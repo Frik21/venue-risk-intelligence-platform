@@ -1,0 +1,278 @@
+Build a full-stack Physical Venue Risk Assessment platform.
+
+The system must include:
+
+1. Venue Database
+Create a database of all assessed venues with:
+- Venue name
+- Venue type
+- Physical address
+- City
+- Country
+- Latitude
+- Longitude
+- Google Maps URL
+- District / area
+- Environment type
+- Assessment history
+
+2. Assessment Form
+Create an editable Physical Venue Risk Assessment form.
+Users must be able to:
+- Create new assessments
+- Save drafts
+- Edit existing assessments
+- Add additional data later
+- View previous versions
+- Export final reports
+
+Approved assessments must be version-controlled and auditable.
+
+3. Manual Assessment Management
+Create an admin dashboard where users can:
+- Search assessments
+- Open assessments
+- Edit assessment fields
+- Add analyst notes
+- Upload images
+- Upload videos
+- Upload PDFs/documents
+- Link media to specific assessment sections
+- Mark evidence as verified or unverified
+
+Every edit must be logged with:
+- User
+- Timestamp
+- Field changed
+- Old value
+- New value
+- Reason for change
+
+4. OSINT Collection Engine
+Add an OSINT assistant that helps develop assessments using public sources.
+
+It should collect and suggest:
+- Venue address data
+- Nearby hospitals
+- Nearby police stations
+- Nearby transport links
+- Recent crime incidents
+- Protests
+- Riots
+- Civil unrest
+- Road closures
+- Public safety advisories
+- Relevant news
+
+Important rule:
+OSINT may suggest findings, but must not automatically overwrite approved assessment data.
+All OSINT findings require analyst review before becoming verified assessment data.
+
+5. Live OSINT Monitoring
+Create a live monitoring engine for saved venues.
+
+It should:
+- Monitor crime, protest, riot, unrest, road closure, and advisory data
+- Search within configurable radius options: 500m, 1km, 3km, 5km
+- Generate alerts when new relevant incidents are found
+- Add alerts to a review queue
+- Show alert priority: Low, Medium, High, Critical
+- Require analyst approval before updating an assessment
+
+Assessment statuses:
+- Draft
+- Under Review
+- Approved
+- Monitoring
+- Review Required
+- Escalated
+- Archived
+
+6. Incident Intelligence
+Create incident tables and dashboard views for:
+- Crime incidents
+- Violent crime
+- Property crime
+- Armed robbery
+- Assault
+- Vehicle theft
+- Protests
+- Demonstrations
+- Riots
+- Civil unrest
+- Road closures
+- Police advisories
+- Government alerts
+- Reputable news incidents
+
+Each incident must store:
+- Incident type
+- Severity
+- Date
+- Summary
+- Source name
+- Source URL
+- Latitude
+- Longitude
+- Distance from venue
+- Confidence level
+- Verified status
+
+7. Maps Module
+Create an interactive map like Google Earth / Google Maps.
+
+Features:
+- Global search bar
+- Search by address
+- Search by venue name
+- Search by landmark
+- Search by GPS coordinates
+- Search by Google Maps URL
+- Satellite view
+- Street map view
+- Hybrid view
+- Traffic layer if available
+- Risk-colored venue pins
+- Crime layer
+- Protest layer
+- Hospital layer
+- Police layer
+- Transport layer
+- Historical assessment layer
+
+When a user searches a location:
+- Geocode the location
+- Center the map
+- Display venue/location details
+- Show nearby infrastructure
+- Show existing assessments nearby
+- Allow user to create a new assessment from the map
+
+8. Route and Extraction Planning
+Allow users to define:
+- Primary extraction route
+- Secondary extraction route
+- Drop-off zone
+- Pick-up zone
+- Parking area
+- Medical evacuation route
+- Nearby hospital route
+
+9. Risk Matrix
+Create risk scoring fields for:
+- Area Risk
+- Access Control
+- Arrival / Departure
+- Parking
+- Personnel
+- Medical
+- HSE
+- Extraction
+- Overall Venue Risk Rating
+
+Risk ratings:
+- Low
+- Moderate
+- Moderate–High
+- High
+- Unknown
+
+10. Evidence Repository
+All evidence must be stored and linked to assessments.
+
+Evidence types:
+- OSINT source
+- Analyst note
+- Image
+- Video
+- PDF
+- Website
+- News article
+- Police advisory
+- Government bulletin
+- Map screenshot
+
+11. User Roles
+Create role-based access:
+
+Admin:
+- Full access
+
+Analyst:
+- Create and edit assessments
+
+Reviewer:
+- Approve or reject changes
+
+Viewer:
+- Read-only access
+
+12. Audit and Version Control
+Every assessment must maintain:
+- Version number
+- Created by
+- Created date
+- Last edited by
+- Last edited date
+- Change summary
+- Approval status
+- Full edit history
+
+Approved versions must remain immutable.
+Changes to approved assessments must create a new version.
+
+13. Report Generator
+Generate exportable reports from saved assessment data.
+
+Export formats:
+- TXT
+- PDF
+- Dashboard view
+
+The report generator should populate the saved Physical Venue Risk Assessment template from database fields.
+
+14. Recommended Stack
+Use:
+- React frontend
+- Node.js / Express backend
+- PostgreSQL database
+- Prisma ORM
+- Mapbox or Google Maps for mapping
+- Secure environment variables for API keys
+- File upload support for images, videos, and documents
+
+15. Core Database Tables
+Create tables for:
+
+users
+venues
+assessments
+assessment_versions
+risk_categories
+security_controls
+mitigation_measures
+evidence_sources
+assessment_media
+assessment_edits
+incident_sources
+incidents
+area_intelligence_reports
+osint_monitoring_profiles
+osint_events
+assessment_alerts
+map_points
+routes
+search_history
+saved_locations
+
+16. Security Requirements
+- Require login
+- Role-based permissions
+- Validate all inputs
+- Store API keys only in environment variables
+- Never expose secrets to frontend
+- Log all edits
+- Protect uploaded files
+- Do not allow OSINT to directly overwrite approved assessment fields
+
+Build the application with a clean professional dashboard suitable for security risk analysts.
