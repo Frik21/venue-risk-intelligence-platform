@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Risk Assessments"
+version = "1.0.0"
+id = "artifacts/risk-assessments"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22601
+
+[services.development]
+run = "pnpm --filter @workspace/risk-assessments run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/risk-assessments", "run", "build" ]
+publicDir = "artifacts/risk-assessments/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22601"
+BASE_PATH = "/"

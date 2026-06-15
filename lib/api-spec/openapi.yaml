@@ -1,15 +1,18 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Risk Assessment API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: assessments
+    description: Risk assessment operations
+  - name: risks
+    description: Risk item operations
 paths:
   /healthz:
     get:
@@ -24,6 +27,209 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /assessments:
+    get:
+      operationId: listAssessments
+      tags: [assessments]
+      summary: List all assessments
+      responses:
+        "200":
+          description: List of assessments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Assessment"
+    post:
+      operationId: createAssessment
+      tags: [assessments]
+      summary: Create a new assessment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssessmentInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assessment"
+
+  /assessments/summary:
+    get:
+      operationId: getAssessmentsSummary
+      tags: [assessments]
+      summary: Get summary stats across all assessments
+      responses:
+        "200":
+          description: Summary statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssessmentsSummary"
+
+  /assessments/{id}:
+    get:
+      operationId: getAssessment
+      tags: [assessments]
+      summary: Get a single assessment with its risks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Assessment detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssessmentDetail"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateAssessment
+      tags: [assessments]
+      summary: Update an assessment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssessmentUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assessment"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteAssessment
+      tags: [assessments]
+      summary: Delete an assessment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /assessments/{assessmentId}/risks:
+    get:
+      operationId: listRisks
+      tags: [risks]
+      summary: List risks for an assessment
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of risks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Risk"
+    post:
+      operationId: createRisk
+      tags: [risks]
+      summary: Add a risk to an assessment
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RiskInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Risk"
+
+  /assessments/{assessmentId}/risks/{riskId}:
+    patch:
+      operationId: updateRisk
+      tags: [risks]
+      summary: Update a risk item
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: riskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RiskUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Risk"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteRisk
+      tags: [risks]
+      summary: Delete a risk item
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: riskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +240,201 @@ components:
       required:
         - status
 
+    Assessment:
+      type: object
+      required: [id, title, status, riskCount, highRiskCount, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        project:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [draft, active, completed, archived]
+        riskCount:
+          type: integer
+        highRiskCount:
+          type: integer
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    AssessmentDetail:
+      type: object
+      required: [id, title, status, risks, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        project:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [draft, active, completed, archived]
+        risks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Risk"
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    AssessmentInput:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        project:
+          type: string
+        status:
+          type: string
+          enum: [draft, active, completed, archived]
+
+    AssessmentUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        project:
+          type: string
+        status:
+          type: string
+          enum: [draft, active, completed, archived]
+
+    AssessmentsSummary:
+      type: object
+      required: [total, byStatus, totalRisks, highRisks, recentAssessments]
+      properties:
+        total:
+          type: integer
+        byStatus:
+          type: object
+          properties:
+            draft:
+              type: integer
+            active:
+              type: integer
+            completed:
+              type: integer
+            archived:
+              type: integer
+          required: [draft, active, completed, archived]
+        totalRisks:
+          type: integer
+        highRisks:
+          type: integer
+        recentAssessments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Assessment"
+
+    Risk:
+      type: object
+      required: [id, assessmentId, title, likelihood, impact, riskScore, category, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        assessmentId:
+          type: integer
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        category:
+          type: string
+          enum: [operational, financial, strategic, compliance, reputational, technical, other]
+        likelihood:
+          type: integer
+          minimum: 1
+          maximum: 5
+        impact:
+          type: integer
+          minimum: 1
+          maximum: 5
+        riskScore:
+          type: integer
+        riskLevel:
+          type: string
+          enum: [low, medium, high, critical]
+        mitigation:
+          type: ["string", "null"]
+        owner:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [open, mitigated, accepted, closed]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    RiskInput:
+      type: object
+      required: [title, likelihood, impact, category]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        category:
+          type: string
+          enum: [operational, financial, strategic, compliance, reputational, technical, other]
+        likelihood:
+          type: integer
+          minimum: 1
+          maximum: 5
+        impact:
+          type: integer
+          minimum: 1
+          maximum: 5
+        mitigation:
+          type: string
+        owner:
+          type: string
+        status:
+          type: string
+          enum: [open, mitigated, accepted, closed]
+
+    RiskUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        category:
+          type: string
+          enum: [operational, financial, strategic, compliance, reputational, technical, other]
+        likelihood:
+          type: integer
+          minimum: 1
+          maximum: 5
+        impact:
+          type: integer
+          minimum: 1
+          maximum: 5
+        mitigation:
+          type: string
+        owner:
+          type: string
+        status:
+          type: string
+          enum: [open, mitigated, accepted, closed]
