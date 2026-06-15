@@ -1,16 +1,45 @@
-import { useGetAssessmentsSummary, getGetAssessmentsSummaryQueryKey } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useQuery } from "@tanstack/react-query";
+import { api, type DashboardSummary } from "@/lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle, CheckCircle, FileText, Activity } from "lucide-react";
-import { Link } from "wouter";
-import { getStatusBadgeVariant, formatDate } from "@/lib/display-utils";
 import { Badge } from "@/components/ui/badge";
+import { Link } from "wouter";
+import {
+  Building2,
+  ClipboardList,
+  AlertTriangle,
+  Bell,
+  ShieldCheck,
+  TrendingUp,
+  ArrowRight,
+} from "lucide-react";
+import { getStatusColor, getStatusLabel, getPriorityColor, getRiskRatingLabel, getRiskRatingColor, timeAgo } from "@/lib/display-utils";
+import { cn } from "@/lib/utils";
+
+function StatCard({ title, value, icon: Icon, color, href }: { title: string; value: number; icon: React.ElementType; color: string; href: string }) {
+  return (
+    <Link href={href}>
+      <Card className="cursor-pointer hover:shadow-md transition-shadow">
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground font-medium">{title}</p>
+              <p className="text-3xl font-bold mt-1">{value}</p>
+            </div>
+            <div className={cn("p-2.5 rounded-lg", color)}>
+              <Icon className="w-5 h-5" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
+  );
+}
 
 export default function Dashboard() {
-  const { data: summary, isLoading, error } = useGetAssessmentsSummary({
-    query: {
-      queryKey: getGetAssessmentsSummaryQueryKey()
-    }
+  const { data, isLoading, error } = useQuery<DashboardSummary>({
+    queryKey: ["dashboard"],
+    queryFn: api.dashboard,
   });
 
   if (error) {
@@ -23,158 +52,155 @@ export default function Dashboard() {
     );
   }
 
+  const statusGroups = [
+    { key: "draft", label: "Draft", color: "bg-slate-400" },
+    { key: "under_review", label: "Under Review", color: "bg-amber-400" },
+    { key: "approved", label: "Approved", color: "bg-green-500" },
+    { key: "monitoring", label: "Monitoring", color: "bg-blue-500" },
+    { key: "review_required", label: "Review Required", color: "bg-orange-500" },
+    { key: "escalated", label: "Escalated", color: "bg-red-500" },
+    { key: "archived", label: "Archived", color: "bg-slate-300" },
+  ];
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Overview</h1>
-        <p className="text-muted-foreground mt-1">High-level summary of your risk management workspace.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Operations Dashboard</h1>
+        <p className="text-slate-500 mt-0.5 text-sm">Physical Venue Risk Assessment Intelligence Platform</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Assessments</CardTitle>
-            <FileText className="w-4 h-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {isLoading ? <Skeleton className="h-8 w-16" /> : (
-              <div className="text-3xl font-bold">{summary?.total || 0}</div>
-            )}
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Active Assessments</CardTitle>
-            <Activity className="w-4 h-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            {isLoading ? <Skeleton className="h-8 w-16" /> : (
-              <div className="text-3xl font-bold text-primary">{summary?.byStatus.active || 0}</div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Risks Identified</CardTitle>
-            <AlertTriangle className="w-4 h-4 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            {isLoading ? <Skeleton className="h-8 w-16" /> : (
-              <div className="text-3xl font-bold">{summary?.totalRisks || 0}</div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium text-muted-foreground">High/Critical Risks</CardTitle>
-            <AlertTriangle className="w-4 h-4 text-destructive" />
-          </CardHeader>
-          <CardContent>
-            {isLoading ? <Skeleton className="h-8 w-16" /> : (
-              <div className="text-3xl font-bold text-destructive">{summary?.highRisks || 0}</div>
-            )}
-          </CardContent>
-        </Card>
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {isLoading ? (
+          Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-24" />)
+        ) : (
+          <>
+            <StatCard title="Venues" value={data?.totalVenues ?? 0} icon={Building2} color="bg-blue-100 text-blue-600" href="/venues" />
+            <StatCard title="Assessments" value={data?.totalAssessments ?? 0} icon={ClipboardList} color="bg-indigo-100 text-indigo-600" href="/assessments" />
+            <StatCard title="Incidents" value={data?.totalIncidents ?? 0} icon={AlertTriangle} color="bg-orange-100 text-orange-600" href="/incidents" />
+            <StatCard title="Pending Alerts" value={data?.pendingAlerts ?? 0} icon={Bell} color="bg-red-100 text-red-600" href="/alerts" />
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recent assessments */}
         <div className="lg:col-span-2">
-          <Card className="h-full">
-            <CardHeader>
+          <Card>
+            <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Recent Assessments</CardTitle>
-                  <CardDescription>Latest risk assessment documents modified.</CardDescription>
-                </div>
-                <Link href="/assessments" className="text-sm text-primary font-medium hover:underline">
-                  View all
+                <CardTitle className="text-base">Recent Assessments</CardTitle>
+                <Link href="/assessments" className="text-sm text-blue-600 hover:underline flex items-center gap-1">
+                  View all <ArrowRight className="w-3 h-3" />
                 </Link>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               {isLoading ? (
-                <div className="space-y-4">
-                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
+                <div className="p-4 space-y-3">
+                  {[1,2,3].map(i => <Skeleton key={i} className="h-14" />)}
                 </div>
-              ) : (summary?.recentAssessments && summary.recentAssessments.length > 0) ? (
-                <div className="divide-y divide-border">
-                  {summary.recentAssessments.map((assessment) => (
-                    <div key={assessment.id} className="py-4 flex items-center justify-between hover:bg-muted/50 px-2 -mx-2 rounded transition-colors group">
-                      <div className="flex-1 min-w-0 pr-4">
-                        <Link href={`/assessments/${assessment.id}`} className="font-medium text-foreground hover:text-primary transition-colors block truncate">
-                          {assessment.title}
-                        </Link>
-                        <div className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
-                          <span className="truncate max-w-[120px]">{assessment.project || 'No project'}</span>
-                          <span>•</span>
-                          <span>{formatDate(assessment.updatedAt)}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-4 shrink-0">
-                        <div className="text-right hidden sm:block">
-                          <div className="text-sm font-medium font-mono">{assessment.riskCount}</div>
-                          <div className="text-xs text-muted-foreground">Risks</div>
-                        </div>
-                        <Badge variant={getStatusBadgeVariant(assessment.status)} className="capitalize w-20 justify-center">
-                          {assessment.status}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
+              ) : !data?.recentAssessments?.length ? (
+                <div className="text-center py-10 text-slate-400">
+                  <ClipboardList className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                  <p className="text-sm">No assessments yet</p>
+                  <Link href="/assessments/new" className="text-sm text-blue-600 hover:underline mt-1 block">Create first assessment →</Link>
                 </div>
               ) : (
-                <div className="text-center py-12 border border-dashed rounded-lg">
-                  <FileText className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
-                  <h3 className="font-medium">No assessments yet</h3>
-                  <p className="text-sm text-muted-foreground mb-4">Create your first risk assessment to get started.</p>
-                  <Link href="/assessments/new" className="inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-primary-foreground h-9 px-4 hover:bg-primary/90">
-                    New Assessment
-                  </Link>
+                <div className="divide-y divide-slate-100">
+                  {data.recentAssessments.map((a) => (
+                    <Link key={a.id} href={`/assessments/${a.id}`}>
+                      <div className="px-5 py-3.5 hover:bg-slate-50 transition-colors cursor-pointer">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium text-slate-900 truncate text-sm">{a.title}</div>
+                            <div className="text-xs text-slate-400 mt-0.5 truncate">
+                              {a.venueName ? `${a.venueName}, ${a.venueCity}` : "No venue"} · {timeAgo(a.updatedAt)}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {a.overallRating && (
+                              <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase", getRiskRatingColor(a.overallRating))}>
+                                {getRiskRatingLabel(a.overallRating)}
+                              </span>
+                            )}
+                            <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase", getStatusColor(a.status))}>
+                              {getStatusLabel(a.status)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
                 </div>
               )}
             </CardContent>
           </Card>
         </div>
 
-        <div className="lg:col-span-1">
-          <Card className="h-full bg-slate-900 text-slate-50 border-slate-800">
-            <CardHeader>
-              <CardTitle className="text-slate-100">Status Distribution</CardTitle>
+        {/* Right column */}
+        <div className="space-y-4">
+          {/* Status distribution */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Assessment Status</CardTitle>
             </CardHeader>
             <CardContent>
-              {isLoading ? <Skeleton className="h-32 w-full bg-slate-800" /> : (
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-slate-400" />
-                      <span className="text-sm text-slate-300">Draft</span>
+              {isLoading ? <Skeleton className="h-32" /> : (
+                <div className="space-y-2.5">
+                  {statusGroups.map(({ key, label, color }) => {
+                    const count = data?.assessmentsByStatus?.[key] ?? 0;
+                    const total = data?.totalAssessments ?? 1;
+                    const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                    return (
+                      <div key={key}>
+                        <div className="flex justify-between text-xs text-slate-600 mb-1">
+                          <span>{label}</span>
+                          <span className="font-mono font-medium">{count}</span>
+                        </div>
+                        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recent alerts */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Recent Alerts</CardTitle>
+                <Link href="/alerts" className="text-sm text-blue-600 hover:underline flex items-center gap-1">
+                  View all <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {isLoading ? (
+                <div className="p-4 space-y-2">
+                  {[1,2].map(i => <Skeleton key={i} className="h-10" />)}
+                </div>
+              ) : !data?.recentAlerts?.length ? (
+                <div className="py-6 text-center text-sm text-slate-400">No recent alerts</div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {data.recentAlerts.map((alert) => (
+                    <div key={alert.id} className="px-4 py-3">
+                      <div className="flex items-start gap-2">
+                        <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase shrink-0 mt-0.5", getPriorityColor(alert.priority))}>
+                          {alert.priority}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="text-xs font-medium text-slate-800 truncate">{alert.title}</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">{alert.venueName} · {timeAgo(alert.createdAt)}</div>
+                        </div>
+                      </div>
                     </div>
-                    <span className="font-mono text-slate-100 font-medium">{summary?.byStatus.draft || 0}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-primary" />
-                      <span className="text-sm text-slate-300">Active</span>
-                    </div>
-                    <span className="font-mono text-slate-100 font-medium">{summary?.byStatus.active || 0}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-slate-600" />
-                      <span className="text-sm text-slate-300">Completed</span>
-                    </div>
-                    <span className="font-mono text-slate-100 font-medium">{summary?.byStatus.completed || 0}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-slate-800 border border-slate-700" />
-                      <span className="text-sm text-slate-300">Archived</span>
-                    </div>
-                    <span className="font-mono text-slate-100 font-medium">{summary?.byStatus.archived || 0}</span>
-                  </div>
+                  ))}
                 </div>
               )}
             </CardContent>

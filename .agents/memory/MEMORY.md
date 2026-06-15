@@ -1,0 +1,1 @@
+- [VenueGuard stack decisions](venueguard-stack.md) — zod, route patterns, schema status flow for this project

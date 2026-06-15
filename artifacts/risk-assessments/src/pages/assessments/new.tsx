@@ -1,153 +1,139 @@
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useCreateAssessment } from "@workspace/api-client-react";
-import { useLocation } from "wouter";
+import { useState } from "react";
+import { useLocation, useSearch } from "wouter";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, type Venue } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft } from "lucide-react";
-import { Link } from "wouter";
-
-const schema = z.object({
-  title: z.string().min(1, "Title is required"),
-  project: z.string().optional(),
-  description: z.string().optional(),
-  status: z.enum(["draft", "active", "completed", "archived"]).default("draft"),
-});
-
-type FormValues = z.infer<typeof schema>;
+import { useToast } from "@/hooks/use-toast";
 
 export default function AssessmentNew() {
-  const [, setLocation] = useLocation();
+  const [, navigate] = useLocation();
+  const search = useSearch();
+  const params = new URLSearchParams(search);
+  const preVenueId = params.get("venueId");
+  const qc = useQueryClient();
   const { toast } = useToast();
-  
-  const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      title: "",
-      project: "",
-      description: "",
-      status: "draft",
-    }
+
+  const { data: venues = [] } = useQuery<Venue[]>({
+    queryKey: ["venues"],
+    queryFn: api.venues.list,
   });
 
-  const createMutation = useCreateAssessment({
-    mutation: {
-      onSuccess: (data) => {
-        toast({ title: "Assessment created successfully" });
-        setLocation(`/assessments/${data.id}`);
-      },
-      onError: () => {
-        toast({ title: "Failed to create assessment", variant: "destructive" });
-      }
-    }
+  const [form, setForm] = useState({
+    title: "",
+    venueId: preVenueId ?? "",
+    description: "",
+    intelSummary: "",
+    analystNotes: "",
   });
 
-  const onSubmit = (data: FormValues) => {
-    createMutation.mutate({ data });
-  };
+  const mutation = useMutation({
+    mutationFn: () =>
+      api.assessments.create({
+        title: form.title,
+        venueId: form.venueId ? Number(form.venueId) : undefined,
+        description: form.description || undefined,
+        intelSummary: form.intelSummary || undefined,
+        analystNotes: form.analystNotes || undefined,
+      }),
+    onSuccess: (a) => {
+      qc.invalidateQueries({ queryKey: ["assessments"] });
+      toast({ title: "Assessment created" });
+      navigate(`/assessments/${a.id}`);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-2xl space-y-5">
+      <Button variant="ghost" size="sm" onClick={() => navigate("/assessments")}>
+        <ArrowLeft className="w-4 h-4 mr-1" /> Assessments
+      </Button>
+
       <div>
-        <Link href="/assessments" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors">
-          <ArrowLeft className="w-4 h-4 mr-1" /> Back to Assessments
-        </Link>
-        <h1 className="text-3xl font-bold tracking-tight">Create Assessment</h1>
+        <h1 className="text-2xl font-bold text-slate-900">New Risk Assessment</h1>
+        <p className="text-slate-500 text-sm mt-0.5">Create a new Physical Venue Risk Assessment</p>
       </div>
 
       <Card>
-        <CardContent className="pt-6">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Title</FormLabel>
-                    <FormControl>
-                      <Input placeholder="E.g., Q3 Infrastructure Upgrade Risk Plan" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField
-                  control={form.control}
-                  name="project"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Project</FormLabel>
-                      <FormControl>
-                        <Input placeholder="E.g., Project Alpha" {...field} value={field.value || ""} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Status</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select status" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="draft">Draft</SelectItem>
-                          <SelectItem value="active">Active</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        placeholder="Overview of the assessment scope and goals..." 
-                        className="min-h-[120px]" 
-                        {...field} 
-                        value={field.value || ""}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="flex justify-end gap-4 pt-4 border-t">
-                <Button type="button" variant="outline" onClick={() => setLocation("/assessments")}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={createMutation.isPending}>
-                  {createMutation.isPending ? "Creating..." : "Create Assessment"}
-                </Button>
-              </div>
-            </form>
-          </Form>
+        <CardHeader><CardTitle className="text-base">Assessment Details</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label>Title *</Label>
+            <Input
+              placeholder="e.g. Grand Hyatt Dubai — Advance Security Assessment"
+              value={form.title}
+              onChange={e => set("title", e.target.value)}
+            />
+          </div>
+          <div>
+            <Label>Venue</Label>
+            <Select value={form.venueId} onValueChange={v => set("venueId", v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a venue (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">No venue</SelectItem>
+                {venues.map(v => (
+                  <SelectItem key={v.id} value={String(v.id)}>
+                    {v.name} — {v.city}, {v.country}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Description</Label>
+            <Textarea
+              placeholder="Brief description of this assessment's scope..."
+              value={form.description}
+              onChange={e => set("description", e.target.value)}
+              rows={2}
+            />
+          </div>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Intelligence Summary</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label>Intel Summary</Label>
+            <Textarea
+              placeholder="Area security environment, threat overview, key intelligence..."
+              value={form.intelSummary}
+              onChange={e => set("intelSummary", e.target.value)}
+              rows={4}
+            />
+          </div>
+          <div>
+            <Label>Analyst Notes</Label>
+            <Textarea
+              placeholder="Internal analyst notes, data sources, confidence levels..."
+              value={form.analystNotes}
+              onChange={e => set("analystNotes", e.target.value)}
+              rows={3}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex gap-3">
+        <Button
+          onClick={() => mutation.mutate()}
+          disabled={mutation.isPending || !form.title}
+        >
+          {mutation.isPending ? "Creating..." : "Create Assessment"}
+        </Button>
+        <Button variant="outline" onClick={() => navigate("/assessments")}>Cancel</Button>
+      </div>
     </div>
   );
 }

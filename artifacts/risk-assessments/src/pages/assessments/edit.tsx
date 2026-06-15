@@ -1,185 +1,138 @@
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useUpdateAssessment, useGetAssessment, getGetAssessmentQueryKey } from "@workspace/api-client-react";
+import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, type Venue, type AssessmentDetail } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft } from "lucide-react";
-import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
-
-const schema = z.object({
-  title: z.string().min(1, "Title is required"),
-  project: z.string().optional(),
-  description: z.string().optional(),
-  status: z.enum(["draft", "active", "completed", "archived"]),
-});
-
-type FormValues = z.infer<typeof schema>;
+import { ArrowLeft } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { ASSESSMENT_STATUSES } from "@/lib/display-utils";
 
 export default function AssessmentEdit() {
-  const { id } = useParams();
-  const assessmentId = Number(id);
-  const [, setLocation] = useLocation();
+  const params = useParams<{ id: string }>();
+  const [, navigate] = useLocation();
+  const qc = useQueryClient();
   const { toast } = useToast();
-  
-  const { data: assessment, isLoading } = useGetAssessment(assessmentId, {
-    query: {
-      enabled: !!assessmentId,
-      queryKey: getGetAssessmentQueryKey(assessmentId)
-    }
+  const id = Number(params.id);
+
+  const { data: venues = [] } = useQuery<Venue[]>({ queryKey: ["venues"], queryFn: api.venues.list });
+  const { data: assessment, isLoading } = useQuery<AssessmentDetail>({
+    queryKey: ["assessments", id],
+    queryFn: () => api.assessments.get(id),
+    enabled: !isNaN(id),
   });
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      title: "",
-      project: "",
-      description: "",
-      status: "draft",
-    }
+  const [form, setForm] = useState({
+    title: "", venueId: "", status: "draft",
+    description: "", intelSummary: "", analystNotes: "",
   });
 
   useEffect(() => {
     if (assessment) {
-      form.reset({
+      setForm({
         title: assessment.title,
-        project: assessment.project || "",
-        description: assessment.description || "",
-        status: assessment.status as any,
+        venueId: assessment.venueId ? String(assessment.venueId) : "",
+        status: assessment.status,
+        description: assessment.description ?? "",
+        intelSummary: assessment.intelSummary ?? "",
+        analystNotes: assessment.analystNotes ?? "",
       });
     }
-  }, [assessment, form]);
+  }, [assessment]);
 
-  const updateMutation = useUpdateAssessment({
-    mutation: {
-      onSuccess: () => {
-        toast({ title: "Assessment updated successfully" });
-        setLocation(`/assessments/${assessmentId}`);
-      },
-      onError: () => {
-        toast({ title: "Failed to update assessment", variant: "destructive" });
-      }
-    }
+  const mutation = useMutation({
+    mutationFn: () => api.assessments.update(id, {
+      title: form.title,
+      venueId: form.venueId ? Number(form.venueId) : undefined,
+      status: form.status as any,
+      description: form.description || undefined,
+      intelSummary: form.intelSummary || undefined,
+      analystNotes: form.analystNotes || undefined,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["assessments"] });
+      qc.invalidateQueries({ queryKey: ["assessments", id] });
+      toast({ title: "Assessment updated" });
+      navigate(`/assessments/${id}`);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const onSubmit = (data: FormValues) => {
-    updateMutation.mutate({ id: assessmentId, data });
-  };
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
-  if (isLoading) {
-    return (
-      <div className="max-w-2xl mx-auto space-y-6">
-        <Skeleton className="h-8 w-1/3" />
-        <Card><CardContent className="p-6"><Skeleton className="h-64 w-full" /></CardContent></Card>
-      </div>
-    );
-  }
+  if (isLoading) return <div className="space-y-4">{Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>;
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-2xl space-y-5">
+      <Button variant="ghost" size="sm" onClick={() => navigate(`/assessments/${id}`)}>
+        <ArrowLeft className="w-4 h-4 mr-1" /> Back to Assessment
+      </Button>
+
       <div>
-        <Link href={`/assessments/${assessmentId}`} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors">
-          <ArrowLeft className="w-4 h-4 mr-1" /> Back to Assessment
-        </Link>
-        <h1 className="text-3xl font-bold tracking-tight">Edit Assessment Metadata</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Edit Assessment</h1>
+        <p className="text-slate-500 text-sm mt-0.5">Update assessment details and status</p>
       </div>
 
       <Card>
-        <CardContent className="pt-6">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Title</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField
-                  control={form.control}
-                  name="project"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Project</FormLabel>
-                      <FormControl>
-                        <Input {...field} value={field.value || ""} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Status</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select status" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="draft">Draft</SelectItem>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="completed">Completed</SelectItem>
-                          <SelectItem value="archived">Archived</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        className="min-h-[120px]" 
-                        {...field} 
-                        value={field.value || ""}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="flex justify-end gap-4 pt-4 border-t">
-                <Button type="button" variant="outline" onClick={() => setLocation(`/assessments/${assessmentId}`)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={updateMutation.isPending}>
-                  {updateMutation.isPending ? "Saving..." : "Save Changes"}
-                </Button>
-              </div>
-            </form>
-          </Form>
+        <CardHeader><CardTitle className="text-base">Assessment Details</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label>Title *</Label>
+            <Input value={form.title} onChange={e => set("title", e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Venue</Label>
+              <Select value={form.venueId} onValueChange={v => set("venueId", v)}>
+                <SelectTrigger><SelectValue placeholder="No venue" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">No venue</SelectItem>
+                  {venues.map(v => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Status</Label>
+              <Select value={form.status} onValueChange={v => set("status", v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ASSESSMENT_STATUSES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div>
+            <Label>Description</Label>
+            <Textarea value={form.description} onChange={e => set("description", e.target.value)} rows={2} />
+          </div>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Intelligence Content</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label>Intel Summary</Label>
+            <Textarea value={form.intelSummary} onChange={e => set("intelSummary", e.target.value)} rows={4} />
+          </div>
+          <div>
+            <Label>Analyst Notes</Label>
+            <Textarea value={form.analystNotes} onChange={e => set("analystNotes", e.target.value)} rows={3} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex gap-3">
+        <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !form.title}>
+          {mutation.isPending ? "Saving..." : "Save Changes"}
+        </Button>
+        <Button variant="outline" onClick={() => navigate(`/assessments/${id}`)}>Cancel</Button>
+      </div>
     </div>
   );
 }

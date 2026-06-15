@@ -1,25 +1,41 @@
 openapi: 3.1.0
 info:
   title: Api
-  version: 0.1.0
-  description: Risk Assessment API
+  version: 0.2.0
+  description: Physical Venue Risk Assessment API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: users
+    description: User management
+  - name: venues
+    description: Venue management
   - name: assessments
-    description: Risk assessment operations
+    description: Assessment operations
   - name: risks
     description: Risk item operations
+  - name: riskMatrix
+    description: Risk matrix scoring
+  - name: incidents
+    description: Incident intelligence
+  - name: evidence
+    description: Evidence repository
+  - name: alerts
+    description: Alert management
+  - name: osint
+    description: OSINT operations
+  - name: dashboard
+    description: Dashboard statistics
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -27,6 +43,144 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get platform-wide summary stats
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /venues:
+    get:
+      operationId: listVenues
+      tags: [venues]
+      summary: List all venues
+      responses:
+        "200":
+          description: List of venues
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Venue"
+    post:
+      operationId: createVenue
+      tags: [venues]
+      summary: Create a venue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VenueInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Venue"
+
+  /venues/{id}:
+    get:
+      operationId: getVenue
+      tags: [venues]
+      summary: Get venue detail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Venue detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenueDetail"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateVenue
+      tags: [venues]
+      summary: Update a venue
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VenueUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Venue"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteVenue
+      tags: [venues]
+      summary: Delete a venue
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
 
   /assessments:
     get:
@@ -41,7 +195,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Assessment"
+                  $ref: "#/components/schemas/AssessmentSummary"
     post:
       operationId: createAssessment
       tags: [assessments]
@@ -58,7 +212,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Assessment"
+                $ref: "#/components/schemas/AssessmentSummary"
 
   /assessments/summary:
     get:
@@ -77,7 +231,7 @@ paths:
     get:
       operationId: getAssessment
       tags: [assessments]
-      summary: Get a single assessment with its risks
+      summary: Get a single assessment with detail
       parameters:
         - name: id
           in: path
@@ -115,7 +269,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Assessment"
+                $ref: "#/components/schemas/AssessmentDetail"
         "404":
           description: Not found
     delete:
@@ -133,6 +287,119 @@ paths:
           description: Deleted
         "404":
           description: Not found
+
+  /assessments/{id}/approve:
+    post:
+      operationId: approveAssessment
+      tags: [assessments]
+      summary: Approve an assessment (creates version snapshot)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveAssessmentInput"
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssessmentDetail"
+        "404":
+          description: Not found
+
+  /assessments/{id}/versions:
+    get:
+      operationId: listAssessmentVersions
+      tags: [assessments]
+      summary: List version history for an assessment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Version history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AssessmentVersion"
+
+  /assessments/{id}/audit-log:
+    get:
+      operationId: listAuditLog
+      tags: [assessments]
+      summary: List audit log entries for an assessment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Audit log
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditLogEntry"
+
+  /assessments/{id}/risk-matrix:
+    get:
+      operationId: getRiskMatrix
+      tags: [riskMatrix]
+      summary: Get risk matrix for an assessment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Risk matrix
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskMatrix"
+        "404":
+          description: Not found
+    put:
+      operationId: upsertRiskMatrix
+      tags: [riskMatrix]
+      summary: Create or update risk matrix for an assessment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RiskMatrixInput"
+      responses:
+        "200":
+          description: Risk matrix saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskMatrix"
 
   /assessments/{assessmentId}/risks:
     get:
@@ -230,6 +497,244 @@ paths:
         "404":
           description: Not found
 
+  /assessments/{id}/evidence:
+    get:
+      operationId: listEvidence
+      tags: [evidence]
+      summary: List evidence for an assessment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Evidence list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Evidence"
+    post:
+      operationId: createEvidence
+      tags: [evidence]
+      summary: Add evidence to an assessment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EvidenceInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Evidence"
+
+  /evidence/{id}:
+    patch:
+      operationId: updateEvidence
+      tags: [evidence]
+      summary: Update evidence item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EvidenceUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Evidence"
+    delete:
+      operationId: deleteEvidence
+      tags: [evidence]
+      summary: Delete evidence item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /incidents:
+    get:
+      operationId: listIncidents
+      tags: [incidents]
+      summary: List incidents
+      responses:
+        "200":
+          description: List of incidents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Incident"
+    post:
+      operationId: createIncident
+      tags: [incidents]
+      summary: Create an incident
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IncidentInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Incident"
+
+  /incidents/{id}:
+    patch:
+      operationId: updateIncident
+      tags: [incidents]
+      summary: Update an incident
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IncidentUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Incident"
+    delete:
+      operationId: deleteIncident
+      tags: [incidents]
+      summary: Delete an incident
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /alerts:
+    get:
+      operationId: listAlerts
+      tags: [alerts]
+      summary: List alerts
+      responses:
+        "200":
+          description: List of alerts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Alert"
+
+  /alerts/{id}:
+    patch:
+      operationId: updateAlert
+      tags: [alerts]
+      summary: Review or update an alert
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Alert"
+
+  /venues/{id}/osint:
+    get:
+      operationId: getVenueOsint
+      tags: [osint]
+      summary: Get OSINT suggestions for a venue
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OSINT events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OsintEvent"
+
+  /osint/{id}/review:
+    patch:
+      operationId: reviewOsintEvent
+      tags: [osint]
+      summary: Accept or reject an OSINT finding
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OsintReviewInput"
+      responses:
+        "200":
+          description: Reviewed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OsintEvent"
+
 components:
   schemas:
     HealthStatus:
@@ -237,28 +742,201 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
-    Assessment:
+    DashboardSummary:
       type: object
-      required: [id, title, status, riskCount, highRiskCount, createdAt, updatedAt]
+      required: [totalVenues, totalAssessments, totalIncidents, pendingAlerts, assessmentsByStatus, recentAssessments, recentAlerts]
+      properties:
+        totalVenues:
+          type: integer
+        totalAssessments:
+          type: integer
+        totalIncidents:
+          type: integer
+        pendingAlerts:
+          type: integer
+        assessmentsByStatus:
+          type: object
+          properties:
+            draft: { type: integer }
+            under_review: { type: integer }
+            approved: { type: integer }
+            monitoring: { type: integer }
+            review_required: { type: integer }
+            escalated: { type: integer }
+            archived: { type: integer }
+          required: [draft, under_review, approved, monitoring, review_required, escalated, archived]
+        recentAssessments:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssessmentSummary"
+        recentAlerts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Alert"
+
+    User:
+      type: object
+      required: [id, name, email, role, active, createdAt]
       properties:
         id:
           type: integer
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, analyst, reviewer, viewer]
+        avatarInitials:
+          type: ["string", "null"]
+        active:
+          type: boolean
+        createdAt:
+          type: string
+
+    UserInput:
+      type: object
+      required: [name, email, role]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, analyst, reviewer, viewer]
+        avatarInitials:
+          type: string
+
+    Venue:
+      type: object
+      required: [id, name, venueType, address, city, country, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        venueType:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        country:
+          type: string
+        lat:
+          type: ["number", "null"]
+        lng:
+          type: ["number", "null"]
+        googleMapsUrl:
+          type: ["string", "null"]
+        district:
+          type: ["string", "null"]
+        environmentType:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        assessmentCount:
+          type: integer
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    VenueDetail:
+      allOf:
+        - $ref: "#/components/schemas/Venue"
+        - type: object
+          properties:
+            assessments:
+              type: array
+              items:
+                $ref: "#/components/schemas/AssessmentSummary"
+            recentIncidents:
+              type: array
+              items:
+                $ref: "#/components/schemas/Incident"
+
+    VenueInput:
+      type: object
+      required: [name, address, city, country]
+      properties:
+        name:
+          type: string
+        venueType:
+          type: string
+          enum: [hotel, stadium, conference, embassy, airport, mall, government, restaurant, hospital, university, other]
+        address:
+          type: string
+        city:
+          type: string
+        country:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+        googleMapsUrl:
+          type: string
+        district:
+          type: string
+        environmentType:
+          type: string
+          enum: [urban, suburban, rural, industrial, coastal]
+        notes:
+          type: string
+
+    VenueUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        venueType:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        country:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+        googleMapsUrl:
+          type: string
+        district:
+          type: string
+        environmentType:
+          type: string
+        notes:
+          type: string
+
+    AssessmentSummary:
+      type: object
+      required: [id, title, status, version, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        venueId:
+          type: ["integer", "null"]
+        venueName:
+          type: ["string", "null"]
+        venueCity:
+          type: ["string", "null"]
         title:
           type: string
         description:
           type: ["string", "null"]
-        project:
-          type: ["string", "null"]
         status:
           type: string
-          enum: [draft, active, completed, archived]
-        riskCount:
+          enum: [draft, under_review, approved, monitoring, review_required, escalated, archived]
+        version:
           type: integer
-        highRiskCount:
-          type: integer
+        overallRating:
+          type: ["string", "null"]
         createdAt:
           type: string
         updatedAt:
@@ -266,23 +944,39 @@ components:
 
     AssessmentDetail:
       type: object
-      required: [id, title, status, risks, createdAt, updatedAt]
+      required: [id, title, status, version, risks, createdAt, updatedAt]
       properties:
         id:
           type: integer
+        venueId:
+          type: ["integer", "null"]
+        venueName:
+          type: ["string", "null"]
+        venueCity:
+          type: ["string", "null"]
         title:
           type: string
         description:
           type: ["string", "null"]
-        project:
-          type: ["string", "null"]
         status:
           type: string
-          enum: [draft, active, completed, archived]
+          enum: [draft, under_review, approved, monitoring, review_required, escalated, archived]
+        version:
+          type: integer
+        intelSummary:
+          type: ["string", "null"]
+        analystNotes:
+          type: ["string", "null"]
+        overallRating:
+          type: ["string", "null"]
+        riskMatrix:
+          $ref: "#/components/schemas/RiskMatrix"
         risks:
           type: array
           items:
             $ref: "#/components/schemas/Risk"
+        approvedAt:
+          type: ["string", "null"]
         createdAt:
           type: string
         updatedAt:
@@ -295,13 +989,17 @@ components:
         title:
           type: string
           minLength: 1
+        venueId:
+          type: integer
         description:
-          type: string
-        project:
           type: string
         status:
           type: string
-          enum: [draft, active, completed, archived]
+          enum: [draft, under_review, approved, monitoring, review_required, escalated, archived]
+        intelSummary:
+          type: string
+        analystNotes:
+          type: string
 
     AssessmentUpdate:
       type: object
@@ -309,31 +1007,57 @@ components:
         title:
           type: string
           minLength: 1
+        venueId:
+          type: integer
         description:
-          type: string
-        project:
           type: string
         status:
           type: string
-          enum: [draft, active, completed, archived]
+          enum: [draft, under_review, approved, monitoring, review_required, escalated, archived]
+        intelSummary:
+          type: string
+        analystNotes:
+          type: string
+
+    ApproveAssessmentInput:
+      type: object
+      required: [userId, changeSummary]
+      properties:
+        userId:
+          type: integer
+        changeSummary:
+          type: string
+
+    AssessmentVersion:
+      type: object
+      required: [id, assessmentId, version, changeSummary, createdAt]
+      properties:
+        id:
+          type: integer
+        assessmentId:
+          type: integer
+        version:
+          type: integer
+        changeSummary:
+          type: ["string", "null"]
+        createdByName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
 
     AssessmentsSummary:
       type: object
-      required: [total, byStatus, totalRisks, highRisks, recentAssessments]
+      required: [total, byStatus, recentAssessments]
       properties:
         total:
           type: integer
         byStatus:
           type: object
           properties:
-            draft:
-              type: integer
-            active:
-              type: integer
-            completed:
-              type: integer
-            archived:
-              type: integer
+            draft: { type: integer }
+            active: { type: integer }
+            completed: { type: integer }
+            archived: { type: integer }
           required: [draft, active, completed, archived]
         totalRisks:
           type: integer
@@ -342,7 +1066,107 @@ components:
         recentAssessments:
           type: array
           items:
-            $ref: "#/components/schemas/Assessment"
+            $ref: "#/components/schemas/AssessmentSummary"
+
+    AuditLogEntry:
+      type: object
+      required: [id, action, createdAt]
+      properties:
+        id:
+          type: integer
+        assessmentId:
+          type: ["integer", "null"]
+        userId:
+          type: ["integer", "null"]
+        userName:
+          type: ["string", "null"]
+        action:
+          type: string
+        fieldChanged:
+          type: ["string", "null"]
+        oldValue:
+          type: ["string", "null"]
+        newValue:
+          type: ["string", "null"]
+        reason:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    RiskMatrix:
+      type: object
+      required: [id, assessmentId, areaRisk, accessControl, arrivalDeparture, parking, personnel, medical, hse, extraction, overallRating]
+      properties:
+        id:
+          type: integer
+        assessmentId:
+          type: integer
+        areaRisk:
+          type: string
+          enum: [low, moderate, moderate_high, high, unknown]
+        accessControl:
+          type: string
+          enum: [low, moderate, moderate_high, high, unknown]
+        arrivalDeparture:
+          type: string
+          enum: [low, moderate, moderate_high, high, unknown]
+        parking:
+          type: string
+          enum: [low, moderate, moderate_high, high, unknown]
+        personnel:
+          type: string
+          enum: [low, moderate, moderate_high, high, unknown]
+        medical:
+          type: string
+          enum: [low, moderate, moderate_high, high, unknown]
+        hse:
+          type: string
+          enum: [low, moderate, moderate_high, high, unknown]
+        extraction:
+          type: string
+          enum: [low, moderate, moderate_high, high, unknown]
+        overallRating:
+          type: string
+          enum: [low, moderate, moderate_high, high, unknown]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    RiskMatrixInput:
+      type: object
+      properties:
+        areaRisk:
+          type: string
+          enum: [low, moderate, moderate_high, high, unknown]
+        accessControl:
+          type: string
+          enum: [low, moderate, moderate_high, high, unknown]
+        arrivalDeparture:
+          type: string
+          enum: [low, moderate, moderate_high, high, unknown]
+        parking:
+          type: string
+          enum: [low, moderate, moderate_high, high, unknown]
+        personnel:
+          type: string
+          enum: [low, moderate, moderate_high, high, unknown]
+        medical:
+          type: string
+          enum: [low, moderate, moderate_high, high, unknown]
+        hse:
+          type: string
+          enum: [low, moderate, moderate_high, high, unknown]
+        extraction:
+          type: string
+          enum: [low, moderate, moderate_high, high, unknown]
+        overallRating:
+          type: string
+          enum: [low, moderate, moderate_high, high, unknown]
+        notes:
+          type: string
 
     Risk:
       type: object
@@ -438,3 +1262,233 @@ components:
         status:
           type: string
           enum: [open, mitigated, accepted, closed]
+
+    Incident:
+      type: object
+      required: [id, incidentType, severity, incidentDate, summary, verified, createdAt]
+      properties:
+        id:
+          type: integer
+        venueId:
+          type: ["integer", "null"]
+        venueName:
+          type: ["string", "null"]
+        incidentType:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        incidentDate:
+          type: string
+        summary:
+          type: string
+        sourceName:
+          type: ["string", "null"]
+        sourceUrl:
+          type: ["string", "null"]
+        lat:
+          type: ["number", "null"]
+        lng:
+          type: ["number", "null"]
+        distanceFromVenue:
+          type: ["number", "null"]
+        confidenceLevel:
+          type: ["string", "null"]
+        verified:
+          type: boolean
+        createdAt:
+          type: string
+
+    IncidentInput:
+      type: object
+      required: [incidentType, severity, incidentDate, summary]
+      properties:
+        venueId:
+          type: integer
+        incidentType:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        incidentDate:
+          type: string
+        summary:
+          type: string
+        sourceName:
+          type: string
+        sourceUrl:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+        distanceFromVenue:
+          type: number
+        confidenceLevel:
+          type: string
+          enum: [low, medium, high]
+        verified:
+          type: boolean
+
+    IncidentUpdate:
+      type: object
+      properties:
+        incidentType:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        incidentDate:
+          type: string
+        summary:
+          type: string
+        sourceName:
+          type: string
+        sourceUrl:
+          type: string
+        verified:
+          type: boolean
+
+    Evidence:
+      type: object
+      required: [id, assessmentId, evidenceType, label, verified, createdAt]
+      properties:
+        id:
+          type: integer
+        assessmentId:
+          type: integer
+        evidenceType:
+          type: string
+        label:
+          type: string
+        content:
+          type: ["string", "null"]
+        url:
+          type: ["string", "null"]
+        filename:
+          type: ["string", "null"]
+        section:
+          type: ["string", "null"]
+        analystNote:
+          type: ["string", "null"]
+        verified:
+          type: boolean
+        uploadedByName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    EvidenceInput:
+      type: object
+      required: [evidenceType, label]
+      properties:
+        evidenceType:
+          type: string
+          enum: [osint_source, analyst_note, image, video, pdf, website, news_article, police_advisory, government_bulletin, map_screenshot]
+        label:
+          type: string
+        content:
+          type: string
+        url:
+          type: string
+        filename:
+          type: string
+        section:
+          type: string
+        analystNote:
+          type: string
+        uploadedBy:
+          type: integer
+
+    EvidenceUpdate:
+      type: object
+      properties:
+        label:
+          type: string
+        content:
+          type: string
+        url:
+          type: string
+        section:
+          type: string
+        analystNote:
+          type: string
+        verified:
+          type: boolean
+
+    Alert:
+      type: object
+      required: [id, venueId, priority, title, summary, status, createdAt]
+      properties:
+        id:
+          type: integer
+        venueId:
+          type: integer
+        venueName:
+          type: ["string", "null"]
+        incidentId:
+          type: ["integer", "null"]
+        priority:
+          type: string
+          enum: [low, medium, high, critical]
+        title:
+          type: string
+        summary:
+          type: string
+        status:
+          type: string
+          enum: [pending, reviewed, dismissed, escalated]
+        reviewedByName:
+          type: ["string", "null"]
+        reviewedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    AlertUpdate:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending, reviewed, dismissed, escalated]
+        reviewedBy:
+          type: integer
+
+    OsintEvent:
+      type: object
+      required: [id, venueId, eventType, summary, status, createdAt]
+      properties:
+        id:
+          type: integer
+        venueId:
+          type: integer
+        eventType:
+          type: string
+        summary:
+          type: string
+        sourceName:
+          type: ["string", "null"]
+        sourceUrl:
+          type: ["string", "null"]
+        lat:
+          type: ["number", "null"]
+        lng:
+          type: ["number", "null"]
+        status:
+          type: string
+          enum: [pending, accepted, rejected]
+        analystNote:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    OsintReviewInput:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [accepted, rejected]
+        analystNote:
+          type: string

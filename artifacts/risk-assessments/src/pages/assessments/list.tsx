@@ -1,154 +1,116 @@
-import { useListAssessments, getListAssessmentsQueryKey, useDeleteAssessment } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import { useQuery } from "@tanstack/react-query";
+import { api, type AssessmentSummary } from "@/lib/api";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, MoreHorizontal, Trash2, Edit } from "lucide-react";
-import { Link } from "wouter";
-import { getStatusBadgeVariant, formatDate } from "@/lib/display-utils";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Link, useLocation } from "wouter";
+import { ClipboardList, Plus, Search, Filter } from "lucide-react";
 import { useState } from "react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
+import { getStatusColor, getStatusLabel, getRiskRatingColor, getRiskRatingLabel, formatDate, ASSESSMENT_STATUSES } from "@/lib/display-utils";
+import { cn } from "@/lib/utils";
 
 export default function AssessmentsList() {
+  const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const [statusFilter, setStatusFilter] = useState("all");
 
-  const { data: assessments, isLoading } = useListAssessments({
-    query: {
-      queryKey: getListAssessmentsQueryKey()
-    }
+  const { data: assessments = [], isLoading } = useQuery<AssessmentSummary[]>({
+    queryKey: ["assessments"],
+    queryFn: api.assessments.list,
   });
 
-  const deleteMutation = useDeleteAssessment({
-    mutation: {
-      onSuccess: () => {
-        toast({ title: "Assessment deleted" });
-        queryClient.invalidateQueries({ queryKey: getListAssessmentsQueryKey() });
-      },
-      onError: () => {
-        toast({ title: "Failed to delete", variant: "destructive" });
-      }
-    }
+  const filtered = assessments.filter((a) => {
+    const matchSearch =
+      a.title.toLowerCase().includes(search.toLowerCase()) ||
+      (a.venueName?.toLowerCase().includes(search.toLowerCase()) ?? false);
+    const matchStatus = statusFilter === "all" || a.status === statusFilter;
+    return matchSearch && matchStatus;
   });
-
-  const filtered = assessments?.filter(a => 
-    a.title.toLowerCase().includes(search.toLowerCase()) || 
-    (a.project && a.project.toLowerCase().includes(search.toLowerCase()))
-  ) || [];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Assessments</h1>
-          <p className="text-muted-foreground mt-1">Manage and track your project risk assessments.</p>
+          <h1 className="text-2xl font-bold text-slate-900">Assessments</h1>
+          <p className="text-slate-500 text-sm mt-0.5">Physical Venue Risk Assessment documents</p>
         </div>
-        <Link href="/assessments/new" className="inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-primary-foreground h-10 px-4 hover:bg-primary/90 shrink-0">
-          <Plus className="w-4 h-4 mr-2" />
-          New Assessment
-        </Link>
+        <Button onClick={() => navigate("/assessments/new")}>
+          <Plus className="w-4 h-4 mr-1.5" /> New Assessment
+        </Button>
       </div>
 
-      <Card>
-        <div className="p-4 border-b flex items-center gap-4">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input 
-              placeholder="Search assessments..." 
-              className="pl-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
+      <div className="flex gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Input className="pl-9" placeholder="Search assessments..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Title</TableHead>
-              <TableHead>Project</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Risks</TableHead>
-              <TableHead className="text-right">High/Crit</TableHead>
-              <TableHead className="w-[100px]"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell><Skeleton className="h-5 w-48" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                  <TableCell className="text-right"><Skeleton className="h-5 w-8 ml-auto" /></TableCell>
-                  <TableCell className="text-right"><Skeleton className="h-5 w-8 ml-auto" /></TableCell>
-                  <TableCell></TableCell>
-                </TableRow>
-              ))
-            ) : filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                  No assessments found.
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((assessment) => (
-                <TableRow key={assessment.id} className="group">
-                  <TableCell className="font-medium">
-                    <Link href={`/assessments/${assessment.id}`} className="hover:text-primary hover:underline transition-colors block">
-                      {assessment.title}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{assessment.project || '—'}</TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusBadgeVariant(assessment.status)} className="capitalize">
-                      {assessment.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right font-mono">{assessment.riskCount}</TableCell>
-                  <TableCell className="text-right font-mono">
-                    <span className={assessment.highRiskCount > 0 ? "text-destructive font-bold" : "text-muted-foreground"}>
-                      {assessment.highRiskCount}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                          <MoreHorizontal className="w-4 h-4" />
-                          <span className="sr-only">Actions</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem asChild>
-                          <Link href={`/assessments/${assessment.id}/edit`} className="cursor-pointer">
-                            <Edit className="w-4 h-4 mr-2" /> Edit Details
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer"
-                          onClick={() => {
-                            if(confirm("Are you sure you want to delete this assessment?")) {
-                              deleteMutation.mutate({ id: assessment.id });
-                            }
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4 mr-2" /> Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-44">
+            <Filter className="w-4 h-4 mr-2 text-slate-400" />
+            <SelectValue placeholder="All statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            {ASSESSMENT_STATUSES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">{Array(6).fill(0).map((_, i) => <Skeleton key={i} className="h-20" />)}</div>
+      ) : filtered.length === 0 ? (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <ClipboardList className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+            <h3 className="font-medium text-slate-600 mb-1">No assessments found</h3>
+            <p className="text-sm text-slate-400 mb-4">
+              {search || statusFilter !== "all" ? "Try changing filters" : "Create your first venue risk assessment"}
+            </p>
+            {!search && statusFilter === "all" && (
+              <Button onClick={() => navigate("/assessments/new")}>
+                <Plus className="w-4 h-4 mr-1.5" /> New Assessment
+              </Button>
             )}
-          </TableBody>
-        </Table>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <div className="divide-y divide-slate-100">
+            {filtered.map((a) => (
+              <Link key={a.id} href={`/assessments/${a.id}`}>
+                <div className="px-5 py-4 hover:bg-slate-50 transition-colors cursor-pointer">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-slate-900 text-sm">{a.title}</span>
+                        <span className="text-[10px] font-mono text-slate-400 border border-slate-200 px-1.5 py-0.5 rounded">v{a.version}</span>
+                      </div>
+                      <div className="text-xs text-slate-400 mt-1">
+                        {a.venueName
+                          ? `${a.venueName}${a.venueCity ? `, ${a.venueCity}` : ""}`
+                          : "No venue"}{" "}
+                        · Updated {formatDate(a.updatedAt)}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {a.overallRating && (
+                        <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase", getRiskRatingColor(a.overallRating))}>
+                          {getRiskRatingLabel(a.overallRating)}
+                        </span>
+                      )}
+                      <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase", getStatusColor(a.status))}>
+                        {getStatusLabel(a.status)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
