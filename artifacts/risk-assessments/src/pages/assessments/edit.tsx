@@ -28,7 +28,7 @@ export default function AssessmentEdit() {
   });
 
   const [form, setForm] = useState({
-    title: "", venueId: "", status: "draft",
+    title: "", venueId: "none", status: "draft",
     description: "", intelSummary: "", analystNotes: "",
   });
 
@@ -36,7 +36,7 @@ export default function AssessmentEdit() {
     if (assessment) {
       setForm({
         title: assessment.title,
-        venueId: assessment.venueId ? String(assessment.venueId) : "",
+        venueId: assessment.venueId ? String(assessment.venueId) : "none",
         status: assessment.status,
         description: assessment.description ?? "",
         intelSummary: assessment.intelSummary ?? "",
@@ -48,7 +48,7 @@ export default function AssessmentEdit() {
   const mutation = useMutation({
     mutationFn: () => api.assessments.update(id, {
       title: form.title,
-      venueId: form.venueId ? Number(form.venueId) : undefined,
+      venueId: form.venueId && form.venueId !== "none" ? Number(form.venueId) : undefined,
       status: form.status as any,
       description: form.description || undefined,
       intelSummary: form.intelSummary || undefined,
@@ -91,7 +91,7 @@ export default function AssessmentEdit() {
               <Select value={form.venueId} onValueChange={v => set("venueId", v)}>
                 <SelectTrigger><SelectValue placeholder="No venue" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No venue</SelectItem>
+                  <SelectItem value="none">No venue</SelectItem>
                   {venues.map(v => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
                 </SelectContent>
               </Select>

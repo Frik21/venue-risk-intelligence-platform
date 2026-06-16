@@ -226,8 +226,8 @@ export default function MapsPage() {
         waypointsJson: waypoints.length > 0 ? waypoints : undefined,
         constraints: form.constraints.length > 0 ? form.constraints : undefined,
         analystNotes: form.analystNotes || undefined,
-        assessmentId: form.assessmentId ? Number(form.assessmentId) : undefined,
-        venueId: form.venueId ? Number(form.venueId) : (selectedVenueId ?? undefined),
+        assessmentId: form.assessmentId && form.assessmentId !== "none" ? Number(form.assessmentId) : undefined,
+        venueId: form.venueId && form.venueId !== "none" ? Number(form.venueId) : (selectedVenueId ?? undefined),
         ...(form.creationMethod === "freehand_draw" && form.waypoints.length >= 2
           ? {
               routeGeometryGeojson: {
@@ -823,7 +823,7 @@ function CreateRoutePanel({ form, setForm, drawMode, setDrawMode, assessments, v
           <Select value={form.assessmentId} onValueChange={v => set("assessmentId", v)}>
             <SelectTrigger className="h-7 text-xs mt-1"><SelectValue placeholder="None" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="">None</SelectItem>
+              <SelectItem value="none">None</SelectItem>
               {assessments.map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.title.slice(0, 28)}{a.title.length > 28 ? "…" : ""}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -833,7 +833,7 @@ function CreateRoutePanel({ form, setForm, drawMode, setDrawMode, assessments, v
           <Select value={form.venueId} onValueChange={v => set("venueId", v)}>
             <SelectTrigger className="h-7 text-xs mt-1"><SelectValue placeholder="None" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="">None</SelectItem>
+              <SelectItem value="none">None</SelectItem>
               {venues.map((v: any) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
             </SelectContent>
           </Select>

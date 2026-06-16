@@ -26,7 +26,7 @@ export default function AssessmentNew() {
 
   const [form, setForm] = useState({
     title: "",
-    venueId: preVenueId ?? "",
+    venueId: preVenueId ?? "none",
     description: "",
     intelSummary: "",
     analystNotes: "",
@@ -36,7 +36,7 @@ export default function AssessmentNew() {
     mutationFn: () =>
       api.assessments.create({
         title: form.title,
-        venueId: form.venueId ? Number(form.venueId) : undefined,
+        venueId: form.venueId && form.venueId !== "none" ? Number(form.venueId) : undefined,
         description: form.description || undefined,
         intelSummary: form.intelSummary || undefined,
         analystNotes: form.analystNotes || undefined,
@@ -80,7 +80,7 @@ export default function AssessmentNew() {
                 <SelectValue placeholder="Select a venue (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No venue</SelectItem>
+                <SelectItem value="none">No venue</SelectItem>
                 {venues.map(v => (
                   <SelectItem key={v.id} value={String(v.id)}>
                     {v.name} — {v.city}, {v.country}
