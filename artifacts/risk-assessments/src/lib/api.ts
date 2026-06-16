@@ -137,6 +137,12 @@ export interface Route {
   endLng: number | null;
   waypointsJson: Waypoint[] | null;
   routeGeometryGeojson: RouteGeoJSON | null;
+  originalDrawnGeometryGeojson: RouteGeoJSON | null;
+  snappedRouteGeometryGeojson: RouteGeoJSON | null;
+  snappedToRoads: boolean;
+  routeProvider: string | null;
+  travelMode: string;
+  routingApiResponseJson: unknown | null;
   estimatedDistance: number | null;
   estimatedTravelTime: number | null;
   constraints: string[] | null;
@@ -146,6 +152,14 @@ export interface Route {
   createdAt: string;
   updatedAt: string;
   findings?: RouteFinding[];
+}
+
+export interface SnapResult {
+  route: Route;
+  snappedGeojson: RouteGeoJSON;
+  distanceMetres: number;
+  travelTimeMinutes: number;
+  provider: string;
 }
 
 export const api = {
@@ -207,6 +221,8 @@ export const api = {
     delete: (id: number) => apiFetch<void>(`/routes/${id}`, { method: "DELETE" }),
     verify: (id: number) => apiFetch<Route>(`/routes/${id}/verify`, { method: "POST" }),
     analyze: (id: number) => apiFetch<{ route: Route; findings: RouteFinding[] }>(`/routes/${id}/analyze`, { method: "POST" }),
+    snap: (id: number) => apiFetch<SnapResult>(`/routes/${id}/snap`, { method: "POST" }),
+    restoreDrawn: (id: number) => apiFetch<Route>(`/routes/${id}/restore-drawn`, { method: "POST" }),
     findings: (id: number) => apiFetch<RouteFinding[]>(`/routes/${id}/findings`),
     updateFinding: (routeId: number, findingId: number, data: { verified?: boolean; analystNotes?: string }) =>
       apiFetch<RouteFinding>(`/routes/${routeId}/findings/${findingId}`, { method: "PATCH", body: JSON.stringify(data) }),

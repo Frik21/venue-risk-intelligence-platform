@@ -41,7 +41,6 @@ export const insertOsintEventSchema = createInsertSchema(osintEventsTable).omit(
 export type InsertOsintEvent = z.infer<typeof insertOsintEventSchema>;
 export type OsintEvent = typeof osintEventsTable.$inferSelect;
 
-// Expanded routes table
 export const routesTable = pgTable("routes", {
   id: serial("id").primaryKey(),
   assessmentId: integer("assessment_id").references(() => assessmentsTable.id, { onDelete: "cascade" }),
@@ -57,6 +56,14 @@ export const routesTable = pgTable("routes", {
   endLng: real("end_lng"),
   waypointsJson: jsonb("waypoints_json"),
   routeGeometryGeojson: jsonb("route_geometry_geojson"),
+  // Road-snap fields
+  originalDrawnGeometryGeojson: jsonb("original_drawn_geometry_geojson"),
+  snappedRouteGeometryGeojson: jsonb("snapped_route_geometry_geojson"),
+  snappedToRoads: boolean("snapped_to_roads").notNull().default(false),
+  routeProvider: text("route_provider"),
+  travelMode: text("travel_mode").notNull().default("driving"),
+  routingApiResponseJson: jsonb("routing_api_response_json"),
+  // Metrics
   estimatedDistance: real("estimated_distance"),
   estimatedTravelTime: integer("estimated_travel_time"),
   constraints: jsonb("constraints"),
@@ -71,7 +78,6 @@ export const insertRouteSchema = createInsertSchema(routesTable).omit({ id: true
 export type InsertRoute = z.infer<typeof insertRouteSchema>;
 export type Route = typeof routesTable.$inferSelect;
 
-// Route intelligence findings
 export const routeFindingsTable = pgTable("route_findings", {
   id: serial("id").primaryKey(),
   routeId: integer("route_id").notNull().references(() => routesTable.id, { onDelete: "cascade" }),
