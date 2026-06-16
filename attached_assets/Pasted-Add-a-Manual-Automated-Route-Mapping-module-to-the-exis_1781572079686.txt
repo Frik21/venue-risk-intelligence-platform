@@ -1,0 +1,181 @@
+Add a Manual & Automated Route Mapping module to the existing Venue Risk Intelligence Platform.
+
+The platform already includes venue assessments, OSINT, mapping, evidence, monitoring, and incident intelligence. Build this feature on top of the existing system.
+
+FEATURE: Manual & Automated Route Mapping
+
+Purpose:
+Allow users to create, save, edit, verify, and monitor operational routes linked to venues and assessments.
+
+Route Types:
+- Primary Extraction Route
+- Secondary Extraction Route
+- Medical Evacuation Route
+- VIP Arrival Route
+- VIP Departure Route
+- Staff Access Route
+- Supplier / Service Route
+- Emergency Services Access Route
+
+Route Creation Methods:
+
+1. Street Name Route Builder
+Users can enter a start point, end point, and preferred street names or road segments.
+
+System must:
+- Accept named streets in sequence
+- Attempt to geocode/resolve each street
+- Generate a route using those streets where possible
+- Flag unresolved streets
+- Allow user correction
+- Save route to assessment
+
+2. Endpoint Marker Routing
+Users can place or search:
+- Start marker
+- End marker
+- Optional waypoint markers
+
+System must:
+- Generate automated route
+- Show estimated distance
+- Show estimated travel time
+- Allow route adjustment
+- Save route as selected route type
+
+3. Freehand Route Drawing
+Users can manually draw a route on the map.
+
+System must:
+- Store drawn route geometry as GeoJSON
+- Allow route editing
+- Allow notes
+- Calculate approximate route distance
+- Mark route creation method as manual_draw
+
+Route Data Fields:
+- Route name
+- Route type
+- Assessment ID
+- Venue ID
+- Creation method
+- Start label
+- Start latitude
+- Start longitude
+- End label
+- End latitude
+- End longitude
+- Waypoints JSON
+- Route geometry GeoJSON
+- Estimated distance
+- Estimated travel time
+- Constraints
+- Analyst notes
+- Verified status
+- Created by
+- Created at
+- Updated at
+
+Route Constraints:
+- Traffic congestion
+- Road closures
+- Protest activity
+- Construction
+- Narrow roads
+- One-way streets
+- Limited turning space
+- Security exposure points
+- Poor lighting
+- High pedestrian density
+- Ride-share clustering
+- Limited law enforcement presence
+
+OSINT Route Corridor Analysis:
+After a route is created, analyze the route corridor for:
+- Crime incidents near route
+- Protest activity near route
+- Civil unrest near route
+- Road closures
+- Construction
+- Police advisories
+- Government alerts
+- Traffic disruption
+
+The system should flag findings for analyst review.
+
+Important rule:
+Automated route and OSINT findings may suggest route risks, but route approval must be manual and analyst verified.
+
+User Interface:
+Add a Route Planning panel inside the map view and assessment view.
+
+Panel actions:
+- Create new route
+- Select route type
+- Select creation method
+- Search start point
+- Search end point
+- Add waypoints
+- Enter preferred streets
+- Draw route manually
+- Save route
+- Edit route
+- Duplicate route
+- Delete route
+- Mark route as verified
+- Attach route to assessment
+- Attach route to venue
+- Add notes
+- View route intelligence findings
+
+Database:
+Add or update the routes table with:
+
+- id
+- assessment_id
+- venue_id
+- route_name
+- route_type
+- creation_method
+- start_label
+- start_latitude
+- start_longitude
+- end_label
+- end_latitude
+- end_longitude
+- waypoints_json
+- route_geometry_geojson
+- estimated_distance
+- estimated_travel_time
+- constraints
+- analyst_notes
+- verified
+- created_by
+- created_at
+- updated_at
+
+Also add route intelligence findings if not already present:
+
+route_intelligence_findings
+- id
+- route_id
+- assessment_id
+- venue_id
+- finding_type
+- severity
+- summary
+- source_name
+- source_url
+- distance_from_route
+- detected_at
+- verified
+- analyst_notes
+
+Integrate this with:
+- Existing map module
+- Existing assessments
+- Existing venue records
+- Existing OSINT engine
+- Existing incident intelligence module
+- Existing audit/version control
+- Existing evidence repository

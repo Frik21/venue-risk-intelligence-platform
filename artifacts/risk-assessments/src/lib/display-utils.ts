@@ -1,28 +1,11 @@
 export function getStatusBadgeVariant(status: string) {
   switch (status) {
-    case 'approved':
-    case 'monitoring':
-      return 'default';
-    case 'under_review':
-      return 'secondary';
-    case 'draft':
-      return 'outline';
-    case 'review_required':
-    case 'escalated':
-      return 'destructive';
-    case 'archived':
-      return 'secondary';
-    case 'active':
-    case 'open':
-      return 'default';
-    case 'completed':
-    case 'closed':
-    case 'mitigated':
-      return 'secondary';
-    case 'accepted':
-      return 'secondary';
-    default:
-      return 'outline';
+    case 'approved': case 'monitoring': return 'default';
+    case 'under_review': return 'secondary';
+    case 'draft': return 'outline';
+    case 'review_required': case 'escalated': return 'destructive';
+    case 'archived': return 'secondary';
+    default: return 'outline';
   }
 }
 
@@ -58,7 +41,6 @@ export function getRiskRatingColor(rating?: string | null): string {
     case 'moderate_high': return 'text-orange-700 bg-orange-50 border-orange-200';
     case 'moderate': return 'text-amber-700 bg-amber-50 border-amber-200';
     case 'low': return 'text-green-700 bg-green-50 border-green-200';
-    case 'unknown': return 'text-slate-500 bg-slate-100 border-slate-200';
     default: return 'text-slate-500 bg-slate-100 border-slate-200';
   }
 }
@@ -69,7 +51,6 @@ export function getRiskRatingLabel(rating?: string | null): string {
     case 'moderate_high': return 'MOD-HIGH';
     case 'moderate': return 'MODERATE';
     case 'low': return 'LOW';
-    case 'unknown': return 'UNKNOWN';
     default: return 'UNKNOWN';
   }
 }
@@ -104,22 +85,40 @@ export function getSeverityColor(severity: string): string {
   }
 }
 
+export function getRouteTypeColor(routeType: string): string {
+  switch (routeType) {
+    case 'primary_extraction': return '#2563eb';   // blue
+    case 'secondary_extraction': return '#7c3aed'; // purple
+    case 'medical_evacuation': return '#dc2626';   // red
+    case 'vip_arrival': return '#16a34a';          // green
+    case 'vip_departure': return '#059669';        // emerald
+    case 'staff_access': return '#d97706';         // amber
+    case 'supplier_route': return '#64748b';       // slate
+    case 'emergency_access': return '#ea580c';     // orange
+    default: return '#64748b';
+  }
+}
+
+export function getRouteTypeLabel(routeType: string): string {
+  switch (routeType) {
+    case 'primary_extraction': return 'Primary Extraction';
+    case 'secondary_extraction': return 'Secondary Extraction';
+    case 'medical_evacuation': return 'Medical Evacuation';
+    case 'vip_arrival': return 'VIP Arrival';
+    case 'vip_departure': return 'VIP Departure';
+    case 'staff_access': return 'Staff Access';
+    case 'supplier_route': return 'Supplier / Service';
+    case 'emergency_access': return 'Emergency Services';
+    default: return routeType.replace(/_/g, ' ');
+  }
+}
+
 export function formatDate(dateStr: string) {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  }).format(new Date(dateStr));
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(dateStr));
 }
 
 export function formatDateTime(dateStr: string) {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(new Date(dateStr));
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(dateStr));
 }
 
 export function timeAgo(dateStr: string): string {
@@ -134,6 +133,20 @@ export function timeAgo(dateStr: string): string {
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days}d ago`;
   return formatDate(dateStr);
+}
+
+export function formatDistance(metres: number | null): string {
+  if (!metres) return '—';
+  if (metres < 1000) return `${Math.round(metres)}m`;
+  return `${(metres / 1000).toFixed(1)}km`;
+}
+
+export function formatTravelTime(minutes: number | null): string {
+  if (!minutes) return '—';
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h ${m}min` : `${h}h`;
 }
 
 export const VENUE_TYPES = [
@@ -207,11 +220,24 @@ export const EVIDENCE_TYPES = [
 ];
 
 export const ROUTE_TYPES = [
-  { value: 'primary_extraction', label: 'Primary Extraction Route' },
-  { value: 'secondary_extraction', label: 'Secondary Extraction Route' },
-  { value: 'drop_off', label: 'Drop-off Zone' },
-  { value: 'pick_up', label: 'Pick-up Zone' },
-  { value: 'parking', label: 'Parking Area' },
-  { value: 'medical_evacuation', label: 'Medical Evacuation Route' },
-  { value: 'hospital_route', label: 'Nearby Hospital Route' },
+  { value: 'primary_extraction', label: 'Primary Extraction Route', color: '#2563eb' },
+  { value: 'secondary_extraction', label: 'Secondary Extraction Route', color: '#7c3aed' },
+  { value: 'medical_evacuation', label: 'Medical Evacuation Route', color: '#dc2626' },
+  { value: 'vip_arrival', label: 'VIP Arrival Route', color: '#16a34a' },
+  { value: 'vip_departure', label: 'VIP Departure Route', color: '#059669' },
+  { value: 'staff_access', label: 'Staff Access Route', color: '#d97706' },
+  { value: 'supplier_route', label: 'Supplier / Service Route', color: '#64748b' },
+  { value: 'emergency_access', label: 'Emergency Services Access', color: '#ea580c' },
+];
+
+export const ROUTE_CREATION_METHODS = [
+  { value: 'endpoint_marker', label: 'Endpoint Marker (click map)', description: 'Click start and end points on the map' },
+  { value: 'street_builder', label: 'Street Name Builder', description: 'Enter road names in sequence' },
+  { value: 'freehand_draw', label: 'Freehand Draw', description: 'Click multiple points to trace the route' },
+];
+
+export const ROUTE_CONSTRAINTS = [
+  'Traffic congestion', 'Road closures', 'Protest activity', 'Construction',
+  'Narrow roads', 'One-way streets', 'Limited turning space', 'Security exposure points',
+  'Poor lighting', 'High pedestrian density', 'Ride-share clustering', 'Limited law enforcement presence',
 ];

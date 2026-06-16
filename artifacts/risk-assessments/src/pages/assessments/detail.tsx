@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import { api, type AssessmentDetail, type RiskMatrix, type Evidence, type AssessmentVersion } from "@/lib/api";
+import { api, type AssessmentDetail, type RiskMatrix, type Evidence, type AssessmentVersion, type Route, type RouteFinding, type RouteType, type RouteCreationMethod } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,11 +11,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  ArrowLeft, Building2, ClipboardList, Shield, FolderOpen, History, CheckCircle2, Edit2, Trash2, Plus, ExternalLink, FileText,
+  ArrowLeft, Building2, Shield, FolderOpen, History, CheckCircle2, Edit2, Trash2, Plus, ExternalLink,
+  Navigation, BarChart2, RefreshCw, Route as RouteIcon,
 } from "lucide-react";
 import {
   getStatusColor, getStatusLabel, getRiskRatingColor, getRiskRatingLabel,
   formatDate, formatDateTime, RISK_RATINGS, EVIDENCE_TYPES,
+  getRouteTypeColor, getRouteTypeLabel, formatDistance, formatTravelTime,
+  getPriorityColor, ROUTE_TYPES, ROUTE_CREATION_METHODS, ROUTE_CONSTRAINTS,
 } from "@/lib/display-utils";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -346,6 +349,336 @@ function VersionHistoryTab({ assessmentId }: { assessmentId: number }) {
   );
 }
 
+// ── Routes Tab ────────────────────────────────────────────────────────────────
+
+interface RouteFormState {
+  routeName: string; routeType: RouteType; creationMethod: RouteCreationMethod;
+  startLabel: string; endLabel: string; analystNotes: string;
+  constraints: string[]; streets: string;
+}
+const defaultRouteForm = (): RouteFormState => ({
+  routeName: "", routeType: "primary_extraction", creationMethod: "endpoint_marker",
+  startLabel: "Start", endLabel: "End", analystNotes: "", constraints: [], streets: "",
+});
+
+function RoutesTab({ assessmentId, venueId }: { assessmentId: number; venueId?: number }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [showCreate, setShowCreate] = useState(false);
+  const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
+  const [form, setForm] = useState<RouteFormState>(defaultRouteForm());
+  const [showFindings, setShowFindings] = useState(false);
+
+  const { data: routes = [], isLoading } = useQuery<Route[]>({
+    queryKey: ["routes", "assessment", assessmentId],
+    queryFn: () => api.routes.list({ assessmentId }),
+  });
+
+  const { data: findings = [], isLoading: fLoading } = useQuery<RouteFinding[]>({
+    queryKey: ["routes", selectedRoute?.id, "findings"],
+    queryFn: () => api.routes.findings(selectedRoute!.id),
+    enabled: !!selectedRoute && showFindings,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () => api.routes.create({
+      routeName: form.routeName,
+      routeType: form.routeType,
+      creationMethod: form.creationMethod,
+      startLabel: form.startLabel || undefined,
+      endLabel: form.endLabel || undefined,
+      analystNotes: form.analystNotes || undefined,
+      constraints: form.constraints.length ? form.constraints : undefined,
+      waypointsJson: form.creationMethod === "street_builder" && form.streets
+        ? form.streets.split("\n").filter(Boolean).map((s) => ({ label: s.trim(), lat: 0, lng: 0 }))
+        : undefined,
+      assessmentId,
+      venueId,
+    }),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["routes", "assessment", assessmentId] });
+      toast({ title: `Route "${r.routeName}" created`, description: r.findings?.length ? `${r.findings.length} corridor findings detected` : "No findings in corridor" });
+      setForm(defaultRouteForm());
+      setShowCreate(false);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const verifyMutation = useMutation({
+    mutationFn: (id: number) => api.routes.verify(id),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["routes", "assessment", assessmentId] });
+      setSelectedRoute(r);
+      toast({ title: "Route verified", description: "Route marked as analyst-verified" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.routes.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["routes", "assessment", assessmentId] });
+      setSelectedRoute(null);
+    },
+  });
+
+  const analyzeMutation = useMutation({
+    mutationFn: (id: number) => api.routes.analyze(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["routes", selectedRoute?.id, "findings"] }),
+  });
+
+  const set = (k: keyof RouteFormState, v: any) => setForm(f => ({ ...f, [k]: v }));
+  const toggleConstraint = (c: string) =>
+    setForm(f => ({ ...f, constraints: f.constraints.includes(c) ? f.constraints.filter(x => x !== c) : [...f.constraints, c] }));
+
+  if (isLoading) return <Skeleton className="h-40" />;
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="font-semibold text-slate-800">Operational Routes ({routes.length})</h3>
+          <p className="text-xs text-slate-500 mt-0.5">Extraction, access, and evacuation routes linked to this assessment</p>
+        </div>
+        <Button size="sm" onClick={() => { setShowCreate(!showCreate); setSelectedRoute(null); }}>
+          <Plus className="w-3.5 h-3.5 mr-1" /> Add Route
+        </Button>
+      </div>
+
+      {/* Create form */}
+      {showCreate && (
+        <Card className="border-blue-200 bg-blue-50/30">
+          <CardContent className="p-4 space-y-3">
+            <div className="font-semibold text-sm text-slate-800 mb-1">Create New Route</div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Route Name *</Label>
+                <Input className="h-8 text-xs mt-1" placeholder="e.g. Primary Extraction Route A" value={form.routeName} onChange={e => set("routeName", e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs">Route Type *</Label>
+                <Select value={form.routeType} onValueChange={v => set("routeType", v as RouteType)}>
+                  <SelectTrigger className="h-8 text-xs mt-1">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ background: getRouteTypeColor(form.routeType) }} />
+                      <SelectValue />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ROUTE_TYPES.map(rt => (
+                      <SelectItem key={rt.value} value={rt.value}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full" style={{ background: rt.color }} />
+                          {rt.label}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs">Creation Method</Label>
+              <Select value={form.creationMethod} onValueChange={v => set("creationMethod", v as RouteCreationMethod)}>
+                <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ROUTE_CREATION_METHODS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {form.creationMethod === "street_builder" ? (
+              <div>
+                <Label className="text-xs">Street Sequence (one per line)</Label>
+                <Textarea className="text-xs mt-1 resize-none" rows={3}
+                  placeholder={"Main St\nBroadway\nPark Ave\nHotel driveway"}
+                  value={form.streets} onChange={e => set("streets", e.target.value)} />
+                <p className="text-[10px] text-slate-400 mt-0.5">Enter road names in order from start to end</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Start Label</Label>
+                  <Input className="h-8 text-xs mt-1" placeholder="Start point" value={form.startLabel} onChange={e => set("startLabel", e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">End Label</Label>
+                  <Input className="h-8 text-xs mt-1" placeholder="End point" value={form.endLabel} onChange={e => set("endLabel", e.target.value)} />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <Label className="text-xs">Route Constraints</Label>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {ROUTE_CONSTRAINTS.map(c => (
+                  <button key={c} onClick={() => toggleConstraint(c)}
+                    className={cn("text-[10px] px-1.5 py-0.5 rounded border transition-colors",
+                      form.constraints.includes(c) ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:border-blue-400")}>
+                    {c}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs">Analyst Notes</Label>
+              <Textarea className="text-xs mt-1 resize-none" rows={2}
+                placeholder="Route-specific observations, warnings, tactical notes..."
+                value={form.analystNotes} onChange={e => set("analystNotes", e.target.value)} />
+            </div>
+
+            <div className="flex gap-2 pt-1 border-t border-blue-200">
+              <Button size="sm" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.routeName}>
+                {createMutation.isPending ? "Creating..." : "Create Route"}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => { setShowCreate(false); setForm(defaultRouteForm()); }}>Cancel</Button>
+            </div>
+            <p className="text-[10px] text-slate-400">Corridor intelligence will be auto-generated on save. Route approval must be manual.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Routes list */}
+      {routes.length === 0 ? (
+        <div className="py-10 text-center">
+          <RouteIcon className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+          <p className="text-sm text-slate-500 font-medium mb-1">No routes yet</p>
+          <p className="text-xs text-slate-400">Add extraction, evacuation, and access routes for this assessment</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {routes.map(r => (
+            <div key={r.id} className={cn("border rounded-lg bg-white transition-all", selectedRoute?.id === r.id ? "border-blue-300 shadow-sm" : "border-slate-200")}>
+              <button className="w-full text-left px-4 py-3" onClick={() => { setSelectedRoute(selectedRoute?.id === r.id ? null : r); setShowFindings(false); }}>
+                <div className="flex items-start gap-3">
+                  <div className="w-3 h-3 rounded-full mt-1 shrink-0" style={{ background: getRouteTypeColor(r.routeType) }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-slate-800 text-sm">{r.routeName}</span>
+                      {r.verified && (
+                        <Badge className="text-[10px] bg-green-100 text-green-700 border-green-200 border">
+                          <CheckCircle2 className="w-2.5 h-2.5 mr-1" />Verified
+                        </Badge>
+                      )}
+                      <Badge variant="outline" className="text-[10px] capitalize">{r.creationMethod.replace(/_/g, " ")}</Badge>
+                    </div>
+                    <div className="text-xs text-slate-500 mt-0.5">{getRouteTypeLabel(r.routeType)}</div>
+                    {(r.estimatedDistance || r.estimatedTravelTime) && (
+                      <div className="text-[11px] text-slate-400 mt-0.5">
+                        {formatDistance(r.estimatedDistance)} {r.estimatedTravelTime ? `· ${formatTravelTime(r.estimatedTravelTime)}` : ""}
+                      </div>
+                    )}
+                    {r.constraints && Array.isArray(r.constraints) && r.constraints.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {(r.constraints as string[]).slice(0, 3).map((c, i) => (
+                          <Badge key={i} variant="outline" className="text-[9px] px-1 py-0">{c}</Badge>
+                        ))}
+                        {(r.constraints as string[]).length > 3 && (
+                          <Badge variant="outline" className="text-[9px] px-1 py-0">+{(r.constraints as string[]).length - 3} more</Badge>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </button>
+
+              {selectedRoute?.id === r.id && (
+                <div className="px-4 pb-3 border-t border-slate-100 mt-0.5">
+                  {/* Notes */}
+                  {r.analystNotes && (
+                    <div className="mb-3 mt-2">
+                      <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Analyst Notes</div>
+                      <p className="text-xs text-slate-600 bg-amber-50 border border-amber-100 p-2 rounded">{r.analystNotes}</p>
+                    </div>
+                  )}
+
+                  {/* Start / End */}
+                  {(r.startLabel || r.endLabel) && (
+                    <div className="mb-3 mt-2 grid grid-cols-2 gap-2">
+                      {r.startLabel && (
+                        <div className="bg-slate-50 rounded p-2">
+                          <div className="text-[9px] font-bold text-slate-400 uppercase">Start</div>
+                          <div className="text-xs text-slate-700 font-medium">{r.startLabel}</div>
+                          {r.startLat && <div className="text-[10px] text-slate-400">{r.startLat.toFixed(4)}, {r.startLng?.toFixed(4)}</div>}
+                        </div>
+                      )}
+                      {r.endLabel && (
+                        <div className="bg-slate-50 rounded p-2">
+                          <div className="text-[9px] font-bold text-slate-400 uppercase">End</div>
+                          <div className="text-xs text-slate-700 font-medium">{r.endLabel}</div>
+                          {r.endLat && <div className="text-[10px] text-slate-400">{r.endLat.toFixed(4)}, {r.endLng?.toFixed(4)}</div>}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Findings */}
+                  {showFindings && (
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Corridor Intelligence</div>
+                        <Button size="sm" variant="outline" className="h-6 text-[10px] px-2"
+                          onClick={() => analyzeMutation.mutate(r.id)} disabled={analyzeMutation.isPending}>
+                          <RefreshCw className={cn("w-2.5 h-2.5 mr-1", analyzeMutation.isPending && "animate-spin")} />
+                          Re-run
+                        </Button>
+                      </div>
+                      {fLoading ? <Skeleton className="h-10" /> : findings.length === 0 ? (
+                        <div className="text-xs text-slate-400 text-center py-2">No findings</div>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {findings.map(f => (
+                            <div key={f.id} className="border border-slate-200 rounded p-2 bg-white">
+                              <div className="flex items-start gap-2">
+                                <span className={cn("text-[9px] font-bold px-1 py-0.5 rounded border uppercase shrink-0", getPriorityColor(f.severity))}>{f.severity}</span>
+                                <div className="min-w-0">
+                                  <p className="text-[11px] text-slate-700 leading-snug">{f.summary}</p>
+                                  <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-400">
+                                    {f.distanceFromRoute && <span>{f.distanceFromRoute}m from route</span>}
+                                    {f.sourceName && <span>{f.sourceName}</span>}
+                                    {f.verified && <CheckCircle2 className="w-2.5 h-2.5 text-green-500" />}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    <Button size="sm" variant="outline" className="text-xs h-7"
+                      onClick={() => setShowFindings(f => !f)}>
+                      <BarChart2 className="w-3 h-3 mr-1" />
+                      {showFindings ? "Hide" : "View"} Corridor Intel
+                    </Button>
+                    {!r.verified && (
+                      <Button size="sm" className="text-xs h-7 bg-green-600 hover:bg-green-700"
+                        onClick={() => verifyMutation.mutate(r.id)} disabled={verifyMutation.isPending}>
+                        <CheckCircle2 className="w-3 h-3 mr-1" />
+                        {verifyMutation.isPending ? "Verifying..." : "Verify Route"}
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" className="text-xs h-7 text-red-500 hover:text-red-700"
+                      onClick={() => { if (confirm("Delete route?")) deleteMutation.mutate(r.id); }}>
+                      <Trash2 className="w-3 h-3 mr-1" /> Delete
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AssessmentDetailPage() {
   const params = useParams<{ id: string }>();
   const [, navigate] = useLocation();
@@ -467,6 +800,7 @@ export default function AssessmentDetailPage() {
           {[
             { value: "risk-matrix", label: "Risk Matrix", icon: Shield },
             { value: "evidence", label: "Evidence", icon: FolderOpen },
+            { value: "routes", label: "Routes", icon: RouteIcon },
             { value: "versions", label: "Version History", icon: History },
           ].map(({ value, label, icon: Icon }) => (
             <TabsTrigger
@@ -484,6 +818,9 @@ export default function AssessmentDetailPage() {
         </TabsContent>
         <TabsContent value="evidence" className="mt-4">
           <EvidenceTab assessmentId={id} />
+        </TabsContent>
+        <TabsContent value="routes" className="mt-4">
+          <RoutesTab assessmentId={id} venueId={assessment.venueId ?? undefined} />
         </TabsContent>
         <TabsContent value="versions" className="mt-4">
           <VersionHistoryTab assessmentId={id} />
