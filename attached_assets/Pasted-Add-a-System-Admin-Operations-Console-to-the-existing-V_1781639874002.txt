@@ -1,0 +1,232 @@
+Add a System Admin & Operations Console to the existing Venue Risk Intelligence Platform.
+
+Only Administrator users may access this area.
+
+Create a new admin section:
+
+/admin
+
+Admin Console Features:
+
+1. Overview Dashboard
+Show:
+- Total users
+- Active users
+- Pending users
+- Suspended users
+- Total venues
+- Total assessments
+- Total reports exported
+- Total OSINT scans
+- Total alerts
+- System health status
+
+2. User Management
+Create admin pages to:
+- View all users
+- Search users
+- Filter by role
+- Filter by account status
+- Change user role
+- Suspend user
+- Reactivate user
+- View login history
+- View failed login attempts
+
+Roles:
+- Administrator
+- Analyst
+- Reviewer
+- Viewer
+
+3. Website Health Monitoring
+Show:
+- Website status: Healthy / Degraded / Down
+- API health
+- Database health
+- File storage health
+- Background job health
+- Last health check time
+
+4. Performance Monitoring
+Track:
+- Average page load time
+- Average API response time
+- Slow API endpoints
+- Slow database queries
+- Map loading performance
+- File upload performance
+
+5. Bugs, Crashes, and Errors
+Create error logging tables and dashboard.
+
+Track:
+- Frontend errors
+- Backend errors
+- API failures
+- Crash reports
+- Error message
+- Stack trace
+- Affected user
+- URL/page
+- Browser/device info
+- Timestamp
+- Status: New / Investigating / Resolved / Ignored
+
+6. Security Monitoring
+Track:
+- Failed login attempts
+- Suspicious activity
+- Permission changes
+- Admin actions
+- Unusual exports/downloads
+- High-volume API usage
+- Account lockouts
+
+7. Audit Logs
+Create searchable audit logs for:
+- User actions
+- Admin actions
+- Assessment edits
+- Report exports
+- Media uploads
+- Role changes
+- Login events
+- Deletions
+
+8. Business Metrics
+Show:
+- New users this month
+- Active users this month
+- Assessments created this month
+- Venues added this month
+- Reports exported this month
+- Alerts generated this month
+- OSINT scans run this month
+
+9. Support & Feedback
+Create support ticket system.
+
+Fields:
+- User
+- Subject
+- Message
+- Priority
+- Status
+- Assigned admin
+- Created date
+- Updated date
+
+Statuses:
+- Open
+- In Progress
+- Resolved
+- Closed
+
+10. System Configuration
+Admin can configure:
+- OSINT scan frequency
+- Alert thresholds
+- File upload size limits
+- Map provider
+- Routing provider
+- Maintenance mode
+- New user registration enabled/disabled
+
+11. Backups & Data Safety
+Show:
+- Last backup time
+- Backup status
+- Database size
+- Storage usage
+- Restore log placeholder
+
+12. Database Tables to Add
+
+Create these tables if they do not already exist:
+
+system_health_checks
+- id
+- service_name
+- status
+- response_time_ms
+- message
+- checked_at
+
+system_errors
+- id
+- error_type
+- severity
+- message
+- stack_trace
+- user_id
+- page_url
+- browser_info
+- status
+- created_at
+- resolved_at
+
+admin_audit_logs
+- id
+- user_id
+- action
+- entity_type
+- entity_id
+- previous_value
+- new_value
+- ip_address
+- user_agent
+- created_at
+
+login_events
+- id
+- user_id
+- email
+- success
+- failure_reason
+- ip_address
+- user_agent
+- created_at
+
+support_tickets
+- id
+- user_id
+- subject
+- message
+- priority
+- status
+- assigned_admin_id
+- created_at
+- updated_at
+
+system_settings
+- id
+- setting_key
+- setting_value
+- updated_by
+- updated_at
+
+13. UI Requirements
+Create a professional admin dashboard with sidebar navigation:
+
+- Overview
+- Users
+- Health
+- Performance
+- Errors
+- Security
+- Audit Logs
+- Business Metrics
+- Support
+- Settings
+- Backups
+
+14. Security Requirements
+- Admin console must be protected by Administrator role only
+- All admin actions must be logged
+- Never expose secrets or API keys in the frontend
+- Validate all admin inputs
+- Confirm destructive actions before execution
+- Prevent non-admin users from accessing admin routes
+
+Build this into the existing application without removing any existing features.

@@ -1,0 +1,229 @@
+Add a Future Mobile Companion App architecture to the existing Venue Risk Intelligence Platform.
+
+Purpose:
+The mobile application will be a companion to the web platform, not a replacement.
+
+The website remains the primary platform for:
+- Full assessments
+- Administration
+- Reporting
+- User management
+- Billing
+- OSINT analysis
+- Monitoring management
+- System configuration
+
+The mobile application is intended for field operations and ease of access when users do not have access to a laptop or desktop.
+
+ARCHITECTURE REQUIREMENT
+
+The entire platform must be API-first.
+
+All data and functionality must be accessible through secure backend APIs.
+
+Future Android and iOS applications must be able to connect to the same backend without requiring a system redesign.
+
+The API architecture must support:
+- Web application
+- Android companion application
+- iOS companion application
+- Future third-party integrations
+
+MOBILE COMPANION APP PURPOSE
+
+The mobile app is designed for field users including:
+
+- Security Specialists
+- Risk Consultants
+- Venue Assessors
+- Executive Protection Teams
+- Event Security Managers
+- Maritime Security Personnel
+- Field Intelligence Personnel
+
+MOBILE COMPANION APP FEATURES
+
+Assessment Access
+- View assigned assessments
+- View venue information
+- View risk summaries
+- View assessment history
+
+Evidence Capture
+- Take photos
+- Record videos
+- Upload files
+- Add captions
+- Add evidence notes
+- Attach evidence to assessment sections
+
+Field Notes
+- Create notes
+- Edit notes
+- Timestamp notes
+- Geotag notes
+- Sync notes to assessment
+
+Voice Notes
+- Record voice notes
+- Attach voice notes to assessments
+- Store voice notes as evidence
+
+Maps & Navigation
+- View venue location
+- View routes
+- View extraction routes
+- View nearby hospitals
+- View nearby police stations
+- View incidents
+- View alerts
+
+Route Operations
+- View saved routes
+- Start navigation
+- View route intelligence findings
+- View route constraints
+
+OSINT Alerts
+- View monitoring alerts
+- View incident alerts
+- View route alerts
+- View area intelligence alerts
+
+Checklists
+- Complete assessment checklist items
+- Mark completed tasks
+- Add comments
+- Upload supporting evidence
+
+Offline Capability
+
+The mobile application must support offline operation.
+
+Users should be able to:
+
+- Open assessments
+- Add notes
+- Take photos
+- Record videos
+- Record voice notes
+- Complete checklists
+
+while offline.
+
+When connectivity returns:
+
+- Sync changes automatically
+- Resolve conflicts
+- Upload media
+- Update assessment records
+
+SYNC REQUIREMENTS
+
+Implement secure synchronization between:
+
+Mobile App
+↓
+Backend API
+↓
+Database
+
+Features:
+- Background sync
+- Manual sync
+- Sync status indicators
+- Conflict resolution
+
+MOBILE SECURITY
+
+Require:
+
+- Authentication
+- Secure API access
+- JWT/session validation
+- Role-based access control
+- Device session management
+
+Support:
+
+- Biometric login
+- PIN login
+- Multi-factor authentication (future)
+
+MEDIA REQUIREMENTS
+
+Support:
+
+Images
+- JPG
+- PNG
+- WEBP
+
+Video
+- MP4
+- MOV
+
+Audio
+- Voice notes
+- Audio evidence
+
+All media must sync to the existing Evidence Repository.
+
+PUSH NOTIFICATIONS (FUTURE)
+
+Design backend architecture to support:
+
+- Alert notifications
+- Incident notifications
+- Assignment notifications
+- Monitoring notifications
+- Assessment updates
+
+DATABASE REQUIREMENTS
+
+Ensure existing database structure supports:
+
+- Mobile synchronization
+- Offline record creation
+- Media uploads
+- Device tracking
+- Sync logs
+
+Add tables if required:
+
+mobile_devices
+- id
+- user_id
+- device_name
+- device_type
+- app_version
+- last_active
+- created_at
+
+mobile_sync_logs
+- id
+- user_id
+- device_id
+- sync_status
+- records_synced
+- errors
+- created_at
+
+DESIGN REQUIREMENT
+
+The mobile application must be considered a field operations companion application.
+
+The web platform remains the primary command, intelligence, administration, reporting, and management platform.
+
+The mobile application focuses on:
+
+- Operational use
+- Evidence collection
+- Route access
+- Alert access
+- Quick updates
+- Field intelligence gathering
+
+Do not build the mobile app now.
+
+Prepare the architecture, APIs, database, authentication, and synchronization design so Android and iOS companion applications can be added later without major changes to the platform.
