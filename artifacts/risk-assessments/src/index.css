@@ -169,3 +169,19 @@
     @apply bg-background text-foreground;
   }
 }
+.venueguard-breathing-marker {
+  animation: venueguard-marker-breathe 3.8s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.75));
+}
+
+@keyframes venueguard-marker-breathe {
+  0%, 100% {
+    opacity: 0.72;
+    stroke-width: 2;
+  }
+
+  50% {
+    opacity: 1;
+    stroke-width: 4;
+  }
+}

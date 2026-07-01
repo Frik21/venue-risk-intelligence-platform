@@ -1,211 +1,191 @@
-import { useQuery } from "@tanstack/react-query";
-import { api, type DashboardSummary } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
-import { Link } from "wouter";
-import {
-  Building2,
-  ClipboardList,
-  AlertTriangle,
-  Bell,
-  ShieldCheck,
-  TrendingUp,
-  ArrowRight,
-} from "lucide-react";
-import { getStatusColor, getStatusLabel, getPriorityColor, getRiskRatingLabel, getRiskRatingColor, timeAgo } from "@/lib/display-utils";
-import { cn } from "@/lib/utils";
+import { useState } from "react";
+import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-react";
 
-function StatCard({ title, value, icon: Icon, color, href }: { title: string; value: number; icon: React.ElementType; color: string; href: string }) {
-  return (
-    <Link href={href}>
-      <Card className="cursor-pointer hover:shadow-md transition-shadow">
-        <CardContent className="p-5">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground font-medium">{title}</p>
-              <p className="text-3xl font-bold mt-1">{value}</p>
-            </div>
-            <div className={cn("p-2.5 rounded-lg", color)}>
-              <Icon className="w-5 h-5" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </Link>
-  );
-}
+type Step = "login" | "preparing" | "brief" | "centre";
 
 export default function Dashboard() {
-  const { data, isLoading, error } = useQuery<DashboardSummary>({
-    queryKey: ["dashboard"],
-    queryFn: api.dashboard,
-  });
+  const [step, setStep] = useState<Step>("login");
 
-  if (error) {
+  function signIn() {
+    setStep("preparing");
+    setTimeout(() => setStep("brief"), 1400);
+  }
+
+  if (step === "login") {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-center">
-        <AlertTriangle className="w-10 h-10 text-destructive mb-4" />
-        <h2 className="text-xl font-semibold mb-2">Failed to load dashboard</h2>
-        <p className="text-muted-foreground">Please try refreshing the page.</p>
+      <div className="min-h-[80vh] flex items-center justify-center bg-slate-950 text-white rounded-3xl overflow-hidden">
+        <div className="w-full max-w-md p-8">
+          <p className="text-sm text-sky-300 mb-2">VenueGuard</p>
+          <h1 className="text-4xl font-semibold tracking-tight mb-2">Planning powered by Intelligence.</h1>
+          <p className="text-slate-400 mb-8">Sign in to prepare your operational brief.</p>
+
+          <div className="space-y-4">
+            <input className="w-full rounded-xl bg-white/10 border border-white/10 px-4 py-3 outline-none" placeholder="Email" />
+            <input className="w-full rounded-xl bg-white/10 border border-white/10 px-4 py-3 outline-none" placeholder="Password" type="password" />
+            <button onClick={signIn} className="w-full rounded-xl bg-sky-400 text-slate-950 font-semibold py-3">
+              Sign In
+            </button>
+            <button className="w-full text-sm text-slate-400 hover:text-white">Forgot Password</button>
+          </div>
+        </div>
       </div>
     );
   }
 
-  const statusGroups = [
-    { key: "draft", label: "Draft", color: "bg-slate-400" },
-    { key: "under_review", label: "Under Review", color: "bg-amber-400" },
-    { key: "approved", label: "Approved", color: "bg-green-500" },
-    { key: "monitoring", label: "Monitoring", color: "bg-blue-500" },
-    { key: "review_required", label: "Review Required", color: "bg-orange-500" },
-    { key: "escalated", label: "Escalated", color: "bg-red-500" },
-    { key: "archived", label: "Archived", color: "bg-slate-300" },
-  ];
+  if (step === "preparing") {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center bg-slate-950 text-white rounded-3xl">
+        <div className="text-center">
+          <p className="text-sky-300 mb-3">Welcome back, Frik.</p>
+          <h1 className="text-3xl font-semibold">Preparing your operational brief...</h1>
+          <div className="mx-auto mt-8 h-2 w-48 rounded-full bg-white/10 overflow-hidden">
+            <div className="h-full w-2/3 rounded-full bg-sky-400 animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "brief") {
+    return (
+      <div className="min-h-[80vh] bg-slate-950 text-white rounded-3xl p-8">
+        <div className="max-w-5xl mx-auto space-y-8">
+          <div>
+            <p className="text-sky-300 text-sm">Today&apos;s Operational Brief</p>
+            <h1 className="text-4xl font-semibold mt-2">Here&apos;s what&apos;s happening around you.</h1>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-4">
+            <div className="rounded-2xl bg-white/10 border border-white/10 p-5">
+              <MapPin className="w-5 h-5 text-sky-300 mb-4" />
+              <p className="text-sm text-slate-400">Current Area</p>
+              <p className="text-xl font-semibold">Cape Town</p>
+              <p className="text-sm text-slate-400 mt-1">Operational radius: 5 km</p>
+            </div>
+
+            <div className="rounded-2xl bg-white/10 border border-white/10 p-5">
+              <ShieldCheck className="w-5 h-5 text-amber-300 mb-4" />
+              <p className="text-sm text-slate-400">Current Operating Conditions</p>
+              <p className="text-xl font-semibold">Elevated</p>
+              <p className="text-sm text-slate-400 mt-1">Additional awareness recommended.</p>
+            </div>
+
+            <div className="rounded-2xl bg-white/10 border border-white/10 p-5">
+              <Clock className="w-5 h-5 text-sky-300 mb-4" />
+              <p className="text-sm text-slate-400">Updated</p>
+              <p className="text-xl font-semibold">5 min ago</p>
+              <p className="text-sm text-slate-400 mt-1">8 intelligence sources reviewed.</p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white/10 border border-white/10 p-6">
+            <h2 className="text-xl font-semibold mb-3">Operations Summary</h2>
+            <p className="text-slate-300 leading-7">
+              Current operating conditions remain suitable for planned activities. Increased traffic, forecast weather, and recent local activity suggest additional planning before deployment.
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white/10 border border-white/10 p-6">
+            <h2 className="text-xl font-semibold mb-4">Area Advisories</h2>
+            <div className="grid md:grid-cols-3 gap-3">
+              {["Traffic congestion expected", "Weather may affect movement", "Public activity under review"].map((item) => (
+                <div key={item} className="rounded-xl bg-slate-900/70 border border-white/10 p-4 text-sm text-slate-300">
+                  <AlertCircle className="w-4 h-4 text-amber-300 mb-2" />
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button onClick={() => setStep("centre")} className="rounded-xl bg-sky-400 text-slate-950 font-semibold px-6 py-3 flex items-center gap-2">
+            Continue to Operations Centre <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Operations Dashboard</h1>
-        <p className="text-slate-500 mt-0.5 text-sm">Physical Venue Risk Assessment Intelligence Platform</p>
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#050816] text-white overflow-hidden px-10">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <p className="text-sky-300 text-sm">Operations Centre</p>
+          <h1 className="text-3xl font-semibold">Operational Canvas</h1>
+        </div>
+        <button onClick={() => setStep("brief")} className="rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-sm">
+          Operations Brief • Updated
+        </button>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {isLoading ? (
-          Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-24" />)
-        ) : (
-          <>
-            <StatCard title="Venues" value={data?.totalVenues ?? 0} icon={Building2} color="bg-blue-100 text-blue-600" href="/venues" />
-            <StatCard title="Assessments" value={data?.totalAssessments ?? 0} icon={ClipboardList} color="bg-indigo-100 text-indigo-600" href="/assessments" />
-            <StatCard title="Incidents" value={data?.totalIncidents ?? 0} icon={AlertTriangle} color="bg-orange-100 text-orange-600" href="/incidents" />
-            <StatCard title="Pending Alerts" value={data?.pendingAlerts ?? 0} icon={Bell} color="bg-red-100 text-red-600" href="/alerts" />
-          </>
-        )}
-      </div>
+      <div className="grid lg:grid-cols-[300px_minmax(620px,1fr)_320px] gap-5 h-[620px] w-full max-w-7xl">
+        <aside className="rounded-2xl bg-white/10 border border-white/10 p-4">
+          <h2 className="font-semibold mb-4">Operational Layers</h2>
+          {["Area Advisories", "Medical Support", "Law Enforcement", "Fuel Stations", "Operational Routes"].map((layer) => (
+            <label key={layer} className="flex items-center gap-3 py-2 text-sm text-slate-300">
+              <input type="checkbox" className="accent-sky-400" />
+              {layer}
+            </label>
+          ))}
+        </aside>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent assessments */}
-        <div className="lg:col-span-2">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Recent Assessments</CardTitle>
-                <Link href="/assessments" className="text-sm text-blue-600 hover:underline flex items-center gap-1">
-                  View all <ArrowRight className="w-3 h-3" />
-                </Link>
+<main className="relative rounded-2xl bg-slate-900 border border-white/10 overflow-hidden">
+  <MapContainer
+    center={[20, 0]}
+    zoom={2}
+    minZoom={2}
+    scrollWheelZoom={false}
+    className="h-full w-full"
+    zoomControl={false}
+    attributionControl={false}
+  >
+    <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+
+    {[
+      { name: "South Africa", position: [-30.5595, 22.9375], status: "Elevated" },
+      { name: "United Kingdom", position: [55.3781, -3.436], status: "Normal" },
+      { name: "United Arab Emirates", position: [23.4241, 53.8478], status: "High" },
+    ].map((marker) => (
+      <CircleMarker
+  className="venueguard-breathing-marker"
+        key={marker.name}
+        center={marker.position as [number, number]}
+        radius={7}
+        pathOptions={{
+          color: "#38bdf8",
+          fillColor: "#38bdf8",
+          fillOpacity: 0.8,
+          weight: 2,
+        }}
+      >
+        <Popup>
+          <strong>{marker.name}</strong>
+          <br />
+          Current Operating Conditions: {marker.status}
+        </Popup>
+      </CircleMarker>
+    ))}
+  </MapContainer>
+
+  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_35%,rgba(5,8,22,0.65)_100%)]" />
+</main>
+
+        <aside className="rounded-2xl bg-white/10 border border-white/10 p-4">
+          <h2 className="font-semibold mb-4">Operational Footprint</h2>
+          <div className="space-y-3">
+            {[
+              ["South Africa", "3 venues", "2 plans"],
+              ["United Kingdom", "1 venue", "1 plan"],
+              ["United Arab Emirates", "1 venue", "0 plans"],
+            ].map(([country, venues, plans]) => (
+              <div key={country} className="rounded-xl bg-slate-900/70 border border-white/10 p-3">
+                <p className="font-medium">{country}</p>
+                <p className="text-xs text-slate-400">{venues} · {plans}</p>
               </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              {isLoading ? (
-                <div className="p-4 space-y-3">
-                  {[1,2,3].map(i => <Skeleton key={i} className="h-14" />)}
-                </div>
-              ) : !data?.recentAssessments?.length ? (
-                <div className="text-center py-10 text-slate-400">
-                  <ClipboardList className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                  <p className="text-sm">No assessments yet</p>
-                  <Link href="/assessments/new" className="text-sm text-blue-600 hover:underline mt-1 block">Create first assessment →</Link>
-                </div>
-              ) : (
-                <div className="divide-y divide-slate-100">
-                  {data.recentAssessments.map((a) => (
-                    <Link key={a.id} href={`/assessments/${a.id}`}>
-                      <div className="px-5 py-3.5 hover:bg-slate-50 transition-colors cursor-pointer">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <div className="font-medium text-slate-900 truncate text-sm">{a.title}</div>
-                            <div className="text-xs text-slate-400 mt-0.5 truncate">
-                              {a.venueName ? `${a.venueName}, ${a.venueCity}` : "No venue"} · {timeAgo(a.updatedAt)}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            {a.overallRating && (
-                              <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase", getRiskRatingColor(a.overallRating))}>
-                                {getRiskRatingLabel(a.overallRating)}
-                              </span>
-                            )}
-                            <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase", getStatusColor(a.status))}>
-                              {getStatusLabel(a.status)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right column */}
-        <div className="space-y-4">
-          {/* Status distribution */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Assessment Status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? <Skeleton className="h-32" /> : (
-                <div className="space-y-2.5">
-                  {statusGroups.map(({ key, label, color }) => {
-                    const count = data?.assessmentsByStatus?.[key] ?? 0;
-                    const total = data?.totalAssessments ?? 1;
-                    const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-                    return (
-                      <div key={key}>
-                        <div className="flex justify-between text-xs text-slate-600 mb-1">
-                          <span>{label}</span>
-                          <span className="font-mono font-medium">{count}</span>
-                        </div>
-                        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                          <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Recent alerts */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Recent Alerts</CardTitle>
-                <Link href="/alerts" className="text-sm text-blue-600 hover:underline flex items-center gap-1">
-                  View all <ArrowRight className="w-3 h-3" />
-                </Link>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              {isLoading ? (
-                <div className="p-4 space-y-2">
-                  {[1,2].map(i => <Skeleton key={i} className="h-10" />)}
-                </div>
-              ) : !data?.recentAlerts?.length ? (
-                <div className="py-6 text-center text-sm text-slate-400">No recent alerts</div>
-              ) : (
-                <div className="divide-y divide-slate-100">
-                  {data.recentAlerts.map((alert) => (
-                    <div key={alert.id} className="px-4 py-3">
-                      <div className="flex items-start gap-2">
-                        <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase shrink-0 mt-0.5", getPriorityColor(alert.priority))}>
-                          {alert.priority}
-                        </span>
-                        <div className="min-w-0">
-                          <div className="text-xs font-medium text-slate-800 truncate">{alert.title}</div>
-                          <div className="text-[10px] text-slate-400 mt-0.5">{alert.venueName} · {timeAgo(alert.createdAt)}</div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+            ))}
+          </div>
+        </aside>
       </div>
     </div>
   );

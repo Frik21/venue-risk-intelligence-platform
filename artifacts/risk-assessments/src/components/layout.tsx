@@ -16,7 +16,7 @@ import {
   Menu,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 const navGroups = [
@@ -60,7 +60,22 @@ const navGroups = [
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [showShell, setShowShell] = useState(() => {
+  return sessionStorage.getItem("venueguard-show-shell") === "true";
+});
+useEffect(() => {
+  const handler = () => {
+    sessionStorage.setItem("venueguard-show-shell", "true");
+    setShowShell(true);
+  };
+const hideShell = location === "/" && !showShell;
+  window.addEventListener("venueguard-show-shell", handler);
 
+  return () => {
+    window.removeEventListener("venueguard-show-shell", handler);
+  };
+}, []);
+const hideShell = location === "/" && !showShell;
   const isActive = (href: string) =>
     href === "/" ? location === "/" : location.startsWith(href);
 
@@ -123,7 +138,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex bg-slate-100 font-sans">
       {/* Desktop sidebar */}
-      <div className="hidden md:flex flex-col shrink-0 h-screen sticky top-0">
+      <div className={cn("hidden md:flex flex-col shrink-0 h-screen sticky top-0", hideShell && "md:hidden")}>
         <Sidebar />
       </div>
 
@@ -139,7 +154,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main content */}
       <main className="flex-1 flex flex-col min-w-0 min-h-screen">
-        <header className="h-14 flex items-center px-4 md:px-6 bg-white border-b border-slate-200 sticky top-0 z-10 gap-4">
+       <header
+  className={cn(
+    "h-14 flex items-center px-4 md:px-6 bg-white border-b border-slate-200 sticky top-0 z-10 gap-4",
+    hideShell && "hidden"
+  )}
+>
           <button
             className="md:hidden p-1.5 rounded hover:bg-slate-100"
             onClick={() => setMobileOpen(!mobileOpen)}
@@ -161,7 +181,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <div className="flex-1 p-4 md:p-6 overflow-auto">
+       <div
+  className={cn(
+    "flex-1 overflow-auto",
+    hideShell ? "p-0" : "p-4 md:p-6"
+  )}
+>
           <div className="max-w-7xl mx-auto w-full">
             {children}
           </div>
