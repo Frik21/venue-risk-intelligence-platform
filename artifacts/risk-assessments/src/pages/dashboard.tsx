@@ -1,16 +1,37 @@
-import { useRef, useState } from "react";
-import { MapContainer, TileLayer, CircleMarker, Tooltip } from "react-leaflet";
+import { useEffect, useRef, useState } from "react";
+import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } from "react-leaflet";
 import type { Map as LeafletMap } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, Cross, ShieldAlert, X } from "lucide-react";
 
 type Step = "login" | "preparing" | "brief" | "centre";
 
+// Belt-and-suspenders lock: the MapContainer interaction props already
+// disable these handlers, but calling the imperative API too guarantees
+// the Operational Canvas map cannot be dragged or zoomed regardless of
+// how the map instance was constructed.
+function MapLock() {
+  const map = useMap();
+
+  useEffect(() => {
+    map.dragging.disable();
+    map.scrollWheelZoom.disable();
+    map.doubleClickZoom.disable();
+    map.touchZoom.disable();
+    map.boxZoom.disable();
+    map.keyboard.disable();
+  }, [map]);
+
+  return null;
+}
+
 type CountryIntel = {
   name: string;
   position: [number, number];
   status: string;
   updated: string;
+  summary: string;
+  overview: string;
   hospitals: string[];
   police: string[];
   advisories: string[];
@@ -22,6 +43,10 @@ const OPERATIONAL_COUNTRIES: CountryIntel[] = [
     position: [-30.5595, 22.9375],
     status: "Elevated",
     updated: "5 min ago",
+    summary:
+      "Current operating conditions remain suitable for planned activities. Recent protest activity and forecast road closures suggest additional route planning before movement.",
+    overview:
+      "South Africa spans diverse urban and rural operating environments, with Cape Town and Johannesburg representing the primary areas of current activity.",
     hospitals: ["Groote Schuur Hospital", "Netcare Christiaan Barnard"],
     police: ["Cape Town Central SAPS", "Sea Point SAPS"],
     advisories: ["Increased protest activity reported downtown", "Road closures expected near CBD"],
@@ -31,6 +56,10 @@ const OPERATIONAL_COUNTRIES: CountryIntel[] = [
     position: [55.3781, -3.436],
     status: "Normal",
     updated: "12 min ago",
+    summary:
+      "Conditions remain stable across primary operating areas. Rail disruption and a scheduled public gathering may affect movement timing this week.",
+    overview:
+      "The United Kingdom presents a mature, low-volatility operating environment with well-established emergency response infrastructure.",
     hospitals: ["St Thomas' Hospital", "Royal London Hospital"],
     police: ["Charing Cross Police Station", "Islington Police Station"],
     advisories: ["Rail disruption affecting central routes", "Large public gathering scheduled this weekend"],
@@ -40,6 +69,10 @@ const OPERATIONAL_COUNTRIES: CountryIntel[] = [
     position: [23.4241, 53.8478],
     status: "High",
     updated: "3 min ago",
+    summary:
+      "Elevated security posture remains in effect around major venues. Temporary road restrictions should be factored into movement planning.",
+    overview:
+      "The United Arab Emirates combines rapid urban development with a highly visible security presence, particularly around commercial and event venues.",
     hospitals: ["Rashid Hospital", "American Hospital Dubai"],
     police: ["Bur Dubai Police Station", "Al Barsha Police Station"],
     advisories: ["Heightened security around major venues", "Temporary road restrictions near event zones"],
@@ -49,6 +82,37 @@ const OPERATIONAL_COUNTRIES: CountryIntel[] = [
 const WORLD_VIEW: [number, number] = [20, 0];
 const WORLD_ZOOM = 2;
 const COUNTRY_ZOOM = 5;
+
+// VenueGuard Operational Canvas Layer Index - built bottom-up, one layer
+// at a time, per the VenueGuard Debug Layer Rule (see CLAUDE.md). Each
+// flag gates exactly one numbered layer. Flip a flag to true only after
+// the layer below it has been visually approved.
+const SHOW_OPERATIONAL_LAYERS = false; // Layer 2
+const SHOW_OPERATIONAL_FOOTPRINT = false; // Layer 3
+const SHOW_COUNTRY_INTEL = false; // Layer 4
+const SHOW_BREATHING_MARKERS = false; // Layer 5
+
+// Cosmetic edge vignette on the map. Not part of the numbered Layer
+// Index, but disabled while Layer 1 is under review so raw map tiles
+// can be verified with zero overlay in the way.
+const SHOW_MAP_VIGNETTE = false;
+
+// Layer 6 - Debug Layer Number Overlay. Debug-only numbered badges that
+// label each layer while it's being verified. Toggling this off removes
+// only the badges, never the layers themselves. Must be false before
+// merging to production.
+const SHOW_LAYER_NUMBERS = true;
+
+function LayerBadge({ number, className }: { number: number; className: string }) {
+  if (!SHOW_LAYER_NUMBERS) return null;
+  return (
+    <div
+      className={`absolute z-[2000] flex h-7 w-7 items-center justify-center rounded-full border border-amber-300 bg-amber-400 text-sm font-bold text-slate-950 shadow-lg ${className}`}
+    >
+      {number}
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const [step, setStep] = useState<Step>("login");
@@ -182,124 +246,163 @@ export default function Dashboard() {
           center={WORLD_VIEW}
           zoom={WORLD_ZOOM}
           minZoom={WORLD_ZOOM}
+          dragging={false}
           scrollWheelZoom={false}
-          className="h-full w-full rounded-2xl"
+          doubleClickZoom={false}
+          touchZoom={false}
+          boxZoom={false}
+          keyboard={false}
+          className="isolate relative z-[1] h-full w-full rounded-2xl"
           zoomControl={false}
           attributionControl={false}
         >
-          <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png" />
+          <MapLock />
+          <TileLayer
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+            maxZoom={16}
+          />
 
-          {OPERATIONAL_COUNTRIES.map((marker) => (
-            <CircleMarker
-              className="venueguard-breathing-marker cursor-pointer"
-              key={marker.name}
-              center={marker.position}
-              radius={7}
-              pathOptions={{
-                color: "#38bdf8",
-                fillColor: "#38bdf8",
-                fillOpacity: 0.8,
-                weight: 2,
-              }}
-              eventHandlers={{ click: () => selectCountry(marker) }}
-            >
-              <Tooltip className="venueguard-marker-tooltip" direction="top" offset={[0, -10]} opacity={1} sticky>
-                <p className="font-semibold text-white">{marker.name}</p>
-                <p className="text-slate-300">Current Operating Conditions: {marker.status}</p>
-                <p className="text-slate-400">Updated {marker.updated}</p>
-              </Tooltip>
-            </CircleMarker>
-          ))}
+          {SHOW_BREATHING_MARKERS &&
+            OPERATIONAL_COUNTRIES.map((marker) => (
+              <CircleMarker
+                className="venueguard-breathing-marker cursor-pointer"
+                key={marker.name}
+                center={marker.position}
+                radius={7}
+                pathOptions={{
+                  color: "#38bdf8",
+                  fillColor: "#38bdf8",
+                  fillOpacity: 0.8,
+                  weight: 2,
+                }}
+                eventHandlers={SHOW_COUNTRY_INTEL ? { click: () => selectCountry(marker) } : {}}
+              >
+                <Tooltip className="venueguard-marker-tooltip" direction="top" offset={[0, -10]} opacity={1}>
+                  <p className="font-semibold text-white">{marker.name}</p>
+                </Tooltip>
+              </CircleMarker>
+            ))}
         </MapContainer>
 
-        <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_center,transparent_35%,rgba(5,8,22,0.65)_100%)]" />
+        <LayerBadge number={1} className="left-3 top-3" />
 
-        <aside className="absolute left-4 top-4 bottom-4 w-[280px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
-          <h2 className="font-semibold mb-4">Operational Layers</h2>
-          {["Area Advisories", "Medical Support", "Law Enforcement", "Fuel Stations", "Operational Routes"].map((layer) => (
-            <label key={layer} className="flex items-center gap-3 py-2 text-sm text-slate-300">
-              <input type="checkbox" className="accent-sky-400" />
-              {layer}
-            </label>
-          ))}
-        </aside>
+        {SHOW_MAP_VIGNETTE && (
+          <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl bg-[radial-gradient(circle_at_center,transparent_35%,rgba(5,8,22,0.65)_100%)]" />
+        )}
 
-        <aside className="absolute right-4 top-4 bottom-4 w-[300px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
-          <h2 className="font-semibold mb-4">Operational Footprint</h2>
-          <div className="space-y-3">
-            {[
-              ["South Africa", "3 venues", "2 plans"],
-              ["United Kingdom", "1 venue", "1 plan"],
-              ["United Arab Emirates", "1 venue", "0 plans"],
-            ].map(([country, venues, plans]) => (
-              <div key={country} className="rounded-xl bg-slate-900/70 border border-white/10 p-3">
-                <p className="font-medium">{country}</p>
-                <p className="text-xs text-slate-400">{venues} · {plans}</p>
-              </div>
+        {SHOW_OPERATIONAL_LAYERS && (
+          <aside className="absolute left-6 top-6 z-[1000] w-[280px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
+            <LayerBadge number={2} className="-left-3 -top-3" />
+            <h2 className="font-semibold mb-4">Operational Layers</h2>
+            {["Area Advisories", "Medical Support", "Law Enforcement", "Fuel Stations", "Operational Routes"].map((layer) => (
+              <label key={layer} className="flex items-center gap-3 py-2 text-sm text-slate-300">
+                <input type="checkbox" className="accent-sky-400" />
+                {layer}
+              </label>
             ))}
+          </aside>
+        )}
+
+        {SHOW_OPERATIONAL_FOOTPRINT && (
+          <aside className="absolute right-4 top-4 bottom-4 z-[1100] w-[300px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
+            <LayerBadge number={3} className="-left-3 -top-3" />
+            <h2 className="font-semibold mb-4">Operational Footprint</h2>
+            <div className="space-y-3">
+              {[
+                ["South Africa", "3 venues", "2 plans"],
+                ["United Kingdom", "1 venue", "1 plan"],
+                ["United Arab Emirates", "1 venue", "0 plans"],
+              ].map(([country, venues, plans]) => (
+                <div key={country} className="rounded-xl bg-slate-900/70 border border-white/10 p-3">
+                  <p className="font-medium">{country}</p>
+                  <p className="text-xs text-slate-400">{venues} · {plans}</p>
+                </div>
+              ))}
+            </div>
+          </aside>
+        )}
+
+        {SHOW_COUNTRY_INTEL && (
+          <div
+            className={`absolute right-6 top-6 bottom-6 z-[1200] w-[380px] max-w-[90%] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-5 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl transition-transform duration-500 ease-out ${
+              selectedCountry ? "translate-x-0" : "pointer-events-none translate-x-[120%]"
+            }`}
+          >
+            <LayerBadge number={4} className="-left-3 -top-3" />
+            {selectedCountry && (
+              <>
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <p className="text-sky-300 text-xs">Country Intelligence</p>
+                    <h2 className="text-xl font-semibold">{selectedCountry.name}</h2>
+                  </div>
+                  <button
+                    onClick={closeCountryIntel}
+                    className="rounded-lg border border-white/10 bg-white/10 p-1.5 text-slate-300 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mb-5">
+                  <div className="rounded-xl bg-slate-900/70 border border-white/10 p-3">
+                    <p className="text-xs text-slate-400">Current Operating Conditions</p>
+                    <p className="text-sm font-semibold">{selectedCountry.status}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-900/70 border border-white/10 p-3">
+                    <p className="text-xs text-slate-400">Updated</p>
+                    <p className="text-sm font-semibold">5 min ago</p>
+                  </div>
+                </div>
+
+                <div className="space-y-5">
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2">Operations Summary</h3>
+                    <p className="text-sm text-slate-300 leading-6">{selectedCountry.summary}</p>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-300" /> Area Advisories
+                    </h3>
+                    <div className="space-y-1.5">
+                      {selectedCountry.advisories.map((advisory) => (
+                        <p key={advisory} className="text-sm text-slate-300">{advisory}</p>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+                      <Cross className="w-3.5 h-3.5 text-sky-300" /> Medical Support
+                    </h3>
+                    <div className="space-y-1.5">
+                      {selectedCountry.hospitals.map((hospital) => (
+                        <p key={hospital} className="text-sm text-slate-300">{hospital}</p>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+                      <ShieldAlert className="w-3.5 h-3.5 text-sky-300" /> Law Enforcement
+                    </h3>
+                    <div className="space-y-1.5">
+                      {selectedCountry.police.map((station) => (
+                        <p key={station} className="text-sm text-slate-300">{station}</p>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2">Country Overview</h3>
+                    <p className="text-sm text-slate-300 leading-6">{selectedCountry.overview}</p>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
-        </aside>
-
-        <div
-          className={`absolute inset-x-0 bottom-4 mx-auto w-[420px] max-w-[90%] rounded-[24px] border border-white/10 bg-white/10 p-5 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl transition-all duration-500 ease-out ${
-            selectedCountry ? "translate-y-0" : "pointer-events-none translate-y-[130%] opacity-0"
-          }`}
-        >
-          {selectedCountry && (
-            <>
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <p className="text-sky-300 text-xs">Country Intelligence</p>
-                  <h2 className="text-xl font-semibold">{selectedCountry.name}</h2>
-                </div>
-                <button
-                  onClick={closeCountryIntel}
-                  className="rounded-lg border border-white/10 bg-white/10 p-1.5 text-slate-300 hover:text-white"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <div className="rounded-xl bg-slate-900/70 border border-white/10 p-3">
-                  <p className="text-xs text-slate-400">Current Operating Conditions</p>
-                  <p className="text-sm font-semibold">{selectedCountry.status}</p>
-                </div>
-                <div className="rounded-xl bg-slate-900/70 border border-white/10 p-3">
-                  <p className="text-xs text-slate-400">Updated</p>
-                  <p className="text-sm font-semibold">{selectedCountry.updated}</p>
-                </div>
-              </div>
-
-              <div className="space-y-3 max-h-40 overflow-y-auto pr-1">
-                <div>
-                  <p className="text-xs text-slate-400 mb-1 flex items-center gap-1">
-                    <Cross className="w-3.5 h-3.5" /> Primary Hospitals
-                  </p>
-                  {selectedCountry.hospitals.map((hospital) => (
-                    <p key={hospital} className="text-sm text-slate-300">{hospital}</p>
-                  ))}
-                </div>
-                <div>
-                  <p className="text-xs text-slate-400 mb-1 flex items-center gap-1">
-                    <ShieldAlert className="w-3.5 h-3.5" /> Police Stations
-                  </p>
-                  {selectedCountry.police.map((station) => (
-                    <p key={station} className="text-sm text-slate-300">{station}</p>
-                  ))}
-                </div>
-                <div>
-                  <p className="text-xs text-slate-400 mb-1 flex items-center gap-1">
-                    <AlertCircle className="w-3.5 h-3.5" /> Area Advisories
-                  </p>
-                  {selectedCountry.advisories.map((advisory) => (
-                    <p key={advisory} className="text-sm text-slate-300">{advisory}</p>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
