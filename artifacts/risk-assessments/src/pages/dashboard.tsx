@@ -83,12 +83,30 @@ const WORLD_VIEW: [number, number] = [20, 0];
 const WORLD_ZOOM = 2;
 const COUNTRY_ZOOM = 5;
 
-// VG-006 layered rebuild: panels are being restored one at a time so each
-// can be verified against the map before adding the next. Operational
-// Layers renders unconditionally below. Flip each remaining flag back to
-// true to restore that panel.
-const SHOW_OPERATIONAL_FOOTPRINT = false;
-const SHOW_COUNTRY_INTEL = false;
+// VenueGuard Operational Canvas Layer Index - built bottom-up, one layer
+// at a time, per the VenueGuard Debug Layer Rule (see CLAUDE.md). Each
+// flag gates exactly one numbered layer. Flip a flag to true only after
+// the layer below it has been visually approved.
+const SHOW_OPERATIONAL_LAYERS = false; // Layer 2
+const SHOW_OPERATIONAL_FOOTPRINT = false; // Layer 3
+const SHOW_COUNTRY_INTEL = false; // Layer 4
+
+// Layer 6 - Debug Layer Number Overlay. Debug-only numbered badges that
+// label each layer while it's being verified. Toggling this off removes
+// only the badges, never the layers themselves. Must be false before
+// merging to production.
+const SHOW_LAYER_NUMBERS = true;
+
+function LayerBadge({ number, className }: { number: number; className: string }) {
+  if (!SHOW_LAYER_NUMBERS) return null;
+  return (
+    <div
+      className={`absolute z-[2000] flex h-7 w-7 items-center justify-center rounded-full border border-amber-300 bg-amber-400 text-sm font-bold text-slate-950 shadow-lg ${className}`}
+    >
+      {number}
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const [step, setStep] = useState<Step>("login");
@@ -228,7 +246,7 @@ export default function Dashboard() {
           touchZoom={false}
           boxZoom={false}
           keyboard={false}
-          className="isolate relative z-0 h-full w-full rounded-2xl"
+          className="isolate relative z-[1] h-full w-full rounded-2xl"
           zoomControl={false}
           attributionControl={false}
         >
@@ -259,20 +277,26 @@ export default function Dashboard() {
           ))}
         </MapContainer>
 
+        <LayerBadge number={1} className="left-3 top-3" />
+
         <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl bg-[radial-gradient(circle_at_center,transparent_35%,rgba(5,8,22,0.65)_100%)]" />
 
-        <aside className="absolute left-6 top-6 z-[1000] w-[280px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
-          <h2 className="font-semibold mb-4">Operational Layers</h2>
-          {["Area Advisories", "Medical Support", "Law Enforcement", "Fuel Stations", "Operational Routes"].map((layer) => (
-            <label key={layer} className="flex items-center gap-3 py-2 text-sm text-slate-300">
-              <input type="checkbox" className="accent-sky-400" />
-              {layer}
-            </label>
-          ))}
-        </aside>
+        {SHOW_OPERATIONAL_LAYERS && (
+          <aside className="absolute left-6 top-6 z-[1000] w-[280px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
+            <LayerBadge number={2} className="-left-3 -top-3" />
+            <h2 className="font-semibold mb-4">Operational Layers</h2>
+            {["Area Advisories", "Medical Support", "Law Enforcement", "Fuel Stations", "Operational Routes"].map((layer) => (
+              <label key={layer} className="flex items-center gap-3 py-2 text-sm text-slate-300">
+                <input type="checkbox" className="accent-sky-400" />
+                {layer}
+              </label>
+            ))}
+          </aside>
+        )}
 
         {SHOW_OPERATIONAL_FOOTPRINT && (
-          <aside className="absolute right-4 top-4 bottom-4 z-10 w-[300px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
+          <aside className="absolute right-4 top-4 bottom-4 z-[1100] w-[300px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
+            <LayerBadge number={3} className="-left-3 -top-3" />
             <h2 className="font-semibold mb-4">Operational Footprint</h2>
             <div className="space-y-3">
               {[
@@ -291,10 +315,11 @@ export default function Dashboard() {
 
         {SHOW_COUNTRY_INTEL && (
           <div
-            className={`absolute right-6 top-6 bottom-6 z-[1000] w-[380px] max-w-[90%] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-5 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl transition-transform duration-500 ease-out ${
+            className={`absolute right-6 top-6 bottom-6 z-[1200] w-[380px] max-w-[90%] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-5 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl transition-transform duration-500 ease-out ${
               selectedCountry ? "translate-x-0" : "pointer-events-none translate-x-[120%]"
             }`}
           >
+            <LayerBadge number={4} className="-left-3 -top-3" />
             {selectedCountry && (
               <>
                 <div className="flex items-start justify-between mb-4">
