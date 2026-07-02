@@ -207,7 +207,10 @@ export default function Dashboard() {
           zoomControl={false}
           attributionControl={false}
         >
-          <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png" />
+          <TileLayer
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+            maxZoom={16}
+          />
 
           {OPERATIONAL_COUNTRIES.map((marker) => (
             <CircleMarker
