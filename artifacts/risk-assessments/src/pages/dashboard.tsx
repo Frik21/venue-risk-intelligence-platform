@@ -90,6 +90,12 @@ const COUNTRY_ZOOM = 5;
 const SHOW_OPERATIONAL_LAYERS = false; // Layer 2
 const SHOW_OPERATIONAL_FOOTPRINT = false; // Layer 3
 const SHOW_COUNTRY_INTEL = false; // Layer 4
+const SHOW_BREATHING_MARKERS = false; // Layer 5
+
+// Cosmetic edge vignette on the map. Not part of the numbered Layer
+// Index, but disabled while Layer 1 is under review so raw map tiles
+// can be verified with zero overlay in the way.
+const SHOW_MAP_VIGNETTE = false;
 
 // Layer 6 - Debug Layer Number Overlay. Debug-only numbered badges that
 // label each layer while it's being verified. Toggling this off removes
@@ -256,30 +262,33 @@ export default function Dashboard() {
             maxZoom={16}
           />
 
-          {OPERATIONAL_COUNTRIES.map((marker) => (
-            <CircleMarker
-              className="venueguard-breathing-marker cursor-pointer"
-              key={marker.name}
-              center={marker.position}
-              radius={7}
-              pathOptions={{
-                color: "#38bdf8",
-                fillColor: "#38bdf8",
-                fillOpacity: 0.8,
-                weight: 2,
-              }}
-              eventHandlers={SHOW_COUNTRY_INTEL ? { click: () => selectCountry(marker) } : {}}
-            >
-              <Tooltip className="venueguard-marker-tooltip" direction="top" offset={[0, -10]} opacity={1}>
-                <p className="font-semibold text-white">{marker.name}</p>
-              </Tooltip>
-            </CircleMarker>
-          ))}
+          {SHOW_BREATHING_MARKERS &&
+            OPERATIONAL_COUNTRIES.map((marker) => (
+              <CircleMarker
+                className="venueguard-breathing-marker cursor-pointer"
+                key={marker.name}
+                center={marker.position}
+                radius={7}
+                pathOptions={{
+                  color: "#38bdf8",
+                  fillColor: "#38bdf8",
+                  fillOpacity: 0.8,
+                  weight: 2,
+                }}
+                eventHandlers={SHOW_COUNTRY_INTEL ? { click: () => selectCountry(marker) } : {}}
+              >
+                <Tooltip className="venueguard-marker-tooltip" direction="top" offset={[0, -10]} opacity={1}>
+                  <p className="font-semibold text-white">{marker.name}</p>
+                </Tooltip>
+              </CircleMarker>
+            ))}
         </MapContainer>
 
         <LayerBadge number={1} className="left-3 top-3" />
 
-        <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl bg-[radial-gradient(circle_at_center,transparent_35%,rgba(5,8,22,0.65)_100%)]" />
+        {SHOW_MAP_VIGNETTE && (
+          <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl bg-[radial-gradient(circle_at_center,transparent_35%,rgba(5,8,22,0.65)_100%)]" />
+        )}
 
         {SHOW_OPERATIONAL_LAYERS && (
           <aside className="absolute left-6 top-6 z-[1000] w-[280px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
