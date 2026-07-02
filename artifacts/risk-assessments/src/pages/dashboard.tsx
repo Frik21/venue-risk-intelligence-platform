@@ -203,7 +203,11 @@ export default function Dashboard() {
           center={WORLD_VIEW}
           zoom={WORLD_ZOOM}
           minZoom={WORLD_ZOOM}
+          dragging={false}
           scrollWheelZoom={false}
+          doubleClickZoom={false}
+          touchZoom={false}
+          keyboard={false}
           className="isolate relative z-0 h-full w-full rounded-2xl"
           zoomControl={false}
           attributionControl={false}
