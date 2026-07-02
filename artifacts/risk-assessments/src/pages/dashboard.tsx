@@ -65,9 +65,9 @@ const WORLD_ZOOM = 2;
 const COUNTRY_ZOOM = 5;
 
 // VG-006 layered rebuild: panels are being restored one at a time so each
-// can be verified against the map before adding the next. Flip each flag
-// back to true to restore that panel.
-const SHOW_OPERATIONAL_LAYERS = true;
+// can be verified against the map before adding the next. Operational
+// Layers renders unconditionally below. Flip each remaining flag back to
+// true to restore that panel.
 const SHOW_OPERATIONAL_FOOTPRINT = false;
 const SHOW_COUNTRY_INTEL = false;
 
@@ -236,17 +236,15 @@ export default function Dashboard() {
 
         <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl bg-[radial-gradient(circle_at_center,transparent_35%,rgba(5,8,22,0.65)_100%)]" />
 
-        {SHOW_OPERATIONAL_LAYERS && (
-          <aside className="absolute left-4 top-4 bottom-4 z-10 w-[280px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
-            <h2 className="font-semibold mb-4">Operational Layers</h2>
-            {["Area Advisories", "Medical Support", "Law Enforcement", "Fuel Stations", "Operational Routes"].map((layer) => (
-              <label key={layer} className="flex items-center gap-3 py-2 text-sm text-slate-300">
-                <input type="checkbox" className="accent-sky-400" />
-                {layer}
-              </label>
-            ))}
-          </aside>
-        )}
+        <aside className="absolute left-6 top-6 z-[1000] w-[280px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
+          <h2 className="font-semibold mb-4">Operational Layers</h2>
+          {["Area Advisories", "Medical Support", "Law Enforcement", "Fuel Stations", "Operational Routes"].map((layer) => (
+            <label key={layer} className="flex items-center gap-3 py-2 text-sm text-slate-300">
+              <input type="checkbox" className="accent-sky-400" />
+              {layer}
+            </label>
+          ))}
+        </aside>
 
         {SHOW_OPERATIONAL_FOOTPRINT && (
           <aside className="absolute right-4 top-4 bottom-4 z-10 w-[300px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
