@@ -253,7 +253,7 @@ export default function Dashboard() {
         </aside>
 
         <div
-          className={`absolute right-4 top-4 bottom-4 z-[1000] w-[380px] max-w-[90%] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-5 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl transition-transform duration-500 ease-out ${
+          className={`absolute right-6 top-6 bottom-6 z-[1000] w-[380px] max-w-[90%] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-5 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl transition-transform duration-500 ease-out ${
             selectedCountry ? "translate-x-0" : "pointer-events-none translate-x-[120%]"
           }`}
         >
