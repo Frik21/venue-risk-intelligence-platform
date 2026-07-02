@@ -197,7 +197,7 @@ export default function Dashboard() {
           zoom={WORLD_ZOOM}
           minZoom={WORLD_ZOOM}
           scrollWheelZoom={false}
-          className="h-full w-full rounded-2xl"
+          className="isolate relative z-0 h-full w-full rounded-2xl"
           zoomControl={false}
           attributionControl={false}
         >
@@ -224,9 +224,9 @@ export default function Dashboard() {
           ))}
         </MapContainer>
 
-        <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_center,transparent_35%,rgba(5,8,22,0.65)_100%)]" />
+        <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl bg-[radial-gradient(circle_at_center,transparent_35%,rgba(5,8,22,0.65)_100%)]" />
 
-        <aside className="absolute left-4 top-4 bottom-4 w-[280px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
+        <aside className="absolute left-4 top-4 bottom-4 z-10 w-[280px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
           <h2 className="font-semibold mb-4">Operational Layers</h2>
           {["Area Advisories", "Medical Support", "Law Enforcement", "Fuel Stations", "Operational Routes"].map((layer) => (
             <label key={layer} className="flex items-center gap-3 py-2 text-sm text-slate-300">
@@ -236,7 +236,7 @@ export default function Dashboard() {
           ))}
         </aside>
 
-        <aside className="absolute right-4 top-4 bottom-4 w-[300px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
+        <aside className="absolute right-4 top-4 bottom-4 z-10 w-[300px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
           <h2 className="font-semibold mb-4">Operational Footprint</h2>
           <div className="space-y-3">
             {[
@@ -253,7 +253,7 @@ export default function Dashboard() {
         </aside>
 
         <div
-          className={`absolute right-4 top-4 bottom-4 z-20 w-[380px] max-w-[90%] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-5 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl transition-transform duration-500 ease-out ${
+          className={`absolute right-4 top-4 bottom-4 z-[1000] w-[380px] max-w-[90%] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-5 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl transition-transform duration-500 ease-out ${
             selectedCountry ? "translate-x-0" : "pointer-events-none translate-x-[120%]"
           }`}
         >
