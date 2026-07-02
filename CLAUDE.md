@@ -1,3 +1,17 @@
+# VenueGuard Product Authority
+
+The Product Constitution (`docs/Product-Constitution.md`) is the highest authority.
+
+Engineering must never override product decisions.
+
+If implementation conflicts with the Constitution:
+
+- STOP.
+- Explain the conflict.
+- Wait for approval.
+
+Never silently redesign VenueGuard. Engineering serves the product. The Product Constitution always wins.
+
 # Workflow
 
 Before every implementation task in this repo:
