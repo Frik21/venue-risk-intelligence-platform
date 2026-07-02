@@ -64,11 +64,12 @@ const WORLD_VIEW: [number, number] = [20, 0];
 const WORLD_ZOOM = 2;
 const COUNTRY_ZOOM = 5;
 
-// VG-006 diagnostic step 1: temporarily hide the floating panels so the
-// Operational Canvas can be verified as a clean, panel-free map layer.
-// Flip back to true to restore Operational Layers, Operational Footprint,
-// and the Country Intelligence panel.
-const RENDER_PANELS = false;
+// VG-006 layered rebuild: panels are being restored one at a time so each
+// can be verified against the map before adding the next. Flip each flag
+// back to true to restore that panel.
+const SHOW_OPERATIONAL_LAYERS = true;
+const SHOW_OPERATIONAL_FOOTPRINT = false;
+const SHOW_COUNTRY_INTEL = false;
 
 export default function Dashboard() {
   const [step, setStep] = useState<Step>("login");
@@ -224,7 +225,7 @@ export default function Dashboard() {
                 fillOpacity: 0.8,
                 weight: 2,
               }}
-              eventHandlers={RENDER_PANELS ? { click: () => selectCountry(marker) } : {}}
+              eventHandlers={SHOW_COUNTRY_INTEL ? { click: () => selectCountry(marker) } : {}}
             >
               <Tooltip className="venueguard-marker-tooltip" direction="top" offset={[0, -10]} opacity={1}>
                 <p className="font-semibold text-white">{marker.name}</p>
@@ -235,7 +236,7 @@ export default function Dashboard() {
 
         <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl bg-[radial-gradient(circle_at_center,transparent_35%,rgba(5,8,22,0.65)_100%)]" />
 
-        {RENDER_PANELS && (
+        {SHOW_OPERATIONAL_LAYERS && (
           <aside className="absolute left-4 top-4 bottom-4 z-10 w-[280px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
             <h2 className="font-semibold mb-4">Operational Layers</h2>
             {["Area Advisories", "Medical Support", "Law Enforcement", "Fuel Stations", "Operational Routes"].map((layer) => (
@@ -247,7 +248,7 @@ export default function Dashboard() {
           </aside>
         )}
 
-        {RENDER_PANELS && (
+        {SHOW_OPERATIONAL_FOOTPRINT && (
           <aside className="absolute right-4 top-4 bottom-4 z-10 w-[300px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
             <h2 className="font-semibold mb-4">Operational Footprint</h2>
             <div className="space-y-3">
@@ -265,7 +266,7 @@ export default function Dashboard() {
           </aside>
         )}
 
-        {RENDER_PANELS && (
+        {SHOW_COUNTRY_INTEL && (
           <div
             className={`absolute right-6 top-6 bottom-6 z-[1000] w-[380px] max-w-[90%] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-5 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl transition-transform duration-500 ease-out ${
               selectedCountry ? "translate-x-0" : "pointer-events-none translate-x-[120%]"
