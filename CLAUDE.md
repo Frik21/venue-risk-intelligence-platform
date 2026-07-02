@@ -22,11 +22,17 @@ Before every implementation task in this repo:
 4. Run Constitution Compliance Check against `docs/Product-Constitution.md`.
 5. Commit.
 6. Push.
-7. Report:
-   - Branch
-   - Commit
-   - Build status
-   - Files changed
-   - Constitution compliance
+7. Open a Pull Request.
+8. Wait for merge approval.
 
-Do not merge. Wait for approval.
+Report on completion:
+- Branch
+- Commit
+- Build status
+- Files changed
+- Constitution compliance
+- Pull Request URL
+
+# VenueGuard Merge Policy
+
+Never merge directly into main unless explicitly instructed.
