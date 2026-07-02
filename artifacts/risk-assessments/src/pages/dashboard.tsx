@@ -1,16 +1,73 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { MapContainer, TileLayer, CircleMarker, Tooltip } from "react-leaflet";
+import type { Map as LeafletMap } from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-react";
+import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, Cross, ShieldAlert, X } from "lucide-react";
 
 type Step = "login" | "preparing" | "brief" | "centre";
 
+type CountryIntel = {
+  name: string;
+  position: [number, number];
+  status: string;
+  updated: string;
+  hospitals: string[];
+  police: string[];
+  advisories: string[];
+};
+
+const OPERATIONAL_COUNTRIES: CountryIntel[] = [
+  {
+    name: "South Africa",
+    position: [-30.5595, 22.9375],
+    status: "Elevated",
+    updated: "5 min ago",
+    hospitals: ["Groote Schuur Hospital", "Netcare Christiaan Barnard"],
+    police: ["Cape Town Central SAPS", "Sea Point SAPS"],
+    advisories: ["Increased protest activity reported downtown", "Road closures expected near CBD"],
+  },
+  {
+    name: "United Kingdom",
+    position: [55.3781, -3.436],
+    status: "Normal",
+    updated: "12 min ago",
+    hospitals: ["St Thomas' Hospital", "Royal London Hospital"],
+    police: ["Charing Cross Police Station", "Islington Police Station"],
+    advisories: ["Rail disruption affecting central routes", "Large public gathering scheduled this weekend"],
+  },
+  {
+    name: "United Arab Emirates",
+    position: [23.4241, 53.8478],
+    status: "High",
+    updated: "3 min ago",
+    hospitals: ["Rashid Hospital", "American Hospital Dubai"],
+    police: ["Bur Dubai Police Station", "Al Barsha Police Station"],
+    advisories: ["Heightened security around major venues", "Temporary road restrictions near event zones"],
+  },
+];
+
+const WORLD_VIEW: [number, number] = [20, 0];
+const WORLD_ZOOM = 2;
+const COUNTRY_ZOOM = 5;
+
 export default function Dashboard() {
   const [step, setStep] = useState<Step>("login");
+  const [selectedCountry, setSelectedCountry] = useState<CountryIntel | null>(null);
+  const mapRef = useRef<LeafletMap | null>(null);
 
   function signIn() {
     setStep("preparing");
     setTimeout(() => setStep("brief"), 1400);
+  }
+
+  function selectCountry(country: CountryIntel) {
+    setSelectedCountry(country);
+    mapRef.current?.flyTo(country.position, COUNTRY_ZOOM, { duration: 1.5 });
+  }
+
+  function closeCountryIntel() {
+    setSelectedCountry(null);
+    mapRef.current?.flyTo(WORLD_VIEW, WORLD_ZOOM, { duration: 1.2 });
   }
 
   if (step === "login") {
@@ -121,9 +178,10 @@ export default function Dashboard() {
 
       <div className="relative h-[calc(100vh-8rem)] w-full">
         <MapContainer
-          center={[20, 0]}
-          zoom={2}
-          minZoom={2}
+          ref={mapRef}
+          center={WORLD_VIEW}
+          zoom={WORLD_ZOOM}
+          minZoom={WORLD_ZOOM}
           scrollWheelZoom={false}
           className="h-full w-full rounded-2xl"
           zoomControl={false}
@@ -131,15 +189,11 @@ export default function Dashboard() {
         >
           <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png" />
 
-          {[
-            { name: "South Africa", position: [-30.5595, 22.9375], status: "Elevated", updated: "5 min ago" },
-            { name: "United Kingdom", position: [55.3781, -3.436], status: "Normal", updated: "12 min ago" },
-            { name: "United Arab Emirates", position: [23.4241, 53.8478], status: "High", updated: "3 min ago" },
-          ].map((marker) => (
+          {OPERATIONAL_COUNTRIES.map((marker) => (
             <CircleMarker
-              className="venueguard-breathing-marker"
+              className="venueguard-breathing-marker cursor-pointer"
               key={marker.name}
-              center={marker.position as [number, number]}
+              center={marker.position}
               radius={7}
               pathOptions={{
                 color: "#38bdf8",
@@ -147,6 +201,7 @@ export default function Dashboard() {
                 fillOpacity: 0.8,
                 weight: 2,
               }}
+              eventHandlers={{ click: () => selectCountry(marker) }}
             >
               <Tooltip className="venueguard-marker-tooltip" direction="top" offset={[0, -10]} opacity={1} sticky>
                 <p className="font-semibold text-white">{marker.name}</p>
@@ -184,6 +239,67 @@ export default function Dashboard() {
             ))}
           </div>
         </aside>
+
+        <div
+          className={`absolute inset-x-0 bottom-4 mx-auto w-[420px] max-w-[90%] rounded-[24px] border border-white/10 bg-white/10 p-5 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl transition-all duration-500 ease-out ${
+            selectedCountry ? "translate-y-0" : "pointer-events-none translate-y-[130%] opacity-0"
+          }`}
+        >
+          {selectedCountry && (
+            <>
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <p className="text-sky-300 text-xs">Country Intelligence</p>
+                  <h2 className="text-xl font-semibold">{selectedCountry.name}</h2>
+                </div>
+                <button
+                  onClick={closeCountryIntel}
+                  className="rounded-lg border border-white/10 bg-white/10 p-1.5 text-slate-300 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="rounded-xl bg-slate-900/70 border border-white/10 p-3">
+                  <p className="text-xs text-slate-400">Current Operating Conditions</p>
+                  <p className="text-sm font-semibold">{selectedCountry.status}</p>
+                </div>
+                <div className="rounded-xl bg-slate-900/70 border border-white/10 p-3">
+                  <p className="text-xs text-slate-400">Updated</p>
+                  <p className="text-sm font-semibold">{selectedCountry.updated}</p>
+                </div>
+              </div>
+
+              <div className="space-y-3 max-h-40 overflow-y-auto pr-1">
+                <div>
+                  <p className="text-xs text-slate-400 mb-1 flex items-center gap-1">
+                    <Cross className="w-3.5 h-3.5" /> Primary Hospitals
+                  </p>
+                  {selectedCountry.hospitals.map((hospital) => (
+                    <p key={hospital} className="text-sm text-slate-300">{hospital}</p>
+                  ))}
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 mb-1 flex items-center gap-1">
+                    <ShieldAlert className="w-3.5 h-3.5" /> Police Stations
+                  </p>
+                  {selectedCountry.police.map((station) => (
+                    <p key={station} className="text-sm text-slate-300">{station}</p>
+                  ))}
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 mb-1 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5" /> Area Advisories
+                  </p>
+                  {selectedCountry.advisories.map((advisory) => (
+                    <p key={advisory} className="text-sm text-slate-300">{advisory}</p>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
