@@ -1,10 +1,29 @@
-import { useRef, useState } from "react";
-import { MapContainer, TileLayer, CircleMarker, Tooltip } from "react-leaflet";
+import { useEffect, useRef, useState } from "react";
+import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } from "react-leaflet";
 import type { Map as LeafletMap } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, Cross, ShieldAlert, X } from "lucide-react";
 
 type Step = "login" | "preparing" | "brief" | "centre";
+
+// Belt-and-suspenders lock: the MapContainer interaction props already
+// disable these handlers, but calling the imperative API too guarantees
+// the Operational Canvas map cannot be dragged or zoomed regardless of
+// how the map instance was constructed.
+function MapLock() {
+  const map = useMap();
+
+  useEffect(() => {
+    map.dragging.disable();
+    map.scrollWheelZoom.disable();
+    map.doubleClickZoom.disable();
+    map.touchZoom.disable();
+    map.boxZoom.disable();
+    map.keyboard.disable();
+  }, [map]);
+
+  return null;
+}
 
 type CountryIntel = {
   name: string;
@@ -207,11 +226,13 @@ export default function Dashboard() {
           scrollWheelZoom={false}
           doubleClickZoom={false}
           touchZoom={false}
+          boxZoom={false}
           keyboard={false}
           className="isolate relative z-0 h-full w-full rounded-2xl"
           zoomControl={false}
           attributionControl={false}
         >
+          <MapLock />
           <TileLayer
             url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
             maxZoom={16}
