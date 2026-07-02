@@ -217,10 +217,8 @@ export default function Dashboard() {
               }}
               eventHandlers={{ click: () => selectCountry(marker) }}
             >
-              <Tooltip className="venueguard-marker-tooltip" direction="top" offset={[0, -10]} opacity={1} sticky>
+              <Tooltip className="venueguard-marker-tooltip" direction="top" offset={[0, -10]} opacity={1}>
                 <p className="font-semibold text-white">{marker.name}</p>
-                <p className="text-slate-300">Current Operating Conditions: {marker.status}</p>
-                <p className="text-slate-400">Updated {marker.updated}</p>
               </Tooltip>
             </CircleMarker>
           ))}
