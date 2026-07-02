@@ -171,7 +171,7 @@
 }
 .venueguard-breathing-marker {
   animation: venueguard-marker-breathe 3.8s ease-in-out infinite;
-  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.75));
+  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.75)) drop-shadow(0 0 16px rgba(56, 189, 248, 0.4));
 }
 
 @keyframes venueguard-marker-breathe {
@@ -184,4 +184,19 @@
     opacity: 1;
     stroke-width: 4;
   }
+}
+
+.leaflet-tooltip.venueguard-marker-tooltip {
+  background: rgba(5, 8, 22, 0.95);
+  color: #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 10px 14px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.leaflet-tooltip.venueguard-marker-tooltip::before {
+  display: none;
 }

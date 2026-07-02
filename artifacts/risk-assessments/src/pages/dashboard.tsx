@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, CircleMarker, Tooltip } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-react";
 
@@ -119,8 +119,47 @@ export default function Dashboard() {
         </button>
       </div>
 
-      <div className="grid lg:grid-cols-[300px_minmax(620px,1fr)_320px] gap-5 h-[620px] w-full max-w-7xl">
-        <aside className="rounded-2xl bg-white/10 border border-white/10 p-4">
+      <div className="relative h-[calc(100vh-8rem)] w-full">
+        <MapContainer
+          center={[20, 0]}
+          zoom={2}
+          minZoom={2}
+          scrollWheelZoom={false}
+          className="h-full w-full rounded-2xl"
+          zoomControl={false}
+          attributionControl={false}
+        >
+          <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png" />
+
+          {[
+            { name: "South Africa", position: [-30.5595, 22.9375], status: "Elevated", updated: "5 min ago" },
+            { name: "United Kingdom", position: [55.3781, -3.436], status: "Normal", updated: "12 min ago" },
+            { name: "United Arab Emirates", position: [23.4241, 53.8478], status: "High", updated: "3 min ago" },
+          ].map((marker) => (
+            <CircleMarker
+              className="venueguard-breathing-marker"
+              key={marker.name}
+              center={marker.position as [number, number]}
+              radius={7}
+              pathOptions={{
+                color: "#38bdf8",
+                fillColor: "#38bdf8",
+                fillOpacity: 0.8,
+                weight: 2,
+              }}
+            >
+              <Tooltip className="venueguard-marker-tooltip" direction="top" offset={[0, -10]} opacity={1} sticky>
+                <p className="font-semibold text-white">{marker.name}</p>
+                <p className="text-slate-300">Current Operating Conditions: {marker.status}</p>
+                <p className="text-slate-400">Updated {marker.updated}</p>
+              </Tooltip>
+            </CircleMarker>
+          ))}
+        </MapContainer>
+
+        <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_center,transparent_35%,rgba(5,8,22,0.65)_100%)]" />
+
+        <aside className="absolute left-4 top-4 bottom-4 w-[280px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
           <h2 className="font-semibold mb-4">Operational Layers</h2>
           {["Area Advisories", "Medical Support", "Law Enforcement", "Fuel Stations", "Operational Routes"].map((layer) => (
             <label key={layer} className="flex items-center gap-3 py-2 text-sm text-slate-300">
@@ -130,48 +169,7 @@ export default function Dashboard() {
           ))}
         </aside>
 
-<main className="relative rounded-2xl bg-slate-900 border border-white/10 overflow-hidden">
-  <MapContainer
-    center={[20, 0]}
-    zoom={2}
-    minZoom={2}
-    scrollWheelZoom={false}
-    className="h-full w-full"
-    zoomControl={false}
-    attributionControl={false}
-  >
-    <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
-
-    {[
-      { name: "South Africa", position: [-30.5595, 22.9375], status: "Elevated" },
-      { name: "United Kingdom", position: [55.3781, -3.436], status: "Normal" },
-      { name: "United Arab Emirates", position: [23.4241, 53.8478], status: "High" },
-    ].map((marker) => (
-      <CircleMarker
-  className="venueguard-breathing-marker"
-        key={marker.name}
-        center={marker.position as [number, number]}
-        radius={7}
-        pathOptions={{
-          color: "#38bdf8",
-          fillColor: "#38bdf8",
-          fillOpacity: 0.8,
-          weight: 2,
-        }}
-      >
-        <Popup>
-          <strong>{marker.name}</strong>
-          <br />
-          Current Operating Conditions: {marker.status}
-        </Popup>
-      </CircleMarker>
-    ))}
-  </MapContainer>
-
-  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_35%,rgba(5,8,22,0.65)_100%)]" />
-</main>
-
-        <aside className="rounded-2xl bg-white/10 border border-white/10 p-4">
+        <aside className="absolute right-4 top-4 bottom-4 w-[300px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
           <h2 className="font-semibold mb-4">Operational Footprint</h2>
           <div className="space-y-3">
             {[
