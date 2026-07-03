@@ -200,3 +200,12 @@
 .leaflet-tooltip.venueguard-marker-tooltip::before {
   display: none;
 }
+
+/* Static neon glow on the selected country outline (Country Select &
+   Outline feature). Intensity is constant - no pulse/flash/strobe. */
+.venueguard-country-outline-selected {
+  filter:
+    drop-shadow(0 0 3px #ffc700)
+    drop-shadow(0 0 8px #ffc700)
+    drop-shadow(0 0 18px #ffa500);
+}

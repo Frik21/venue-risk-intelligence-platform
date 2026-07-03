@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
-import { MapContainer, TileLayer, CircleMarker, useMap } from "react-leaflet";
+import { useEffect, useRef, useState } from "react";
+import { MapContainer, TileLayer, CircleMarker, GeoJSON, useMap, useMapEvent } from "react-leaflet";
+import L from "leaflet";
+import type { Feature } from "geojson";
 import "leaflet/dist/leaflet.css";
 import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-react";
+import countryBorders from "@/data/operational-country-borders.json";
 
 // Belt-and-suspenders: the MapContainer interaction props already disable
 // these handlers, but calling the imperative API too guarantees the
@@ -21,6 +24,81 @@ function MapLock() {
   }, [map]);
 
   return null;
+}
+
+const COUNTRY_ZOOM_DURATION = 1.2;
+const WORLD_ZOOM_DURATION = 1.2;
+
+function isFeatureSelected(feature: Feature | undefined, selectedCountryId: string | null): boolean {
+  return feature?.id != null && String(feature.id) === selectedCountryId;
+}
+
+function countryOutlineStyle(feature: Feature | undefined, selectedCountryId: string | null): L.PathOptions {
+  const isSelected = isFeatureSelected(feature, selectedCountryId);
+  return {
+    color: isSelected ? "#FFC700" : "transparent",
+    weight: isSelected ? 3 : 0,
+    fillColor: "#000000",
+    fillOpacity: isSelected ? 0 : 0.01,
+  };
+}
+
+// Country Select & Outline: clicking within a country's true boundary
+// (Natural Earth geometry, including enclaves like Lesotho) flies the
+// camera to frame it and renders a static neon outline. Clicking
+// anywhere else (the country features stop event propagation) flies
+// back to the world view and clears the selection. This is a discrete,
+// programmatic camera action - it does not re-enable free dragging,
+// scrolling, touch, or keyboard navigation.
+function CountrySelect({
+  selectedCountryId,
+  onSelectCountry,
+}: {
+  selectedCountryId: string | null;
+  onSelectCountry: (id: string | null) => void;
+}) {
+  const map = useMap();
+  const geoJsonRef = useRef<L.GeoJSON | null>(null);
+
+  useMapEvent("click", () => {
+    onSelectCountry(null);
+    map.flyTo(WORLD_VIEW, WORLD_ZOOM, { duration: WORLD_ZOOM_DURATION });
+  });
+
+  // Leaflet's Path.setStyle() only updates stroke/fill CSS properties - it
+  // does not re-apply a `className` after the path element exists. The
+  // glow effect is a CSS class, so it's toggled directly on the path's
+  // DOM element (Path.getElement(), Leaflet 1.3+) whenever selection
+  // changes, alongside the declarative colour/weight update.
+  useEffect(() => {
+    geoJsonRef.current?.eachLayer((layer) => {
+      const path = layer as L.Path & { feature?: Feature };
+      const isSelected = isFeatureSelected(path.feature, selectedCountryId);
+      path.setStyle(countryOutlineStyle(path.feature, selectedCountryId));
+      path.getElement()?.classList.toggle("venueguard-country-outline-selected", isSelected);
+    });
+  }, [selectedCountryId]);
+
+  function onEachFeature(feature: Feature, layer: L.Layer) {
+    layer.on("click", (event: L.LeafletMouseEvent) => {
+      L.DomEvent.stopPropagation(event);
+      onSelectCountry(feature.id != null ? String(feature.id) : null);
+
+      const bounds = (layer as L.Path & { getBounds?: () => L.LatLngBounds }).getBounds?.();
+      if (bounds) {
+        map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 6, duration: COUNTRY_ZOOM_DURATION });
+      }
+    });
+  }
+
+  return (
+    <GeoJSON
+      ref={geoJsonRef}
+      data={countryBorders as GeoJSON.FeatureCollection}
+      style={(feature) => countryOutlineStyle(feature, selectedCountryId)}
+      onEachFeature={onEachFeature}
+    />
+  );
 }
 
 type Step = "login" | "preparing" | "brief" | "centre";
@@ -168,6 +246,8 @@ export default function Dashboard() {
 // Nothing else renders yet - Layers 2-7 (including Layer 8: Status
 // Legend) are built and approved one at a time per the Debug Layer Rule.
 function MapLayer() {
+  const [selectedCountryId, setSelectedCountryId] = useState<string | null>(null);
+
   return (
     <div data-layer="1" className="absolute inset-0 z-[1] h-full w-full">
       <MapContainer
@@ -190,6 +270,8 @@ function MapLayer() {
           url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
           maxZoom={16}
         />
+
+        <CountrySelect selectedCountryId={selectedCountryId} onSelectCountry={setSelectedCountryId} />
 
         {OPERATIONAL_COUNTRIES.map((marker) => (
           <CircleMarker
