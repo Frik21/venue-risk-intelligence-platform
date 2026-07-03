@@ -36,8 +36,8 @@ function isFeatureSelected(feature: Feature | undefined, selectedCountryId: stri
 function countryOutlineStyle(feature: Feature | undefined, selectedCountryId: string | null): L.PathOptions {
   const isSelected = isFeatureSelected(feature, selectedCountryId);
   return {
-    color: isSelected ? "#FFC700" : "transparent",
-    weight: isSelected ? 3 : 0,
+    color: isSelected ? "#FFB800" : "transparent",
+    weight: isSelected ? 2 : 0,
     fillColor: "#000000",
     fillOpacity: isSelected ? 0 : 0.01,
   };
