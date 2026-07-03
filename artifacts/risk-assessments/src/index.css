@@ -210,3 +210,14 @@
     drop-shadow(0 0 2px rgba(255, 184, 0, 0.4))
     drop-shadow(0 0 6px rgba(255, 184, 0, 0.2));
 }
+
+/* The world-fit zoom can leave a margin outside the actual tile bounds
+   on wide/short viewports (see WorldFitZoom + TileLayer noWrap in
+   dashboard.tsx) - that margin is never meant to show real tiles since
+   the map is static-locked and can't be panned into it. Matching the
+   Esri World_Dark_Gray_Base basemap's own ocean/water fill here makes
+   that margin blend into the ocean instead of showing Leaflet's default
+   placeholder gray at the left/right edges. */
+.venueguard-operational-canvas-map.leaflet-container {
+  background-color: #1a1a1a;
+}

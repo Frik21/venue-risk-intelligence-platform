@@ -420,7 +420,7 @@ function MapLayer() {
         keyboard={false}
         zoomControl
         attributionControl={false}
-        className="h-full w-full"
+        className="venueguard-operational-canvas-map h-full w-full"
       >
         <MapLock />
         <WorldFitZoom />
