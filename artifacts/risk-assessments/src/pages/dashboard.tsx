@@ -276,6 +276,26 @@ const OPERATIONAL_COUNTRIES: OperationalMarker[] = [
 
 const WORLD_VIEW: [number, number] = [44, 11];
 
+// The real world's lat/lng extent. Passed to the TileLayer as `bounds`
+// so Leaflet's own tile-validity check (_isValidTile) rejects any tile
+// outside it outright - this is the check that actually matters here:
+// EPSG3857 (Web Mercator) declares itself wrap-capable, so `noWrap`
+// alone does not stop GridLayer from computing and requesting
+// out-of-range tile x-indices when the container is wider than the
+// world at the current zoom (confirmed by pointing the TileLayer at a
+// local logging tile server: with only `noWrap` set, 36 of 84 tile
+// requests were for out-of-range coordinates; adding `bounds` brought
+// that to zero). Deliberately NOT also set as the map's `maxBounds`:
+// Leaflet re-enforces maxBounds on every view change, and doing so
+// against this exact-fit framing shifted the rendered center by tens
+// of pixels - the TileLayer's own `bounds` already fully prevents the
+// invalid requests, so maxBounds isn't needed to fix the reported bug
+// and isn't worth that side effect.
+const WORLD_BOUNDS: L.LatLngBoundsExpression = [
+  [-90, -180],
+  [90, 180],
+];
+
 // Current Operating Conditions - locked to these four levels plus the
 // "No Data" marker state (docs/Operations-Centre-v1.md).
 const STATUS_COLORS: Record<OperatingStatus, string> = {
@@ -428,6 +448,7 @@ function MapLayer() {
           url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
           maxZoom={16}
           noWrap
+          bounds={WORLD_BOUNDS}
         />
 
         <CountrySelect selectedCountryId={selectedCountryId} onSelectCountry={setSelectedCountryId} />
