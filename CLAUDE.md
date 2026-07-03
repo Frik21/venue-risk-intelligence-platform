@@ -32,6 +32,23 @@ Report on completion:
 - Files changed
 - Constitution compliance
 - Pull Request URL
+- Codespace dev server restart command (see below)
+
+## Codespace dev server restart command
+
+Whenever work stops for review, include the exact commands to check out
+the branch and restart the dev server in the Codespace, e.g.:
+
+```bash
+git fetch origin <branch-name>
+git checkout <branch-name>
+git pull
+cd artifacts/risk-assessments
+PORT=3000 BASE_PATH=/ pnpm run dev
+```
+
+A browser refresh alone is not enough - the dev server must be fully
+stopped and restarted to pick up new commits.
 
 # VenueGuard Merge Policy
 
