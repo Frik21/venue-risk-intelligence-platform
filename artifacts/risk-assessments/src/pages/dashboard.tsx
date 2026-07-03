@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { MapContainer, TileLayer, CircleMarker, GeoJSON, useMap, useMapEvent } from "react-leaflet";
 import L from "leaflet";
-import type { Feature } from "geojson";
+import type { Feature, FeatureCollection } from "geojson";
 import "leaflet/dist/leaflet.css";
 import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-react";
-import countryBorders from "@/data/operational-country-borders.json";
+
+// Full-world country boundaries (Natural Earth, ~4MB) are served as a
+// static asset and fetched at runtime rather than bundled into the JS
+// build - keeps the app's core bundle lean regardless of dataset size.
+const COUNTRY_BORDERS_URL = `${import.meta.env.BASE_URL}data/operational-country-borders.json`;
 
 // Belt-and-suspenders: the MapContainer interaction props already disable
 // these handlers, but calling the imperative API too guarantees the
@@ -59,6 +63,19 @@ function CountrySelect({
 }) {
   const map = useMap();
   const geoJsonRef = useRef<L.GeoJSON | null>(null);
+  const [countryBorders, setCountryBorders] = useState<FeatureCollection | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(COUNTRY_BORDERS_URL)
+      .then((res) => res.json())
+      .then((data: FeatureCollection) => {
+        if (!cancelled) setCountryBorders(data);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useMapEvent("click", () => {
     onSelectCountry(null);
@@ -91,10 +108,12 @@ function CountrySelect({
     });
   }
 
+  if (!countryBorders) return null;
+
   return (
     <GeoJSON
       ref={geoJsonRef}
-      data={countryBorders as GeoJSON.FeatureCollection}
+      data={countryBorders}
       style={(feature) => countryOutlineStyle(feature, selectedCountryId)}
       onEachFeature={onEachFeature}
     />
