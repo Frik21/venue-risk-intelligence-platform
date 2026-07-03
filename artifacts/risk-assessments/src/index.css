@@ -210,3 +210,12 @@
     drop-shadow(0 0 2px rgba(255, 184, 0, 0.4))
     drop-shadow(0 0 6px rgba(255, 184, 0, 0.2));
 }
+
+/* Layer 1 base map palette: push Esri's World Physical Map (natural
+   blue ocean / green vegetation / tan desert / white ice, with terrain
+   shading built in) toward a darker, more muted satellite/terrain
+   tone to match the app's dark theme, without flattening the
+   land/water/ice colour differentiation into a single hue. */
+.venueguard-satellite-tiles {
+  filter: brightness(0.62) saturate(0.85) contrast(1.08);
+}
