@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { MapContainer, TileLayer, CircleMarker, GeoJSON, Tooltip, useMap, useMapEvent } from "react-leaflet";
+import { MapContainer, TileLayer, ImageOverlay, CircleMarker, GeoJSON, Tooltip, useMap, useMapEvent } from "react-leaflet";
 import L from "leaflet";
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
 import "leaflet/dist/leaflet.css";
@@ -10,6 +10,13 @@ import { COUNTRY_CAPITALS } from "@/lib/country-capitals";
 // static asset and fetched at runtime rather than bundled into the JS
 // build - keeps the app's core bundle lean regardless of dataset size.
 const COUNTRY_BORDERS_URL = `${import.meta.env.BASE_URL}data/operational-country-borders.json`;
+
+// Static "Earth at Night" world map (dark navy landmasses, black ocean,
+// amber city-light glow) - the Operational Canvas's default-view base
+// layer, replacing the earlier ESRI tile base. Pre-rendered once from
+// the same country-borders dataset rather than served as map tiles,
+// since a raster tile provider can't express this custom styling.
+const NIGHT_MAP_URL = `${import.meta.env.BASE_URL}data/earth-at-night.png`;
 
 // General antimeridian fix: any ring whose consecutive points jump by
 // more than 180deg of longitude (i.e. it crosses the 180/-180 dateline,
@@ -465,24 +472,22 @@ const WORLD_HALF_SPAN_DEG =
     190.27 - WORLD_VIEW[1], // Russia: Chukotka easternmost point (post-alignment)
   ) + 3;
 
-// The real world's lat/lng extent. Passed to the TileLayer as `bounds`
-// so Leaflet's own tile-validity check (_isValidTile) rejects any tile
-// outside it outright - this is the check that actually matters here:
-// EPSG3857 (Web Mercator) declares itself wrap-capable, so `noWrap`
-// alone does not stop GridLayer from computing and requesting
-// out-of-range tile x-indices when the container is wider than the
-// world at the current zoom (confirmed by pointing the TileLayer at a
-// local logging tile server: with only `noWrap` set, 36 of 84 tile
-// requests were for out-of-range coordinates; adding `bounds` brought
-// that to zero). Deliberately NOT also set as the map's `maxBounds`:
-// Leaflet re-enforces maxBounds on every view change, and doing so
-// against this exact-fit framing shifted the rendered center by tens
-// of pixels - the TileLayer's own `bounds` already fully prevents the
-// invalid requests, so maxBounds isn't needed to fix the reported bug
-// and isn't worth that side effect.
-const WORLD_BOUNDS: L.LatLngBoundsExpression = [
-  [-90, -180],
-  [90, 180],
+// The night-map image's own render window - it was generated with its
+// seam deliberately placed at 191.1deg (=-168.9deg) rather than the
+// standard +-180deg, specifically so Russia's full mainland (max
+// 190.27deg) and Alaska's full mainland (min -168.09deg) both render
+// whole, on the correct side, with a small margin to spare, instead of
+// one of them being clipped or duplicated at a seam that would
+// otherwise fall inside one of their landmasses. This is (within
+// 0.1deg) the same antipodal seam this app's own WORLD_VIEW center
+// already implies (11deg + 180deg = 191deg), so it lines up with the
+// existing vector country borders without needing to touch the
+// framing. Latitude is capped at the standard Web Mercator limit
+// (matching Leaflet's own default CRS), not +-90, since the image was
+// rendered with that same projection.
+const NIGHT_MAP_BOUNDS: L.LatLngBoundsExpression = [
+  [-85.05112877980659, -168.9],
+  [85.05112877980659, 191.1],
 ];
 
 // Current Operating Conditions - locked to these four levels plus the
@@ -633,12 +638,14 @@ function MapLayer() {
       >
         <MapLock />
         <WorldFitZoom />
-        <TileLayer
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
-          maxZoom={16}
-          noWrap
-          bounds={WORLD_BOUNDS}
-        />
+        {/* Earth-at-Night base layer only mounts for the default/world
+            view. It's fully unmounted (not just hidden) the moment a
+            country is selected, since the amber city-lights glow baked
+            into this image would otherwise sit awkwardly underneath the
+            real satellite imagery that covers the selected country -
+            the gap outside the satellite tiles' bounds falls back to
+            the map's own ocean-colour background instead. */}
+        {selectedCountryId == null && <ImageOverlay url={NIGHT_MAP_URL} bounds={NIGHT_MAP_BOUNDS} />}
 
         <CountrySelect selectedCountryId={selectedCountryId} onSelectCountry={setSelectedCountryId} />
 
