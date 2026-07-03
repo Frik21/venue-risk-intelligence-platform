@@ -1,7 +1,27 @@
-import { useState } from "react";
-import { MapContainer, TileLayer, CircleMarker } from "react-leaflet";
+import { useEffect, useState } from "react";
+import { MapContainer, TileLayer, CircleMarker, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-react";
+
+// Belt-and-suspenders: the MapContainer interaction props already disable
+// these handlers, but calling the imperative API too guarantees the
+// Operational Canvas map cannot be dragged/scrolled/touch-panned
+// regardless of how the map instance was constructed. Zoom control
+// buttons are left enabled - they call map.zoomIn()/zoomOut() directly.
+function MapLock() {
+  const map = useMap();
+
+  useEffect(() => {
+    map.dragging.disable();
+    map.scrollWheelZoom.disable();
+    map.doubleClickZoom.disable();
+    map.touchZoom.disable();
+    map.boxZoom.disable();
+    map.keyboard.disable();
+  }, [map]);
+
+  return null;
+}
 
 type Step = "login" | "preparing" | "brief" | "centre";
 
@@ -144,10 +164,11 @@ export default function Dashboard() {
 }
 
 // LAYER 1: Map (static)
-// Base layer of the Operational Canvas stack. Full world view, pannable
-// and zoomable, with colour-coded operational markers and a status
-// legend. Nothing renders above this yet - Layers 2-7 are built and
-// approved one at a time per the VenueGuard Debug Layer Rule.
+// Base layer of the Operational Canvas stack. Static world view - the
+// map cannot be dragged/scrolled/touch-panned; the zoom control buttons
+// are the only way to zoom. Colour-coded operational markers and a
+// status legend sit on top. Nothing renders above this yet - Layers
+// 2-7 are built and approved one at a time per the Debug Layer Rule.
 function MapLayer() {
   return (
     <div data-layer="1" className="absolute inset-0 z-[1] h-full w-full">
@@ -156,10 +177,17 @@ function MapLayer() {
         zoom={WORLD_ZOOM}
         minZoom={WORLD_ZOOM}
         maxZoom={16}
+        dragging={false}
+        scrollWheelZoom={false}
+        doubleClickZoom={false}
+        touchZoom={false}
+        boxZoom={false}
+        keyboard={false}
         zoomControl
         attributionControl={false}
         className="h-full w-full"
       >
+        <MapLock />
         <TileLayer
           url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
           maxZoom={16}
