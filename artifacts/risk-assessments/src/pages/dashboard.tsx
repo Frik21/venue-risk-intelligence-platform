@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { MapContainer, TileLayer, CircleMarker, GeoJSON, useMap, useMapEvent } from "react-leaflet";
 import L from "leaflet";
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
@@ -100,8 +100,50 @@ function MapLock() {
   return null;
 }
 
+// Fits the world-view floor to the actual rendered viewport instead of a
+// zoom number measured against one specific window size. Runs before
+// paint (useLayoutEffect) so there's no flash of the wrong scale, and
+// re-fits on window resize. If the map is currently sitting at the
+// world view (not zoomed into a country), the resize also re-centers it
+// at the newly-fitted zoom so the floor never leaves the map framed
+// wider than the reference; an active country selection is left alone.
+function WorldFitZoom() {
+  const map = useMap();
+
+  useLayoutEffect(() => {
+    const initialZoom = computeWorldFitZoom(map);
+    map.setMinZoom(initialZoom);
+    map.setView(WORLD_VIEW, initialZoom, { animate: false });
+
+    function handleResize() {
+      const previousMinZoom = map.getMinZoom();
+      const wasAtFloor = map.getZoom() <= previousMinZoom;
+      const zoom = computeWorldFitZoom(map);
+      map.setMinZoom(zoom);
+      if (wasAtFloor) {
+        map.setView(WORLD_VIEW, zoom, { animate: false });
+      }
+    }
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [map]);
+
+  return null;
+}
+
 const COUNTRY_ZOOM_DURATION = 1.2;
 const WORLD_ZOOM_DURATION = 1.2;
+
+// The reference framing is "the world fills the viewport edge to edge"
+// (poles cropped slightly), not one fixed zoom number - a hardcoded zoom
+// only produces that fill at the one viewport width it was measured
+// against. World pixel width at a given zoom is 256 * 2^zoom (Leaflet's
+// standard tile scale), so solving 256 * 2^zoom = containerWidthPx for
+// zoom gives the exact fractional zoom that fills the current viewport,
+// whatever size it actually is.
+function computeWorldFitZoom(map: L.Map): number {
+  return Math.log2(map.getSize().x / 256);
+}
 
 function isFeatureSelected(feature: Feature | undefined, selectedCountryId: string | null): boolean {
   return feature?.id != null && String(feature.id) === selectedCountryId;
@@ -153,7 +195,7 @@ function CountrySelect({
 
   useMapEvent("click", () => {
     onSelectCountry(null);
-    map.flyTo(WORLD_VIEW, WORLD_ZOOM, { duration: WORLD_ZOOM_DURATION });
+    map.flyTo(WORLD_VIEW, computeWorldFitZoom(map), { duration: WORLD_ZOOM_DURATION });
   });
 
   // Leaflet's Path.setStyle() only updates stroke/fill CSS properties - it
@@ -215,7 +257,6 @@ const OPERATIONAL_COUNTRIES: OperationalMarker[] = [
 ];
 
 const WORLD_VIEW: [number, number] = [44, 11];
-const WORLD_ZOOM = 2.3;
 
 // Current Operating Conditions - locked to these four levels plus the
 // "No Data" marker state (docs/Operations-Centre-v1.md).
@@ -349,8 +390,7 @@ function MapLayer() {
     <div data-layer="1" className="absolute inset-0 z-[1] h-full w-full">
       <MapContainer
         center={WORLD_VIEW}
-        zoom={WORLD_ZOOM}
-        minZoom={WORLD_ZOOM}
+        zoom={2}
         maxZoom={16}
         zoomSnap={0}
         zoomDelta={1}
@@ -365,6 +405,7 @@ function MapLayer() {
         className="h-full w-full"
       >
         <MapLock />
+        <WorldFitZoom />
         <TileLayer
           url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
           maxZoom={16}
