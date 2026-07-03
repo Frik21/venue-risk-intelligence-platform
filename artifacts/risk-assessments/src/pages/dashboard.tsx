@@ -134,15 +134,33 @@ function WorldFitZoom() {
 const COUNTRY_ZOOM_DURATION = 1.2;
 const WORLD_ZOOM_DURATION = 1.2;
 
-// The reference framing is "the world fills the viewport edge to edge"
-// (poles cropped slightly), not one fixed zoom number - a hardcoded zoom
-// only produces that fill at the one viewport width it was measured
-// against. World pixel width at a given zoom is 256 * 2^zoom (Leaflet's
-// standard tile scale), so solving 256 * 2^zoom = containerWidthPx for
-// zoom gives the exact fractional zoom that fills the current viewport,
-// whatever size it actually is.
+function mercatorYFraction(latDeg: number): number {
+  const latRad = (latDeg * Math.PI) / 180;
+  return 0.5 - Math.asinh(Math.tan(latRad)) / (2 * Math.PI);
+}
+
+// The reference framing is "the world fills the viewport" without
+// clipping any continent - not one fixed zoom number, and not simply
+// "fill the width." World pixel width/height at a given zoom is
+// 256 * 2^zoom (Leaflet's standard tile scale); fitting to width alone
+// assumes a roughly square-ish window, but a wide/short browser window
+// needs a smaller world so Cape Horn (South America's southern tip, the
+// most extreme continental landmass point from the WORLD_VIEW center)
+// stays above the bottom edge instead of being cropped, the same way
+// the high Arctic needs to stay below the top edge. Taking the more
+// restrictive of a width-fit and a height-fit zoom guarantees neither
+// dimension ever clips a continent, whatever the viewport's aspect ratio.
 function computeWorldFitZoom(map: L.Map): number {
-  return Math.log2(map.getSize().x / 256);
+  const size = map.getSize();
+  const widthFitZoom = Math.log2(size.x / 256);
+
+  const centerYFrac = mercatorYFraction(WORLD_VIEW[0]);
+  const southHalfSpan = mercatorYFraction(-56) - centerYFrac; // Cape Horn
+  const northHalfSpan = centerYFrac - mercatorYFraction(83); // high Arctic
+  const halfSpan = Math.max(southHalfSpan, northHalfSpan) * 1.05; // small safety margin
+  const heightFitZoom = Math.log2(size.y / (2 * halfSpan) / 256);
+
+  return Math.min(widthFitZoom, heightFitZoom);
 }
 
 function isFeatureSelected(feature: Feature | undefined, selectedCountryId: string | null): boolean {
@@ -409,6 +427,7 @@ function MapLayer() {
         <TileLayer
           url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
           maxZoom={16}
+          noWrap
         />
 
         <CountrySelect selectedCountryId={selectedCountryId} onSelectCountry={setSelectedCountryId} />
