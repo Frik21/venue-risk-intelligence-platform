@@ -203,7 +203,10 @@
 
 /* Static, subtle glow on the selected country outline (Country Select &
    Outline feature) - calm and refined, "highlighted" rather than "lit
-   up". Intensity is constant - no pulse/flash/strobe. */
+   up". Two soft layers give a more gradual outward fade than a single
+   hard-edged blur. Intensity is constant - no pulse/flash/strobe. */
 .venueguard-country-outline-selected {
-  filter: drop-shadow(0 0 3px rgba(255, 184, 0, 0.55));
+  filter:
+    drop-shadow(0 0 2px rgba(255, 184, 0, 0.4))
+    drop-shadow(0 0 6px rgba(255, 184, 0, 0.2));
 }
