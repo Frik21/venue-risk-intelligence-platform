@@ -211,17 +211,17 @@
     drop-shadow(0 0 6px rgba(255, 184, 0, 0.2));
 }
 
-/* The world-fit zoom can leave a margin outside the actual image bounds
-   on wide/short viewports (see WorldFitZoom + ImageOverlay bounds in
-   dashboard.tsx) - that margin is never meant to show real map content
-   since the map is static-locked and can't be panned into it. Matching
-   the Earth at Night image's own deep-ocean edge tone here (sampled
-   directly from the rendered PNG's left/right edge, not the brighter
-   mid-gradient highlight nearer its center) makes that margin blend
-   into the ocean instead of showing Leaflet's default placeholder gray
-   at the left/right edges. */
+/* Fallback background for whatever the map's own imagery doesn't cover
+   - the image is now tiled three times across the whole realistic
+   viewport range (see NIGHT_MAP_TILE_OFFSETS in dashboard.tsx), so in
+   practice this only shows for an instant before the image loads, or
+   behind the satellite tiles' padding gap when a country is selected.
+   --ocean-color is set inline from dashboard.tsx's OCEAN_COLOR constant
+   - the ONLY place this color is written. Do not hardcode a hex value
+   here again: that's exactly how this same seam bug kept recurring
+   (two independently-maintained color values drifting out of sync). */
 .venueguard-operational-canvas-map.leaflet-container {
-  background-color: #00081a;
+  background-color: var(--ocean-color);
 }
 
 /* Capital city marker (Layer 1, country-zoom level): a static, subtle

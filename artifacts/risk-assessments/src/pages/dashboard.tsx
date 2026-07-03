@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { MapContainer, TileLayer, ImageOverlay, CircleMarker, GeoJSON, Tooltip, useMap, useMapEvent } from "react-leaflet";
 import L from "leaflet";
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
@@ -17,6 +18,21 @@ const COUNTRY_BORDERS_URL = `${import.meta.env.BASE_URL}data/operational-country
 // the same country-borders dataset rather than served as map tiles,
 // since a raster tile provider can't express this custom styling.
 const NIGHT_MAP_URL = `${import.meta.env.BASE_URL}data/earth-at-night.png`;
+
+// Single source of truth for the map's ocean/background tone. This is
+// the ONLY place this color is ever written - the container's CSS
+// fallback background (see --ocean-color in index.css) reads it via a
+// custom property set from this constant, instead of a second
+// hand-copied hex value that silently drifts out of sync with the
+// image (which is exactly how this seam bug kept recurring). It's
+// sampled from the Earth at Night image's own rendered edge pixel - see
+// the generator script referenced there for how the ocean gradient
+// itself is produced. Even with the map's own imagery now tiled to
+// cover every realistic viewport (see NIGHT_MAP_TILE_OFFSETS below),
+// this fallback still matters for the instant before the image has
+// loaded and for the satellite tiles' padding gap when a country is
+// selected.
+const OCEAN_COLOR = "#00081a";
 
 // General antimeridian fix: any ring whose consecutive points jump by
 // more than 180deg of longitude (i.e. it crosses the 180/-180 dateline,
@@ -485,10 +501,35 @@ const WORLD_HALF_SPAN_DEG =
 // framing. Latitude is capped at the standard Web Mercator limit
 // (matching Leaflet's own default CRS), not +-90, since the image was
 // rendered with that same projection.
-const NIGHT_MAP_BOUNDS: L.LatLngBoundsExpression = [
+type LatLngBoundsTuple = [[number, number], [number, number]];
+
+const NIGHT_MAP_BOUNDS: LatLngBoundsTuple = [
   [-85.05112877980659, -168.9],
   [85.05112877980659, 191.1],
 ];
+
+// The image spans exactly 360deg (191.1 - -168.9), but wide/short
+// viewports can need more than that: WORLD_HALF_SPAN_DEG's ~192.19deg
+// half-span (see above) means up to ~384.38deg of total width, more
+// than a single copy covers. Rather than fall back to a plain colour
+// for that leftover margin (the fragile, easy-to-mismatch fix that
+// caused this exact seam bug to keep recurring), the image is tiled:
+// two extra copies, each shifted a full 360deg of longitude, sit
+// immediately either side of the primary one. This isn't an
+// approximation - the image's left and right edges were deliberately
+// chosen (see NIGHT_MAP_BOUNDS above) to both fall on the SAME safe
+// real-world meridian, so copy-to-copy joins land on that identical
+// seam, giving over 1000deg of total coverage with no gap possible at
+// any realistic viewport.
+const NIGHT_MAP_TILE_OFFSETS = [-360, 0, 360];
+
+function offsetBoundsLng(bounds: LatLngBoundsTuple, deltaLng: number): LatLngBoundsTuple {
+  const [[south, west], [north, east]] = bounds;
+  return [
+    [south, west + deltaLng],
+    [north, east + deltaLng],
+  ];
+}
 
 // Current Operating Conditions - locked to these four levels plus the
 // "No Data" marker state (docs/Operations-Centre-v1.md).
@@ -634,6 +675,7 @@ function MapLayer() {
         keyboard={false}
         zoomControl
         attributionControl={false}
+        style={{ "--ocean-color": OCEAN_COLOR } as CSSProperties}
         className="venueguard-operational-canvas-map h-full w-full"
       >
         <MapLock />
@@ -644,8 +686,14 @@ function MapLayer() {
             into this image would otherwise sit awkwardly underneath the
             real satellite imagery that covers the selected country -
             the gap outside the satellite tiles' bounds falls back to
-            the map's own ocean-colour background instead. */}
-        {selectedCountryId == null && <ImageOverlay url={NIGHT_MAP_URL} bounds={NIGHT_MAP_BOUNDS} />}
+            the map's own ocean-colour background instead. Tiled three
+            times (see NIGHT_MAP_TILE_OFFSETS) so the image itself - not
+            a separate fallback colour - is what's visible at every
+            realistic viewport edge. */}
+        {selectedCountryId == null &&
+          NIGHT_MAP_TILE_OFFSETS.map((offset) => (
+            <ImageOverlay key={`night-map-${offset}`} url={NIGHT_MAP_URL} bounds={offsetBoundsLng(NIGHT_MAP_BOUNDS, offset)} />
+          ))}
 
         <CountrySelect selectedCountryId={selectedCountryId} onSelectCountry={setSelectedCountryId} />
 
