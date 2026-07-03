@@ -52,8 +52,6 @@ const STATUS_COLORS: Record<OperatingStatus, string> = {
   "No Data": "#94a3b8",
 };
 
-const STATUS_LEGEND: OperatingStatus[] = ["Normal", "Elevated", "High", "Severe", "No Data"];
-
 export default function Dashboard() {
   const [step, setStep] = useState<Step>("login");
 
@@ -166,9 +164,9 @@ export default function Dashboard() {
 // LAYER 1: Map (static)
 // Base layer of the Operational Canvas stack. Static world view - the
 // map cannot be dragged/scrolled/touch-panned; the zoom control buttons
-// are the only way to zoom. Colour-coded operational markers and a
-// status legend sit on top. Nothing renders above this yet - Layers
-// 2-7 are built and approved one at a time per the Debug Layer Rule.
+// are the only way to zoom. Colour-coded operational markers sit on top.
+// Nothing else renders yet - Layers 2-7 (including Layer 8: Status
+// Legend) are built and approved one at a time per the Debug Layer Rule.
 function MapLayer() {
   return (
     <div data-layer="1" className="absolute inset-0 z-[1] h-full w-full">
@@ -208,16 +206,6 @@ function MapLayer() {
           />
         ))}
       </MapContainer>
-
-      <div className="absolute bottom-4 left-4 z-[10] rounded-xl border border-white/10 bg-slate-950/80 p-3 text-xs backdrop-blur-sm">
-        <p className="mb-2 font-semibold text-white">Current Operating Conditions</p>
-        {STATUS_LEGEND.map((status) => (
-          <div key={status} className="flex items-center gap-2 py-0.5">
-            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[status] }} />
-            <span className="text-slate-300">{status}</span>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
