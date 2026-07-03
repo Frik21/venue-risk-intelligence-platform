@@ -17,27 +17,65 @@ const COUNTRY_BORDERS_URL = `${import.meta.env.BASE_URL}data/operational-country
 // every ring of every feature - not country-specific - so it fixes any
 // dateline-crossing geometry in the dataset, and rings that never cross
 // the dateline are returned unchanged (offset stays 0 throughout).
-function unwrapRingLongitudes(ring: Position[]): Position[] {
+// crossedAntimeridian tracks whether THIS ring itself needed unwrapping,
+// which alignCrossingRings (below) uses to decide which rings are safe
+// to shift again for consistency with the rest of the same feature.
+function unwrapRingLongitudes(ring: Position[]): { points: Position[]; crossedAntimeridian: boolean } {
   let offset = 0;
-  const result: Position[] = [ring[0]];
+  let crossedAntimeridian = false;
+  const points: Position[] = [ring[0]];
   for (let i = 1; i < ring.length; i++) {
     const delta = ring[i][0] - ring[i - 1][0];
-    if (delta > 180) offset -= 360;
-    else if (delta < -180) offset += 360;
-    result.push([ring[i][0] + offset, ring[i][1]]);
+    if (delta > 180) {
+      offset -= 360;
+      crossedAntimeridian = true;
+    } else if (delta < -180) {
+      offset += 360;
+      crossedAntimeridian = true;
+    }
+    points.push([ring[i][0] + offset, ring[i][1]]);
   }
-  return result;
+  return { points, crossedAntimeridian };
+}
+
+// A ring that crosses the antimeridian on its own (e.g. Russia's
+// Wrangel Island, whose coastline straddles exactly 180deg) unwraps
+// independently of every other ring in the same feature, so it can land
+// 360deg away from where the rest of the country ended up - e.g.
+// Wrangel Island unwrapping to roughly -181..-177 while the Russian
+// mainland (which also crosses, via the Chukotka coastline) unwraps to
+// roughly 27..190. That leaves a small, correctly-shaped island
+// floating on the opposite side of the map from the rest of its own
+// country, right next to a different country entirely (Alaska/the US,
+// in Russia's case). Re-shifting only the rings that themselves crossed,
+// by whole multiples of 360deg, to sit next to the feature's largest
+// ring (by area, whichever side it happens to be on) keeps every part
+// of a dateline-straddling country on the same side of the seam. Rings
+// that never crossed are returned completely untouched - this is what
+// keeps already-correct geometry (e.g. the US's Aleutian islands, which
+// sit at valid, unmodified positive longitudes without ever crossing
+// the seam within a single ring) from being shifted unnecessarily.
+function alignCrossingRings(rings: { points: Position[]; crossedAntimeridian: boolean }[]): Position[][] {
+  const largest = rings.reduce((best, r) => (ringArea(r.points) > ringArea(best.points) ? r : best));
+  const referenceLng = largest.points[0][0];
+
+  return rings.map(({ points, crossedAntimeridian }) => {
+    if (!crossedAntimeridian) return points;
+    const shift = Math.round((referenceLng - points[0][0]) / 360) * 360;
+    return shift === 0 ? points : points.map(([lng, lat]): Position => [lng + shift, lat]);
+  });
 }
 
 function unwrapGeometry(geometry: Geometry): Geometry {
   if (geometry.type === "Polygon") {
-    return { ...geometry, coordinates: geometry.coordinates.map(unwrapRingLongitudes) };
+    return { ...geometry, coordinates: alignCrossingRings(geometry.coordinates.map(unwrapRingLongitudes)) };
   }
   if (geometry.type === "MultiPolygon") {
-    return {
-      ...geometry,
-      coordinates: geometry.coordinates.map((polygon) => polygon.map(unwrapRingLongitudes)),
-    };
+    const unwrappedPolygons = geometry.coordinates.map((polygon) => polygon.map(unwrapRingLongitudes));
+    const aligned = alignCrossingRings(unwrappedPolygons.flat());
+    let cursor = 0;
+    const coordinates = unwrappedPolygons.map((polygon) => polygon.map(() => aligned[cursor++]));
+    return { ...geometry, coordinates };
   }
   return geometry;
 }
