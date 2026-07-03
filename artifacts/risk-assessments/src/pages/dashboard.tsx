@@ -214,8 +214,8 @@ const OPERATIONAL_COUNTRIES: OperationalMarker[] = [
   { name: "United Arab Emirates", position: [23.4241, 53.8478], status: "High" },
 ];
 
-const WORLD_VIEW: [number, number] = [20, 0];
-const WORLD_ZOOM = 2;
+const WORLD_VIEW: [number, number] = [44, 11];
+const WORLD_ZOOM = 2.3;
 
 // Current Operating Conditions - locked to these four levels plus the
 // "No Data" marker state (docs/Operations-Centre-v1.md).
@@ -352,6 +352,8 @@ function MapLayer() {
         zoom={WORLD_ZOOM}
         minZoom={WORLD_ZOOM}
         maxZoom={16}
+        zoomSnap={0}
+        zoomDelta={1}
         dragging={false}
         scrollWheelZoom={false}
         doubleClickZoom={false}
