@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MapContainer, TileLayer, CircleMarker, GeoJSON, useMap, useMapEvent } from "react-leaflet";
 import L from "leaflet";
-import type { Feature, FeatureCollection } from "geojson";
+import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
 import "leaflet/dist/leaflet.css";
 import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-react";
 
@@ -9,6 +9,76 @@ import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-reac
 // static asset and fetched at runtime rather than bundled into the JS
 // build - keeps the app's core bundle lean regardless of dataset size.
 const COUNTRY_BORDERS_URL = `${import.meta.env.BASE_URL}data/operational-country-borders.json`;
+
+// General antimeridian fix: any ring whose consecutive points jump by
+// more than 180deg of longitude (i.e. it crosses the 180/-180 dateline,
+// e.g. Russia, Fiji) gets its longitudes "unwrapped" into a continuous
+// range instead of snapping back and forth across the seam. Applied to
+// every ring of every feature - not country-specific - so it fixes any
+// dateline-crossing geometry in the dataset, and rings that never cross
+// the dateline are returned unchanged (offset stays 0 throughout).
+function unwrapRingLongitudes(ring: Position[]): Position[] {
+  let offset = 0;
+  const result: Position[] = [ring[0]];
+  for (let i = 1; i < ring.length; i++) {
+    const delta = ring[i][0] - ring[i - 1][0];
+    if (delta > 180) offset -= 360;
+    else if (delta < -180) offset += 360;
+    result.push([ring[i][0] + offset, ring[i][1]]);
+  }
+  return result;
+}
+
+function unwrapGeometry(geometry: Geometry): Geometry {
+  if (geometry.type === "Polygon") {
+    return { ...geometry, coordinates: geometry.coordinates.map(unwrapRingLongitudes) };
+  }
+  if (geometry.type === "MultiPolygon") {
+    return {
+      ...geometry,
+      coordinates: geometry.coordinates.map((polygon) => polygon.map(unwrapRingLongitudes)),
+    };
+  }
+  return geometry;
+}
+
+// Planar shoelace-formula area of a ring, in (degree^2) units. Not a
+// true geodesic area, but that's not needed here - it's only used to
+// rank a country's own sub-polygons against each other by relative
+// size, and for that a simple planar comparison is accurate enough.
+function ringArea(ring: Position[]): number {
+  let sum = 0;
+  for (let i = 0; i < ring.length - 1; i++) {
+    const [x1, y1] = ring[i];
+    const [x2, y2] = ring[i + 1];
+    sum += x1 * y2 - x2 * y1;
+  }
+  return Math.abs(sum) / 2;
+}
+
+// Multi-part countries (US: mainland + Alaska + Hawaii; France: mainland
+// + overseas territories; NZ: North/South Island + Chatham Islands,
+// etc.) must zoom to their primary/largest landmass, not a bounding box
+// spanning every part - that box is often huge or degenerate and breaks
+// the camera transition. This finds the largest polygon by area (the
+// outer ring only) and returns bounds for just that one part. Outline
+// rendering is untouched - it still draws every part of the geometry,
+// since this bounds calculation is only used for the flyToBounds camera
+// target, never passed to the GeoJSON layer's own style/render path.
+function getPrimaryPolygonBounds(geometry: Geometry): L.LatLngBounds | null {
+  let rings: Position[][];
+  if (geometry.type === "Polygon") {
+    rings = [geometry.coordinates[0]];
+  } else if (geometry.type === "MultiPolygon") {
+    rings = geometry.coordinates.map((polygon) => polygon[0]);
+  } else {
+    return null;
+  }
+
+  const largestRing = rings.reduce((largest, ring) => (ringArea(ring) > ringArea(largest) ? ring : largest));
+
+  return L.latLngBounds(largestRing.map(([lng, lat]) => L.latLng(lat, lng)));
+}
 
 // Belt-and-suspenders: the MapContainer interaction props already disable
 // these handlers, but calling the imperative API too guarantees the
@@ -70,7 +140,11 @@ function CountrySelect({
     fetch(COUNTRY_BORDERS_URL)
       .then((res) => res.json())
       .then((data: FeatureCollection) => {
-        if (!cancelled) setCountryBorders(data);
+        if (cancelled) return;
+        setCountryBorders({
+          ...data,
+          features: data.features.map((f) => ({ ...f, geometry: unwrapGeometry(f.geometry) })),
+        });
       });
     return () => {
       cancelled = true;
@@ -101,7 +175,11 @@ function CountrySelect({
       L.DomEvent.stopPropagation(event);
       onSelectCountry(feature.id != null ? String(feature.id) : null);
 
-      const bounds = (layer as L.Path & { getBounds?: () => L.LatLngBounds }).getBounds?.();
+      // Zoom to the primary/largest landmass only, not a bounding box
+      // spanning every part of a multi-part country (see
+      // getPrimaryPolygonBounds) - the full geometry still renders via
+      // the GeoJSON layer above, unaffected by this bounds choice.
+      const bounds = getPrimaryPolygonBounds(feature.geometry);
       if (bounds) {
         map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 6, duration: COUNTRY_ZOOM_DURATION });
       }
