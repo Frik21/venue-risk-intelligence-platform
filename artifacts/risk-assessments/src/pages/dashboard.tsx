@@ -1,73 +1,45 @@
-import { useRef, useState } from "react";
-import { MapContainer, TileLayer, CircleMarker, Tooltip } from "react-leaflet";
-import type { Map as LeafletMap } from "leaflet";
+import { useState } from "react";
+import { MapContainer, TileLayer, CircleMarker } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, Cross, ShieldAlert, X } from "lucide-react";
+import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-react";
 
 type Step = "login" | "preparing" | "brief" | "centre";
 
-type CountryIntel = {
+type OperatingStatus = "Normal" | "Elevated" | "High" | "Severe" | "No Data";
+
+type OperationalMarker = {
   name: string;
   position: [number, number];
-  status: string;
-  updated: string;
-  hospitals: string[];
-  police: string[];
-  advisories: string[];
+  status: OperatingStatus;
 };
 
-const OPERATIONAL_COUNTRIES: CountryIntel[] = [
-  {
-    name: "South Africa",
-    position: [-30.5595, 22.9375],
-    status: "Elevated",
-    updated: "5 min ago",
-    hospitals: ["Groote Schuur Hospital", "Netcare Christiaan Barnard"],
-    police: ["Cape Town Central SAPS", "Sea Point SAPS"],
-    advisories: ["Increased protest activity reported downtown", "Road closures expected near CBD"],
-  },
-  {
-    name: "United Kingdom",
-    position: [55.3781, -3.436],
-    status: "Normal",
-    updated: "12 min ago",
-    hospitals: ["St Thomas' Hospital", "Royal London Hospital"],
-    police: ["Charing Cross Police Station", "Islington Police Station"],
-    advisories: ["Rail disruption affecting central routes", "Large public gathering scheduled this weekend"],
-  },
-  {
-    name: "United Arab Emirates",
-    position: [23.4241, 53.8478],
-    status: "High",
-    updated: "3 min ago",
-    hospitals: ["Rashid Hospital", "American Hospital Dubai"],
-    police: ["Bur Dubai Police Station", "Al Barsha Police Station"],
-    advisories: ["Heightened security around major venues", "Temporary road restrictions near event zones"],
-  },
+const OPERATIONAL_COUNTRIES: OperationalMarker[] = [
+  { name: "South Africa", position: [-30.5595, 22.9375], status: "Elevated" },
+  { name: "United Kingdom", position: [55.3781, -3.436], status: "Normal" },
+  { name: "United Arab Emirates", position: [23.4241, 53.8478], status: "High" },
 ];
 
 const WORLD_VIEW: [number, number] = [20, 0];
 const WORLD_ZOOM = 2;
-const COUNTRY_ZOOM = 5;
+
+// Current Operating Conditions - locked to these four levels plus the
+// "No Data" marker state (docs/Operations-Centre-v1.md).
+const STATUS_COLORS: Record<OperatingStatus, string> = {
+  Normal: "#22c55e",
+  Elevated: "#f59e0b",
+  High: "#f97316",
+  Severe: "#ef4444",
+  "No Data": "#94a3b8",
+};
+
+const STATUS_LEGEND: OperatingStatus[] = ["Normal", "Elevated", "High", "Severe", "No Data"];
 
 export default function Dashboard() {
   const [step, setStep] = useState<Step>("login");
-  const [selectedCountry, setSelectedCountry] = useState<CountryIntel | null>(null);
-  const mapRef = useRef<LeafletMap | null>(null);
 
   function signIn() {
     setStep("preparing");
     setTimeout(() => setStep("brief"), 1400);
-  }
-
-  function selectCountry(country: CountryIntel) {
-    setSelectedCountry(country);
-    mapRef.current?.flyTo(country.position, COUNTRY_ZOOM, { duration: 1.5 });
-  }
-
-  function closeCountryIntel() {
-    setSelectedCountry(null);
-    mapRef.current?.flyTo(WORLD_VIEW, WORLD_ZOOM, { duration: 1.2 });
   }
 
   if (step === "login") {
@@ -165,141 +137,58 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#050816] text-white overflow-hidden px-10">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <p className="text-sky-300 text-sm">Operations Centre</p>
-          <h1 className="text-3xl font-semibold">Operational Canvas</h1>
-        </div>
-        <button onClick={() => setStep("brief")} className="rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-sm">
-          Operations Brief • Updated
-        </button>
-      </div>
+    <div className="fixed inset-0 z-50 overflow-hidden bg-[#050816] text-white">
+      <MapLayer />
+    </div>
+  );
+}
 
-      <div className="relative h-[calc(100vh-8rem)] w-full">
-        <MapContainer
-          ref={mapRef}
-          center={WORLD_VIEW}
-          zoom={WORLD_ZOOM}
-          minZoom={WORLD_ZOOM}
-          scrollWheelZoom={false}
-          className="h-full w-full rounded-2xl"
-          zoomControl={false}
-          attributionControl={false}
-        >
-          <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png" />
+// LAYER 1: Map (static)
+// Base layer of the Operational Canvas stack. Full world view, pannable
+// and zoomable, with colour-coded operational markers and a status
+// legend. Nothing renders above this yet - Layers 2-7 are built and
+// approved one at a time per the VenueGuard Debug Layer Rule.
+function MapLayer() {
+  return (
+    <div data-layer="1" className="absolute inset-0 z-[1] h-full w-full">
+      <MapContainer
+        center={WORLD_VIEW}
+        zoom={WORLD_ZOOM}
+        minZoom={WORLD_ZOOM}
+        maxZoom={16}
+        zoomControl
+        attributionControl={false}
+        className="h-full w-full"
+      >
+        <TileLayer
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+          maxZoom={16}
+        />
 
-          {OPERATIONAL_COUNTRIES.map((marker) => (
-            <CircleMarker
-              className="venueguard-breathing-marker cursor-pointer"
-              key={marker.name}
-              center={marker.position}
-              radius={7}
-              pathOptions={{
-                color: "#38bdf8",
-                fillColor: "#38bdf8",
-                fillOpacity: 0.8,
-                weight: 2,
-              }}
-              eventHandlers={{ click: () => selectCountry(marker) }}
-            >
-              <Tooltip className="venueguard-marker-tooltip" direction="top" offset={[0, -10]} opacity={1} sticky>
-                <p className="font-semibold text-white">{marker.name}</p>
-                <p className="text-slate-300">Current Operating Conditions: {marker.status}</p>
-                <p className="text-slate-400">Updated {marker.updated}</p>
-              </Tooltip>
-            </CircleMarker>
-          ))}
-        </MapContainer>
+        {OPERATIONAL_COUNTRIES.map((marker) => (
+          <CircleMarker
+            className="venueguard-breathing-marker"
+            key={marker.name}
+            center={marker.position}
+            radius={7}
+            pathOptions={{
+              color: STATUS_COLORS[marker.status],
+              fillColor: STATUS_COLORS[marker.status],
+              fillOpacity: 0.85,
+              weight: 2,
+            }}
+          />
+        ))}
+      </MapContainer>
 
-        <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_center,transparent_35%,rgba(5,8,22,0.65)_100%)]" />
-
-        <aside className="absolute left-4 top-4 bottom-4 w-[280px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
-          <h2 className="font-semibold mb-4">Operational Layers</h2>
-          {["Area Advisories", "Medical Support", "Law Enforcement", "Fuel Stations", "Operational Routes"].map((layer) => (
-            <label key={layer} className="flex items-center gap-3 py-2 text-sm text-slate-300">
-              <input type="checkbox" className="accent-sky-400" />
-              {layer}
-            </label>
-          ))}
-        </aside>
-
-        <aside className="absolute right-4 top-4 bottom-4 w-[300px] overflow-y-auto rounded-[24px] border border-white/10 bg-white/10 p-4 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl">
-          <h2 className="font-semibold mb-4">Operational Footprint</h2>
-          <div className="space-y-3">
-            {[
-              ["South Africa", "3 venues", "2 plans"],
-              ["United Kingdom", "1 venue", "1 plan"],
-              ["United Arab Emirates", "1 venue", "0 plans"],
-            ].map(([country, venues, plans]) => (
-              <div key={country} className="rounded-xl bg-slate-900/70 border border-white/10 p-3">
-                <p className="font-medium">{country}</p>
-                <p className="text-xs text-slate-400">{venues} · {plans}</p>
-              </div>
-            ))}
+      <div className="absolute bottom-4 left-4 z-[10] rounded-xl border border-white/10 bg-slate-950/80 p-3 text-xs backdrop-blur-sm">
+        <p className="mb-2 font-semibold text-white">Current Operating Conditions</p>
+        {STATUS_LEGEND.map((status) => (
+          <div key={status} className="flex items-center gap-2 py-0.5">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[status] }} />
+            <span className="text-slate-300">{status}</span>
           </div>
-        </aside>
-
-        <div
-          className={`absolute inset-x-0 bottom-4 mx-auto w-[420px] max-w-[90%] rounded-[24px] border border-white/10 bg-white/10 p-5 opacity-[0.92] shadow-2xl shadow-black/40 backdrop-blur-xl transition-all duration-500 ease-out ${
-            selectedCountry ? "translate-y-0" : "pointer-events-none translate-y-[130%] opacity-0"
-          }`}
-        >
-          {selectedCountry && (
-            <>
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <p className="text-sky-300 text-xs">Country Intelligence</p>
-                  <h2 className="text-xl font-semibold">{selectedCountry.name}</h2>
-                </div>
-                <button
-                  onClick={closeCountryIntel}
-                  className="rounded-lg border border-white/10 bg-white/10 p-1.5 text-slate-300 hover:text-white"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <div className="rounded-xl bg-slate-900/70 border border-white/10 p-3">
-                  <p className="text-xs text-slate-400">Current Operating Conditions</p>
-                  <p className="text-sm font-semibold">{selectedCountry.status}</p>
-                </div>
-                <div className="rounded-xl bg-slate-900/70 border border-white/10 p-3">
-                  <p className="text-xs text-slate-400">Updated</p>
-                  <p className="text-sm font-semibold">{selectedCountry.updated}</p>
-                </div>
-              </div>
-
-              <div className="space-y-3 max-h-40 overflow-y-auto pr-1">
-                <div>
-                  <p className="text-xs text-slate-400 mb-1 flex items-center gap-1">
-                    <Cross className="w-3.5 h-3.5" /> Primary Hospitals
-                  </p>
-                  {selectedCountry.hospitals.map((hospital) => (
-                    <p key={hospital} className="text-sm text-slate-300">{hospital}</p>
-                  ))}
-                </div>
-                <div>
-                  <p className="text-xs text-slate-400 mb-1 flex items-center gap-1">
-                    <ShieldAlert className="w-3.5 h-3.5" /> Police Stations
-                  </p>
-                  {selectedCountry.police.map((station) => (
-                    <p key={station} className="text-sm text-slate-300">{station}</p>
-                  ))}
-                </div>
-                <div>
-                  <p className="text-xs text-slate-400 mb-1 flex items-center gap-1">
-                    <AlertCircle className="w-3.5 h-3.5" /> Area Advisories
-                  </p>
-                  {selectedCountry.advisories.map((advisory) => (
-                    <p key={advisory} className="text-sm text-slate-300">{advisory}</p>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
+        ))}
       </div>
     </div>
   );
