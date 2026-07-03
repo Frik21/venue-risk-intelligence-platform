@@ -190,7 +190,7 @@ function mercatorYFraction(latDeg: number): number {
 // dimension ever clips a continent, whatever the viewport's aspect ratio.
 function computeWorldFitZoom(map: L.Map): number {
   const size = map.getSize();
-  const widthFitZoom = Math.log2(size.x / 256);
+  const widthFitZoom = Math.log2((size.x * 180) / (256 * WORLD_HALF_SPAN_DEG));
 
   const centerYFrac = mercatorYFraction(WORLD_VIEW[0]);
   const southHalfSpan = mercatorYFraction(-56) - centerYFrac; // Cape Horn
@@ -313,6 +313,30 @@ const OPERATIONAL_COUNTRIES: OperationalMarker[] = [
 ];
 
 const WORLD_VIEW: [number, number] = [44, 11];
+
+// computeWorldFitZoom's width-fit branch implicitly assumed the
+// visible half-span from WORLD_VIEW's center could always be exactly
+// 180deg (i.e. the container width maps to one full 360deg world).
+// That assumption silently requires the center longitude to be
+// equidistant from the antimeridian on both sides - WORLD_VIEW's
+// center (11deg E) is not. Measured directly against the actual
+// dataset (post unwrapGeometry/alignCrossingRings): the US's
+// westernmost point (the Aleutian chain, down to -178.19deg) needs a
+// 189.19deg half-span to stay on screen, while Russia's easternmost
+// point (the Chukotka peninsula, up to 190.27deg) only needs 179.27deg.
+// A fixed 180deg half-span left the Aleutians' westernmost tip's
+// bounding box starting at x=-32 in a 1288px-wide viewport (genuinely
+// off-screen, confirmed via the rendered path's own getBoundingClientRect)
+// while giving Russia's tip only ~2px of margin on the other edge
+// (technically on-screen, but pixel-thin enough to read as clipped).
+// Using the larger of the two real requirements, plus a small safety
+// margin, fits both comfortably instead of assuming symmetry that
+// isn't actually there.
+const WORLD_HALF_SPAN_DEG =
+  Math.max(
+    WORLD_VIEW[1] - -178.19, // US: Aleutian Islands westernmost point
+    190.27 - WORLD_VIEW[1], // Russia: Chukotka easternmost point (post-alignment)
+  ) + 3;
 
 // The real world's lat/lng extent. Passed to the TileLayer as `bounds`
 // so Leaflet's own tile-validity check (_isValidTile) rejects any tile
