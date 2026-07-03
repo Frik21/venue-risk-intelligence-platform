@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { MapContainer, TileLayer, CircleMarker, GeoJSON, useMap, useMapEvent } from "react-leaflet";
+import { MapContainer, TileLayer, CircleMarker, GeoJSON, Tooltip, useMap, useMapEvent } from "react-leaflet";
 import L from "leaflet";
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
 import "leaflet/dist/leaflet.css";
 import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-react";
+import { COUNTRY_CAPITALS } from "@/lib/country-capitals";
 
 // Full-world country boundaries (Natural Earth, ~4MB) are served as a
 // static asset and fetched at runtime rather than bundled into the JS
@@ -116,6 +117,73 @@ function getPrimaryPolygonBounds(geometry: Geometry): L.LatLngBounds | null {
   const largestRing = rings.reduce((largest, ring) => (ringArea(ring) > ringArea(largest) ? ring : largest));
 
   return L.latLngBounds(largestRing.map(([lng, lat]) => L.latLng(lat, lng)));
+}
+
+// The satellite TileLayer (Layer 1's country-zoom rendering) is bounded
+// to just the selected country - a single, well-defined box that avoids
+// the world-spanning antimeridian/edge bugs the earlier global raster
+// base map hit. Russia is the exception this note warns about: its
+// primary-polygon bounds (see getPrimaryPolygonBounds), after
+// unwrapGeometry/alignCrossingRings, legitimately extend past +180deg
+// (its Chukotka coastline runs to roughly 190deg in this app's unwrapped
+// representation). A single bounds object with east > 180 would look
+// fine for the flyToBounds camera move (raw lat/lng arithmetic doesn't
+// care), but Leaflet's tile-validity check for a TileLayer's `bounds`
+// option compares against each tile's own projected lat/lng, which the
+// CRS always keeps within -180..180 - so the "overflow" portion (180 to
+// 190) would never overlap any real tile there, and the western half of
+// Chukotka (natively indexed as x-coordinates near the antimeridian's
+// other side, i.e. lng close to -180) would never load. Splitting any
+// bounds that cross +-180 into two normal, non-crossing boxes - one on
+// each side of the seam - and rendering one TileLayer per box fixes this
+// the same way the outline geometry itself needed splitting/aligning.
+function splitBoundsAtAntimeridian(bounds: L.LatLngBounds): L.LatLngBoundsExpression[] {
+  const south = bounds.getSouth();
+  const north = bounds.getNorth();
+  const west = bounds.getWest();
+  const east = bounds.getEast();
+
+  if (east > 180) {
+    return [
+      [
+        [south, west],
+        [north, 180],
+      ],
+      [
+        [south, -180],
+        [north, east - 360],
+      ],
+    ];
+  }
+  if (west < -180) {
+    return [
+      [
+        [south, west + 360],
+        [north, 180],
+      ],
+      [
+        [south, -180],
+        [north, east],
+      ],
+    ];
+  }
+  return [
+    [
+      [south, west],
+      [north, east],
+    ],
+  ];
+}
+
+// Bounds for the satellite TileLayer(s): the primary-polygon bounds used
+// for the camera move, padded by 25% on every side (Leaflet's own
+// LatLngBounds.pad()) so satellite tiles are available slightly beyond
+// the tight country outline - matching flyToBounds's own pixel padding
+// conceptually - then split at the antimeridian if needed.
+function getSatelliteBoundsSegments(geometry: Geometry): L.LatLngBoundsExpression[] {
+  const bounds = getPrimaryPolygonBounds(geometry);
+  if (!bounds) return [];
+  return splitBoundsAtAntimeridian(bounds.pad(0.25));
 }
 
 // Belt-and-suspenders: the MapContainer interaction props already disable
@@ -232,6 +300,14 @@ function CountrySelect({
   const map = useMap();
   const geoJsonRef = useRef<L.GeoJSON | null>(null);
   const [countryBorders, setCountryBorders] = useState<FeatureCollection | null>(null);
+  // Gates the capital marker/label until the flyToBounds camera move has
+  // actually finished, per spec ("only once the zoom-to-country animation
+  // completes"), rather than appearing instantly alongside a still-moving
+  // camera. A timer matching COUNTRY_ZOOM_DURATION is simpler and more
+  // robust here than chaining off Leaflet's own moveend/zoomend events,
+  // which can fire more than once (or not exactly at animation end) across
+  // browsers during a flyToBounds animation.
+  const [showCapital, setShowCapital] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -248,6 +324,13 @@ function CountrySelect({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    setShowCapital(false);
+    if (selectedCountryId == null) return;
+    const timer = setTimeout(() => setShowCapital(true), COUNTRY_ZOOM_DURATION * 1000);
+    return () => clearTimeout(timer);
+  }, [selectedCountryId]);
 
   useMapEvent("click", () => {
     onSelectCountry(null);
@@ -286,13 +369,57 @@ function CountrySelect({
 
   if (!countryBorders) return null;
 
+  const selectedFeature =
+    selectedCountryId != null
+      ? countryBorders.features.find((f) => f.id != null && String(f.id) === selectedCountryId)
+      : undefined;
+  const satelliteBoundsSegments = selectedFeature ? getSatelliteBoundsSegments(selectedFeature.geometry) : [];
+  const capital = selectedCountryId != null ? COUNTRY_CAPITALS[selectedCountryId] : undefined;
+
   return (
-    <GeoJSON
-      ref={geoJsonRef}
-      data={countryBorders}
-      style={(feature) => countryOutlineStyle(feature, selectedCountryId)}
-      onEachFeature={onEachFeature}
-    />
+    <>
+      {/* Satellite imagery only covers the selected country's own bounds
+          (split at the antimeridian if needed, see
+          getSatelliteBoundsSegments) - never the whole world - and only
+          mounts while a country is selected, so it's fully unmounted
+          (not just hidden) the moment the view returns to the vector
+          world map. */}
+      {satelliteBoundsSegments.map((segmentBounds, index) => (
+        <TileLayer
+          key={`${selectedCountryId}-satellite-${index}`}
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          maxZoom={18}
+          noWrap
+          bounds={segmentBounds}
+        />
+      ))}
+
+      <GeoJSON
+        ref={geoJsonRef}
+        data={countryBorders}
+        style={(feature) => countryOutlineStyle(feature, selectedCountryId)}
+        onEachFeature={onEachFeature}
+      />
+
+      {showCapital && capital && (
+        <CircleMarker
+          key={selectedCountryId}
+          className="venueguard-capital-marker"
+          center={capital.position}
+          radius={5}
+          pathOptions={{
+            color: "#f1f5f9",
+            fillColor: "#f1f5f9",
+            fillOpacity: 0.95,
+            weight: 1.5,
+          }}
+        >
+          <Tooltip className="venueguard-marker-tooltip" direction="right" offset={[8, 0]} permanent>
+            {capital.name}
+          </Tooltip>
+        </CircleMarker>
+      )}
+    </>
   );
 }
 

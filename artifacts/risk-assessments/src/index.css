@@ -221,3 +221,12 @@
 .venueguard-operational-canvas-map.leaflet-container {
   background-color: #1a1a1a;
 }
+
+/* Capital city marker (Layer 1, country-zoom level): a static, subtle
+   glow only - no pulse/breathe animation. That rhythm is reserved for
+   operational status markers (.venueguard-breathing-marker) elsewhere in
+   the product per the Motion Principles; this is a neutral geographic
+   reference point, not a status indicator, so it stays still. */
+.venueguard-capital-marker {
+  filter: drop-shadow(0 0 3px rgba(241, 245, 249, 0.55));
+}
