@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
 import { MapContainer, ImageOverlay, CircleMarker, GeoJSON, Tooltip, useMap, useMapEvent } from "react-leaflet";
 import L from "leaflet";
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
@@ -19,18 +18,12 @@ const COUNTRY_BORDERS_URL = `${import.meta.env.BASE_URL}data/operational-country
 // since a raster tile provider can't express this custom styling.
 const NIGHT_MAP_URL = `${import.meta.env.BASE_URL}data/earth-at-night.png`;
 
-// Single source of truth for the map's ocean/background tone. This is
-// the ONLY place this color is ever written - the container's CSS
-// fallback background (see --ocean-color in index.css) reads it via a
-// custom property set from this constant, instead of a second
-// hand-copied hex value that silently drifts out of sync with the
-// image (which is exactly how this seam bug kept recurring). It's
-// sampled from the Earth at Night image's own rendered edge pixel - see
-// the generator script referenced there for how the ocean gradient
-// itself is produced. Even with the map's own imagery now tiled to
-// cover every realistic viewport (see NIGHT_MAP_TILE_OFFSETS below),
-// this fallback still matters for the instant before the image has
-// loaded.
+// Background tone for the outer page wrapper (behind MapLayer). The
+// Leaflet container's own fallback (visible where the map's own
+// imagery doesn't cover) uses a matching radial gradient defined
+// directly in index.css instead of this single flat value - see the
+// comment there for why a flat colour couldn't fully blend with the
+// image's own radial ocean gradient.
 const OCEAN_COLOR = "#00081a";
 
 // General antimeridian fix: any ring whose consecutive points jump by
@@ -635,7 +628,6 @@ function MapLayer() {
         keyboard={false}
         zoomControl
         attributionControl={false}
-        style={{ "--ocean-color": OCEAN_COLOR } as CSSProperties}
         className="venueguard-operational-canvas-map h-full w-full"
       >
         <MapLock />
