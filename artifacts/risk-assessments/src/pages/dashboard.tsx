@@ -452,8 +452,13 @@ function computeNightMapEdgeFadeBounds(map: L.Map): {
   const westReachDeg = centerLng - west;
   const eastReachDeg = east - centerLng;
 
-  const westFadeDeg = Math.max(0, requiredHalfSpanDeg - westReachDeg);
-  const eastFadeDeg = Math.max(0, requiredHalfSpanDeg - eastReachDeg);
+  // Extends each fade well past the minimum required to cover the
+  // duplicate-zone shortfall, so the darkening continues gradually past
+  // the real edge geography (Alaska/Chukotka) and the seam, rather than
+  // stopping abruptly right at the minimum needed reach.
+  const EXTRA_FADE_REACH_DEG = 150;
+  const westFadeDeg = Math.max(0, requiredHalfSpanDeg - westReachDeg) + EXTRA_FADE_REACH_DEG;
+  const eastFadeDeg = Math.max(0, requiredHalfSpanDeg - eastReachDeg) + EXTRA_FADE_REACH_DEG;
 
   return {
     west: westFadeDeg > 0 ? [[south, west - westFadeDeg], [north, west]] : null,
