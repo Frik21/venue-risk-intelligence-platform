@@ -529,14 +529,14 @@ function offsetBoundsLng(bounds: LatLngBoundsTuple, deltaLng: number): LatLngBou
 // required half-span from the map's real current zoom and pixel
 // width (degrees-per-pixel at that zoom, times half the viewport
 // width) and adds exactly as many 360deg-wide copies as that needs,
-// plus one full extra copy of safety margin - correct at any aspect
+// plus two full extra copies of safety margin - correct at any aspect
 // ratio, not just the ones already tested.
 function computeNightMapTileOffsets(map: L.Map): number[] {
   const zoom = map.getZoom();
   const size = map.getSize();
   const worldWidthPx = 256 * Math.pow(2, zoom);
   const requiredHalfSpanDeg = worldWidthPx > 0 ? (size.x / 2 / worldWidthPx) * 360 : 360;
-  const extraCopiesEachSide = Math.max(1, Math.ceil(requiredHalfSpanDeg / 360) + 1);
+  const extraCopiesEachSide = Math.max(2, Math.ceil(requiredHalfSpanDeg / 360) + 2);
   const offsets: number[] = [];
   for (let i = -extraCopiesEachSide; i <= extraCopiesEachSide; i++) {
     offsets.push(i * 360);
@@ -686,8 +686,14 @@ export default function Dashboard() {
     );
   }
 
+  // This wrapper's own background is a THIRD place a colour could
+  // silently drift from the map's ocean tone (previously a separate
+  // hardcoded #050816) - it now uses the exact same OCEAN_COLOR
+  // constant as the Leaflet container's fallback, so there is no seam
+  // possible between this wrapper and the map, regardless of how close
+  // a hand-picked hex value might otherwise look.
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-[#050816] text-white">
+    <div className="fixed inset-0 z-50 overflow-hidden text-white" style={{ backgroundColor: OCEAN_COLOR }}>
       <MapLayer />
     </div>
   );
