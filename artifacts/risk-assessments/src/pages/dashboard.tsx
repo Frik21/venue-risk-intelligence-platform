@@ -508,27 +508,70 @@ const NIGHT_MAP_BOUNDS: LatLngBoundsTuple = [
   [85.05112877980659, 191.1],
 ];
 
-// The image spans exactly 360deg (191.1 - -168.9), but wide/short
-// viewports can need more than that: WORLD_HALF_SPAN_DEG's ~192.19deg
-// half-span (see above) means up to ~384.38deg of total width, more
-// than a single copy covers. Rather than fall back to a plain colour
-// for that leftover margin (the fragile, easy-to-mismatch fix that
-// caused this exact seam bug to keep recurring), the image is tiled:
-// two extra copies, each shifted a full 360deg of longitude, sit
-// immediately either side of the primary one. This isn't an
-// approximation - the image's left and right edges were deliberately
-// chosen (see NIGHT_MAP_BOUNDS above) to both fall on the SAME safe
-// real-world meridian, so copy-to-copy joins land on that identical
-// seam, giving over 1000deg of total coverage with no gap possible at
-// any realistic viewport.
-const NIGHT_MAP_TILE_OFFSETS = [-360, 0, 360];
-
 function offsetBoundsLng(bounds: LatLngBoundsTuple, deltaLng: number): LatLngBoundsTuple {
   const [[south, west], [north, east]] = bounds;
   return [
     [south, west + deltaLng],
     [north, east + deltaLng],
   ];
+}
+
+// The image spans exactly 360deg (191.1 - -168.9), but a wide/short
+// viewport can need more than that. A FIXED number of extra copies
+// (an earlier version of this used [-360, 0, 360]) is still a guess:
+// computeWorldFitZoom picks whichever of its width-fit or height-fit
+// branch is more zoomed out, and for aspect ratios where HEIGHT is the
+// binding constraint, the resulting zoom can be smaller than the
+// width-fit formula alone assumes - at that smaller zoom the same
+// viewport width covers MORE than the width-fit branch's own
+// WORLD_HALF_SPAN_DEG, so a hardcoded tile count can still fall short
+// at a sufficiently extreme aspect ratio. This computes the actual
+// required half-span from the map's real current zoom and pixel
+// width (degrees-per-pixel at that zoom, times half the viewport
+// width) and adds exactly as many 360deg-wide copies as that needs,
+// plus one full extra copy of safety margin - correct at any aspect
+// ratio, not just the ones already tested.
+function computeNightMapTileOffsets(map: L.Map): number[] {
+  const zoom = map.getZoom();
+  const size = map.getSize();
+  const worldWidthPx = 256 * Math.pow(2, zoom);
+  const requiredHalfSpanDeg = worldWidthPx > 0 ? (size.x / 2 / worldWidthPx) * 360 : 360;
+  const extraCopiesEachSide = Math.max(1, Math.ceil(requiredHalfSpanDeg / 360) + 1);
+  const offsets: number[] = [];
+  for (let i = -extraCopiesEachSide; i <= extraCopiesEachSide; i++) {
+    offsets.push(i * 360);
+  }
+  return offsets;
+}
+
+// Recomputes the tile count whenever the map's zoom or viewport size
+// can change (mount, window resize, WorldFitZoom's own zoom changes) -
+// this can't be a one-time calculation since the world-fit zoom itself
+// depends on the viewport, which can change after mount.
+function NightMapLayer() {
+  const map = useMap();
+  const [offsets, setOffsets] = useState<number[]>(() => [-720, -360, 0, 360, 720]);
+
+  useLayoutEffect(() => {
+    function recompute() {
+      setOffsets(computeNightMapTileOffsets(map));
+    }
+    recompute();
+    map.on("zoomend moveend", recompute);
+    window.addEventListener("resize", recompute);
+    return () => {
+      map.off("zoomend moveend", recompute);
+      window.removeEventListener("resize", recompute);
+    };
+  }, [map]);
+
+  return (
+    <>
+      {offsets.map((offset) => (
+        <ImageOverlay key={`night-map-${offset}`} url={NIGHT_MAP_URL} bounds={offsetBoundsLng(NIGHT_MAP_BOUNDS, offset)} />
+      ))}
+    </>
+  );
 }
 
 // Current Operating Conditions - locked to these four levels plus the
@@ -686,14 +729,11 @@ function MapLayer() {
             into this image would otherwise sit awkwardly underneath the
             real satellite imagery that covers the selected country -
             the gap outside the satellite tiles' bounds falls back to
-            the map's own ocean-colour background instead. Tiled three
-            times (see NIGHT_MAP_TILE_OFFSETS) so the image itself - not
-            a separate fallback colour - is what's visible at every
-            realistic viewport edge. */}
-        {selectedCountryId == null &&
-          NIGHT_MAP_TILE_OFFSETS.map((offset) => (
-            <ImageOverlay key={`night-map-${offset}`} url={NIGHT_MAP_URL} bounds={offsetBoundsLng(NIGHT_MAP_BOUNDS, offset)} />
-          ))}
+            the map's own ocean-colour background instead. Tiled
+            dynamically (see NightMapLayer/computeNightMapTileOffsets)
+            so the image itself - not a separate fallback colour - is
+            what's visible at every viewport edge, at any aspect ratio. */}
+        {selectedCountryId == null && <NightMapLayer />}
 
         <CountrySelect selectedCountryId={selectedCountryId} onSelectCountry={setSelectedCountryId} />
 
