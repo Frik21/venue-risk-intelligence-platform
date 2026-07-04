@@ -18,6 +18,14 @@ const COUNTRY_BORDERS_URL = `${import.meta.env.BASE_URL}data/operational-country
 // since a raster tile provider can't express this custom styling.
 const NIGHT_MAP_URL = `${import.meta.env.BASE_URL}data/earth-at-night.png`;
 
+// Edge-fade strips generated once, offline, from the night-map image's own
+// west/east edge columns (see scripts note in the NightMapLayer comment
+// below) - real adjacent map data, anchored pixel-exact to the image's own
+// edge and fading to the same dark ocean tone as the CSS gradient fallback,
+// not an invented texture.
+const NIGHT_MAP_EDGE_FADE_WEST_URL = `${import.meta.env.BASE_URL}data/night-map-edge-fade-west.png`;
+const NIGHT_MAP_EDGE_FADE_EAST_URL = `${import.meta.env.BASE_URL}data/night-map-edge-fade-east.png`;
+
 // Background tone for the outer page wrapper (behind MapLayer). The
 // Leaflet container's own fallback (visible where the map's own
 // imagery doesn't cover) uses a matching radial gradient defined
@@ -412,53 +420,58 @@ const NIGHT_MAP_BOUNDS: LatLngBoundsTuple = [
   [85.05112877980659, 191.1],
 ];
 
-function offsetBoundsLng(bounds: LatLngBoundsTuple, deltaLng: number): LatLngBoundsTuple {
-  const [[south, west], [north, east]] = bounds;
-  return [
-    [south, west + deltaLng],
-    [north, east + deltaLng],
-  ];
-}
-
-// The image spans exactly 360deg (191.1 - -168.9), but a wide/short
-// viewport can need more than that. A FIXED number of extra copies
-// (an earlier version of this used [-360, 0, 360]) is still a guess:
-// computeWorldFitZoom picks whichever of its width-fit or height-fit
-// branch is more zoomed out, and for aspect ratios where HEIGHT is the
-// binding constraint, the resulting zoom can be smaller than the
-// width-fit formula alone assumes - at that smaller zoom the same
-// viewport width covers MORE than the width-fit branch's own
-// WORLD_HALF_SPAN_DEG, so a hardcoded tile count can still fall short
-// at a sufficiently extreme aspect ratio. This computes the actual
-// required half-span from the map's real current zoom and pixel
-// width (degrees-per-pixel at that zoom, times half the viewport
-// width) and adds exactly as many 360deg-wide copies as that needs,
-// plus two full extra copies of safety margin - correct at any aspect
-// ratio, not just the ones already tested.
-function computeNightMapTileOffsets(map: L.Map): number[] {
+// A single, un-offset copy of the real image, plus two narrow edge-fade
+// overlays covering only the genuine shortfall beyond it - not the
+// tiled, 360deg-shifted repeats an earlier version used. At this app's
+// locked default zoom the required visible span is wider than the
+// image's own 360deg width, so a neighbouring full copy's own content
+// (not just its ocean margin) would become visible - duplicating
+// Alaska/Chukotka at the opposite edge from where they already appear.
+// The fade images (public/data/night-map-edge-fade-{west,east}.png,
+// generated once offline from this same source image's own west/east
+// edge columns - see the generation script kept alongside this change)
+// are real adjacent map data, not an invented gradient: each is
+// pixel-exact to the real edge column for its innermost 3px, then a
+// heavily vertically-smoothed (darkest-of-150px-window, so no single
+// coastline/graticule row can stretch into a streak) version of that
+// same column, blended out to the same dark ocean tone the CSS gradient
+// fallback already uses (#020b18). Leaflet stretches each overlay's
+// fixed-resolution image to whatever LatLngBounds is given, so the
+// fade's own pixel width doesn't need to match the degrees it covers.
+function computeNightMapEdgeFadeBounds(map: L.Map): {
+  west: LatLngBoundsTuple | null;
+  east: LatLngBoundsTuple | null;
+} {
   const zoom = map.getZoom();
   const size = map.getSize();
   const worldWidthPx = 256 * Math.pow(2, zoom);
   const requiredHalfSpanDeg = worldWidthPx > 0 ? (size.x / 2 / worldWidthPx) * 360 : 360;
-  const extraCopiesEachSide = Math.max(2, Math.ceil(requiredHalfSpanDeg / 360) + 2);
-  const offsets: number[] = [];
-  for (let i = -extraCopiesEachSide; i <= extraCopiesEachSide; i++) {
-    offsets.push(i * 360);
-  }
-  return offsets;
+
+  const [[south, west], [north, east]] = NIGHT_MAP_BOUNDS;
+  const centerLng = WORLD_VIEW[1];
+  const westReachDeg = centerLng - west;
+  const eastReachDeg = east - centerLng;
+
+  const westFadeDeg = Math.max(0, requiredHalfSpanDeg - westReachDeg);
+  const eastFadeDeg = Math.max(0, requiredHalfSpanDeg - eastReachDeg);
+
+  return {
+    west: westFadeDeg > 0 ? [[south, west - westFadeDeg], [north, west]] : null,
+    east: eastFadeDeg > 0 ? [[south, east], [north, east + eastFadeDeg]] : null,
+  };
 }
 
-// Recomputes the tile count whenever the map's zoom or viewport size
-// can change (mount, window resize, WorldFitZoom's own zoom changes) -
-// this can't be a one-time calculation since the world-fit zoom itself
-// depends on the viewport, which can change after mount.
+// Recomputes the fade bounds whenever the map's zoom or viewport size can
+// change (mount, window resize, WorldFitZoom's own zoom changes) - this
+// can't be a one-time calculation since the world-fit zoom itself depends
+// on the viewport, which can change after mount.
 function NightMapLayer() {
   const map = useMap();
-  const [offsets, setOffsets] = useState<number[]>(() => [-720, -360, 0, 360, 720]);
+  const [fadeBounds, setFadeBounds] = useState(() => computeNightMapEdgeFadeBounds(map));
 
   useLayoutEffect(() => {
     function recompute() {
-      setOffsets(computeNightMapTileOffsets(map));
+      setFadeBounds(computeNightMapEdgeFadeBounds(map));
     }
     recompute();
     map.on("zoomend moveend", recompute);
@@ -471,9 +484,9 @@ function NightMapLayer() {
 
   return (
     <>
-      {offsets.map((offset) => (
-        <ImageOverlay key={`night-map-${offset}`} url={NIGHT_MAP_URL} bounds={offsetBoundsLng(NIGHT_MAP_BOUNDS, offset)} />
-      ))}
+      <ImageOverlay url={NIGHT_MAP_URL} bounds={NIGHT_MAP_BOUNDS} />
+      {fadeBounds.west && <ImageOverlay url={NIGHT_MAP_EDGE_FADE_WEST_URL} bounds={fadeBounds.west} />}
+      {fadeBounds.east && <ImageOverlay url={NIGHT_MAP_EDGE_FADE_EAST_URL} bounds={fadeBounds.east} />}
     </>
   );
 }
@@ -636,10 +649,11 @@ function MapLayer() {
             stays mounted for both the default world view and while a
             country is selected/zoomed in. There is no alternate
             rendering path (no satellite imagery, no tile-layer swap) to
-            switch to or hide this for. Tiled dynamically (see
-            NightMapLayer/computeNightMapTileOffsets) so the image
-            itself - not a fallback colour - is what's visible at every
-            viewport edge, at any aspect ratio. */}
+            switch to or hide this for. A single copy of the real image
+            plus two narrow edge-fade overlays (see
+            NightMapLayer/computeNightMapEdgeFadeBounds) cover any extra
+            reach beyond the image's own width at the current viewport's
+            aspect ratio, without duplicating real geography. */}
         <NightMapLayer />
 
         <CountrySelect selectedCountryId={selectedCountryId} onSelectCountry={setSelectedCountryId} />
