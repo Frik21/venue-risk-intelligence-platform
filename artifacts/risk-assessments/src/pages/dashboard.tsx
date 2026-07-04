@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { MapContainer, TileLayer, ImageOverlay, CircleMarker, GeoJSON, Tooltip, useMap, useMapEvent } from "react-leaflet";
+import { MapContainer, ImageOverlay, CircleMarker, GeoJSON, Tooltip, useMap, useMapEvent } from "react-leaflet";
 import L from "leaflet";
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
 import "leaflet/dist/leaflet.css";
@@ -17,6 +17,14 @@ const COUNTRY_BORDERS_URL = `${import.meta.env.BASE_URL}data/operational-country
 // the same country-borders dataset rather than served as map tiles,
 // since a raster tile provider can't express this custom styling.
 const NIGHT_MAP_URL = `${import.meta.env.BASE_URL}data/earth-at-night.png`;
+
+// Background tone for the outer page wrapper (behind MapLayer). The
+// Leaflet container's own fallback (visible where the map's own
+// imagery doesn't cover) uses a matching radial gradient defined
+// directly in index.css instead of this single flat value - see the
+// comment there for why a flat colour couldn't fully blend with the
+// image's own radial ocean gradient.
+const OCEAN_COLOR = "#00081a";
 
 // General antimeridian fix: any ring whose consecutive points jump by
 // more than 180deg of longitude (i.e. it crosses the 180/-180 dateline,
@@ -124,73 +132,6 @@ function getPrimaryPolygonBounds(geometry: Geometry): L.LatLngBounds | null {
   const largestRing = rings.reduce((largest, ring) => (ringArea(ring) > ringArea(largest) ? ring : largest));
 
   return L.latLngBounds(largestRing.map(([lng, lat]) => L.latLng(lat, lng)));
-}
-
-// The satellite TileLayer (Layer 1's country-zoom rendering) is bounded
-// to just the selected country - a single, well-defined box that avoids
-// the world-spanning antimeridian/edge bugs the earlier global raster
-// base map hit. Russia is the exception this note warns about: its
-// primary-polygon bounds (see getPrimaryPolygonBounds), after
-// unwrapGeometry/alignCrossingRings, legitimately extend past +180deg
-// (its Chukotka coastline runs to roughly 190deg in this app's unwrapped
-// representation). A single bounds object with east > 180 would look
-// fine for the flyToBounds camera move (raw lat/lng arithmetic doesn't
-// care), but Leaflet's tile-validity check for a TileLayer's `bounds`
-// option compares against each tile's own projected lat/lng, which the
-// CRS always keeps within -180..180 - so the "overflow" portion (180 to
-// 190) would never overlap any real tile there, and the western half of
-// Chukotka (natively indexed as x-coordinates near the antimeridian's
-// other side, i.e. lng close to -180) would never load. Splitting any
-// bounds that cross +-180 into two normal, non-crossing boxes - one on
-// each side of the seam - and rendering one TileLayer per box fixes this
-// the same way the outline geometry itself needed splitting/aligning.
-function splitBoundsAtAntimeridian(bounds: L.LatLngBounds): L.LatLngBoundsExpression[] {
-  const south = bounds.getSouth();
-  const north = bounds.getNorth();
-  const west = bounds.getWest();
-  const east = bounds.getEast();
-
-  if (east > 180) {
-    return [
-      [
-        [south, west],
-        [north, 180],
-      ],
-      [
-        [south, -180],
-        [north, east - 360],
-      ],
-    ];
-  }
-  if (west < -180) {
-    return [
-      [
-        [south, west + 360],
-        [north, 180],
-      ],
-      [
-        [south, -180],
-        [north, east],
-      ],
-    ];
-  }
-  return [
-    [
-      [south, west],
-      [north, east],
-    ],
-  ];
-}
-
-// Bounds for the satellite TileLayer(s): the primary-polygon bounds used
-// for the camera move, padded by 25% on every side (Leaflet's own
-// LatLngBounds.pad()) so satellite tiles are available slightly beyond
-// the tight country outline - matching flyToBounds's own pixel padding
-// conceptually - then split at the antimeridian if needed.
-function getSatelliteBoundsSegments(geometry: Geometry): L.LatLngBoundsExpression[] {
-  const bounds = getPrimaryPolygonBounds(geometry);
-  if (!bounds) return [];
-  return splitBoundsAtAntimeridian(bounds.pad(0.25));
 }
 
 // Belt-and-suspenders: the MapContainer interaction props already disable
@@ -376,31 +317,10 @@ function CountrySelect({
 
   if (!countryBorders) return null;
 
-  const selectedFeature =
-    selectedCountryId != null
-      ? countryBorders.features.find((f) => f.id != null && String(f.id) === selectedCountryId)
-      : undefined;
-  const satelliteBoundsSegments = selectedFeature ? getSatelliteBoundsSegments(selectedFeature.geometry) : [];
   const capital = selectedCountryId != null ? COUNTRY_CAPITALS[selectedCountryId] : undefined;
 
   return (
     <>
-      {/* Satellite imagery only covers the selected country's own bounds
-          (split at the antimeridian if needed, see
-          getSatelliteBoundsSegments) - never the whole world - and only
-          mounts while a country is selected, so it's fully unmounted
-          (not just hidden) the moment the view returns to the vector
-          world map. */}
-      {satelliteBoundsSegments.map((segmentBounds, index) => (
-        <TileLayer
-          key={`${selectedCountryId}-satellite-${index}`}
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-          maxZoom={18}
-          noWrap
-          bounds={segmentBounds}
-        />
-      ))}
-
       <GeoJSON
         ref={geoJsonRef}
         data={countryBorders}
@@ -485,10 +405,78 @@ const WORLD_HALF_SPAN_DEG =
 // framing. Latitude is capped at the standard Web Mercator limit
 // (matching Leaflet's own default CRS), not +-90, since the image was
 // rendered with that same projection.
-const NIGHT_MAP_BOUNDS: L.LatLngBoundsExpression = [
+type LatLngBoundsTuple = [[number, number], [number, number]];
+
+const NIGHT_MAP_BOUNDS: LatLngBoundsTuple = [
   [-85.05112877980659, -168.9],
   [85.05112877980659, 191.1],
 ];
+
+function offsetBoundsLng(bounds: LatLngBoundsTuple, deltaLng: number): LatLngBoundsTuple {
+  const [[south, west], [north, east]] = bounds;
+  return [
+    [south, west + deltaLng],
+    [north, east + deltaLng],
+  ];
+}
+
+// The image spans exactly 360deg (191.1 - -168.9), but a wide/short
+// viewport can need more than that. A FIXED number of extra copies
+// (an earlier version of this used [-360, 0, 360]) is still a guess:
+// computeWorldFitZoom picks whichever of its width-fit or height-fit
+// branch is more zoomed out, and for aspect ratios where HEIGHT is the
+// binding constraint, the resulting zoom can be smaller than the
+// width-fit formula alone assumes - at that smaller zoom the same
+// viewport width covers MORE than the width-fit branch's own
+// WORLD_HALF_SPAN_DEG, so a hardcoded tile count can still fall short
+// at a sufficiently extreme aspect ratio. This computes the actual
+// required half-span from the map's real current zoom and pixel
+// width (degrees-per-pixel at that zoom, times half the viewport
+// width) and adds exactly as many 360deg-wide copies as that needs,
+// plus two full extra copies of safety margin - correct at any aspect
+// ratio, not just the ones already tested.
+function computeNightMapTileOffsets(map: L.Map): number[] {
+  const zoom = map.getZoom();
+  const size = map.getSize();
+  const worldWidthPx = 256 * Math.pow(2, zoom);
+  const requiredHalfSpanDeg = worldWidthPx > 0 ? (size.x / 2 / worldWidthPx) * 360 : 360;
+  const extraCopiesEachSide = Math.max(2, Math.ceil(requiredHalfSpanDeg / 360) + 2);
+  const offsets: number[] = [];
+  for (let i = -extraCopiesEachSide; i <= extraCopiesEachSide; i++) {
+    offsets.push(i * 360);
+  }
+  return offsets;
+}
+
+// Recomputes the tile count whenever the map's zoom or viewport size
+// can change (mount, window resize, WorldFitZoom's own zoom changes) -
+// this can't be a one-time calculation since the world-fit zoom itself
+// depends on the viewport, which can change after mount.
+function NightMapLayer() {
+  const map = useMap();
+  const [offsets, setOffsets] = useState<number[]>(() => [-720, -360, 0, 360, 720]);
+
+  useLayoutEffect(() => {
+    function recompute() {
+      setOffsets(computeNightMapTileOffsets(map));
+    }
+    recompute();
+    map.on("zoomend moveend", recompute);
+    window.addEventListener("resize", recompute);
+    return () => {
+      map.off("zoomend moveend", recompute);
+      window.removeEventListener("resize", recompute);
+    };
+  }, [map]);
+
+  return (
+    <>
+      {offsets.map((offset) => (
+        <ImageOverlay key={`night-map-${offset}`} url={NIGHT_MAP_URL} bounds={offsetBoundsLng(NIGHT_MAP_BOUNDS, offset)} />
+      ))}
+    </>
+  );
+}
 
 // Current Operating Conditions - locked to these four levels plus the
 // "No Data" marker state (docs/Operations-Centre-v1.md).
@@ -602,8 +590,14 @@ export default function Dashboard() {
     );
   }
 
+  // This wrapper's own background is a THIRD place a colour could
+  // silently drift from the map's ocean tone (previously a separate
+  // hardcoded #050816) - it now uses the exact same OCEAN_COLOR
+  // constant as the Leaflet container's fallback, so there is no seam
+  // possible between this wrapper and the map, regardless of how close
+  // a hand-picked hex value might otherwise look.
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-[#050816] text-white">
+    <div className="fixed inset-0 z-50 overflow-hidden text-white" style={{ backgroundColor: OCEAN_COLOR }}>
       <MapLayer />
     </div>
   );
@@ -638,14 +632,15 @@ function MapLayer() {
       >
         <MapLock />
         <WorldFitZoom />
-        {/* Earth-at-Night base layer only mounts for the default/world
-            view. It's fully unmounted (not just hidden) the moment a
-            country is selected, since the amber city-lights glow baked
-            into this image would otherwise sit awkwardly underneath the
-            real satellite imagery that covers the selected country -
-            the gap outside the satellite tiles' bounds falls back to
-            the map's own ocean-colour background instead. */}
-        {selectedCountryId == null && <ImageOverlay url={NIGHT_MAP_URL} bounds={NIGHT_MAP_BOUNDS} />}
+        {/* Earth-at-Night is the only map rendering layer, full stop - it
+            stays mounted for both the default world view and while a
+            country is selected/zoomed in. There is no alternate
+            rendering path (no satellite imagery, no tile-layer swap) to
+            switch to or hide this for. Tiled dynamically (see
+            NightMapLayer/computeNightMapTileOffsets) so the image
+            itself - not a fallback colour - is what's visible at every
+            viewport edge, at any aspect ratio. */}
+        <NightMapLayer />
 
         <CountrySelect selectedCountryId={selectedCountryId} onSelectCountry={setSelectedCountryId} />
 

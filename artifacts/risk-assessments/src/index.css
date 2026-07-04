@@ -211,15 +211,34 @@
     drop-shadow(0 0 6px rgba(255, 184, 0, 0.2));
 }
 
-/* The world-fit zoom can leave a margin outside the actual tile bounds
-   on wide/short viewports (see WorldFitZoom + TileLayer noWrap in
-   dashboard.tsx) - that margin is never meant to show real tiles since
-   the map is static-locked and can't be panned into it. Matching the
-   Esri World_Dark_Gray_Base basemap's own ocean/water fill here makes
-   that margin blend into the ocean instead of showing Leaflet's default
-   placeholder gray at the left/right edges. */
+/* Fallback background for whatever the map's own imagery doesn't cover
+   (the image is dynamically tiled across the whole realistic viewport
+   range - see NightMapLayer/computeNightMapTileOffsets in dashboard.tsx
+   - so in practice this only shows for an instant before the image has
+   loaded, or in a sliver at the very margin of an extreme aspect
+   ratio). A flat colour here was still visibly a "different, separate
+   panel" next to the image's own radial ocean gradient (the image is
+   brightest at its own centre and darkens toward its edges - a single
+   flat tone can only match ONE point along that falloff, not the
+   whole vertical extent). This reproduces the same radial shape
+   instead - same centre position (50% 42%) and falloff direction the
+   image itself uses - so whichever row the fallback is visible at, it
+   continues the image's own gradient rather than sitting next to it
+   as a visibly flat, separate colour. */
 .venueguard-operational-canvas-map.leaflet-container {
-  background-color: #1a1a1a;
+  /* An ellipse, not a circle (farthest-corner/circle both fall off far
+     too gradually vertically compared to the source image - sampling
+     the actual PNG shows it's noticeably darker by ~15% of its height
+     above/below centre, not just near the far corners). 140%/55% was
+     tuned by rendering this gradient directly next to the real PNG and
+     visually confirming the boundary disappears. */
+  background: radial-gradient(
+    ellipse 140% 55% at 50% 42%,
+    #0a2742 0%,
+    #08223d 40%,
+    #031321 70%,
+    #020b18 100%
+  );
 }
 
 /* Capital city marker (Layer 1, country-zoom level): a static, subtle
