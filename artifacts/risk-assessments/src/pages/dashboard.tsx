@@ -28,6 +28,17 @@ const COUNTRY_BORDERS_URL = `${import.meta.env.BASE_URL}data/operational-country
 const NIGHT_MAP_LIT_TILES_URL = `${import.meta.env.BASE_URL}data/tiles/lit/{z}/{x}_{y}.webp`;
 const NIGHT_MAP_NO_LIGHTS_TILES_URL = `${import.meta.env.BASE_URL}data/tiles/no-lights/{z}/{x}_{y}.webp`;
 
+// Index 1.5: a third, bottom layer containing only the ocean's own
+// gradient - no land, no lights. The lit/no-lights layers above it set
+// noWrap so they show exactly one real copy of the world and nothing
+// past its edges; on a wide viewport, this layer's normal wrapping fills
+// the extra width instead, so what's beyond the real map reads as open
+// ocean continuing into the distance rather than a repeated, duplicate
+// continent. Safe to let this one wrap - a repeated pure gradient with
+// no real content is indistinguishable from a single copy at every
+// point, unlike land or city lights repeating.
+const NIGHT_MAP_OCEAN_GRADIENT_TILES_URL = `${import.meta.env.BASE_URL}data/tiles/ocean-gradient/{z}/{x}_{y}.webp`;
+
 // 512px tiles (not the more typical 256px) - same total pixel density,
 // but a quarter as many tiles cover any given viewport. This app's zoom
 // changes are all animated flyToBounds calls that pass through several
@@ -509,26 +520,40 @@ function NightMapLayer({ noLights }: { noLights: boolean }) {
   // cuts that to just the tiles actually needed. Harmless here since
   // there's no manual zoom control to make the in-between frames matter -
   // all zoom changes are the same handful of programmatic camera moves.
-  return noLights ? (
-    <TileLayer
-      key="no-lights"
-      url={NIGHT_MAP_NO_LIGHTS_TILES_URL}
-      tileSize={NIGHT_MAP_TILE_SIZE}
-      zoomOffset={NIGHT_MAP_TILE_ZOOM_OFFSET}
-      maxNativeZoom={NIGHT_MAP_NO_LIGHTS_MAX_NATIVE_ZOOM}
-      minZoom={0}
-      updateWhenZooming={false}
-    />
-  ) : (
-    <TileLayer
-      key="lit"
-      url={NIGHT_MAP_LIT_TILES_URL}
-      tileSize={NIGHT_MAP_TILE_SIZE}
-      zoomOffset={NIGHT_MAP_TILE_ZOOM_OFFSET}
-      maxNativeZoom={NIGHT_MAP_LIT_MAX_NATIVE_ZOOM}
-      minZoom={0}
-      updateWhenZooming={false}
-    />
+  return (
+    <>
+      <TileLayer
+        url={NIGHT_MAP_OCEAN_GRADIENT_TILES_URL}
+        tileSize={NIGHT_MAP_TILE_SIZE}
+        zoomOffset={NIGHT_MAP_TILE_ZOOM_OFFSET}
+        maxNativeZoom={NIGHT_MAP_LIT_MAX_NATIVE_ZOOM}
+        minZoom={0}
+        updateWhenZooming={false}
+      />
+      {noLights ? (
+        <TileLayer
+          key="no-lights"
+          url={NIGHT_MAP_NO_LIGHTS_TILES_URL}
+          tileSize={NIGHT_MAP_TILE_SIZE}
+          zoomOffset={NIGHT_MAP_TILE_ZOOM_OFFSET}
+          maxNativeZoom={NIGHT_MAP_NO_LIGHTS_MAX_NATIVE_ZOOM}
+          minZoom={0}
+          updateWhenZooming={false}
+          noWrap
+        />
+      ) : (
+        <TileLayer
+          key="lit"
+          url={NIGHT_MAP_LIT_TILES_URL}
+          tileSize={NIGHT_MAP_TILE_SIZE}
+          zoomOffset={NIGHT_MAP_TILE_ZOOM_OFFSET}
+          maxNativeZoom={NIGHT_MAP_LIT_MAX_NATIVE_ZOOM}
+          minZoom={0}
+          updateWhenZooming={false}
+          noWrap
+        />
+      )}
+    </>
   );
 }
 
