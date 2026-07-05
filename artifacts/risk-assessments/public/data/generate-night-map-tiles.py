@@ -141,7 +141,16 @@ def ocean_background_for_tile(tx, ty, z):
     lat = np.degrees(np.arctan(np.sinh(np.pi * (1 - 2 * yfrac))))
 
     center_yfrac = mercator_y_fraction(GRADIENT_CENTER_LAT)
-    dx = (lng - GRADIENT_CENTER_LNG) / 180.0
+    # Wrap the longitude difference to the shortest angular distance
+    # (-180, 180] rather than using it raw - lng=180 and lng=-180 are the
+    # same physical meridian, but a raw difference treats them as ~360deg
+    # apart, so the gradient's distance-from-centre (and therefore its
+    # colour) jumped discontinuously right at the antimeridian, visible
+    # as a hard vertical seam every time the tile grid wraps for a wide
+    # viewport. Wrapping first makes both sides of the seam compute the
+    # same distance, and therefore the same colour.
+    lng_diff = ((lng - GRADIENT_CENTER_LNG + 180) % 360) - 180
+    dx = lng_diff / 180.0
     dy = (yfrac - center_yfrac) / 0.5
     dist = np.sqrt(dx**2 + dy**2)
 
