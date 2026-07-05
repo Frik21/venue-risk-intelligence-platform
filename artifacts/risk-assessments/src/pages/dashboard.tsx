@@ -244,7 +244,7 @@ function countryOutlineStyle(feature: Feature | undefined, selectedCountryId: st
 
 // Manual zoom control (Index 1.1): hidden on the default world view,
 // shown only once a country's zoom-in animation completes ("visible"
-// mirrors CountrySelect's own showCapital timing exactly, for the same
+// mirrors MapLayer's own zoomSettled timing exactly, for the same
 // reason - wait for the flyToBounds move to actually finish). Built as a
 // real Leaflet control (not plain positioned JSX) so it mounts/unmounts
 // from the DOM entirely rather than just toggling a CSS class - "must
@@ -295,21 +295,15 @@ function ZoomOutControl({ visible, onZoomOut }: { visible: boolean; onZoomOut: (
 function CountrySelect({
   selectedCountryId,
   onSelectCountry,
+  zoomSettled,
 }: {
   selectedCountryId: string | null;
   onSelectCountry: (id: string | null) => void;
+  zoomSettled: boolean;
 }) {
   const map = useMap();
   const geoJsonRef = useRef<L.GeoJSON | null>(null);
   const [countryBorders, setCountryBorders] = useState<FeatureCollection | null>(null);
-  // Gates the capital marker/label until the flyToBounds camera move has
-  // actually finished, per spec ("only once the zoom-to-country animation
-  // completes"), rather than appearing instantly alongside a still-moving
-  // camera. A timer matching COUNTRY_ZOOM_DURATION is simpler and more
-  // robust here than chaining off Leaflet's own moveend/zoomend events,
-  // which can fire more than once (or not exactly at animation end) across
-  // browsers during a flyToBounds animation.
-  const [showCapital, setShowCapital] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -327,29 +321,23 @@ function CountrySelect({
     };
   }, []);
 
-  useEffect(() => {
-    setShowCapital(false);
-    if (selectedCountryId == null) return;
-    const timer = setTimeout(() => setShowCapital(true), COUNTRY_ZOOM_DURATION * 1000);
-    return () => clearTimeout(timer);
-  }, [selectedCountryId]);
-
   // Free camera drag (Index 1.2) is enabled only in the zoomed-in-on-country
   // state, once the zoom-in animation has actually finished - the same
-  // showCapital gate already used for the capital marker and the 1.1
-  // zoom-out control, not a separate timer. MapLock's own imperative
-  // dragging.disable() call still runs once on mount (matching the
-  // default world view's static lock); this effect is the only thing that
-  // re-enables it, and only for the duration of a country selection. No
-  // maxBounds is set anywhere, so once enabled this is unrestricted free
-  // panning - not a bounded exception.
+  // zoomSettled gate (owned by MapLayer) already used for the capital
+  // marker, the 1.1 zoom-out control, and the 1.3 night-map visibility,
+  // not a separate timer. MapLock's own imperative dragging.disable() call
+  // still runs once on mount (matching the default world view's static
+  // lock); this effect is the only thing that re-enables it, and only for
+  // the duration of a country selection. No maxBounds is set anywhere, so
+  // once enabled this is unrestricted free panning - not a bounded
+  // exception.
   useEffect(() => {
-    if (showCapital) {
+    if (zoomSettled) {
       map.dragging.enable();
     } else {
       map.dragging.disable();
     }
-  }, [showCapital, map]);
+  }, [zoomSettled, map]);
 
   function resetToWorldView() {
     onSelectCountry(null);
@@ -401,9 +389,9 @@ function CountrySelect({
         onEachFeature={onEachFeature}
       />
 
-      <ZoomOutControl visible={showCapital} onZoomOut={resetToWorldView} />
+      <ZoomOutControl visible={zoomSettled} onZoomOut={resetToWorldView} />
 
-      {showCapital && capital && (
+      {zoomSettled && capital && (
         <CircleMarker
           key={selectedCountryId}
           className="venueguard-capital-marker"
@@ -689,16 +677,35 @@ export default function Dashboard() {
 }
 
 // LAYER 1: Map (static)
-// Base layer of the Operational Canvas stack. Static world view - the
-// map cannot be dragged/scrolled/touch-panned. There is no manual
+// Base layer of the Operational Canvas stack. Default world view is
+// fully static-locked (no drag/scroll/touch-pan). There is no manual
 // zoom-in control at all; the only zoom changes are the programmatic
 // camera moves triggered by selecting/deselecting a country (see
-// CountrySelect/ZoomOutControl, Index 1.1). Colour-coded operational
-// markers sit on top. Nothing else renders yet - Layers 2-7 (including
-// Layer 8: Status Legend) are built and approved one at a time per the
-// Debug Layer Rule.
+// CountrySelect/ZoomOutControl, Index 1.1) - dragging is the one
+// exception, and only once zoomed in on a selected country (Index 1.2).
+// Colour-coded operational markers sit on top. Nothing else renders yet -
+// Layers 2-7 (including Layer 8: Status Legend) are built and approved
+// one at a time per the Debug Layer Rule.
 function MapLayer() {
   const [selectedCountryId, setSelectedCountryId] = useState<string | null>(null);
+  // True only once a country's zoom-in animation has actually finished -
+  // gates the capital marker, the 1.1 zoom-out control, free drag (1.2),
+  // and the 1.3 night-map (incl. city-lights glow) visibility below, all
+  // off this same timing so they change state together. A timer matching
+  // COUNTRY_ZOOM_DURATION is simpler and more robust here than chaining
+  // off Leaflet's own moveend/zoomend events, which can fire more than
+  // once (or not exactly at animation end) across browsers during a
+  // flyToBounds animation. Resets to false immediately (not gated by a
+  // timer) the instant a selection clears, via any exit path - only
+  // becoming true again is delayed, never becoming false.
+  const [zoomSettled, setZoomSettled] = useState(false);
+
+  useEffect(() => {
+    setZoomSettled(false);
+    if (selectedCountryId == null) return;
+    const timer = setTimeout(() => setZoomSettled(true), COUNTRY_ZOOM_DURATION * 1000);
+    return () => clearTimeout(timer);
+  }, [selectedCountryId]);
 
   return (
     <div data-layer="1" className="absolute inset-0 z-[1] h-full w-full">
@@ -720,18 +727,25 @@ function MapLayer() {
       >
         <MapLock />
         <WorldFitZoom />
-        {/* Earth-at-Night is the only map rendering layer, full stop - it
-            stays mounted for both the default world view and while a
-            country is selected/zoomed in. There is no alternate
+        {/* Earth-at-Night (incl. its city-lights glow) is the default
+            world view's rendering layer - there is no alternate
             rendering path (no satellite imagery, no tile-layer swap) to
-            switch to or hide this for. A single copy of the real image
-            plus two narrow edge-fade overlays (see
-            NightMapLayer/computeNightMapEdgeFadeBounds) cover any extra
-            reach beyond the image's own width at the current viewport's
-            aspect ratio, without duplicating real geography. */}
-        <NightMapLayer />
+            switch to. A single copy of the real image plus two narrow
+            edge-fade overlays (see NightMapLayer/
+            computeNightMapEdgeFadeBounds) cover any extra reach beyond
+            the image's own width at the current viewport's aspect
+            ratio, without duplicating real geography. Per Index 1.3,
+            it's unmounted entirely (not just hidden) once zoomed in on
+            a country and settled - "only part of the default world
+            view's visual language" - and remounts immediately the
+            moment a selection clears via any exit path. */}
+        {!zoomSettled && <NightMapLayer />}
 
-        <CountrySelect selectedCountryId={selectedCountryId} onSelectCountry={setSelectedCountryId} />
+        <CountrySelect
+          selectedCountryId={selectedCountryId}
+          onSelectCountry={setSelectedCountryId}
+          zoomSettled={zoomSettled}
+        />
 
         {OPERATIONAL_COUNTRIES.map((marker) => (
           <CircleMarker
