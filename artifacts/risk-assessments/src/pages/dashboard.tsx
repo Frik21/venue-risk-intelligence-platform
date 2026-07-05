@@ -11,27 +11,38 @@ import { COUNTRY_CAPITALS } from "@/lib/country-capitals";
 // build - keeps the app's core bundle lean regardless of dataset size.
 const COUNTRY_BORDERS_URL = `${import.meta.env.BASE_URL}data/operational-country-borders.json`;
 
-// Static "Earth at Night" world map (dark navy landmasses, black ocean,
+// Static "Earth at Night" world map (dark landmass, black ocean, real
 // amber city-light glow) - the Operational Canvas's default-view base
-// layer, replacing the earlier ESRI tile base. Pre-rendered once from
-// the same country-borders dataset rather than served as map tiles,
-// since a raster tile provider can't express this custom styling.
-const NIGHT_MAP_URL = `${import.meta.env.BASE_URL}data/earth-at-night.png`;
+// layer. Rasterized offline at 16383px wide from our own real data (this
+// same country-borders dataset, plus 7332 real populated places from
+// Natural Earth's populated-places dataset - see generate-night-map.py
+// and generate-city-lights.py alongside the assets for the full
+// pipeline/provenance) rather than sourced or hand-edited as a
+// photographic image. That width matches Leaflet's own native pixel
+// density at zoom 6, so it stays crisp rather than visibly blurry once
+// zoomed into a single country - a lower-resolution image stretched that
+// far past its own source resolution was the original problem this
+// solves.
+const NIGHT_MAP_URL = `${import.meta.env.BASE_URL}data/earth-at-night.webp`;
+
+// Index 1.3: while zoomed into a country, the amber city-lights glow is
+// hidden, but landmass/ocean/coastline texture must stay visible behind
+// the outline - so this is a genuinely separate asset (baked without the
+// city-lights pass, see generate-night-map.py), not a CSS filter or a
+// conditional unmount of the whole layer.
+const NIGHT_MAP_NO_LIGHTS_URL = `${import.meta.env.BASE_URL}data/earth-at-night-no-lights.webp`;
 
 // Edge-fade strips generated once, offline, from the night-map image's own
 // west/east edge columns (see scripts note in the NightMapLayer comment
 // below) - real adjacent map data, anchored pixel-exact to the image's own
 // edge and fading to the same dark ocean tone as the CSS gradient fallback,
 // not an invented texture.
-const NIGHT_MAP_EDGE_FADE_WEST_URL = `${import.meta.env.BASE_URL}data/night-map-edge-fade-west.png`;
-const NIGHT_MAP_EDGE_FADE_EAST_URL = `${import.meta.env.BASE_URL}data/night-map-edge-fade-east.png`;
+const NIGHT_MAP_EDGE_FADE_WEST_URL = `${import.meta.env.BASE_URL}data/night-map-edge-fade-west.webp`;
+const NIGHT_MAP_EDGE_FADE_EAST_URL = `${import.meta.env.BASE_URL}data/night-map-edge-fade-east.webp`;
 
-// Background tone for the outer page wrapper (behind MapLayer). The
-// Leaflet container's own fallback (visible where the map's own
-// imagery doesn't cover) uses a matching radial gradient defined
-// directly in index.css instead of this single flat value - see the
-// comment there for why a flat colour couldn't fully blend with the
-// image's own radial ocean gradient.
+// Background tone for the outer page wrapper (behind MapLayer), and the
+// same tone the Leaflet container's own CSS fallback (index.css) uses
+// for open ocean wherever no landmass fill covers it.
 const OCEAN_COLOR = "#00081a";
 
 // General antimeridian fix: any ring whose consecutive points jump by
@@ -232,6 +243,12 @@ function isFeatureSelected(feature: Feature | undefined, selectedCountryId: stri
   return feature?.id != null && String(feature.id) === selectedCountryId;
 }
 
+// Fill is a near-invisible 0.01-opacity layer, not real landmass
+// appearance - that's the raster night-map image underneath (see
+// NightMapLayer). It exists only to keep each country's true shape
+// clickable/hoverable everywhere within its borders, not just on the
+// (invisible) outline itself. Only color/weight (the amber
+// selected-country outline) change with selection.
 function countryOutlineStyle(feature: Feature | undefined, selectedCountryId: string | null): L.PathOptions {
   const isSelected = isFeatureSelected(feature, selectedCountryId);
   return {
@@ -244,7 +261,7 @@ function countryOutlineStyle(feature: Feature | undefined, selectedCountryId: st
 
 // Manual zoom control (Index 1.1): hidden on the default world view,
 // shown only once a country's zoom-in animation completes ("visible"
-// mirrors CountrySelect's own showCapital timing exactly, for the same
+// mirrors MapLayer's own zoomSettled timing exactly, for the same
 // reason - wait for the flyToBounds move to actually finish). Built as a
 // real Leaflet control (not plain positioned JSX) so it mounts/unmounts
 // from the DOM entirely rather than just toggling a CSS class - "must
@@ -295,21 +312,15 @@ function ZoomOutControl({ visible, onZoomOut }: { visible: boolean; onZoomOut: (
 function CountrySelect({
   selectedCountryId,
   onSelectCountry,
+  zoomSettled,
 }: {
   selectedCountryId: string | null;
   onSelectCountry: (id: string | null) => void;
+  zoomSettled: boolean;
 }) {
   const map = useMap();
   const geoJsonRef = useRef<L.GeoJSON | null>(null);
   const [countryBorders, setCountryBorders] = useState<FeatureCollection | null>(null);
-  // Gates the capital marker/label until the flyToBounds camera move has
-  // actually finished, per spec ("only once the zoom-to-country animation
-  // completes"), rather than appearing instantly alongside a still-moving
-  // camera. A timer matching COUNTRY_ZOOM_DURATION is simpler and more
-  // robust here than chaining off Leaflet's own moveend/zoomend events,
-  // which can fire more than once (or not exactly at animation end) across
-  // browsers during a flyToBounds animation.
-  const [showCapital, setShowCapital] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -327,29 +338,23 @@ function CountrySelect({
     };
   }, []);
 
-  useEffect(() => {
-    setShowCapital(false);
-    if (selectedCountryId == null) return;
-    const timer = setTimeout(() => setShowCapital(true), COUNTRY_ZOOM_DURATION * 1000);
-    return () => clearTimeout(timer);
-  }, [selectedCountryId]);
-
   // Free camera drag (Index 1.2) is enabled only in the zoomed-in-on-country
   // state, once the zoom-in animation has actually finished - the same
-  // showCapital gate already used for the capital marker and the 1.1
-  // zoom-out control, not a separate timer. MapLock's own imperative
-  // dragging.disable() call still runs once on mount (matching the
-  // default world view's static lock); this effect is the only thing that
-  // re-enables it, and only for the duration of a country selection. No
-  // maxBounds is set anywhere, so once enabled this is unrestricted free
-  // panning - not a bounded exception.
+  // zoomSettled gate (owned by MapLayer) already used for the capital
+  // marker, the 1.1 zoom-out control, and city-lights visibility, not a
+  // separate timer. MapLock's own imperative dragging.disable() call
+  // still runs once on mount (matching the default world view's static
+  // lock); this effect is the only thing that re-enables it, and only
+  // for the duration of a country selection. No maxBounds is set
+  // anywhere, so once enabled this is unrestricted free panning - not a
+  // bounded exception.
   useEffect(() => {
-    if (showCapital) {
+    if (zoomSettled) {
       map.dragging.enable();
     } else {
       map.dragging.disable();
     }
-  }, [showCapital, map]);
+  }, [zoomSettled, map]);
 
   function resetToWorldView() {
     onSelectCountry(null);
@@ -401,9 +406,9 @@ function CountrySelect({
         onEachFeature={onEachFeature}
       />
 
-      <ZoomOutControl visible={showCapital} onZoomOut={resetToWorldView} />
+      <ZoomOutControl visible={zoomSettled} onZoomOut={resetToWorldView} />
 
-      {showCapital && capital && (
+      {zoomSettled && capital && (
         <CircleMarker
           key={selectedCountryId}
           className="venueguard-capital-marker"
@@ -494,12 +499,12 @@ const NIGHT_MAP_BOUNDS: LatLngBoundsTuple = [
 // image's own 360deg width, so a neighbouring full copy's own content
 // (not just its ocean margin) would become visible - duplicating
 // Alaska/Chukotka at the opposite edge from where they already appear.
-// The fade images (public/data/night-map-edge-fade-{west,east}.png,
+// The fade images (public/data/night-map-edge-fade-{west,east}.webp,
 // generated once offline from this same source image's own west/east
 // edge columns - see the generation script kept alongside this change)
 // are real adjacent map data, not an invented gradient: each is
 // pixel-exact to the real edge column for its innermost 3px, then a
-// heavily vertically-smoothed (darkest-of-150px-window, so no single
+// heavily vertically-smoothed (darkest-of-window, so no single
 // coastline/graticule row can stretch into a streak) version of that
 // same column, blended out to the same dark ocean tone the CSS gradient
 // fallback already uses (#020b18). Leaflet stretches each overlay's
@@ -536,8 +541,12 @@ function computeNightMapEdgeFadeBounds(map: L.Map): {
 // Recomputes the fade bounds whenever the map's zoom or viewport size can
 // change (mount, window resize, WorldFitZoom's own zoom changes) - this
 // can't be a one-time calculation since the world-fit zoom itself depends
-// on the viewport, which can change after mount.
-function NightMapLayer() {
+// on the viewport, which can change after mount. noLights swaps in the
+// lights-free variant once zoomed into a country and settled (Index 1.3) -
+// landmass/ocean/coastline texture stays visible behind the outline, only
+// the amber glow itself is a genuinely separate baked asset (see
+// generate-night-map.py).
+function NightMapLayer({ noLights }: { noLights: boolean }) {
   const map = useMap();
   const [fadeBounds, setFadeBounds] = useState(() => computeNightMapEdgeFadeBounds(map));
 
@@ -556,7 +565,7 @@ function NightMapLayer() {
 
   return (
     <>
-      <ImageOverlay url={NIGHT_MAP_URL} bounds={NIGHT_MAP_BOUNDS} />
+      <ImageOverlay url={noLights ? NIGHT_MAP_NO_LIGHTS_URL : NIGHT_MAP_URL} bounds={NIGHT_MAP_BOUNDS} />
       {fadeBounds.west && <ImageOverlay url={NIGHT_MAP_EDGE_FADE_WEST_URL} bounds={fadeBounds.west} />}
       {fadeBounds.east && <ImageOverlay url={NIGHT_MAP_EDGE_FADE_EAST_URL} bounds={fadeBounds.east} />}
     </>
@@ -689,16 +698,39 @@ export default function Dashboard() {
 }
 
 // LAYER 1: Map (static)
-// Base layer of the Operational Canvas stack. Static world view - the
-// map cannot be dragged/scrolled/touch-panned. There is no manual
+// Base layer of the Operational Canvas stack. Default world view is
+// fully static-locked (no drag/scroll/touch-pan). There is no manual
 // zoom-in control at all; the only zoom changes are the programmatic
 // camera moves triggered by selecting/deselecting a country (see
-// CountrySelect/ZoomOutControl, Index 1.1). Colour-coded operational
+// CountrySelect/ZoomOutControl, Index 1.1) - dragging is the one
+// exception, and only once zoomed in on a selected country (Index 1.2).
+// Landmass/coastline/city-lights are a static raster image (NightMapLayer)
+// rasterized offline at a resolution matching this app's own native pixel
+// density at country-zoom, so it stays crisp at any zoom level rather than
+// stretched far beyond its source resolution. Colour-coded operational
 // markers sit on top. Nothing else renders yet - Layers 2-7 (including
 // Layer 8: Status Legend) are built and approved one at a time per the
 // Debug Layer Rule.
 function MapLayer() {
   const [selectedCountryId, setSelectedCountryId] = useState<string | null>(null);
+  // True only once a country's zoom-in animation has actually finished -
+  // gates the capital marker, the 1.1 zoom-out control, free drag (1.2),
+  // and the night-map's lights-hidden variant below, all off this same
+  // timing so they change state together. A timer matching COUNTRY_ZOOM_DURATION is
+  // simpler and more robust here than chaining off Leaflet's own
+  // moveend/zoomend events, which can fire more than once (or not
+  // exactly at animation end) across browsers during a flyToBounds
+  // animation. Resets to false immediately (not gated by a timer) the
+  // instant a selection clears, via any exit path - only becoming true
+  // again is delayed, never becoming false.
+  const [zoomSettled, setZoomSettled] = useState(false);
+
+  useEffect(() => {
+    setZoomSettled(false);
+    if (selectedCountryId == null) return;
+    const timer = setTimeout(() => setZoomSettled(true), COUNTRY_ZOOM_DURATION * 1000);
+    return () => clearTimeout(timer);
+  }, [selectedCountryId]);
 
   return (
     <div data-layer="1" className="absolute inset-0 z-[1] h-full w-full">
@@ -720,18 +752,28 @@ function MapLayer() {
       >
         <MapLock />
         <WorldFitZoom />
+
         {/* Earth-at-Night is the only map rendering layer, full stop - it
             stays mounted for both the default world view and while a
             country is selected/zoomed in. There is no alternate
             rendering path (no satellite imagery, no tile-layer swap) to
-            switch to or hide this for. A single copy of the real image
-            plus two narrow edge-fade overlays (see
-            NightMapLayer/computeNightMapEdgeFadeBounds) cover any extra
-            reach beyond the image's own width at the current viewport's
-            aspect ratio, without duplicating real geography. */}
-        <NightMapLayer />
+            switch to. A single copy of the real image plus two narrow
+            edge-fade overlays (see NightMapLayer/
+            computeNightMapEdgeFadeBounds) cover any extra reach beyond
+            the image's own width at the current viewport's aspect
+            ratio, without duplicating real geography. Per Index 1.3,
+            the main image swaps to a lights-removed variant once
+            zoomed in on a country and settled, and swaps back
+            immediately the moment a selection clears via any exit
+            path - landmass/ocean/coastline stay visible throughout,
+            only the city-lights glow toggles. */}
+        <NightMapLayer noLights={zoomSettled} />
 
-        <CountrySelect selectedCountryId={selectedCountryId} onSelectCountry={setSelectedCountryId} />
+        <CountrySelect
+          selectedCountryId={selectedCountryId}
+          onSelectCountry={setSelectedCountryId}
+          zoomSettled={zoomSettled}
+        />
 
         {OPERATIONAL_COUNTRIES.map((marker) => (
           <CircleMarker
