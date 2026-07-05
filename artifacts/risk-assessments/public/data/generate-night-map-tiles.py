@@ -39,13 +39,23 @@ BORDERS_PATH = "operational-country-borders.json"
 LIGHTS_PATH = "city-lights.json"
 OUT_ROOT = "tiles"
 
-TILE_SIZE = 256
+# 512px tiles (not the more typical 256px) - same total pixel density,
+# but a quarter as many tiles cover any given viewport, cutting request
+# count proportionally. That matters more than usual here: this app's
+# zoom transitions are all animated flyToBounds calls that pass through
+# several intermediate integer zoom levels, and Leaflet fetches tiles for
+# each one it passes even mid-animation - so total request count per
+# transition is already inflated well beyond what the final view alone
+# needs. The frontend (dashboard.tsx) sets zoomOffset=-1 to compensate:
+# a 512px tile at internal zoom z covers the same ground a 256px tile
+# would at map zoom z+1, so map-perceived maxNativeZoom is unchanged.
+TILE_SIZE = 512
 OCEAN_COLOR = (0x00, 0x08, 0x1A)
 LANDMASS_FILL_COLOR = (0x1C, 0x1F, 0x16)
 LIGHT_COLOR = np.array([255.0, 226.0, 158.0])
 
-LIT_MAX_ZOOM = 5
-NOLIGHTS_MAX_ZOOM = 6
+LIT_MAX_ZOOM = 4
+NOLIGHTS_MAX_ZOOM = 5
 
 SHIFTS = (0, -360, 360)
 

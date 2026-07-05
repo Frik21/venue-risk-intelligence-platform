@@ -20,20 +20,36 @@ const COUNTRY_BORDERS_URL = `${import.meta.env.BASE_URL}data/operational-country
 // cost the browser several seconds to decode on every zoom transition,
 // since it had to decode the same ~268 million pixels whether or not the
 // viewport actually needed that much detail. Tiling fixes this the
-// standard way every web map uses: only the handful of small (256px)
-// tiles actually visible at the current zoom ever get decoded, so cost
-// stays small regardless of the map's total resolution. Two full tile
-// sets exist - lit (default world view) and lights-free (Index 1.3,
-// country zoom) - selected by NightMapLayer below.
+// standard way every web map uses: only the handful of small tiles
+// actually visible at the current zoom ever get decoded, so cost stays
+// small regardless of the map's total resolution. Two full tile sets
+// exist - lit (default world view) and lights-free (Index 1.3, country
+// zoom) - selected by NightMapLayer below.
 const NIGHT_MAP_LIT_TILES_URL = `${import.meta.env.BASE_URL}data/tiles/lit/{z}/{x}_{y}.webp`;
 const NIGHT_MAP_NO_LIGHTS_TILES_URL = `${import.meta.env.BASE_URL}data/tiles/no-lights/{z}/{x}_{y}.webp`;
 
-// Native resolution of each tile set - Leaflet upscales beyond this rather
-// than requesting tiles that don't exist. The lit set only ever needs to
-// cover the default world-fit view (never higher, since Index 1.3 swaps to
-// the no-lights set the moment a country is selected), so it stops well
-// short of the no-lights set's full country-zoom range (matches this app's
-// own flyToBounds maxZoom of 6).
+// 512px tiles (not the more typical 256px) - same total pixel density,
+// but a quarter as many tiles cover any given viewport. This app's zoom
+// changes are all animated flyToBounds calls that pass through several
+// intermediate integer zoom levels, and Leaflet fetches tiles for each
+// one even mid-animation - a single country selection was measured
+// firing ~180 tile requests, most for zoom levels never actually seen
+// at rest. Bigger tiles cut that request count (not just decode cost)
+// proportionally - the fix for a "feels like slow internet" perception,
+// as distinct from the earlier decode-time fix. zoomOffset=-1 below
+// compensates in the map <-> tile-z mapping: our tile z is always one
+// less than the map's own zoom, since each tile already covers 2x the
+// linear ground a 256px tile would at that same map zoom.
+const NIGHT_MAP_TILE_SIZE = 512;
+const NIGHT_MAP_TILE_ZOOM_OFFSET = -1;
+
+// Native resolution of each tile set, in map-zoom terms (i.e. already
+// accounting for NIGHT_MAP_TILE_ZOOM_OFFSET) - Leaflet upscales beyond
+// this rather than requesting tiles that don't exist. The lit set only
+// ever needs to cover the default world-fit view (never higher, since
+// Index 1.3 swaps to the no-lights set the moment a country is
+// selected), so it stops well short of the no-lights set's full
+// country-zoom range (matches this app's own flyToBounds maxZoom of 6).
 const NIGHT_MAP_LIT_MAX_NATIVE_ZOOM = 5;
 const NIGHT_MAP_NO_LIGHTS_MAX_NATIVE_ZOOM = 6;
 
@@ -484,16 +500,35 @@ const WORLD_HALF_SPAN_DEG =
 // around the antimeridian automatically, the same way any other web map
 // handles a viewport wider than 360deg of longitude.
 function NightMapLayer({ noLights }: { noLights: boolean }) {
+  // updateWhenZooming=false: Leaflet's default fetches tiles at every
+  // *intermediate* integer zoom level a flyToBounds animation passes
+  // through, not just the one the user actually ends up looking at - a
+  // single country selection (animating from the world-fit zoom up to
+  // zoom 6) fired ~180 tile requests this way, only ~30 of which were
+  // for the final zoom. Deferring tile loads until the animation settles
+  // cuts that to just the tiles actually needed. Harmless here since
+  // there's no manual zoom control to make the in-between frames matter -
+  // all zoom changes are the same handful of programmatic camera moves.
   return noLights ? (
     <TileLayer
       key="no-lights"
       url={NIGHT_MAP_NO_LIGHTS_TILES_URL}
-      tileSize={256}
+      tileSize={NIGHT_MAP_TILE_SIZE}
+      zoomOffset={NIGHT_MAP_TILE_ZOOM_OFFSET}
       maxNativeZoom={NIGHT_MAP_NO_LIGHTS_MAX_NATIVE_ZOOM}
       minZoom={0}
+      updateWhenZooming={false}
     />
   ) : (
-    <TileLayer key="lit" url={NIGHT_MAP_LIT_TILES_URL} tileSize={256} maxNativeZoom={NIGHT_MAP_LIT_MAX_NATIVE_ZOOM} minZoom={0} />
+    <TileLayer
+      key="lit"
+      url={NIGHT_MAP_LIT_TILES_URL}
+      tileSize={NIGHT_MAP_TILE_SIZE}
+      zoomOffset={NIGHT_MAP_TILE_ZOOM_OFFSET}
+      maxNativeZoom={NIGHT_MAP_LIT_MAX_NATIVE_ZOOM}
+      minZoom={0}
+      updateWhenZooming={false}
+    />
   );
 }
 
