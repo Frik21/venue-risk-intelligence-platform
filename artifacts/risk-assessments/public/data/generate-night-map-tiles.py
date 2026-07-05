@@ -20,11 +20,18 @@
 #
 # Every tile in the grid is generated, including pure-ocean ones - skipping
 # them and relying on Leaflet's "missing tile is transparent" behaviour was
-# tried first, but left a visible seam wherever a real ocean tile's flat
-# fill met the CSS radial-gradient fallback (index.css) showing through
-# the gap; the two are rarely the same tone at a given point. A tiny flat
-# tile decodes just as fast as any other, so there's no perf reason to
-# skip them.
+# tried first, but left a visible seam wherever a real ocean tile met the
+# CSS radial-gradient fallback (index.css) showing through the gap; the
+# two are only equal at one specific position. A tiny tile decodes just
+# as fast as any other, so there's no perf reason to skip them.
+#
+# Index 1.4: land colour and the ocean's brightness gradient are measured
+# directly off the pre-1.3 source image (git history, commit 4ecafb6),
+# not invented - see LANDMASS_FILL_COLOR and the _GRADIENT_STOPS table
+# below for the extraction method and real sampled values. The 1.3 tile
+# rewrite was scoped to fixing decode/request cost, not to changing this
+# established palette; flat-filling the ocean during that work lost the
+# real photographic falloff the source image had baked in.
 import json
 import math
 import os
@@ -50,8 +57,12 @@ OUT_ROOT = "tiles"
 # a 512px tile at internal zoom z covers the same ground a 256px tile
 # would at map zoom z+1, so map-perceived maxNativeZoom is unchanged.
 TILE_SIZE = 512
-OCEAN_COLOR = (0x00, 0x08, 0x1A)
-LANDMASS_FILL_COLOR = (0x1C, 0x1F, 0x16)
+# Measured directly off the pre-1.3 source image (git history, commit
+# 4ecafb6) rather than guessed: sampled real pixels at known lat/lng
+# across every continent for land, and across the open ocean at varying
+# distance from the image's own bright-centre gradient for ocean (Index
+# 1.4 - see generate_ocean_gradient_rgb below for the ocean curve).
+LANDMASS_FILL_COLOR = (0x00, 0x0E, 0x1A)
 LIGHT_COLOR = np.array([255.0, 226.0, 158.0])
 
 LIT_MAX_ZOOM = 4
@@ -71,6 +82,73 @@ def world_px_x(lng, z):
 
 def world_px_y(lat, z):
     return mercator_y_fraction(lat) * (TILE_SIZE * (1 << z))
+
+
+# Ocean brightness gradient (Index 1.4): the pre-1.3 source image had a
+# real photographic falloff baked into its ocean - brightest near the
+# image's own centre (50%/42% of its own bounds, the same reference point
+# index.css's own fallback gradient already uses), darkening outward -
+# not a flat colour. Flat-filling ocean lost this look entirely once the
+# image was replaced by tiles. These stops are not invented: they're a
+# binned average of real ocean-only pixels (land excluded via the actual
+# country-borders mask) from that source image, at increasing normalized
+# elliptical distance from its centre. Distance is normalized the same
+# way regardless of zoom/tile (a fraction of the world's own half-span),
+# so this same curve applies unchanged at any resolution.
+GRADIENT_CENTER_LNG = 11.1
+GRADIENT_CENTER_LAT = 27.65861979122676
+
+_GRADIENT_STOPS = [
+    (0.064, (8.5, 32.6, 53.8)),
+    (0.128, (9.6, 32.5, 52.7)),
+    (0.191, (5.7, 28.3, 50.1)),
+    (0.255, (1.6, 23.7, 48.3)),
+    (0.319, (0.3, 21.6, 46.6)),
+    (0.383, (0.9, 20.8, 44.2)),
+    (0.446, (0.6, 19.4, 42.4)),
+    (0.510, (0.7, 18.5, 40.6)),
+    (0.574, (1.0, 18.2, 38.9)),
+    (0.638, (1.1, 17.0, 37.9)),
+    (0.702, (0.5, 15.4, 36.1)),
+    (0.765, (0.2, 13.9, 33.4)),
+    (0.829, (0.0, 11.8, 31.6)),
+    (0.893, (0.0, 10.6, 29.8)),
+    (0.957, (0.0, 9.5, 28.2)),
+    (1.021, (0.0, 8.4, 27.3)),
+    (1.084, (0.0, 7.9, 25.5)),
+    (1.148, (0.0, 7.0, 22.8)),
+    (1.212, (0.0, 5.9, 21.0)),
+    (1.276, (0.0, 4.7, 19.2)),
+    (1.339, (0.0, 3.5, 18.0)),
+    (1.403, (0.0, 1.8, 16.6)),
+    (1.467, (0.0, 0.3, 14.9)),
+    (1.531, (0.0, 0.0, 12.8)),
+]
+_GRADIENT_DISTS = np.array([d for d, _ in _GRADIENT_STOPS])
+_GRADIENT_R = np.array([c[0] for _, c in _GRADIENT_STOPS])
+_GRADIENT_G = np.array([c[1] for _, c in _GRADIENT_STOPS])
+_GRADIENT_B = np.array([c[2] for _, c in _GRADIENT_STOPS])
+
+
+def ocean_background_for_tile(tx, ty, z):
+    """RGB array (TILE_SIZE, TILE_SIZE, 3) uint8 - the ocean's own
+    position-based brightness gradient for this tile's exact world
+    pixels, before any land or lights are composited on top."""
+    n_px = TILE_SIZE * (1 << z)
+    py, px = np.mgrid[ty * TILE_SIZE : (ty + 1) * TILE_SIZE, tx * TILE_SIZE : (tx + 1) * TILE_SIZE]
+    lng = px / n_px * 360 - 180
+    yfrac = py / n_px
+    lat = np.degrees(np.arctan(np.sinh(np.pi * (1 - 2 * yfrac))))
+
+    center_yfrac = mercator_y_fraction(GRADIENT_CENTER_LAT)
+    dx = (lng - GRADIENT_CENTER_LNG) / 180.0
+    dy = (yfrac - center_yfrac) / 0.5
+    dist = np.sqrt(dx**2 + dy**2)
+
+    r = np.interp(dist, _GRADIENT_DISTS, _GRADIENT_R, left=_GRADIENT_R[0], right=_GRADIENT_R[-1])
+    g = np.interp(dist, _GRADIENT_DISTS, _GRADIENT_G, left=_GRADIENT_G[0], right=_GRADIENT_G[-1])
+    b = np.interp(dist, _GRADIENT_DISTS, _GRADIENT_B, left=_GRADIENT_B[0], right=_GRADIENT_B[-1])
+    return np.clip(np.stack([r, g, b], axis=-1), 0, 255).astype(np.uint8)
 
 
 def unwrap_ring_longitudes(ring):
@@ -240,14 +318,25 @@ def generate_zoom_level(features, lights, z, out_dir, include_lights):
 
     for tx, ty in all_tile_keys:
         ox, oy = tx * TILE_SIZE, ty * TILE_SIZE
-        img = Image.new("RGB", (TILE_SIZE, TILE_SIZE), OCEAN_COLOR)
-        draw = ImageDraw.Draw(img)
+
+        # Land is a flat mask composited over the ocean's own position-based
+        # gradient background (Index 1.4), not drawn straight onto a flat
+        # ocean fill - a hole (e.g. a lake) needs the gradient to continue
+        # underneath it exactly as open ocean would, not a separate flat
+        # tone, so it can't be painted directly like a flat-ocean fill could.
+        land_mask = Image.new("L", (TILE_SIZE, TILE_SIZE), 0)
+        mask_draw = ImageDraw.Draw(land_mask)
         for rings_px in tile_polys.get((tx, ty), []):
             exterior = [(x - ox, y - oy) for x, y in rings_px[0]]
-            draw.polygon(exterior, fill=LANDMASS_FILL_COLOR)
+            mask_draw.polygon(exterior, fill=255)
             for hole in rings_px[1:]:
                 hole_local = [(x - ox, y - oy) for x, y in hole]
-                draw.polygon(hole_local, fill=OCEAN_COLOR)
+                mask_draw.polygon(hole_local, fill=0)
+
+        background = ocean_background_for_tile(tx, ty, z)
+        is_land = (np.asarray(land_mask) > 127)[:, :, None]
+        arr = np.where(is_land, np.array(LANDMASS_FILL_COLOR, dtype=np.uint8), background)
+        img = Image.fromarray(arr, "RGB")
 
         if (tx, ty) in tile_lights:
             arr = np.asarray(img, dtype=np.float32)
