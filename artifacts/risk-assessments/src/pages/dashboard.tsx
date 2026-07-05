@@ -144,9 +144,12 @@ function getPrimaryPolygonBounds(geometry: Geometry): L.LatLngBounds | null {
 
 // Belt-and-suspenders: the MapContainer interaction props already disable
 // these handlers, but calling the imperative API too guarantees the
-// Operational Canvas map cannot be dragged/scrolled/touch-panned
-// regardless of how the map instance was constructed. Zoom control
-// buttons are left enabled - they call map.zoomIn()/zoomOut() directly.
+// Operational Canvas map starts fully static-locked (default world view)
+// regardless of how the map instance was constructed. Scroll/double-click
+// /touch/box-zoom/keyboard stay disabled permanently - nothing else in
+// the app re-enables them. Dragging is the one exception: CountrySelect
+// (Index 1.2) re-enables it only while zoomed in on a selected country,
+// and disables it again the moment that selection clears.
 function MapLock() {
   const map = useMap();
 
@@ -330,6 +333,23 @@ function CountrySelect({
     const timer = setTimeout(() => setShowCapital(true), COUNTRY_ZOOM_DURATION * 1000);
     return () => clearTimeout(timer);
   }, [selectedCountryId]);
+
+  // Free camera drag (Index 1.2) is enabled only in the zoomed-in-on-country
+  // state, once the zoom-in animation has actually finished - the same
+  // showCapital gate already used for the capital marker and the 1.1
+  // zoom-out control, not a separate timer. MapLock's own imperative
+  // dragging.disable() call still runs once on mount (matching the
+  // default world view's static lock); this effect is the only thing that
+  // re-enables it, and only for the duration of a country selection. No
+  // maxBounds is set anywhere, so once enabled this is unrestricted free
+  // panning - not a bounded exception.
+  useEffect(() => {
+    if (showCapital) {
+      map.dragging.enable();
+    } else {
+      map.dragging.disable();
+    }
+  }, [showCapital, map]);
 
   function resetToWorldView() {
     onSelectCountry(null);
