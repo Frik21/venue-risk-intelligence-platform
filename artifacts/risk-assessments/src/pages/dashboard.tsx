@@ -239,6 +239,49 @@ function countryOutlineStyle(feature: Feature | undefined, selectedCountryId: st
   };
 }
 
+// Manual zoom control (Index 1.1): hidden on the default world view,
+// shown only once a country's zoom-in animation completes ("visible"
+// mirrors CountrySelect's own showCapital timing exactly, for the same
+// reason - wait for the flyToBounds move to actually finish). Built as a
+// real Leaflet control (not plain positioned JSX) so it mounts/unmounts
+// from the DOM entirely rather than just toggling a CSS class - "must
+// not be visible" on the default view, not just visually hidden. Offers
+// only a single zoom-out affordance, and that affordance is the same
+// full reset to the world view used by click-outside-to-deselect, not
+// Leaflet's own default zoomOut() (which would just step the zoom level
+// down once, leaving the country still selected/outlined).
+function ZoomOutControl({ visible, onZoomOut }: { visible: boolean; onZoomOut: () => void }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!visible) return;
+
+    const control = new L.Control({ position: "topleft" });
+    control.onAdd = () => {
+      const container = L.DomUtil.create("div", "leaflet-bar leaflet-control-zoom");
+      const link = L.DomUtil.create("a", "leaflet-control-zoom-out", container);
+      link.href = "#";
+      link.title = "Zoom out";
+      link.setAttribute("role", "button");
+      link.setAttribute("aria-label", "Zoom out");
+      link.innerHTML = "&#8722;";
+      L.DomEvent.disableClickPropagation(container);
+      L.DomEvent.on(link, "click", (event: Event) => {
+        L.DomEvent.preventDefault(event);
+        onZoomOut();
+      });
+      return container;
+    };
+    control.addTo(map);
+
+    return () => {
+      control.remove();
+    };
+  }, [visible, map, onZoomOut]);
+
+  return null;
+}
+
 // Country Select & Outline: clicking within a country's true boundary
 // (Natural Earth geometry, including enclaves like Lesotho) flies the
 // camera to frame it and renders a static neon outline. Clicking
@@ -288,10 +331,12 @@ function CountrySelect({
     return () => clearTimeout(timer);
   }, [selectedCountryId]);
 
-  useMapEvent("click", () => {
+  function resetToWorldView() {
     onSelectCountry(null);
     map.flyTo(WORLD_VIEW, computeWorldFitZoom(map), { duration: WORLD_ZOOM_DURATION });
-  });
+  }
+
+  useMapEvent("click", resetToWorldView);
 
   // Leaflet's Path.setStyle() only updates stroke/fill CSS properties - it
   // does not re-apply a `className` after the path element exists. The
@@ -335,6 +380,8 @@ function CountrySelect({
         style={(feature) => countryOutlineStyle(feature, selectedCountryId)}
         onEachFeature={onEachFeature}
       />
+
+      <ZoomOutControl visible={showCapital} onZoomOut={resetToWorldView} />
 
       {showCapital && capital && (
         <CircleMarker
@@ -623,10 +670,13 @@ export default function Dashboard() {
 
 // LAYER 1: Map (static)
 // Base layer of the Operational Canvas stack. Static world view - the
-// map cannot be dragged/scrolled/touch-panned; the zoom control buttons
-// are the only way to zoom. Colour-coded operational markers sit on top.
-// Nothing else renders yet - Layers 2-7 (including Layer 8: Status
-// Legend) are built and approved one at a time per the Debug Layer Rule.
+// map cannot be dragged/scrolled/touch-panned. There is no manual
+// zoom-in control at all; the only zoom changes are the programmatic
+// camera moves triggered by selecting/deselecting a country (see
+// CountrySelect/ZoomOutControl, Index 1.1). Colour-coded operational
+// markers sit on top. Nothing else renders yet - Layers 2-7 (including
+// Layer 8: Status Legend) are built and approved one at a time per the
+// Debug Layer Rule.
 function MapLayer() {
   const [selectedCountryId, setSelectedCountryId] = useState<string | null>(null);
 
@@ -644,7 +694,7 @@ function MapLayer() {
         touchZoom={false}
         boxZoom={false}
         keyboard={false}
-        zoomControl
+        zoomControl={false}
         attributionControl={false}
         className="venueguard-operational-canvas-map h-full w-full"
       >
