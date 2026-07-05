@@ -28,17 +28,6 @@ const COUNTRY_BORDERS_URL = `${import.meta.env.BASE_URL}data/operational-country
 const NIGHT_MAP_LIT_TILES_URL = `${import.meta.env.BASE_URL}data/tiles/lit/{z}/{x}_{y}.webp`;
 const NIGHT_MAP_NO_LIGHTS_TILES_URL = `${import.meta.env.BASE_URL}data/tiles/no-lights/{z}/{x}_{y}.webp`;
 
-// Index 1.5: a third, bottom layer containing only the ocean's own
-// gradient - no land, no lights. The lit/no-lights layers above it set
-// noWrap so they show exactly one real copy of the world and nothing
-// past its edges; on a wide viewport, this layer's normal wrapping fills
-// the extra width instead, so what's beyond the real map reads as open
-// ocean continuing into the distance rather than a repeated, duplicate
-// continent. Safe to let this one wrap - a repeated pure gradient with
-// no real content is indistinguishable from a single copy at every
-// point, unlike land or city lights repeating.
-const NIGHT_MAP_OCEAN_GRADIENT_TILES_URL = `${import.meta.env.BASE_URL}data/tiles/ocean-gradient/{z}/{x}_{y}.webp`;
-
 // 512px tiles (not the more typical 256px) - same total pixel density,
 // but a quarter as many tiles cover any given viewport. This app's zoom
 // changes are all animated flyToBounds calls that pass through several
@@ -505,11 +494,20 @@ const WORLD_HALF_SPAN_DEG =
 // to reuse the existing one with a new url - Leaflet's own tile cache is
 // keyed by tile coordinate, not by which url template produced it, so
 // reusing the same layer instance across a url change could show stale
-// tiles from the other set. Unlike the single-image approach this
-// replaces, there's no custom edge-fade handling needed for wide
-// viewports - standard Leaflet tile layers already wrap tile x-indices
-// around the antimeridian automatically, the same way any other web map
-// handles a viewport wider than 360deg of longitude.
+// tiles from the other set.
+//
+// Index 1.5: noWrap means exactly one real copy of the world ever
+// renders - Leaflet's default tile wrapping (reusing the same tile for
+// x-indices beyond the world) would otherwise repeat the whole tile,
+// landmass and city lights included, to fill a wide viewport, which
+// read as a duplicated continent. Whatever's left over on a wide
+// viewport falls through to the ocean's own CSS gradient (index.css)
+// instead. That gradient is centred on the *viewport*, not a world
+// position, and already darkens toward its own edges - a real gradient
+// tile layer was tried first, but since the ocean's photographic
+// gradient (Index 1.4) is a one-off vignette centred on one real spot
+// on Earth, repeating that tile to fill extra width produced a second,
+// out-of-place bright spot in open ocean rather than a smooth fade.
 function NightMapLayer({ noLights }: { noLights: boolean }) {
   // updateWhenZooming=false: Leaflet's default fetches tiles at every
   // *intermediate* integer zoom level a flyToBounds animation passes
@@ -522,14 +520,6 @@ function NightMapLayer({ noLights }: { noLights: boolean }) {
   // all zoom changes are the same handful of programmatic camera moves.
   return (
     <>
-      <TileLayer
-        url={NIGHT_MAP_OCEAN_GRADIENT_TILES_URL}
-        tileSize={NIGHT_MAP_TILE_SIZE}
-        zoomOffset={NIGHT_MAP_TILE_ZOOM_OFFSET}
-        maxNativeZoom={NIGHT_MAP_LIT_MAX_NATIVE_ZOOM}
-        minZoom={0}
-        updateWhenZooming={false}
-      />
       {noLights ? (
         <TileLayer
           key="no-lights"

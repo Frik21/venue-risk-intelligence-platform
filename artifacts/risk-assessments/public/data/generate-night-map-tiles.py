@@ -370,24 +370,6 @@ def generate_zoom_level(features, lights, z, out_dir, include_lights):
     return len(all_tile_keys)
 
 
-def generate_ocean_gradient_zoom_level(z, out_dir):
-    """Pure ocean-gradient tiles, no land or lights - a bottom layer that
-    fills any extra width a wide viewport needs beyond one real world-copy.
-    The lit/no-lights layers on top set noWrap=true so they never repeat
-    (Index 1.5: repeating them duplicated real landmass/lights, which
-    looked wrong even though the gradient itself no longer seams at the
-    antimeridian) - this layer is deliberately allowed to keep wrapping
-    normally, since a repeated gradient with no real content is
-    indistinguishable from a single copy at every point."""
-    n = 1 << z
-    os.makedirs(f"{out_dir}/{z}", exist_ok=True)
-    for tx in range(n):
-        for ty in range(n):
-            img = Image.fromarray(ocean_background_for_tile(tx, ty, z), "RGB")
-            img.save(f"{out_dir}/{z}/{tx}_{ty}.webp", "WEBP", quality=95, method=6)
-    return n * n
-
-
 def main():
     t0 = time.time()
     features = load_features()
@@ -403,14 +385,6 @@ def main():
         t0 = time.time()
         n = generate_zoom_level(features, lights, z, f"{OUT_ROOT}/no-lights", include_lights=False)
         print(f"no-lights z={z}: {n} tiles in {time.time()-t0:.1f}s")
-
-    # Only the default (lit) view's own zoom range ever needs extra width
-    # beyond one world-copy - once zoomed into a country the viewport is
-    # always far narrower than a single world-width, so no gap can appear.
-    for z in range(0, LIT_MAX_ZOOM + 1):
-        t0 = time.time()
-        n = generate_ocean_gradient_zoom_level(z, f"{OUT_ROOT}/ocean-gradient")
-        print(f"ocean-gradient z={z}: {n} tiles in {time.time()-t0:.1f}s")
 
 
 if __name__ == "__main__":
