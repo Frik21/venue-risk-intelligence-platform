@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { MapContainer, TileLayer, CircleMarker, GeoJSON, Tooltip, useMap, useMapEvent } from "react-leaflet";
+import { MapContainer, TileLayer, ImageOverlay, CircleMarker, GeoJSON, Tooltip, useMap, useMapEvent } from "react-leaflet";
 import L from "leaflet";
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
 import "leaflet/dist/leaflet.css";
@@ -27,6 +27,33 @@ const COUNTRY_BORDERS_URL = `${import.meta.env.BASE_URL}data/operational-country
 // zoom) - selected by NightMapLayer below.
 const NIGHT_MAP_LIT_TILES_URL = `${import.meta.env.BASE_URL}data/tiles/lit/{z}/{x}_{y}.webp`;
 const NIGHT_MAP_NO_LIGHTS_TILES_URL = `${import.meta.env.BASE_URL}data/tiles/no-lights/{z}/{x}_{y}.webp`;
+
+// Index 1.6: real edge-fade strips, anchored pixel-exact to the lit tile
+// set's own west (tile x=0, world lng -180) and east (tile x=n-1, world
+// lng +180) edge columns, then heavily vertically-smoothed and faded to
+// the ocean gradient's own darkest measured tone (Index 1.4) - see
+// generate-night-map-edge-fades.py alongside the assets. Needed because
+// Index 1.5's noWrap stops the lit/no-lights layers repeating (correctly
+// killing duplicate landmass/city-lights on a wide viewport), but that
+// also exposes the map's own real edges with no coastline continuation -
+// without this, land reads as abruptly cut off rather than trailing into
+// open ocean. Lit-view only: the no-lights (country-zoom) state is never
+// shown at a zoom wide enough to need it.
+const NIGHT_MAP_EDGE_FADE_WEST_URL = `${import.meta.env.BASE_URL}data/night-map-edge-fade-west.webp`;
+const NIGHT_MAP_EDGE_FADE_EAST_URL = `${import.meta.env.BASE_URL}data/night-map-edge-fade-east.webp`;
+
+type LatLngBoundsTuple = [[number, number], [number, number]];
+
+// The lit tile set's own real-world bounds - standard Web Mercator, one
+// full 360deg copy of the world (tile x=0..15 at zoom 4 covers exactly
+// -180deg to +180deg; unlike the old single-image approach's custom
+// -168.9/191.1 window, the tile generator doesn't need to shift its own
+// seam, since each feature crossing the antimeridian is already shifted
+// per-tile - see generate-night-map-tiles.py's relevant_shifts).
+const NIGHT_MAP_BOUNDS: LatLngBoundsTuple = [
+  [-85.05112877980659, -180],
+  [85.05112877980659, 180],
+];
 
 // 512px tiles (not the more typical 256px) - same total pixel density,
 // but a quarter as many tiles cover any given viewport. This app's zoom
@@ -500,15 +527,72 @@ const WORLD_HALF_SPAN_DEG =
 // renders - Leaflet's default tile wrapping (reusing the same tile for
 // x-indices beyond the world) would otherwise repeat the whole tile,
 // landmass and city lights included, to fill a wide viewport, which
-// read as a duplicated continent. Whatever's left over on a wide
-// viewport falls through to the ocean's own CSS gradient (index.css)
-// instead. That gradient is centred on the *viewport*, not a world
-// position, and already darkens toward its own edges - a real gradient
-// tile layer was tried first, but since the ocean's photographic
-// gradient (Index 1.4) is a one-off vignette centred on one real spot
-// on Earth, repeating that tile to fill extra width produced a second,
-// out-of-place bright spot in open ocean rather than a smooth fade.
+// read as a duplicated continent. (A real gradient tile layer for
+// whatever's left over was tried first, but since the ocean's
+// photographic gradient - Index 1.4 - is a one-off vignette centred on
+// one real spot on Earth, repeating that tile to fill extra width
+// produced a second, out-of-place bright spot in open ocean rather than
+// a smooth fade.)
+//
+// Index 1.6: noWrap alone left the map's own real edges (Alaska on the
+// west, Russia's Far East on the other) directly exposed against the
+// ocean's CSS fallback gradient (index.css) with no coastline
+// continuation - land read as abruptly cut off rather than trailing
+// into open ocean, since that CSS gradient is centred on the viewport,
+// not a world position, and has no actual coastline data of its own.
+// computeNightMapEdgeFadeBounds below covers the same real shortfall the
+// old single-image approach's version of this used to (see its own
+// comment for the calculation), stretching real edge-fade imagery -
+// anchored pixel-exact to the lit tile set's own edge columns, not
+// invented - only as far as the current viewport's aspect ratio actually
+// needs. Lit-view only: the no-lights (country-zoom) state is never
+// shown at a zoom wide enough to need it.
+function computeNightMapEdgeFadeBounds(map: L.Map): {
+  west: LatLngBoundsTuple | null;
+  east: LatLngBoundsTuple | null;
+} {
+  const zoom = map.getZoom();
+  const size = map.getSize();
+  const worldWidthPx = 256 * Math.pow(2, zoom);
+  const requiredHalfSpanDeg = worldWidthPx > 0 ? (size.x / 2 / worldWidthPx) * 360 : 360;
+
+  const [[south, west], [north, east]] = NIGHT_MAP_BOUNDS;
+  const centerLng = WORLD_VIEW[1];
+  const westReachDeg = centerLng - west;
+  const eastReachDeg = east - centerLng;
+
+  // Extends each fade well past the minimum required to cover the
+  // shortfall, so the darkening continues gradually past the real edge
+  // geography (Alaska/Chukotka) rather than stopping abruptly right at
+  // the minimum needed reach.
+  const EXTRA_FADE_REACH_DEG = 150;
+  const westFadeDeg = Math.max(0, requiredHalfSpanDeg - westReachDeg) + EXTRA_FADE_REACH_DEG;
+  const eastFadeDeg = Math.max(0, requiredHalfSpanDeg - eastReachDeg) + EXTRA_FADE_REACH_DEG;
+
+  return {
+    west: westFadeDeg > 0 ? [[south, west - westFadeDeg], [north, west]] : null,
+    east: eastFadeDeg > 0 ? [[south, east], [north, east + eastFadeDeg]] : null,
+  };
+}
+
 function NightMapLayer({ noLights }: { noLights: boolean }) {
+  const map = useMap();
+  const [fadeBounds, setFadeBounds] = useState(() => (noLights ? { west: null, east: null } : computeNightMapEdgeFadeBounds(map)));
+
+  useLayoutEffect(() => {
+    if (noLights) return;
+    function recompute() {
+      setFadeBounds(computeNightMapEdgeFadeBounds(map));
+    }
+    recompute();
+    map.on("zoomend moveend", recompute);
+    window.addEventListener("resize", recompute);
+    return () => {
+      map.off("zoomend moveend", recompute);
+      window.removeEventListener("resize", recompute);
+    };
+  }, [map, noLights]);
+
   // updateWhenZooming=false: Leaflet's default fetches tiles at every
   // *intermediate* integer zoom level a flyToBounds animation passes
   // through, not just the one the user actually ends up looking at - a
@@ -543,6 +627,8 @@ function NightMapLayer({ noLights }: { noLights: boolean }) {
           noWrap
         />
       )}
+      {fadeBounds.west && <ImageOverlay url={NIGHT_MAP_EDGE_FADE_WEST_URL} bounds={fadeBounds.west} />}
+      {fadeBounds.east && <ImageOverlay url={NIGHT_MAP_EDGE_FADE_EAST_URL} bounds={fadeBounds.east} />}
     </>
   );
 }
