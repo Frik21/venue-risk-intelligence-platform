@@ -1,7 +1,7 @@
 # One-time offline generator for night-map-edge-fade-{west,east}.webp - not
 # part of the app build or runtime, only re-run by hand if the lit tile set
 # itself is ever regenerated (see generate-night-map-tiles.py). Requires
-# Pillow (`pip install Pillow`); run from this directory
+# Pillow and NumPy (`pip install Pillow numpy`); run from this directory
 # (`python3 generate-night-map-edge-fades.py`) after the tiles/ directory
 # already exists.
 #
@@ -24,6 +24,7 @@
 # viewport's aspect ratio needs beyond the map's own 360deg width -
 # lit-only, since the no-lights (country-zoom) state is never shown at a
 # zoom wide enough to need this.
+import numpy as np
 from PIL import Image
 
 Image.MAX_IMAGE_PIXELS = None
@@ -38,6 +39,40 @@ DARK_BASE = (0x00, 0x00, 0x0D)  # the ocean gradient's own darkest measured stop
 FADE_W = 96
 ANCHOR_PX = 3
 SMOOTH_WINDOW = round(150 * (TILE_SIZE * N) / 2048)
+# Deliberately much smaller than any real on-screen display height (which
+# ranges from a few hundred px to a couple thousand). This asset has no
+# fine detail to lose - it's a smooth fade to a flat dark tone - so there's
+# no cost to shrinking it well past that point. What that buys: the
+# browser almost always scales this image UP at runtime rather than down.
+# Upscaling interpolates between fewer samples, which blends dithering
+# into a smooth result; downscaling area-averages, which is specifically
+# what ordered dithering is designed to cancel back out to the plain
+# (banded) rounded value - see the dithering comment in build_fade below,
+# which found exactly that when this was still 2048.
+OUT_HEIGHT = 512
+
+# Same technique and reasoning as generate-night-map-tiles.py's _BAYER_8:
+# the faded-out region changes brightness by only a handful of 8-bit
+# levels over the whole image, so plain rounding produces flat bands with
+# a visible 1-unit step between them. Ordered dithering breaks each step
+# into a fine dot pattern instead, which reads as smooth.
+_BAYER_8 = (
+    np.array(
+        [
+            [0, 32, 8, 40, 2, 34, 10, 42],
+            [48, 16, 56, 24, 50, 18, 58, 26],
+            [12, 44, 4, 36, 14, 46, 6, 38],
+            [60, 28, 52, 20, 62, 30, 54, 22],
+            [3, 35, 11, 43, 1, 33, 9, 41],
+            [51, 19, 59, 27, 49, 17, 57, 25],
+            [15, 47, 7, 39, 13, 45, 5, 37],
+            [63, 31, 55, 23, 61, 29, 53, 21],
+        ],
+        dtype=np.float64,
+    )
+    / 64.0
+    - 0.5
+)
 
 
 def stitch_column(tx):
@@ -51,10 +86,26 @@ def stitch_column(tx):
 def darkest_smoothed_column(spx, x, height, window):
     col = [spx[x, y] for y in range(height)]
     half = window // 2
+    # Pass 1: darkest-of-window - safe against ever showing brighter than
+    # nearby real content (ocean is always the darkest content at this
+    # column), but "min" is an order-statistic filter, not an averaging
+    # one: it only changes value when the window's extremum shifts,
+    # producing large flat plateaus with a sudden jump between them
+    # instead of an actual gradual transition (visible as a blocky/grid
+    # look once this column is stretched tall to cover a real viewport).
+    darkest = []
+    for y in range(height):
+        lo, hi = max(0, y - half), min(height, y + half + 1)
+        darkest.append(min(col[lo:hi], key=lambda c: sum(c)))
+    # Pass 2: average that lower envelope over the same window so the
+    # plateau edges become gradual ramps instead of instant steps - can't
+    # brighten past nearby real darkest content since it only averages
+    # values that already passed the min filter in pass 1.
     result = []
     for y in range(height):
         lo, hi = max(0, y - half), min(height, y + half + 1)
-        result.append(min(col[lo:hi], key=lambda c: sum(c)))
+        window_vals = darkest[lo:hi]
+        result.append(tuple(round(sum(c[k] for c in window_vals) / len(window_vals)) for k in range(3)))
     return result
 
 
@@ -64,20 +115,57 @@ def build_fade(strip, source_edge_x, anchor_on_right, out_path):
     raw_col = [spx[source_edge_x, y] for y in range(height)]
     smooth_col = darkest_smoothed_column(spx, source_edge_x, height, SMOOTH_WINDOW)
 
-    img = Image.new("RGB", (FADE_W, height))
-    px = img.load()
+    # Built at full resolution with plain, undithered continuous values -
+    # dithering happens after the resize below (see that comment), not
+    # here, so the noise survives to the actually-displayed resolution
+    # instead of being smoothed back out by the resize's own filtering.
+    arr = np.empty((height, FADE_W, 3), dtype=np.float64)
     for y in range(height):
         raw_c = raw_col[y]
         smooth_c = smooth_col[y]
         for cx in range(FADE_W):
             dist_from_anchor_side = (FADE_W - 1 - cx) if anchor_on_right else cx
             if dist_from_anchor_side < ANCHOR_PX:
-                color = raw_c
+                arr[y, cx] = raw_c
             else:
                 t = min((dist_from_anchor_side - ANCHOR_PX) / (FADE_W - ANCHOR_PX), 1.0)
-                color = tuple(round(smooth_c[k] + (DARK_BASE[k] - smooth_c[k]) * t) for k in range(3))
-            px[cx, y] = color
-    img.save(out_path, "WEBP", quality=90, method=6)
+                arr[y, cx] = [smooth_c[k] + (DARK_BASE[k] - smooth_c[k]) * t for k in range(3)]
+    img = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGB")
+
+    # Downsample before saving: at full 8192px height this asset only ever
+    # gets shown stretched down to roughly viewport-height on screen (a
+    # few hundred to ~2000px), so the browser has to minify it by a large
+    # factor (~8x) at runtime. Chromium's own runtime image scaling isn't a
+    # true box/Lanczos filter at that ratio, and produces a visible blocky
+    # look on this content - large flat, very dark, slowly-varying areas
+    # where even a 1-unit rounding difference is a big relative jump. Doing
+    # the downsample here with Pillow's own LANCZOS filter (a proper
+    # multi-tap resample, unlike relying on the browser) fixes that, at
+    # the cost of the anchor columns becoming a local average across a few
+    # neighbouring source rows rather than an exact match to one specific
+    # tile row - negligible given how gradually real content changes
+    # latitude-to-latitude at this zoom, and still far less visible than
+    # the blockiness it replaces.
+    img = img.resize((FADE_W, OUT_HEIGHT), Image.LANCZOS)
+
+    # Dither now, at final resolution, for the same reason as _BAYER_8's
+    # own comment above: this gradient changes by only a few 8-bit levels
+    # across the whole image, so plain rounding leaves a visible 1-unit
+    # step at each level boundary. Anchor columns are left untouched so
+    # they still exactly match the real tile edge.
+    out = np.array(img).astype(np.float64)
+    for cx in range(FADE_W):
+        dist_from_anchor_side = (FADE_W - 1 - cx) if anchor_on_right else cx
+        if dist_from_anchor_side < ANCHOR_PX:
+            continue
+        col_dither = _BAYER_8[np.arange(OUT_HEIGHT) % 8, cx % 8]
+        out[:, cx] += col_dither[:, None]
+    img = Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGB")
+
+    # Lossless: the anchor columns must match the real tile's own edge
+    # pixels exactly (Index 1.6/1.7), which lossy compression can't
+    # guarantee even at high quality.
+    img.save(out_path, "WEBP", lossless=True, method=6)
     print(f"saved {out_path}")
 
 

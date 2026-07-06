@@ -523,11 +523,17 @@ const WORLD_HALF_SPAN_DEG =
 // reusing the same layer instance across a url change could show stale
 // tiles from the other set.
 //
-// Index 1.5: noWrap means exactly one real copy of the world ever
-// renders - Leaflet's default tile wrapping (reusing the same tile for
-// x-indices beyond the world) would otherwise repeat the whole tile,
+// Index 1.5: noWrap+bounds means exactly one real copy of the world
+// ever renders - Leaflet's default tile wrapping (reusing the same tile
+// for x-indices beyond the world) would otherwise repeat the whole tile,
 // landmass and city lights included, to fill a wide viewport, which
-// read as a duplicated continent. (A real gradient tile layer for
+// read as a duplicated continent. noWrap alone still let Leaflet request
+// out-of-range tile coordinates (e.g. x=-1) - harmless against a real
+// tile server (a clean 404), but Vite's dev server answers any unmatched
+// path with its own index.html (200 OK), so the resulting broken <img>
+// rendered as a visible placeholder box, a grid pattern in the empty
+// space. bounds={NIGHT_MAP_BOUNDS} makes Leaflet skip those coordinates
+// entirely rather than requesting them. (A real gradient tile layer for
 // whatever's left over was tried first, but since the ocean's
 // photographic gradient - Index 1.4 - is a one-off vignette centred on
 // one real spot on Earth, repeating that tile to fill extra width
@@ -614,6 +620,7 @@ function NightMapLayer({ noLights }: { noLights: boolean }) {
           minZoom={0}
           updateWhenZooming={false}
           noWrap
+          bounds={NIGHT_MAP_BOUNDS}
         />
       ) : (
         <TileLayer
@@ -625,6 +632,7 @@ function NightMapLayer({ noLights }: { noLights: boolean }) {
           minZoom={0}
           updateWhenZooming={false}
           noWrap
+          bounds={NIGHT_MAP_BOUNDS}
         />
       )}
       {fadeBounds.west && <ImageOverlay url={NIGHT_MAP_EDGE_FADE_WEST_URL} bounds={fadeBounds.west} />}
