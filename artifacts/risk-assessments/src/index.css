@@ -211,22 +211,30 @@
     drop-shadow(0 0 6px rgba(255, 184, 0, 0.2));
 }
 
-/* The ocean's own background - the night-map raster image (see
-   NightMapLayer in dashboard.tsx) sits on top of this wherever it
-   covers the viewport, so this only shows through briefly (e.g. while
-   the image itself is loading) or at the very edges. A single flat
-   tone read as visibly flat/artificial, so this is a soft radial
-   gradient instead - brightest a little above centre, darkening
-   toward the edges. */
+/* The ocean's own background - the night-map tiles (see NightMapLayer in
+   dashboard.tsx, noWrap) cover exactly one real copy of the world, so
+   this shows through for whatever's left on a wide viewport (as well as
+   briefly while tiles are loading). A single flat tone read as visibly
+   flat/artificial, so this is a soft radial gradient instead - brightest
+   a little above centre, darkening toward the edges, same idea as the
+   real ocean gradient the tiles themselves use (Index 1.4/1.5) - though
+   this one is centred on the *viewport*, not a world position, so it can
+   only approximate the real tiles' own edge tone, not match it exactly
+   at every latitude. */
 .venueguard-operational-canvas-map.leaflet-container {
   /* An ellipse, not a circle (falls off too gradually vertically for
-     the look this is going for). 140%/55% at 50% 42% was tuned by eye. */
+     the look this is going for). 140%/55% at 50% 42% was tuned by eye.
+     Colour stops are the real measured ocean-gradient values (Index 1.4)
+     at increasing distance from its centre, not invented - keeps this
+     fallback in the same tonal range as the real tiles it sits behind,
+     rather than the noticeably brighter placeholder tones used before
+     that gradient was measured. */
   background: radial-gradient(
     ellipse 140% 55% at 50% 42%,
-    #0a2742 0%,
-    #08223d 40%,
-    #031321 70%,
-    #020b18 100%
+    #082136 0%,
+    #011126 40%,
+    #00081b 70%,
+    #00000d 100%
   );
 }
 
