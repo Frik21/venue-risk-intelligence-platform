@@ -337,14 +337,22 @@ def generate_zoom_level(features, lights, z, out_dir, include_lights):
     tile_lights = {}
     if include_lights:
         zoom_scale = (1 << z) / (1 << REFERENCE_ZOOM)
+        # No SHIFTS loop here (unlike the polygon pass below): every light is
+        # a single point already normalized to -180..180 in city-lights.json,
+        # so it only ever has one true position - there's no "crossing the
+        # antimeridian" case to handle for a point the way there is for a
+        # polygon ring. Looping over all three shifts anyway meant a light
+        # within its halo radius of either edge (e.g. Anadyr, Chukotka, near
+        # lng +179.3) also got a ghost copy drawn a whole world-width away,
+        # bleeding into the tile at the *opposite* edge of the standard
+        # -180/180 grid - a real duplicate light cluster, not real geography.
         for lng, lat, ref_core_r, ref_halo_r, peak in lights:
             core_r = max(ref_core_r * zoom_scale, 0.15)
             halo_r = max(ref_halo_r * zoom_scale, 0.3)
-            for shift in SHIFTS:
-                wx = world_px_x(lng + shift, z)
-                wy = world_px_y(lat, z)
-                for tx, ty in tiles_for_bbox(wx - halo_r, wx + halo_r, wy - halo_r, wy + halo_r, z, buffer_px=0):
-                    tile_lights.setdefault((tx, ty), []).append((wx, wy, core_r, halo_r, peak))
+            wx = world_px_x(lng, z)
+            wy = world_px_y(lat, z)
+            for tx, ty in tiles_for_bbox(wx - halo_r, wx + halo_r, wy - halo_r, wy + halo_r, z, buffer_px=0):
+                tile_lights.setdefault((tx, ty), []).append((wx, wy, core_r, halo_r, peak))
 
     # Every coordinate in the valid grid, not just ones with land/lights -
     # a skipped "pure ocean" tile leaves a visible seam where its flat
