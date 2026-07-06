@@ -12,18 +12,30 @@
 # sits there) are directly exposed against the ocean-gradient CSS
 # fallback with no coastline continuation, reading as land abruptly cut
 # off rather than trailing into open ocean. These two images are a
-# narrow vertical strip for each edge, anchored pixel-exact to that
-# edge's own real column (stitched from the lit tile set's own x=0 and
-# x=n-1 tile columns at zoom 4 - real map data, not an invented
-# gradient) for its innermost 3px, then a heavily vertically-smoothed
-# (darkest-of-window - ocean is always the darkest content here, so this
-# can't pick up a coastline or city-light streak) version of that same
-# column, fading out to the ocean gradient's own darkest measured tone
-# (Index 1.4). NightMapLayer (dashboard.tsx) stretches these via
-# Leaflet's ImageOverlay bounds to cover whatever extra reach the current
-# viewport's aspect ratio needs beyond the map's own 360deg width -
-# lit-only, since the no-lights (country-zoom) state is never shown at a
-# zoom wide enough to need this.
+# narrow vertical strip for each edge, built from a heavily
+# vertically-smoothed (darkest-of-window - ocean is always the darkest
+# content here, so this can't pick up a coastline or city-light streak)
+# version of that edge's own real column (stitched from the lit tile
+# set's own x=0 and x=n-1 tile columns at zoom 4), fading out to the
+# ocean gradient's own darkest measured tone (Index 1.4). NightMapLayer
+# (dashboard.tsx) stretches these via Leaflet's ImageOverlay bounds to
+# cover whatever extra reach the current viewport's aspect ratio needs
+# beyond the map's own 360deg width - lit-only, since the no-lights
+# (country-zoom) state is never shown at a zoom wide enough to need this.
+#
+# Index 1.7: an earlier version held the real (unsmoothed) tile-edge
+# pixels exactly for the innermost 3px, for a perfect colour match right
+# at the seam. That raw sliver carries whatever's really at that column -
+# here, a real hint of Alaska/Chukotka coastline and city lights, right
+# where the tile grid's edge happens to sit - and once stretched across a
+# wide viewport's worth of screen space, that thin real detail read as a
+# chunk of land duplicated in open ocean (visible on both the west and
+# east fades at once, since they're anchored to opposite sides of the
+# same real-world seam - Alaska and Chukotka are right across the
+# dateline from each other). The smoothed column is already derived from
+# that same source column, so starting the fade immediately from that
+# instead keeps the seam colour close without any raw coastline/light
+# detail able to leak through and get magnified.
 import numpy as np
 from PIL import Image
 
@@ -37,7 +49,6 @@ N = 16  # tiles per axis at zoom 4 (LIT_MAX_ZOOM)
 
 DARK_BASE = (0x00, 0x00, 0x0D)  # the ocean gradient's own darkest measured stop (Index 1.4)
 FADE_W = 96
-ANCHOR_PX = 3
 SMOOTH_WINDOW = round(150 * (TILE_SIZE * N) / 2048)
 # Deliberately much smaller than any real on-screen display height (which
 # ranges from a few hundred px to a couple thousand). This asset has no
@@ -112,24 +123,34 @@ def darkest_smoothed_column(spx, x, height, window):
 def build_fade(strip, source_edge_x, anchor_on_right, out_path):
     height = strip.size[1]
     spx = strip.load()
-    raw_col = [spx[source_edge_x, y] for y in range(height)]
     smooth_col = darkest_smoothed_column(spx, source_edge_x, height, SMOOTH_WINDOW)
 
     # Built at full resolution with plain, undithered continuous values -
     # dithering happens after the resize below (see that comment), not
     # here, so the noise survives to the actually-displayed resolution
     # instead of being smoothed back out by the resize's own filtering.
+    #
+    # No raw-pixel anchor: an earlier version held the real tile-edge
+    # pixels exactly for the innermost few columns, for a perfect colour
+    # match at the seam. But those raw pixels carry whatever's really at
+    # that column - here, a real hint of Alaska/Chukotka coastline and
+    # city lights, right where the tile grid's edge happens to sit. Once
+    # stretched across a wide viewport's worth of screen space, that thin
+    # real sliver reads as a chunk of land in open ocean - the same
+    # problem Index 1.5/1.6 already fixed once for whole-tile duplication,
+    # recurring at a smaller scale. Starting the smoothed/darkened blend
+    # immediately at the seam instead (t=0 at dist 0, rather than holding
+    # raw pixels for ANCHOR_PX columns first) avoids that: the smoothed
+    # colour is already derived from this same column, so the seam colour
+    # match stays close, with no real coastline/light detail able to leak
+    # through and get magnified.
     arr = np.empty((height, FADE_W, 3), dtype=np.float64)
     for y in range(height):
-        raw_c = raw_col[y]
         smooth_c = smooth_col[y]
         for cx in range(FADE_W):
             dist_from_anchor_side = (FADE_W - 1 - cx) if anchor_on_right else cx
-            if dist_from_anchor_side < ANCHOR_PX:
-                arr[y, cx] = raw_c
-            else:
-                t = min((dist_from_anchor_side - ANCHOR_PX) / (FADE_W - ANCHOR_PX), 1.0)
-                arr[y, cx] = [smooth_c[k] + (DARK_BASE[k] - smooth_c[k]) * t for k in range(3)]
+            t = min(dist_from_anchor_side / FADE_W, 1.0)
+            arr[y, cx] = [smooth_c[k] + (DARK_BASE[k] - smooth_c[k]) * t for k in range(3)]
     img = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGB")
 
     # Downsample before saving: at full 8192px height this asset only ever
@@ -140,31 +161,19 @@ def build_fade(strip, source_edge_x, anchor_on_right, out_path):
     # look on this content - large flat, very dark, slowly-varying areas
     # where even a 1-unit rounding difference is a big relative jump. Doing
     # the downsample here with Pillow's own LANCZOS filter (a proper
-    # multi-tap resample, unlike relying on the browser) fixes that, at
-    # the cost of the anchor columns becoming a local average across a few
-    # neighbouring source rows rather than an exact match to one specific
-    # tile row - negligible given how gradually real content changes
-    # latitude-to-latitude at this zoom, and still far less visible than
-    # the blockiness it replaces.
+    # multi-tap resample, unlike relying on the browser) fixes that.
     img = img.resize((FADE_W, OUT_HEIGHT), Image.LANCZOS)
 
     # Dither now, at final resolution, for the same reason as _BAYER_8's
     # own comment above: this gradient changes by only a few 8-bit levels
     # across the whole image, so plain rounding leaves a visible 1-unit
-    # step at each level boundary. Anchor columns are left untouched so
-    # they still exactly match the real tile edge.
+    # step at each level boundary.
     out = np.array(img).astype(np.float64)
     for cx in range(FADE_W):
-        dist_from_anchor_side = (FADE_W - 1 - cx) if anchor_on_right else cx
-        if dist_from_anchor_side < ANCHOR_PX:
-            continue
         col_dither = _BAYER_8[np.arange(OUT_HEIGHT) % 8, cx % 8]
         out[:, cx] += col_dither[:, None]
     img = Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGB")
 
-    # Lossless: the anchor columns must match the real tile's own edge
-    # pixels exactly (Index 1.6/1.7), which lossy compression can't
-    # guarantee even at high quality.
     img.save(out_path, "WEBP", lossless=True, method=6)
     print(f"saved {out_path}")
 
@@ -174,12 +183,12 @@ def main():
     east_strip = stitch_column(N - 1)
 
     # West fade: sits further west than the map's own west edge (tile x=0,
-    # world lng -180). Anchor (real edge pixel) touches that edge -> anchor
-    # on the RIGHT of this fade image, fading to dark ocean on the left.
+    # world lng -180). The seam touches that edge on the RIGHT of this
+    # fade image, fading to dark ocean on the left.
     build_fade(west_strip, source_edge_x=0, anchor_on_right=True, out_path=f"{OUT_DIR}/night-map-edge-fade-west.webp")
 
     # East fade: sits further east than the map's own east edge (tile
-    # x=n-1, world lng +180). Anchor on the LEFT, fading to dark ocean on
+    # x=n-1, world lng +180). Seam on the LEFT, fading to dark ocean on
     # the right.
     build_fade(
         east_strip, source_edge_x=TILE_SIZE - 1, anchor_on_right=False, out_path=f"{OUT_DIR}/night-map-edge-fade-east.webp"
