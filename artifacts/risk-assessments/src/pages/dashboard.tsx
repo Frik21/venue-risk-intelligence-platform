@@ -237,25 +237,10 @@ function countVertices(svgPath: string): number {
 // it does not, and cannot, persist to disk by itself.
 type CountryAdjustment = { status: "review-required"; notes: string };
 
-// Australia Polygon Capture Tool (Index 2.0) - dev-only, temporary. Reuses
-// the calibration tool's live x/y point: every canvas click appends the
-// current point to australiaPolygonPoints, rendered as connected gold
-// dots, and a matching "M x y L x y ... Z" SVG path string is generated
-// live for copying into AUSTRALIA_FOCUS_PATH once captured accurately.
-const CAPTURE_AUSTRALIA_POLYGON = true;
-
-function buildAustraliaPolygonPath(points: { x: number; y: number }[]): string {
-  if (points.length === 0) return "";
-  const [first, ...rest] = points;
-  const segments = [`M ${first.x} ${first.y}`, ...rest.map((p) => `L ${p.x} ${p.y}`), "Z"];
-  return segments.join(" ");
-}
-
 function OperationalCanvas() {
   const showDebugLayerNumbers = false;
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [calibrationPoint, setCalibrationPoint] = useState<{ x: number; y: number } | null>(null);
-  const [australiaPolygonPoints, setAustraliaPolygonPoints] = useState<{ x: number; y: number }[]>([]);
 
   const [qaCountryIndex, setQaCountryIndex] = useState(0);
   const [qaShowFill, setQaShowFill] = useState(false);
@@ -325,14 +310,6 @@ function OperationalCanvas() {
   function handleCalibrationClick() {
     if (!calibrationPoint) return;
     console.log("Operational Canvas calibration point:", calibrationPoint);
-    if (CAPTURE_AUSTRALIA_POLYGON) {
-      setAustraliaPolygonPoints((points) => [...points, calibrationPoint]);
-    }
-  }
-
-  function handleResetAustraliaPoints(event: MouseEvent<HTMLButtonElement>) {
-    event.stopPropagation();
-    setAustraliaPolygonPoints([]);
   }
 
   return (
@@ -466,40 +443,6 @@ function OperationalCanvas() {
         </div>
       )}
 
-      {CAPTURE_AUSTRALIA_POLYGON && (
-        <>
-          <svg
-            className="australia-polygon-capture-overlay"
-            viewBox="0 0 1000 500"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-          >
-            {australiaPolygonPoints.length > 1 && (
-              <polyline
-                points={australiaPolygonPoints.map((p) => `${p.x},${p.y}`).join(" ")}
-                className="australia-polygon-capture-line"
-              />
-            )}
-            {australiaPolygonPoints.map((p, index) => (
-              <circle key={index} cx={p.x} cy={p.y} r={4} className="australia-polygon-capture-dot" />
-            ))}
-          </svg>
-
-          <div className="australia-polygon-capture-readout">
-            <div>Points captured: {australiaPolygonPoints.length}</div>
-            <div className="australia-polygon-capture-path">
-              {buildAustraliaPolygonPath(australiaPolygonPoints) || "(click the canvas to capture points)"}
-            </div>
-            <button
-              type="button"
-              className="australia-polygon-capture-reset"
-              onClick={handleResetAustraliaPoints}
-            >
-              Reset Australia Points
-            </button>
-          </div>
-        </>
-      )}
 
       {SHOW_COUNTRY_QA && qaCurrent && (
         <div className="country-qa-panel" onClick={(event) => event.stopPropagation()}>
