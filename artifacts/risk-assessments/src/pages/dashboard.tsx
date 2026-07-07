@@ -4,6 +4,9 @@ import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-reac
 // Background tone for the outer page wrapper (behind MapLayer).
 const OCEAN_COLOR = "#00081a";
 
+// Approved static base map image (dark night-world map).
+const BASE_MAP_IMAGE_URL = `${import.meta.env.BASE_URL}data/world-map-v17.png`;
+
 type Step = "login" | "preparing" | "brief" | "centre";
 
 export default function Dashboard() {
@@ -121,7 +124,9 @@ export default function Dashboard() {
 function MapLayer() {
   return (
     <div data-layer="1" className="absolute inset-0 z-[1] h-full w-full" style={{ backgroundColor: "#0B0F14" }}>
-      <div data-layer-name="base-map-layer" className="absolute inset-0 h-full w-full" />
+      <div data-layer-name="base-map-layer" className="absolute inset-0 h-full w-full overflow-hidden">
+        <img src={BASE_MAP_IMAGE_URL} alt="" className="h-full w-full object-cover" />
+      </div>
       <div data-layer-name="operational-layers" className="absolute inset-0 h-full w-full" />
       <div data-layer-name="operational-footprint-layer" className="absolute inset-0 h-full w-full" />
       <div data-layer-name="country-intelligence-layer" className="absolute inset-0 h-full w-full" />
