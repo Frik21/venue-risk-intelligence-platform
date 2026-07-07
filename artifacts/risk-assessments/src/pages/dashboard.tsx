@@ -185,6 +185,7 @@ function OperationalCanvas() {
   function handleCountryZoneClick(country: CountryTestZone) {
     handleCountryTestZoneClick(country);
     if (country.name === "Australia") {
+      console.log("AUSTRALIA CLICKED");
       setSelectedCountry(country.name);
     }
   }
@@ -221,14 +222,23 @@ function OperationalCanvas() {
               preserveAspectRatio="none"
               aria-hidden="true"
             >
-              {COUNTRY_TEST_ZONES.map((country) => (
-                <path
-                  key={country.isoCode}
-                  d={country.path}
-                  className="country-hit-zone"
-                  onClick={() => handleCountryZoneClick(country)}
-                />
-              ))}
+              {COUNTRY_TEST_ZONES.map((country) => {
+                const isAustralia = country.name === "Australia";
+                return (
+                  <path
+                    key={country.isoCode}
+                    d={country.path}
+                    className="country-hit-zone"
+                    pointerEvents={isAustralia ? "all" : undefined}
+                    style={
+                      isAustralia
+                        ? { fill: "rgba(255, 196, 87, 0.35)", stroke: "rgba(255, 196, 87, 0.8)", strokeWidth: 2 }
+                        : undefined
+                    }
+                    onClick={() => handleCountryZoneClick(country)}
+                  />
+                );
+              })}
             </svg>
           )}
           {layer.className === "operational-footprint-layer" && selectedCountry === "Australia" && (
