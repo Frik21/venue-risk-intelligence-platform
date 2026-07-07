@@ -4,9 +4,6 @@ import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-reac
 // Background tone for the outer page wrapper (behind MapLayer).
 const OCEAN_COLOR = "#00081a";
 
-// Approved static base map image (dark night-world map).
-const BASE_MAP_IMAGE_URL = `${import.meta.env.BASE_URL}data/world-map-v17.png`;
-
 type Step = "login" | "preparing" | "brief" | "centre";
 
 export default function Dashboard() {
@@ -119,19 +116,17 @@ export default function Dashboard() {
 }
 
 // LAYER 1: Operational Canvas foundation. Layered container structure for
-// the new map architecture - each sub-layer exists but renders no visible
-// content yet, stacked bottom to top.
+// the new map architecture - only base-map-layer renders visible content
+// (the approved static map); the rest exist but render nothing yet.
 function MapLayer() {
   return (
-    <div data-layer="1" className="absolute inset-0 z-[1] h-full w-full" style={{ backgroundColor: "#0B0F14" }}>
-      <div data-layer-name="base-map-layer" className="absolute inset-0 h-full w-full overflow-hidden">
-        <img src={BASE_MAP_IMAGE_URL} alt="" className="h-full w-full object-cover" />
-      </div>
-      <div data-layer-name="operational-layers" className="absolute inset-0 h-full w-full" />
-      <div data-layer-name="operational-footprint-layer" className="absolute inset-0 h-full w-full" />
-      <div data-layer-name="country-intelligence-layer" className="absolute inset-0 h-full w-full" />
-      <div data-layer-name="breathing-markers-layer" className="absolute inset-0 h-full w-full" />
-      <div data-layer-name="debug-layer-number-layer" className="absolute inset-0 h-full w-full" />
-    </div>
+    <section className="operational-canvas" aria-label="Operational Canvas">
+      <div className="canvas-layer base-map-layer" />
+      <div className="canvas-layer operational-layers" />
+      <div className="canvas-layer operational-footprint-layer" />
+      <div className="canvas-layer country-intelligence-layer" />
+      <div className="canvas-layer breathing-markers-layer" />
+      <div className="canvas-layer debug-layer-number-layer" />
+    </section>
   );
 }
