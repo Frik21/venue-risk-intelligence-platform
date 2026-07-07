@@ -191,60 +191,36 @@ const COUNTRY_HIT_ZONES: CountryHitZone[] = [
 // render nothing yet. operational-layers hosts the invisible country
 // selection engine (Index 1.6) - hit zones only, no visual change.
 function OperationalCanvas() {
-  const [selectedCountry, setSelectedCountry] = useState<CountryHitZone | null>(null);
+  const showDebugLayerNumbers = true;
 
-  function handleCountrySelect(country: CountryHitZone) {
-    setSelectedCountry(country);
-
-    console.log("Operational Canvas selected country:", {
-      name: country.name,
-      isoCode: country.isoCode,
-    });
-  }
+  const layers = [
+    { number: 1, label: "Base Map", className: "base-map-layer" },
+    { number: 2, label: "Operational Layers", className: "operational-layers" },
+    { number: 3, label: "Operational Footprint", className: "operational-footprint-layer" },
+    { number: 4, label: "Country Intelligence", className: "country-intelligence-layer" },
+    { number: 5, label: "Breathing Markers", className: "breathing-markers-layer" },
+    { number: 6, label: "Debug Layer Numbers", className: "debug-layer-number-layer" },
+  ];
 
   return (
     <section className="operational-canvas" aria-label="Operational Canvas">
-      {CANVAS_LAYERS.map((layer) => (
+      {layers.map((layer) => (
         <div
-          key={layer.id}
+          key={layer.number}
           className={`canvas-layer ${layer.className}`}
           data-layer-number={layer.number}
           data-layer-name={layer.label}
-        >
-          {layer.id === "operational-layers" && (
-            <svg
-              className="country-selection-engine"
-              viewBox="0 0 1000 500"
-              preserveAspectRatio="none"
-              aria-hidden="true"
-            >
-              {COUNTRY_HIT_ZONES.map((country) => (
-                <path
-                  key={country.id}
-                  d={country.path}
-                  className="country-hit-zone"
-                  onClick={() => handleCountrySelect(country)}
-                />
-              ))}
-            </svg>
-          )}
-        </div>
+        />
       ))}
 
-      {SHOW_DEBUG_LAYER_NUMBERS && (
+      {showDebugLayerNumbers && (
         <div className="debug-layer-badge-stack" aria-hidden="true">
-          {CANVAS_LAYERS.map((layer) => (
-            <div key={layer.id} className="debug-layer-badge">
+          {layers.map((layer) => (
+            <div key={layer.number} className="debug-layer-badge">
               <span>{layer.number}</span>
               <strong>{layer.label}</strong>
             </div>
           ))}
-        </div>
-      )}
-
-      {selectedCountry && (
-        <div className="selected-country-dev-readout" aria-hidden="true">
-          {selectedCountry.name} / {selectedCountry.isoCode}
         </div>
       )}
     </section>
