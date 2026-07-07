@@ -163,11 +163,45 @@ const CANVAS_LAYERS: CanvasLayer[] = [
   },
 ];
 
+type CountryHitZone = {
+  id: string;
+  name: string;
+  isoCode: string;
+  path: string;
+};
+
+const COUNTRY_HIT_ZONES: CountryHitZone[] = [
+  { id: "canada", name: "Canada", isoCode: "CAN", path: "M104 58 L330 54 L365 123 L318 158 L154 150 L92 102 Z" },
+  { id: "united-states", name: "United States", isoCode: "USA", path: "M128 150 L315 145 L348 214 L285 248 L151 226 L102 185 Z" },
+  { id: "brazil", name: "Brazil", isoCode: "BRA", path: "M350 270 L430 286 L460 350 L416 425 L350 392 L326 318 Z" },
+  { id: "united-kingdom", name: "United Kingdom", isoCode: "GBR", path: "M468 126 L494 126 L502 156 L480 166 L463 148 Z" },
+  { id: "france", name: "France", isoCode: "FRA", path: "M480 164 L524 164 L532 199 L502 218 L470 194 Z" },
+  { id: "germany", name: "Germany", isoCode: "DEU", path: "M512 142 L548 144 L552 180 L524 196 L503 172 Z" },
+  { id: "south-africa", name: "South Africa", isoCode: "ZAF", path: "M506 356 L570 360 L592 388 L560 420 L505 404 Z" },
+  { id: "russia", name: "Russia", isoCode: "RUS", path: "M545 68 L914 64 L934 146 L760 172 L574 144 Z" },
+  { id: "india", name: "India", isoCode: "IND", path: "M654 230 L710 240 L720 308 L680 346 L644 286 Z" },
+  { id: "china", name: "China", isoCode: "CHN", path: "M674 164 L805 174 L820 244 L740 278 L662 234 Z" },
+  { id: "japan", name: "Japan", isoCode: "JPN", path: "M835 190 L866 205 L862 255 L828 246 Z" },
+  { id: "australia", name: "Australia", isoCode: "AUS", path: "M758 330 L832 324 L876 350 L866 396 L814 416 L754 390 Z" },
+];
+
 // Operational Canvas Engine foundation - six-layer stack for future map
 // intelligence features to plug into. Only base-map-layer renders visible
-// content (the approved static map); layers 2-6 exist structurally but
-// render nothing yet.
+// content (the approved static map); layers 3-6 exist structurally but
+// render nothing yet. operational-layers hosts the invisible country
+// selection engine (Index 1.6) - hit zones only, no visual change.
 function OperationalCanvas() {
+  const [selectedCountry, setSelectedCountry] = useState<CountryHitZone | null>(null);
+
+  function handleCountrySelect(country: CountryHitZone) {
+    setSelectedCountry(country);
+
+    console.log("Operational Canvas selected country:", {
+      name: country.name,
+      isoCode: country.isoCode,
+    });
+  }
+
   return (
     <section className="operational-canvas" aria-label="Operational Canvas">
       {CANVAS_LAYERS.map((layer) => (
@@ -176,7 +210,25 @@ function OperationalCanvas() {
           className={`canvas-layer ${layer.className}`}
           data-layer-number={layer.number}
           data-layer-name={layer.label}
-        />
+        >
+          {layer.id === "operational-layers" && (
+            <svg
+              className="country-selection-engine"
+              viewBox="0 0 1000 500"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              {COUNTRY_HIT_ZONES.map((country) => (
+                <path
+                  key={country.id}
+                  d={country.path}
+                  className="country-hit-zone"
+                  onClick={() => handleCountrySelect(country)}
+                />
+              ))}
+            </svg>
+          )}
+        </div>
       ))}
 
       {SHOW_DEBUG_LAYER_NUMBERS && (
@@ -187,6 +239,12 @@ function OperationalCanvas() {
               <strong>{layer.label}</strong>
             </div>
           ))}
+        </div>
+      )}
+
+      {selectedCountry && (
+        <div className="selected-country-dev-readout" aria-hidden="true">
+          {selectedCountry.name} / {selectedCountry.isoCode}
         </div>
       )}
     </section>
