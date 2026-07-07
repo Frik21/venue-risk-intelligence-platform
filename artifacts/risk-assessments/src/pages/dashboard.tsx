@@ -187,6 +187,20 @@ const AUSTRALIA_FOCUS_CENTER_SHIFT = "translate(-316.67, -117.67)";
 // focus logic - purely a measurement aid.
 const SHOW_CANVAS_CALIBRATION = true;
 
+// Operational Geometry Alignment Engine (Index 2.2C). The runtime
+// transform that keeps invisible COUNTRY_REGISTRY geometry locked to the
+// approved base map (world-map-v17.png) at any viewport size, without
+// ever touching the map itself - per the Product Constitution, geometry
+// adapts to the map, never the reverse. The registry is pre-projected
+// into the full square 1000x1000 source-image space (Index 2.2B, no
+// crop baked in), and every SVG that renders it uses this exact
+// viewBox/fit pair - "xMidYMid slice" is the SVG-native equivalent of
+// the image's own `object-fit: cover; object-position: center center`,
+// so both are scaled/cropped by the identical browser algorithm on
+// every resize. No JS resize listener, no measured offsets, no drift.
+const OPERATIONAL_GEOMETRY_VIEWBOX = "0 0 1000 1000";
+const OPERATIONAL_GEOMETRY_FIT = "xMidYMid slice";
+
 // Country Boundary Debug Mode (Index 2.1) - temporary. Draws every
 // COUNTRY_REGISTRY boundary (thin gold outline, transparent fill) so
 // alignment against the approved base map can be visually verified.
@@ -392,8 +406,8 @@ function OperationalCanvas() {
           {layer.className === "country-intelligence-layer" && SHOW_COUNTRY_BOUNDARIES && (
             <svg
               className="country-boundary-debug-overlay"
-              viewBox="0 0 1000 1000"
-              preserveAspectRatio="xMidYMid slice"
+              viewBox={OPERATIONAL_GEOMETRY_VIEWBOX}
+              preserveAspectRatio={OPERATIONAL_GEOMETRY_FIT}
               aria-hidden="true"
             >
               {COUNTRY_REGISTRY.map((country) => (
@@ -404,8 +418,8 @@ function OperationalCanvas() {
           {layer.className === "country-intelligence-layer" && SHOW_COUNTRY_QA && qaCurrent && (
             <svg
               className="country-qa-overlay"
-              viewBox="0 0 1000 1000"
-              preserveAspectRatio="xMidYMid slice"
+              viewBox={OPERATIONAL_GEOMETRY_VIEWBOX}
+              preserveAspectRatio={OPERATIONAL_GEOMETRY_FIT}
               aria-hidden="true"
               style={{ opacity: qaOpacity }}
             >
