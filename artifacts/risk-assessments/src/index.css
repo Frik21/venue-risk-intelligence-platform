@@ -169,34 +169,298 @@
     @apply bg-background text-foreground;
   }
 }
-.venueguard-breathing-marker {
-  animation: venueguard-marker-breathe 3.8s ease-in-out infinite;
-  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.75)) drop-shadow(0 0 16px rgba(56, 189, 248, 0.4));
+
+.operational-canvas {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #0b0f14;
+  isolation: isolate;
 }
 
-@keyframes venueguard-marker-breathe {
-  0%, 100% {
-    opacity: 0.72;
-    stroke-width: 2;
-  }
-
-  50% {
-    opacity: 1;
-    stroke-width: 4;
-  }
+.canvas-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
-.leaflet-tooltip.venueguard-marker-tooltip {
-  background: rgba(5, 8, 22, 0.95);
-  color: #e2e8f0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
-  padding: 10px 14px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+.base-map-layer {
+  z-index: 1;
+  pointer-events: none;
+}
+
+.approved-base-map-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center center;
+}
+
+.operational-layers {
+  z-index: 2;
+  pointer-events: auto;
+}
+
+.operational-footprint-layer {
+  z-index: 3;
+  pointer-events: none;
+}
+
+.country-intelligence-layer {
+  z-index: 4;
+  pointer-events: none;
+}
+
+/* Country Boundary Debug Mode (Index 2.1) - temporary, alignment
+   verification only. Transparent fill, thin gold outline, no hover. */
+.country-boundary-debug-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.country-boundary-debug-path {
+  fill: none;
+  stroke: rgba(255, 196, 87, 0.55);
+  stroke-width: 0.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.breathing-markers-layer {
+  z-index: 5;
+  pointer-events: none;
+}
+
+.debug-layer-number-layer {
+  z-index: 6;
+  pointer-events: none;
+}
+
+.debug-layer-badge-stack {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.debug-layer-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 196, 87, 0.28);
+  border-radius: 999px;
+  background: rgba(11, 15, 20, 0.72);
+  color: rgba(255, 236, 198, 0.86);
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  backdrop-filter: blur(8px);
+}
+
+.debug-layer-badge span {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(255, 196, 87, 0.18);
+  color: rgba(255, 214, 143, 0.96);
+  font-weight: 700;
+}
+
+.debug-layer-badge strong {
+  font-weight: 500;
+}
+
+.country-selection-engine {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.country-hit-zone {
+  fill: transparent;
+  stroke: transparent;
+  cursor: pointer;
+}
+
+.country-hit-zone:hover,
+.country-hit-zone:focus,
+.country-hit-zone:active {
+  fill: transparent;
+  stroke: transparent;
+  outline: none;
+}
+
+.selected-country-dev-readout {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 20;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 196, 87, 0.22);
+  border-radius: 999px;
+  background: rgba(11, 15, 20, 0.72);
+  color: rgba(255, 236, 198, 0.72);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+
+.canvas-calibration-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.canvas-calibration-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 196, 87, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 196, 87, 0.16) 1px, transparent 1px);
+  background-size: 5% 5%;
+}
+
+.canvas-calibration-crosshair-x,
+.canvas-calibration-crosshair-y {
+  position: absolute;
+  background: rgba(255, 196, 87, 0.9);
+}
+
+.canvas-calibration-crosshair-x {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+.canvas-calibration-crosshair-y {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.canvas-calibration-readout {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 196, 87, 0.35);
+  border-radius: 8px;
+  background: rgba(11, 15, 20, 0.82);
+  color: rgba(255, 236, 198, 0.95);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.45;
+  letter-spacing: 0.04em;
+  backdrop-filter: blur(8px);
 }
 
-.leaflet-tooltip.venueguard-marker-tooltip::before {
-  display: none;
+/* Country Boundary QA Mode (Index 2.2) - product verification tool,
+   development only. Shows exactly one country's boundary at a time. */
+.country-qa-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.country-qa-path {
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.country-qa-panel {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 30;
+  width: 260px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 196, 87, 0.35);
+  border-radius: 10px;
+  background: rgba(11, 15, 20, 0.88);
+  color: rgba(255, 236, 198, 0.95);
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0.03em;
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.country-qa-panel-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+}
+
+.country-qa-panel-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.country-qa-panel-row button {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 196, 87, 0.35);
+  border-radius: 6px;
+  background: rgba(255, 196, 87, 0.12);
+  color: rgba(255, 236, 198, 0.95);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.country-qa-panel-row input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid rgba(255, 196, 87, 0.25);
+  border-radius: 6px;
+  background: rgba(11, 15, 20, 0.6);
+  color: rgba(255, 236, 198, 0.95);
+  font-size: 11px;
+}
+
+.country-qa-panel-row label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.country-qa-panel-row input[type="range"] {
+  flex: 1;
+}
+
+.country-qa-panel-details {
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 196, 87, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: rgba(255, 236, 198, 0.75);
+}
+
+.country-qa-panel-flagged {
+  color: rgba(255, 140, 140, 0.9);
+  font-weight: 600;
 }

@@ -1,0 +1,20 @@
+Country Boundary Accuracy Pipeline - validation report (Index 2.1)
+
+Source dataset: operational-country-borders.json (Natural Earth-derived, already in-repo)
+Projection: Web Mercator, custom seam at 191.1deg (=-168.9deg), clamped to +-85.05112877980659deg lat,
+            projected into the full square source-image space (1000x1000, matching the
+            2048x2048 world-map-v17.png 1:1, no crop baked in - Index 2.2B). Consuming SVG
+            overlays use viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid slice", the
+            SVG-native equivalent of the image's object-fit:cover, so both stay aligned at
+            any live viewport aspect ratio.
+Simplification: Douglas-Peucker, tolerance 0.5px in the projected 1000x1000 space
+                (rings under 30 points kept exactly as sourced, unsimplified,
+                 to avoid collapsing small nations below a valid ring)
+
+Total features in source: 241
+Features with no id at all (excluded, not counted as errors): 5
+Duplicate-id features dropped (kept the larger geometry per id): 1
+Successfully converted: 235
+Requiring manual adjustment/skipped: 0
+Duplicate ids (smaller/degenerate copy dropped): 036
+Output file: /home/user/venue-risk-intelligence-platform/artifacts/risk-assessments/public/data/../../src/lib/country-registry.ts (744475 bytes, 727.0 KB)
