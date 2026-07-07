@@ -189,11 +189,15 @@
 
 .base-map-layer {
   z-index: 1;
-  background-image: url("/data/world-map-v17.png");
-  background-size: cover;
-  background-position: center center;
-  background-repeat: no-repeat;
   pointer-events: none;
+}
+
+.approved-base-map-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center center;
 }
 
 .operational-layers {

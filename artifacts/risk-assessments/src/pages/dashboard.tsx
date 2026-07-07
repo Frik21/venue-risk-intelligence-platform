@@ -210,7 +210,17 @@ function OperationalCanvas() {
           className={`canvas-layer ${layer.className}`}
           data-layer-number={layer.number}
           data-layer-name={layer.label}
-        />
+        >
+          {layer.className === "base-map-layer" && (
+            <img
+              className="approved-base-map-image"
+              src="/data/world-map-v17.png"
+              alt=""
+              draggable={false}
+              aria-hidden="true"
+            />
+          )}
+        </div>
       ))}
 
       {showDebugLayerNumbers && (
