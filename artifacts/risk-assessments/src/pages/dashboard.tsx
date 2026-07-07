@@ -4,6 +4,9 @@ import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-reac
 // Background tone for the outer page wrapper (behind MapLayer).
 const OCEAN_COLOR = "#00081a";
 
+// Approved static Operational Canvas base image (dark blue/gold night map).
+const OPERATIONAL_CANVAS_MAP_URL = `${import.meta.env.BASE_URL}data/world-map-v17.png`;
+
 type Step = "login" | "preparing" | "brief" | "centre";
 
 export default function Dashboard() {
@@ -118,20 +121,13 @@ export default function Dashboard() {
   );
 }
 
-// LAYER 1: Map - rendering removed pending a rebuild (see git history for
-// the previous Leaflet/night-map-tiles implementation). Placeholder only;
-// no map graphics, markers, or interaction until the new implementation
-// lands.
+// LAYER 1: Map - static approved Operational Canvas base image only. No
+// zoom, no country selection/highlight, no panels, no labels, no pins, no
+// search - those are later layers, not built yet.
 function MapLayer() {
   return (
-    <div
-      data-layer="1"
-      className="absolute inset-0 z-[1] h-full w-full flex items-center justify-center"
-      style={{ backgroundColor: "#02070F" }}
-    >
-      <p style={{ color: "#6B7A90" }} className="text-sm font-medium">
-        Map rebuild in progress
-      </p>
+    <div data-layer="1" className="absolute inset-0 z-[1] h-full w-full overflow-hidden">
+      <img src={OPERATIONAL_CANVAS_MAP_URL} alt="" className="h-full w-full object-cover" />
     </div>
   );
 }
