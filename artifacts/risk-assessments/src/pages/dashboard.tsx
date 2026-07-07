@@ -191,7 +191,7 @@ const COUNTRY_HIT_ZONES: CountryHitZone[] = [
 // render nothing yet. operational-layers hosts the invisible country
 // selection engine (Index 1.6) - hit zones only, no visual change.
 function OperationalCanvas() {
-  const showDebugLayerNumbers = true;
+  const showDebugLayerNumbers = false;
 
   const layers = [
     { number: 1, label: "Base Map", className: "base-map-layer" },
