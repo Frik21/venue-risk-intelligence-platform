@@ -248,6 +248,23 @@
   pointer-events: none;
 }
 
+/* Country Boundary Debug Mode (Index 2.1) - temporary, alignment
+   verification only. Transparent fill, thin gold outline, no hover. */
+.country-boundary-debug-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.country-boundary-debug-path {
+  fill: none;
+  stroke: rgba(255, 196, 87, 0.55);
+  stroke-width: 0.5;
+  vector-effect: non-scaling-stroke;
+}
+
 .breathing-markers-layer {
   z-index: 5;
   pointer-events: none;

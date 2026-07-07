@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { MouseEvent } from "react";
 import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-react";
+import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 
 // Background tone for the outer page wrapper (behind MapLayer).
 const OCEAN_COLOR = "#00081a";
@@ -186,6 +187,14 @@ const AUSTRALIA_FOCUS_CENTER_SHIFT = "translate(-316.67, -117.67)";
 // focus logic - purely a measurement aid.
 const SHOW_CANVAS_CALIBRATION = true;
 
+// Country Boundary Debug Mode (Index 2.1) - temporary. Draws every
+// COUNTRY_REGISTRY boundary (thin gold outline, transparent fill) so
+// alignment against the approved base map can be visually verified.
+// Never affects production behaviour when false - the registry itself
+// stays loaded either way (it's used for selection/masking, not just
+// this debug view), only the outline rendering is gated.
+const SHOW_COUNTRY_BOUNDARIES = true;
+
 // Australia Polygon Capture Tool (Index 2.0) - dev-only, temporary. Reuses
 // the calibration tool's live x/y point: every canvas click appends the
 // current point to australiaPolygonPoints, rendered as connected gold
@@ -301,6 +310,18 @@ function OperationalCanvas() {
                 </g>
               </svg>
             </>
+          )}
+          {layer.className === "country-intelligence-layer" && SHOW_COUNTRY_BOUNDARIES && (
+            <svg
+              className="country-boundary-debug-overlay"
+              viewBox="0 0 1000 500"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              {COUNTRY_REGISTRY.map((country) => (
+                <path key={country.id} d={country.svgPath} className="country-boundary-debug-path" />
+              ))}
+            </svg>
           )}
         </div>
       ))}
