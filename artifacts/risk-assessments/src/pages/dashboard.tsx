@@ -129,7 +129,6 @@ type CountryTestZone = {
 };
 
 const COUNTRY_TEST_ZONES: CountryTestZone[] = [
-  { name: "Australia", isoCode: "AUS", path: "M758 330 L832 324 L876 350 L866 396 L814 416 L754 390 Z" },
   { name: "United States", isoCode: "USA", path: "M128 150 L315 145 L348 214 L285 248 L151 226 L102 185 Z" },
   { name: "United Kingdom", isoCode: "GBR", path: "M468 126 L494 126 L502 156 L480 166 L463 148 Z" },
   { name: "South Africa", isoCode: "ZAF", path: "M506 356 L570 360 L592 388 L560 420 L505 404 Z" },
@@ -165,20 +164,6 @@ const CANVAS_LAYERS: OperationalCanvasLayer[] = [
   { id: "breathing-markers", order: 5, label: "Breathing Markers", className: "breathing-markers-layer", visible: true },
   { id: "debug-layer-numbers", order: 6, label: "Debug Layer Numbers", className: "debug-layer-number-layer", visible: true },
 ].sort((a, b) => a.order - b.order);
-
-// Country Focus Engine (Index 1.9/1.9A) - Australia proof only. Clicking
-// Australia's existing invisible hit zone additionally sets
-// selectedCountry, which blurs/dims the shared base map image and shows
-// a flat gold Australia-shaped proof, rigidly translated (no zoom/scale)
-// so its silhouette lands centred on the canvas regardless of the
-// underlying map's real geographic position. This is a visibility proof
-// only - not perfect map-image clipping (that's a later ticket). United
-// States/United Kingdom/South Africa hit zones are untouched - they
-// still only log on click.
-const AUSTRALIA_FOCUS_PATH = "M758 330 L832 324 L876 350 L866 396 L814 416 L754 390 Z";
-// Average of the path's own vertices, in the same 0-1000/0-500 viewBox
-// units as the hit zones - the shift below re-centres exactly this point.
-const AUSTRALIA_FOCUS_CENTER_SHIFT = "translate(-316.67, -117.67)";
 
 // Operational Canvas Calibration Tool (Index 1.9) - dev-only, temporary.
 // Lets country hit-zone paths be aligned exactly to the rendered PNG by
@@ -239,7 +224,6 @@ type CountryAdjustment = { status: "review-required"; notes: string };
 
 function OperationalCanvas() {
   const showDebugLayerNumbers = false;
-  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [calibrationPoint, setCalibrationPoint] = useState<{ x: number; y: number } | null>(null);
 
   const [qaCountryIndex, setQaCountryIndex] = useState(0);
@@ -292,14 +276,6 @@ function OperationalCanvas() {
     });
   }
 
-  function handleCountryZoneClick(country: CountryTestZone) {
-    handleCountryTestZoneClick(country);
-    if (country.name === "Australia") {
-      console.log("AUSTRALIA CLICKED");
-      setSelectedCountry(country.name);
-    }
-  }
-
   function handleCalibrationMove(event: MouseEvent<HTMLElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
     const x = Math.round(((event.clientX - rect.left) / rect.width) * 1000);
@@ -314,7 +290,7 @@ function OperationalCanvas() {
 
   return (
     <section
-      className={selectedCountry ? "operational-canvas is-country-focused" : "operational-canvas"}
+      className="operational-canvas"
       aria-label="Operational Canvas"
       onMouseMove={SHOW_CANVAS_CALIBRATION ? handleCalibrationMove : undefined}
       onClick={SHOW_CANVAS_CALIBRATION ? handleCalibrationClick : undefined}
@@ -328,11 +304,7 @@ function OperationalCanvas() {
         >
           {layer.className === "base-map-layer" && (
             <img
-              className={
-                selectedCountry
-                  ? "approved-base-map-image approved-base-map-image--focused"
-                  : "approved-base-map-image"
-              }
+              className="approved-base-map-image"
               src="/data/world-map-v17.png"
               alt=""
               draggable={false}
@@ -346,39 +318,15 @@ function OperationalCanvas() {
               preserveAspectRatio="none"
               aria-hidden="true"
             >
-              {COUNTRY_TEST_ZONES.map((country) => {
-                const isAustralia = country.name === "Australia";
-                return (
-                  <path
-                    key={country.isoCode}
-                    d={country.path}
-                    className="country-hit-zone"
-                    pointerEvents={isAustralia ? "all" : undefined}
-                    style={
-                      isAustralia
-                        ? { fill: "rgba(255, 196, 87, 0.35)", stroke: "rgba(255, 196, 87, 0.8)", strokeWidth: 2 }
-                        : undefined
-                    }
-                    onClick={() => handleCountryZoneClick(country)}
-                  />
-                );
-              })}
+              {COUNTRY_TEST_ZONES.map((country) => (
+                <path
+                  key={country.isoCode}
+                  d={country.path}
+                  className="country-hit-zone"
+                  onClick={() => handleCountryTestZoneClick(country)}
+                />
+              ))}
             </svg>
-          )}
-          {layer.className === "operational-footprint-layer" && selectedCountry === "Australia" && (
-            <>
-              <div className="country-focus-dim-overlay" aria-hidden="true" />
-              <svg
-                className="country-focus-shape"
-                viewBox="0 0 1000 500"
-                preserveAspectRatio="none"
-                aria-hidden="true"
-              >
-                <g transform={AUSTRALIA_FOCUS_CENTER_SHIFT}>
-                  <path d={AUSTRALIA_FOCUS_PATH} />
-                </g>
-              </svg>
-            </>
           )}
           {layer.className === "country-intelligence-layer" && SHOW_COUNTRY_BOUNDARIES && (
             <svg

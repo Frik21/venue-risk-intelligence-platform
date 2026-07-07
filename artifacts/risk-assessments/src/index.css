@@ -200,39 +200,6 @@
   object-position: center center;
 }
 
-/* Country Focus Engine (Index 1.9/1.9A): blurs/dims the shared base map
-   while a country focus is active, plus a full-screen dim/blur overlay
-   and a flat gold shape as a visibility proof - not animated yet, and not
-   yet clipped to the real map image (a later ticket). */
-.approved-base-map-image--focused {
-  filter: blur(10px) brightness(0.45);
-}
-
-.country-focus-dim-overlay {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 10;
-  background: rgba(11, 15, 20, 0.55);
-  backdrop-filter: blur(6px);
-  pointer-events: none;
-}
-
-.country-focus-shape {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 11;
-  pointer-events: none;
-}
-
-.country-focus-shape path {
-  fill: rgba(255, 196, 87, 0.55);
-  stroke: none;
-}
-
 .operational-layers {
   z-index: 2;
   pointer-events: auto;
