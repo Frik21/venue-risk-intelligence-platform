@@ -392,8 +392,8 @@ function OperationalCanvas() {
           {layer.className === "country-intelligence-layer" && SHOW_COUNTRY_BOUNDARIES && (
             <svg
               className="country-boundary-debug-overlay"
-              viewBox="0 0 1000 500"
-              preserveAspectRatio="none"
+              viewBox="0 0 1000 1000"
+              preserveAspectRatio="xMidYMid slice"
               aria-hidden="true"
             >
               {COUNTRY_REGISTRY.map((country) => (
@@ -404,8 +404,8 @@ function OperationalCanvas() {
           {layer.className === "country-intelligence-layer" && SHOW_COUNTRY_QA && qaCurrent && (
             <svg
               className="country-qa-overlay"
-              viewBox="0 0 1000 500"
-              preserveAspectRatio="none"
+              viewBox="0 0 1000 1000"
+              preserveAspectRatio="xMidYMid slice"
               aria-hidden="true"
               style={{ opacity: qaOpacity }}
             >

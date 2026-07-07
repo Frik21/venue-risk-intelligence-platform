@@ -7,10 +7,11 @@
 # geometry already used by this project (operational-country-borders.json)
 # into VenueGuard's own internal Country Registry - a plain TS array of
 # {id, iso2, iso3, name, svgPath, boundingBox}, pre-projected into the
-# same 1000x500 coordinate space the Operational Canvas's hit-zone/
-# calibration/capture tools already use, and pre-simplified. No GeoJSON,
-# no projection math, ships to the browser - it's an import-time-only
-# format, per the ticket's own "GeoJSON is an import format only" rule.
+# full square 1000x1000 source-image space (Index 2.2B - matches
+# world-map-v17.png's own 2048x2048 square 1:1, no crop assumption baked
+# in) and pre-simplified. No GeoJSON, no projection math, ships to the
+# browser - it's an import-time-only format, per the ticket's own
+# "GeoJSON is an import format only" rule.
 #
 # ISO 3166-1 numeric->alpha/name metadata isn't present in the borders
 # file itself (every feature's `properties` is empty; only a numeric
@@ -39,18 +40,24 @@ MERCATOR_LAT_LIMIT = 85.05112877980659
 
 # world-map-v17.png is a square (2048x2048) standard Web Mercator render,
 # clamped to +-MERCATOR_LAT_LIMIT over its full height - i.e. no unused
-# polar margin. The Operational Canvas's existing hit-zone/calibration
-# system (Index 1.6-2.0) already assumes this square image is displayed
-# via object-fit:cover inside the 2:1 (1000x500) viewBox convention its
-# own hand-authored test zones were calibrated against: covering a 2:1
-# viewport with a 1:1 source crops symmetrically to the middle 50% of the
-# source's height (no horizontal crop, since width is the binding
-# dimension for a square source in a wider-than-square container). That
-# same assumption is reproduced here, not invented independently, so
-# generated boundaries land in the same space the existing hand-typed
-# test zones and calibration tool already use.
-Y_CROP_LO = 0.25
-Y_CROP_HI = 0.75
+# polar margin. Index 2.1 projected this into a 1000x500 space assuming a
+# fixed 2:1 crop of that square image (the middle 50% of its height), to
+# match the Operational Canvas's existing hit-zone/calibration viewBox
+# convention. That assumption broke (Index 2.2A) because the canvas
+# container is `width:100%; height:100vh` - it takes on the live browser
+# window's aspect ratio, not a fixed 2:1 - while the base image is
+# rendered with `object-fit:cover`, whose true visible crop fraction is
+# `1/aspectRatio` and therefore changes on every resize. No single build
+# time constant can be correct for every runtime aspect ratio.
+#
+# Index 2.2B fixes this by not cropping at all here: the registry is
+# generated in the FULL square source-image space (1000x1000, matching
+# the image's own 2048x2048 square 1:1), with no crop assumption baked
+# in. The consuming SVG overlays use viewBox="0 0 1000 1000" with
+# preserveAspectRatio="xMidYMid slice" - the SVG-native equivalent of
+# object-fit:cover - so the boundary overlay and the base image are
+# scaled/cropped by the exact same algorithm at render time, for any
+# live viewport aspect ratio, with no JS resize handling needed.
 
 
 def mercator_y_fraction(lat_deg):
@@ -63,9 +70,8 @@ def mercator_y_fraction(lat_deg):
 def project(lng, lat):
     x_frac = (lng - LEFT_EDGE) / 360
     clamped_lat = max(-MERCATOR_LAT_LIMIT, min(MERCATOR_LAT_LIMIT, lat))
-    y_frac_full = mercator_y_fraction(clamped_lat)
-    y_frac = (y_frac_full - Y_CROP_LO) / (Y_CROP_HI - Y_CROP_LO)
-    return x_frac * 1000, y_frac * 500
+    y_frac = mercator_y_fraction(clamped_lat)
+    return x_frac * 1000, y_frac * 1000
 
 
 # Antimeridian unwrap/align - ported directly from dashboard.tsx's own
@@ -160,7 +166,7 @@ def unwrap_geometry(geometry):
 
 
 # Standard Douglas-Peucker simplification, run in the already-projected
-# 1000x500 space (so tolerance is a fixed, meaningful pixel-ish distance
+# 1000x1000 space (so tolerance is a fixed, meaningful pixel-ish distance
 # regardless of a country's real-world size), to keep the generated file
 # a reasonable size - country borders are only ever used for invisible
 # hit-testing/masking (never displayed at full fidelity), so sub-pixel
@@ -442,14 +448,16 @@ def main():
         "// GENERATED FILE - do not edit by hand. Regenerate via",
         "// public/data/generate-country-registry.py.",
         "//",
-        "// VenueGuard's own internal Country Registry (Index 2.1) - converted",
-        "// offline from the real Natural Earth-derived",
-        "// operational-country-borders.json, pre-projected into the same",
-        "// 1000x500 coordinate space the Operational Canvas's hit-zone/",
-        "// calibration/capture tools already use, and pre-simplified. No",
-        "// GeoJSON, no projection math, ships to the browser - these paths are",
-        "// NOT for display, only for country selection/masking/isolation/",
-        "// intelligence-layer use.",
+        "// VenueGuard's own internal Country Registry (Index 2.1, reprojected",
+        "// Index 2.2B) - converted offline from the real Natural Earth-derived",
+        "// operational-country-borders.json, pre-projected into the full square",
+        "// 1000x1000 source-image space (matching world-map-v17.png's own",
+        "// 2048x2048 square 1:1, no crop assumption baked in) and pre-",
+        "// simplified. No GeoJSON, no projection math, ships to the browser -",
+        "// these paths are NOT for display, only for country selection/",
+        "// masking/isolation/intelligence-layer use. Consuming SVG overlays",
+        "// must use viewBox=\"0 0 1000 1000\" preserveAspectRatio=\"xMidYMid",
+        "// slice\" to stay aligned with the base image's object-fit:cover.",
         "export interface CountryDefinition {",
         "  id: string;",
         "  iso2: string;",
@@ -492,9 +500,12 @@ def main():
         "",
         f"Source dataset: operational-country-borders.json (Natural Earth-derived, already in-repo)",
         f"Projection: Web Mercator, custom seam at {SEAM}deg (={LEFT_EDGE}deg), clamped to +-{MERCATOR_LAT_LIMIT}deg lat,",
-        f"            remapped to the Operational Canvas's existing 1000x500 space assuming a 2:1",
-        f"            object-fit:cover crop of the square world-map-v17.png (middle 50% of Mercator Y visible)",
-        f"Simplification: Douglas-Peucker, tolerance {SIMPLIFY_TOLERANCE_PX}px in the projected 1000x500 space",
+        f"            projected into the full square source-image space (1000x1000, matching the",
+        f"            2048x2048 world-map-v17.png 1:1, no crop baked in - Index 2.2B). Consuming SVG",
+        f"            overlays use viewBox=\"0 0 1000 1000\" preserveAspectRatio=\"xMidYMid slice\", the",
+        f"            SVG-native equivalent of the image's object-fit:cover, so both stay aligned at",
+        f"            any live viewport aspect ratio.",
+        f"Simplification: Douglas-Peucker, tolerance {SIMPLIFY_TOLERANCE_PX}px in the projected 1000x1000 space",
         f"                (rings under {SIMPLIFY_MIN_RING_POINTS} points kept exactly as sourced, unsimplified,",
         f"                 to avoid collapsing small nations below a valid ring)",
         "",
