@@ -129,6 +129,35 @@ _GRADIENT_R = np.array([c[0] for _, c in _GRADIENT_STOPS])
 _GRADIENT_G = np.array([c[1] for _, c in _GRADIENT_STOPS])
 _GRADIENT_B = np.array([c[2] for _, c in _GRADIENT_STOPS])
 
+# The gradient above changes brightness very slowly across a huge stretched
+# area (a handful of 8-bit levels over the whole visible ocean), so plain
+# rounding to uint8 produces flat bands with a hard 1-unit step at each
+# level boundary - visible as blocky "tiling" even though the underlying
+# curve and the tiles' own shared edges are already correct (this is
+# quantization banding, not a seam between tiles). Ordered (Bayer)
+# dithering breaks each hard step into a fine dot pattern instead, which
+# reads as smooth to the eye. The matrix is indexed by each pixel's GLOBAL
+# world coordinate (px/py, already absolute rather than tile-relative), so
+# the dither pattern tiles seamlessly across tile boundaries exactly like
+# the gradient itself does.
+_BAYER_8 = (
+    np.array(
+        [
+            [0, 32, 8, 40, 2, 34, 10, 42],
+            [48, 16, 56, 24, 50, 18, 58, 26],
+            [12, 44, 4, 36, 14, 46, 6, 38],
+            [60, 28, 52, 20, 62, 30, 54, 22],
+            [3, 35, 11, 43, 1, 33, 9, 41],
+            [51, 19, 59, 27, 49, 17, 57, 25],
+            [15, 47, 7, 39, 13, 45, 5, 37],
+            [63, 31, 55, 23, 61, 29, 53, 21],
+        ],
+        dtype=np.float64,
+    )
+    / 64.0
+    - 0.5
+)
+
 
 def ocean_background_for_tile(tx, ty, z):
     """RGB array (TILE_SIZE, TILE_SIZE, 3) uint8 - the ocean's own
@@ -157,7 +186,9 @@ def ocean_background_for_tile(tx, ty, z):
     r = np.interp(dist, _GRADIENT_DISTS, _GRADIENT_R, left=_GRADIENT_R[0], right=_GRADIENT_R[-1])
     g = np.interp(dist, _GRADIENT_DISTS, _GRADIENT_G, left=_GRADIENT_G[0], right=_GRADIENT_G[-1])
     b = np.interp(dist, _GRADIENT_DISTS, _GRADIENT_B, left=_GRADIENT_B[0], right=_GRADIENT_B[-1])
-    return np.clip(np.stack([r, g, b], axis=-1), 0, 255).astype(np.uint8)
+    dither = _BAYER_8[py % 8, px % 8]
+    rgb = np.stack([r, g, b], axis=-1) + dither[:, :, None]
+    return np.clip(rgb, 0, 255).astype(np.uint8)
 
 
 def unwrap_ring_longitudes(ring):
@@ -306,14 +337,22 @@ def generate_zoom_level(features, lights, z, out_dir, include_lights):
     tile_lights = {}
     if include_lights:
         zoom_scale = (1 << z) / (1 << REFERENCE_ZOOM)
+        # No SHIFTS loop here (unlike the polygon pass below): every light is
+        # a single point already normalized to -180..180 in city-lights.json,
+        # so it only ever has one true position - there's no "crossing the
+        # antimeridian" case to handle for a point the way there is for a
+        # polygon ring. Looping over all three shifts anyway meant a light
+        # within its halo radius of either edge (e.g. Anadyr, Chukotka, near
+        # lng +179.3) also got a ghost copy drawn a whole world-width away,
+        # bleeding into the tile at the *opposite* edge of the standard
+        # -180/180 grid - a real duplicate light cluster, not real geography.
         for lng, lat, ref_core_r, ref_halo_r, peak in lights:
             core_r = max(ref_core_r * zoom_scale, 0.15)
             halo_r = max(ref_halo_r * zoom_scale, 0.3)
-            for shift in SHIFTS:
-                wx = world_px_x(lng + shift, z)
-                wy = world_px_y(lat, z)
-                for tx, ty in tiles_for_bbox(wx - halo_r, wx + halo_r, wy - halo_r, wy + halo_r, z, buffer_px=0):
-                    tile_lights.setdefault((tx, ty), []).append((wx, wy, core_r, halo_r, peak))
+            wx = world_px_x(lng, z)
+            wy = world_px_y(lat, z)
+            for tx, ty in tiles_for_bbox(wx - halo_r, wx + halo_r, wy - halo_r, wy + halo_r, z, buffer_px=0):
+                tile_lights.setdefault((tx, ty), []).append((wx, wy, core_r, halo_r, peak))
 
     # Every coordinate in the valid grid, not just ones with land/lights -
     # a skipped "pure ocean" tile leaves a visible seam where its flat
@@ -365,7 +404,14 @@ def generate_zoom_level(features, lights, z, out_dir, include_lights):
             out_arr = arr * (1.0 - vis) + LIGHT_COLOR[None, None, :] * vis
             img = Image.fromarray(np.clip(out_arr, 0, 255).astype(np.uint8), "RGB")
 
-        img.save(f"{out_dir}/{z}/{tx}_{ty}.webp", "WEBP", quality=95, method=6)
+        # Lossless, not just high-quality lossy: two adjacent tiles are
+        # encoded independently, and even at quality=95 that let lossy
+        # compression drift their shared edge pixels apart by a few
+        # values - invisible on detailed imagery, but a visible seam on
+        # this mostly-flat ocean gradient once a tile is stretched to
+        # cover a large screen area at low zoom. Lossless guarantees
+        # identical edge pixels wherever the source data already agrees.
+        img.save(f"{out_dir}/{z}/{tx}_{ty}.webp", "WEBP", lossless=True, method=6)
 
     return len(all_tile_keys)
 
