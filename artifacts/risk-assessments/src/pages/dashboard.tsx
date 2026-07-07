@@ -1,5 +1,7 @@
 import { useState } from "react";
+import type { MouseEvent } from "react";
 import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-react";
+import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 
 // Background tone for the outer page wrapper (behind MapLayer).
 const OCEAN_COLOR = "#00081a";
@@ -127,7 +129,6 @@ type CountryTestZone = {
 };
 
 const COUNTRY_TEST_ZONES: CountryTestZone[] = [
-  { name: "Australia", isoCode: "AUS", path: "M758 330 L832 324 L876 350 L866 396 L814 416 L754 390 Z" },
   { name: "United States", isoCode: "USA", path: "M128 150 L315 145 L348 214 L285 248 L151 226 L102 185 Z" },
   { name: "United Kingdom", isoCode: "GBR", path: "M468 126 L494 126 L502 156 L480 166 L463 148 Z" },
   { name: "South Africa", isoCode: "ZAF", path: "M506 356 L570 360 L592 388 L560 420 L505 404 Z" },
@@ -164,11 +165,136 @@ const CANVAS_LAYERS: OperationalCanvasLayer[] = [
   { id: "debug-layer-numbers", order: 6, label: "Debug Layer Numbers", className: "debug-layer-number-layer", visible: true },
 ].sort((a, b) => a.order - b.order);
 
+// Operational Canvas Calibration Tool (Index 1.9) - dev-only, temporary.
+// Lets country hit-zone paths be aligned exactly to the rendered PNG by
+// reading live x/y coordinates (0-1000 / 0-500, matching the hit-zone
+// viewBox) under the mouse, and logging the clicked point. No country or
+// focus logic - purely a measurement aid.
+const SHOW_CANVAS_CALIBRATION = true;
+
+// Operational Geometry Alignment Engine (Index 2.2C). The runtime
+// transform that keeps invisible COUNTRY_REGISTRY geometry locked to the
+// approved base map (world-map-v17.png) at any viewport size, without
+// ever touching the map itself - per the Product Constitution, geometry
+// adapts to the map, never the reverse. The registry is pre-projected
+// into the full square 1000x1000 source-image space (Index 2.2B, no
+// crop baked in), and every SVG that renders it uses this exact
+// viewBox/fit pair - "xMidYMid slice" is the SVG-native equivalent of
+// the image's own `object-fit: cover; object-position: center center`,
+// so both are scaled/cropped by the identical browser algorithm on
+// every resize. No JS resize listener, no measured offsets, no drift.
+const OPERATIONAL_GEOMETRY_VIEWBOX = "0 0 1000 1000";
+const OPERATIONAL_GEOMETRY_FIT = "xMidYMid slice";
+
+// Country Boundary Debug Mode (Index 2.1) - temporary. Draws every
+// COUNTRY_REGISTRY boundary (thin gold outline, transparent fill) so
+// alignment against the approved base map can be visually verified.
+// Never affects production behaviour when false - the registry itself
+// stays loaded either way (it's used for selection/masking, not just
+// this debug view), only the outline rendering is gated.
+const SHOW_COUNTRY_BOUNDARIES = true;
+
+// Country Boundary QA Mode (Index 2.2) - a product verification tool, not
+// a development feature: lets a reviewer step through COUNTRY_REGISTRY
+// one country at a time to visually confirm each boundary against the
+// approved base map. Separate from SHOW_COUNTRY_BOUNDARIES (Index 2.1,
+// which still draws every country at once) - this shows exactly one, so
+// a single coastline can be inspected without every other country's
+// outline cluttering the view. Registry data itself is never edited here
+// - if a country looks wrong, that's recorded as a separate review item
+// (see COUNTRY_ADJUSTMENTS below), never applied as a correction.
+const SHOW_COUNTRY_QA = true;
+
+const QA_COUNTRIES = COUNTRY_REGISTRY;
+
+function countVertices(svgPath: string): number {
+  const matches = svgPath.match(/[ML]\s/g);
+  return matches ? matches.length : 0;
+}
+
+// Adjustment records are reviewer-authored review flags, kept entirely
+// separate from the generated registry (public/data/country-adjustments.json
+// - seeded empty, since generating it is out of scope for this ticket:
+// only the registry pipeline does that, and this ticket explicitly must
+// not touch it). A static frontend has no filesystem write access, so
+// flagging a country here updates in-session state and logs the exact
+// target JSON to the console for a reviewer to copy into the real file -
+// it does not, and cannot, persist to disk by itself.
+type CountryAdjustment = { status: "review-required"; notes: string };
+
 function OperationalCanvas() {
   const showDebugLayerNumbers = false;
+  const [calibrationPoint, setCalibrationPoint] = useState<{ x: number; y: number } | null>(null);
+
+  const [qaCountryIndex, setQaCountryIndex] = useState(0);
+  const [qaShowFill, setQaShowFill] = useState(false);
+  const [qaShowOutline, setQaShowOutline] = useState(true);
+  const [qaOpacity, setQaOpacity] = useState(1);
+  const [qaJumpIso, setQaJumpIso] = useState("");
+  const [qaNotes, setQaNotes] = useState("");
+  const [qaAdjustments, setQaAdjustments] = useState<Record<string, CountryAdjustment>>({});
+  const qaCurrent = QA_COUNTRIES[qaCountryIndex];
+
+  function handleQaPrevious(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    setQaCountryIndex((i) => (i - 1 + QA_COUNTRIES.length) % QA_COUNTRIES.length);
+    setQaNotes("");
+  }
+
+  function handleQaNext(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    setQaCountryIndex((i) => (i + 1) % QA_COUNTRIES.length);
+    setQaNotes("");
+  }
+
+  function handleQaJumpToIso(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    const target = qaJumpIso.trim().toUpperCase();
+    const index = QA_COUNTRIES.findIndex((c) => c.iso2 === target || c.iso3 === target);
+    if (index !== -1) {
+      setQaCountryIndex(index);
+      setQaNotes("");
+    }
+  }
+
+  function handleQaResetView(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    setQaShowFill(false);
+    setQaShowOutline(true);
+    setQaOpacity(1);
+  }
+
+  function handleQaFlagForReview(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    setQaAdjustments((current) => {
+      const next = { ...current, [qaCurrent.iso3]: { status: "review-required" as const, notes: qaNotes } };
+      // No filesystem write access from a static frontend - this is the
+      // exact content a reviewer copies into country-adjustments.json by
+      // hand. It is never applied to the registry itself.
+      console.log("country-adjustments.json:", JSON.stringify(next, null, 2));
+      return next;
+    });
+  }
+
+  function handleCalibrationMove(event: MouseEvent<HTMLElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = Math.round(((event.clientX - rect.left) / rect.width) * 1000);
+    const y = Math.round(((event.clientY - rect.top) / rect.height) * 500);
+    setCalibrationPoint({ x, y });
+  }
+
+  function handleCalibrationClick() {
+    if (!calibrationPoint) return;
+    console.log("Operational Canvas calibration point:", calibrationPoint);
+  }
 
   return (
-    <section className="operational-canvas" aria-label="Operational Canvas">
+    <section
+      className="operational-canvas"
+      aria-label="Operational Canvas"
+      onMouseMove={SHOW_CANVAS_CALIBRATION ? handleCalibrationMove : undefined}
+      onClick={SHOW_CANVAS_CALIBRATION ? handleCalibrationClick : undefined}
+    >
       {CANVAS_LAYERS.map((layer) => (
         <div
           key={layer.id}
@@ -202,6 +328,36 @@ function OperationalCanvas() {
               ))}
             </svg>
           )}
+          {layer.className === "country-intelligence-layer" && SHOW_COUNTRY_BOUNDARIES && (
+            <svg
+              className="country-boundary-debug-overlay"
+              viewBox={OPERATIONAL_GEOMETRY_VIEWBOX}
+              preserveAspectRatio={OPERATIONAL_GEOMETRY_FIT}
+              aria-hidden="true"
+            >
+              {COUNTRY_REGISTRY.map((country) => (
+                <path key={country.id} d={country.svgPath} className="country-boundary-debug-path" />
+              ))}
+            </svg>
+          )}
+          {layer.className === "country-intelligence-layer" && SHOW_COUNTRY_QA && qaCurrent && (
+            <svg
+              className="country-qa-overlay"
+              viewBox={OPERATIONAL_GEOMETRY_VIEWBOX}
+              preserveAspectRatio={OPERATIONAL_GEOMETRY_FIT}
+              aria-hidden="true"
+              style={{ opacity: qaOpacity }}
+            >
+              <path
+                d={qaCurrent.svgPath}
+                className="country-qa-path"
+                style={{
+                  fill: qaShowFill ? "rgba(255, 196, 87, 0.35)" : "none",
+                  stroke: qaShowOutline ? "rgba(255, 196, 87, 0.95)" : "none",
+                }}
+              />
+            </svg>
+          )}
         </div>
       ))}
 
@@ -213,6 +369,126 @@ function OperationalCanvas() {
               <strong>{layer.label}</strong>
             </div>
           ))}
+        </div>
+      )}
+
+      {SHOW_CANVAS_CALIBRATION && calibrationPoint && (
+        <div className="canvas-calibration-overlay" aria-hidden="true">
+          <div className="canvas-calibration-grid" />
+          <div
+            className="canvas-calibration-crosshair-x"
+            style={{ top: `${(calibrationPoint.y / 500) * 100}%` }}
+          />
+          <div
+            className="canvas-calibration-crosshair-y"
+            style={{ left: `${(calibrationPoint.x / 1000) * 100}%` }}
+          />
+          <div className="canvas-calibration-readout">
+            Canvas X: {calibrationPoint.x}
+            <br />
+            Canvas Y: {calibrationPoint.y}
+          </div>
+        </div>
+      )}
+
+
+      {SHOW_COUNTRY_QA && qaCurrent && (
+        <div className="country-qa-panel" onClick={(event) => event.stopPropagation()}>
+          <div className="country-qa-panel-row country-qa-panel-title">
+            <strong>{qaCurrent.name}</strong>
+            <span>{qaCurrent.iso2}</span>
+          </div>
+          <div className="country-qa-panel-row">
+            <span>
+              {qaCountryIndex + 1} / {QA_COUNTRIES.length}
+            </span>
+          </div>
+          <div className="country-qa-panel-row">
+            <button type="button" onClick={handleQaPrevious}>
+              Previous
+            </button>
+            <button type="button" onClick={handleQaNext}>
+              Next
+            </button>
+          </div>
+          <div className="country-qa-panel-row">
+            <input
+              type="text"
+              placeholder="Jump to ISO"
+              value={qaJumpIso}
+              onClick={(event) => event.stopPropagation()}
+              onChange={(event) => setQaJumpIso(event.target.value)}
+            />
+            <button type="button" onClick={handleQaJumpToIso}>
+              Go
+            </button>
+          </div>
+          <div className="country-qa-panel-row">
+            <label>
+              <input
+                type="checkbox"
+                checked={qaShowFill}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => setQaShowFill(event.target.checked)}
+              />
+              Show Fill
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={qaShowOutline}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => setQaShowOutline(event.target.checked)}
+              />
+              Show Outline
+            </label>
+          </div>
+          <div className="country-qa-panel-row">
+            <label>
+              Opacity
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={qaOpacity}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => setQaOpacity(Number(event.target.value))}
+              />
+            </label>
+          </div>
+          <div className="country-qa-panel-row">
+            <button type="button" onClick={handleQaResetView}>
+              Reset View
+            </button>
+          </div>
+
+          <div className="country-qa-panel-details">
+            <div>ISO2: {qaCurrent.iso2}</div>
+            <div>ISO3: {qaCurrent.iso3}</div>
+            <div>
+              BBox: [{qaCurrent.boundingBox.minX}, {qaCurrent.boundingBox.minY}] - [{qaCurrent.boundingBox.maxX},{" "}
+              {qaCurrent.boundingBox.maxY}]
+            </div>
+            <div>Vertices: {countVertices(qaCurrent.svgPath)}</div>
+            <div>Path length: {qaCurrent.svgPath.length} chars</div>
+          </div>
+
+          <div className="country-qa-panel-row">
+            <input
+              type="text"
+              placeholder="Review notes"
+              value={qaNotes}
+              onClick={(event) => event.stopPropagation()}
+              onChange={(event) => setQaNotes(event.target.value)}
+            />
+            <button type="button" onClick={handleQaFlagForReview}>
+              Flag for Review
+            </button>
+          </div>
+          {qaAdjustments[qaCurrent.iso3] && (
+            <div className="country-qa-panel-flagged">Flagged: review-required</div>
+          )}
         </div>
       )}
     </section>
