@@ -335,3 +335,52 @@
   pointer-events: none;
   backdrop-filter: blur(8px);
 }
+
+.canvas-calibration-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.canvas-calibration-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 196, 87, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 196, 87, 0.16) 1px, transparent 1px);
+  background-size: 5% 5%;
+}
+
+.canvas-calibration-crosshair-x,
+.canvas-calibration-crosshair-y {
+  position: absolute;
+  background: rgba(255, 196, 87, 0.9);
+}
+
+.canvas-calibration-crosshair-x {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+.canvas-calibration-crosshair-y {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.canvas-calibration-readout {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 196, 87, 0.35);
+  border-radius: 8px;
+  background: rgba(11, 15, 20, 0.82);
+  color: rgba(255, 236, 198, 0.95);
+  font-size: 12px;
+  line-height: 1.45;
+  letter-spacing: 0.04em;
+  backdrop-filter: blur(8px);
+}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { MouseEvent } from "react";
 import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-react";
 
 // Background tone for the outer page wrapper (behind MapLayer).
@@ -178,9 +179,17 @@ const AUSTRALIA_FOCUS_PATH = "M758 330 L832 324 L876 350 L866 396 L814 416 L754 
 // units as the hit zones - the shift below re-centres exactly this point.
 const AUSTRALIA_FOCUS_CENTER_SHIFT = "translate(-316.67, -117.67)";
 
+// Operational Canvas Calibration Tool (Index 1.9) - dev-only, temporary.
+// Lets country hit-zone paths be aligned exactly to the rendered PNG by
+// reading live x/y coordinates (0-1000 / 0-500, matching the hit-zone
+// viewBox) under the mouse, and logging the clicked point. No country or
+// focus logic - purely a measurement aid.
+const SHOW_CANVAS_CALIBRATION = true;
+
 function OperationalCanvas() {
   const showDebugLayerNumbers = false;
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
+  const [calibrationPoint, setCalibrationPoint] = useState<{ x: number; y: number } | null>(null);
 
   function handleCountryZoneClick(country: CountryTestZone) {
     handleCountryTestZoneClick(country);
@@ -190,10 +199,24 @@ function OperationalCanvas() {
     }
   }
 
+  function handleCalibrationMove(event: MouseEvent<HTMLElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = Math.round(((event.clientX - rect.left) / rect.width) * 1000);
+    const y = Math.round(((event.clientY - rect.top) / rect.height) * 500);
+    setCalibrationPoint({ x, y });
+  }
+
+  function handleCalibrationClick() {
+    if (!calibrationPoint) return;
+    console.log("Operational Canvas calibration point:", calibrationPoint);
+  }
+
   return (
     <section
       className={selectedCountry ? "operational-canvas is-country-focused" : "operational-canvas"}
       aria-label="Operational Canvas"
+      onMouseMove={SHOW_CANVAS_CALIBRATION ? handleCalibrationMove : undefined}
+      onClick={SHOW_CANVAS_CALIBRATION ? handleCalibrationClick : undefined}
     >
       {CANVAS_LAYERS.map((layer) => (
         <div
@@ -267,6 +290,25 @@ function OperationalCanvas() {
               <strong>{layer.label}</strong>
             </div>
           ))}
+        </div>
+      )}
+
+      {SHOW_CANVAS_CALIBRATION && calibrationPoint && (
+        <div className="canvas-calibration-overlay" aria-hidden="true">
+          <div className="canvas-calibration-grid" />
+          <div
+            className="canvas-calibration-crosshair-x"
+            style={{ top: `${(calibrationPoint.y / 500) * 100}%` }}
+          />
+          <div
+            className="canvas-calibration-crosshair-y"
+            style={{ left: `${(calibrationPoint.x / 1000) * 100}%` }}
+          />
+          <div className="canvas-calibration-readout">
+            Canvas X: {calibrationPoint.x}
+            <br />
+            Canvas Y: {calibrationPoint.y}
+          </div>
         </div>
       )}
     </section>
