@@ -4,9 +4,6 @@ import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-reac
 // Background tone for the outer page wrapper (behind MapLayer).
 const OCEAN_COLOR = "#00081a";
 
-// Approved static Operational Canvas base image (dark blue/gold night map).
-const OPERATIONAL_CANVAS_MAP_URL = `${import.meta.env.BASE_URL}data/world-map-v17.png`;
-
 type Step = "login" | "preparing" | "brief" | "centre";
 
 export default function Dashboard() {
@@ -111,9 +108,6 @@ export default function Dashboard() {
     );
   }
 
-  // This wrapper's own background is a second place a colour could
-  // silently drift from the map's ocean tone - it uses the same
-  // OCEAN_COLOR constant the map layer itself is built against.
   return (
     <div className="fixed inset-0 z-50 overflow-hidden text-white" style={{ backgroundColor: OCEAN_COLOR }}>
       <MapLayer />
@@ -121,13 +115,8 @@ export default function Dashboard() {
   );
 }
 
-// LAYER 1: Map - static approved Operational Canvas base image only. No
-// zoom, no country selection/highlight, no panels, no labels, no pins, no
-// search - those are later layers, not built yet.
+// LAYER 1: Map - legacy implementation removed. Blank canvas only, pending
+// an entirely new architecture.
 function MapLayer() {
-  return (
-    <div data-layer="1" className="absolute inset-0 z-[1] h-full w-full overflow-hidden">
-      <img src={OPERATIONAL_CANVAS_MAP_URL} alt="" className="h-full w-full object-cover" />
-    </div>
-  );
+  return <div data-layer="1" className="absolute inset-0 z-[1] h-full w-full" style={{ backgroundColor: "#0B0F14" }} />;
 }
