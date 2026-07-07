@@ -195,6 +195,34 @@ const SHOW_CANVAS_CALIBRATION = true;
 // this debug view), only the outline rendering is gated.
 const SHOW_COUNTRY_BOUNDARIES = true;
 
+// Country Boundary QA Mode (Index 2.2) - a product verification tool, not
+// a development feature: lets a reviewer step through COUNTRY_REGISTRY
+// one country at a time to visually confirm each boundary against the
+// approved base map. Separate from SHOW_COUNTRY_BOUNDARIES (Index 2.1,
+// which still draws every country at once) - this shows exactly one, so
+// a single coastline can be inspected without every other country's
+// outline cluttering the view. Registry data itself is never edited here
+// - if a country looks wrong, that's recorded as a separate review item
+// (see COUNTRY_ADJUSTMENTS below), never applied as a correction.
+const SHOW_COUNTRY_QA = true;
+
+const QA_COUNTRIES = COUNTRY_REGISTRY;
+
+function countVertices(svgPath: string): number {
+  const matches = svgPath.match(/[ML]\s/g);
+  return matches ? matches.length : 0;
+}
+
+// Adjustment records are reviewer-authored review flags, kept entirely
+// separate from the generated registry (public/data/country-adjustments.json
+// - seeded empty, since generating it is out of scope for this ticket:
+// only the registry pipeline does that, and this ticket explicitly must
+// not touch it). A static frontend has no filesystem write access, so
+// flagging a country here updates in-session state and logs the exact
+// target JSON to the console for a reviewer to copy into the real file -
+// it does not, and cannot, persist to disk by itself.
+type CountryAdjustment = { status: "review-required"; notes: string };
+
 // Australia Polygon Capture Tool (Index 2.0) - dev-only, temporary. Reuses
 // the calibration tool's live x/y point: every canvas click appends the
 // current point to australiaPolygonPoints, rendered as connected gold
@@ -214,6 +242,56 @@ function OperationalCanvas() {
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [calibrationPoint, setCalibrationPoint] = useState<{ x: number; y: number } | null>(null);
   const [australiaPolygonPoints, setAustraliaPolygonPoints] = useState<{ x: number; y: number }[]>([]);
+
+  const [qaCountryIndex, setQaCountryIndex] = useState(0);
+  const [qaShowFill, setQaShowFill] = useState(false);
+  const [qaShowOutline, setQaShowOutline] = useState(true);
+  const [qaOpacity, setQaOpacity] = useState(1);
+  const [qaJumpIso, setQaJumpIso] = useState("");
+  const [qaNotes, setQaNotes] = useState("");
+  const [qaAdjustments, setQaAdjustments] = useState<Record<string, CountryAdjustment>>({});
+  const qaCurrent = QA_COUNTRIES[qaCountryIndex];
+
+  function handleQaPrevious(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    setQaCountryIndex((i) => (i - 1 + QA_COUNTRIES.length) % QA_COUNTRIES.length);
+    setQaNotes("");
+  }
+
+  function handleQaNext(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    setQaCountryIndex((i) => (i + 1) % QA_COUNTRIES.length);
+    setQaNotes("");
+  }
+
+  function handleQaJumpToIso(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    const target = qaJumpIso.trim().toUpperCase();
+    const index = QA_COUNTRIES.findIndex((c) => c.iso2 === target || c.iso3 === target);
+    if (index !== -1) {
+      setQaCountryIndex(index);
+      setQaNotes("");
+    }
+  }
+
+  function handleQaResetView(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    setQaShowFill(false);
+    setQaShowOutline(true);
+    setQaOpacity(1);
+  }
+
+  function handleQaFlagForReview(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    setQaAdjustments((current) => {
+      const next = { ...current, [qaCurrent.iso3]: { status: "review-required" as const, notes: qaNotes } };
+      // No filesystem write access from a static frontend - this is the
+      // exact content a reviewer copies into country-adjustments.json by
+      // hand. It is never applied to the registry itself.
+      console.log("country-adjustments.json:", JSON.stringify(next, null, 2));
+      return next;
+    });
+  }
 
   function handleCountryZoneClick(country: CountryTestZone) {
     handleCountryTestZoneClick(country);
@@ -323,6 +401,24 @@ function OperationalCanvas() {
               ))}
             </svg>
           )}
+          {layer.className === "country-intelligence-layer" && SHOW_COUNTRY_QA && qaCurrent && (
+            <svg
+              className="country-qa-overlay"
+              viewBox="0 0 1000 500"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+              style={{ opacity: qaOpacity }}
+            >
+              <path
+                d={qaCurrent.svgPath}
+                className="country-qa-path"
+                style={{
+                  fill: qaShowFill ? "rgba(255, 196, 87, 0.35)" : "none",
+                  stroke: qaShowOutline ? "rgba(255, 196, 87, 0.95)" : "none",
+                }}
+              />
+            </svg>
+          )}
         </div>
       ))}
 
@@ -389,6 +485,106 @@ function OperationalCanvas() {
             </button>
           </div>
         </>
+      )}
+
+      {SHOW_COUNTRY_QA && qaCurrent && (
+        <div className="country-qa-panel" onClick={(event) => event.stopPropagation()}>
+          <div className="country-qa-panel-row country-qa-panel-title">
+            <strong>{qaCurrent.name}</strong>
+            <span>{qaCurrent.iso2}</span>
+          </div>
+          <div className="country-qa-panel-row">
+            <span>
+              {qaCountryIndex + 1} / {QA_COUNTRIES.length}
+            </span>
+          </div>
+          <div className="country-qa-panel-row">
+            <button type="button" onClick={handleQaPrevious}>
+              Previous
+            </button>
+            <button type="button" onClick={handleQaNext}>
+              Next
+            </button>
+          </div>
+          <div className="country-qa-panel-row">
+            <input
+              type="text"
+              placeholder="Jump to ISO"
+              value={qaJumpIso}
+              onClick={(event) => event.stopPropagation()}
+              onChange={(event) => setQaJumpIso(event.target.value)}
+            />
+            <button type="button" onClick={handleQaJumpToIso}>
+              Go
+            </button>
+          </div>
+          <div className="country-qa-panel-row">
+            <label>
+              <input
+                type="checkbox"
+                checked={qaShowFill}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => setQaShowFill(event.target.checked)}
+              />
+              Show Fill
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={qaShowOutline}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => setQaShowOutline(event.target.checked)}
+              />
+              Show Outline
+            </label>
+          </div>
+          <div className="country-qa-panel-row">
+            <label>
+              Opacity
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={qaOpacity}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => setQaOpacity(Number(event.target.value))}
+              />
+            </label>
+          </div>
+          <div className="country-qa-panel-row">
+            <button type="button" onClick={handleQaResetView}>
+              Reset View
+            </button>
+          </div>
+
+          <div className="country-qa-panel-details">
+            <div>ISO2: {qaCurrent.iso2}</div>
+            <div>ISO3: {qaCurrent.iso3}</div>
+            <div>
+              BBox: [{qaCurrent.boundingBox.minX}, {qaCurrent.boundingBox.minY}] - [{qaCurrent.boundingBox.maxX},{" "}
+              {qaCurrent.boundingBox.maxY}]
+            </div>
+            <div>Vertices: {countVertices(qaCurrent.svgPath)}</div>
+            <div>Path length: {qaCurrent.svgPath.length} chars</div>
+          </div>
+
+          <div className="country-qa-panel-row">
+            <input
+              type="text"
+              placeholder="Review notes"
+              value={qaNotes}
+              onClick={(event) => event.stopPropagation()}
+              onChange={(event) => setQaNotes(event.target.value)}
+            />
+            <button type="button" onClick={handleQaFlagForReview}>
+              Flag for Review
+            </button>
+          </div>
+          {qaAdjustments[qaCurrent.iso3] && (
+            <div className="country-qa-panel-flagged">Flagged: review-required</div>
+          )}
+        </div>
       )}
     </section>
   );
