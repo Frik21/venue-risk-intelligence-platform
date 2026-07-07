@@ -164,8 +164,29 @@ const CANVAS_LAYERS: OperationalCanvasLayer[] = [
   { id: "debug-layer-numbers", order: 6, label: "Debug Layer Numbers", className: "debug-layer-number-layer", visible: true },
 ].sort((a, b) => a.order - b.order);
 
+// Country Focus Engine (Index 1.9) - Australia proof only. Clicking
+// Australia's existing invisible hit zone additionally sets
+// selectedCountry, which blurs/dims the shared base map image and
+// renders a second, sharp copy of the same asset clipped to Australia's
+// own path, rigidly translated (no zoom/scale) so its silhouette lands
+// centred on the canvas regardless of the underlying map's real
+// geographic position. United States/United Kingdom/South Africa hit
+// zones are untouched - they still only log on click.
+const AUSTRALIA_FOCUS_PATH = "M758 330 L832 324 L876 350 L866 396 L814 416 L754 390 Z";
+// Average of the path's own vertices, in the same 0-1000/0-500 viewBox
+// units as the hit zones - the shift below re-centres exactly this point.
+const AUSTRALIA_FOCUS_CENTER_SHIFT = "translate(-316.67, -117.67)";
+
 function OperationalCanvas() {
   const showDebugLayerNumbers = false;
+  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
+
+  function handleCountryZoneClick(country: CountryTestZone) {
+    handleCountryTestZoneClick(country);
+    if (country.name === "Australia") {
+      setSelectedCountry(country.name);
+    }
+  }
 
   return (
     <section className="operational-canvas" aria-label="Operational Canvas">
@@ -178,7 +199,11 @@ function OperationalCanvas() {
         >
           {layer.className === "base-map-layer" && (
             <img
-              className="approved-base-map-image"
+              className={
+                selectedCountry
+                  ? "approved-base-map-image approved-base-map-image--focused"
+                  : "approved-base-map-image"
+              }
               src="/data/world-map-v17.png"
               alt=""
               draggable={false}
@@ -197,9 +222,34 @@ function OperationalCanvas() {
                   key={country.isoCode}
                   d={country.path}
                   className="country-hit-zone"
-                  onClick={() => handleCountryTestZoneClick(country)}
+                  onClick={() => handleCountryZoneClick(country)}
                 />
               ))}
+            </svg>
+          )}
+          {layer.className === "operational-footprint-layer" && selectedCountry === "Australia" && (
+            <svg
+              className="country-focus-overlay"
+              viewBox="0 0 1000 500"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              <defs>
+                <clipPath id="country-focus-clip-australia" clipPathUnits="userSpaceOnUse">
+                  <path d={AUSTRALIA_FOCUS_PATH} />
+                </clipPath>
+              </defs>
+              <g transform={AUSTRALIA_FOCUS_CENTER_SHIFT}>
+                <image
+                  href="/data/world-map-v17.png"
+                  x="0"
+                  y="0"
+                  width="1000"
+                  height="500"
+                  preserveAspectRatio="xMidYMid slice"
+                  clipPath="url(#country-focus-clip-australia)"
+                />
+              </g>
             </svg>
           )}
         </div>
