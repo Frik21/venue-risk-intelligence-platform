@@ -110,23 +110,85 @@ export default function Dashboard() {
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden text-white" style={{ backgroundColor: OCEAN_COLOR }}>
-      <MapLayer />
+      <OperationalCanvas />
     </div>
   );
 }
 
-// LAYER 1: Operational Canvas foundation. Layered container structure for
-// the new map architecture - only base-map-layer renders visible content
-// (the approved static map); the rest exist but render nothing yet.
-function MapLayer() {
+const SHOW_DEBUG_LAYER_NUMBERS = true;
+
+type CanvasLayer = {
+  id: string;
+  number: number;
+  label: string;
+  className: string;
+};
+
+const CANVAS_LAYERS: CanvasLayer[] = [
+  {
+    id: "base-map",
+    number: 1,
+    label: "Base Map",
+    className: "base-map-layer",
+  },
+  {
+    id: "operational-layers",
+    number: 2,
+    label: "Operational Layers",
+    className: "operational-layers",
+  },
+  {
+    id: "operational-footprint",
+    number: 3,
+    label: "Operational Footprint",
+    className: "operational-footprint-layer",
+  },
+  {
+    id: "country-intelligence",
+    number: 4,
+    label: "Country Intelligence",
+    className: "country-intelligence-layer",
+  },
+  {
+    id: "breathing-markers",
+    number: 5,
+    label: "Breathing Markers",
+    className: "breathing-markers-layer",
+  },
+  {
+    id: "debug-layer-numbers",
+    number: 6,
+    label: "Debug Layer Numbers",
+    className: "debug-layer-number-layer",
+  },
+];
+
+// Operational Canvas Engine foundation - six-layer stack for future map
+// intelligence features to plug into. Only base-map-layer renders visible
+// content (the approved static map); layers 2-6 exist structurally but
+// render nothing yet.
+function OperationalCanvas() {
   return (
     <section className="operational-canvas" aria-label="Operational Canvas">
-      <div className="canvas-layer base-map-layer" />
-      <div className="canvas-layer operational-layers" />
-      <div className="canvas-layer operational-footprint-layer" />
-      <div className="canvas-layer country-intelligence-layer" />
-      <div className="canvas-layer breathing-markers-layer" />
-      <div className="canvas-layer debug-layer-number-layer" />
+      {CANVAS_LAYERS.map((layer) => (
+        <div
+          key={layer.id}
+          className={`canvas-layer ${layer.className}`}
+          data-layer-number={layer.number}
+          data-layer-name={layer.label}
+        />
+      ))}
+
+      {SHOW_DEBUG_LAYER_NUMBERS && (
+        <div className="debug-layer-badge-stack" aria-hidden="true">
+          {CANVAS_LAYERS.map((layer) => (
+            <div key={layer.id} className="debug-layer-badge">
+              <span>{layer.number}</span>
+              <strong>{layer.label}</strong>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

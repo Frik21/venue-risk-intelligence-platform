@@ -174,21 +174,26 @@
   position: relative;
   width: 100%;
   height: 100vh;
+  min-height: 100vh;
   overflow: hidden;
   background: #0b0f14;
+  isolation: isolate;
 }
 
 .canvas-layer {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .base-map-layer {
   z-index: 1;
   background-image: url("/data/world-map-v17.png");
   background-size: cover;
-  background-position: center;
+  background-position: center center;
   background-repeat: no-repeat;
+  pointer-events: none;
 }
 
 .operational-layers {
@@ -214,4 +219,46 @@
 .debug-layer-number-layer {
   z-index: 6;
   pointer-events: none;
+}
+
+.debug-layer-badge-stack {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.debug-layer-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 196, 87, 0.28);
+  border-radius: 999px;
+  background: rgba(11, 15, 20, 0.72);
+  color: rgba(255, 236, 198, 0.86);
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  backdrop-filter: blur(8px);
+}
+
+.debug-layer-badge span {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(255, 196, 87, 0.18);
+  color: rgba(255, 214, 143, 0.96);
+  font-weight: 700;
+}
+
+.debug-layer-badge strong {
+  font-weight: 500;
 }
