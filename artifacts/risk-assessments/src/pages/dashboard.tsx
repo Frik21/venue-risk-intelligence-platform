@@ -115,8 +115,18 @@ export default function Dashboard() {
   );
 }
 
-// LAYER 1: Map - legacy implementation removed. Blank canvas only, pending
-// an entirely new architecture.
+// LAYER 1: Operational Canvas foundation. Layered container structure for
+// the new map architecture - each sub-layer exists but renders no visible
+// content yet, stacked bottom to top.
 function MapLayer() {
-  return <div data-layer="1" className="absolute inset-0 z-[1] h-full w-full" style={{ backgroundColor: "#0B0F14" }} />;
+  return (
+    <div data-layer="1" className="absolute inset-0 z-[1] h-full w-full" style={{ backgroundColor: "#0B0F14" }}>
+      <div data-layer-name="base-map-layer" className="absolute inset-0 h-full w-full" />
+      <div data-layer-name="operational-layers" className="absolute inset-0 h-full w-full" />
+      <div data-layer-name="operational-footprint-layer" className="absolute inset-0 h-full w-full" />
+      <div data-layer-name="country-intelligence-layer" className="absolute inset-0 h-full w-full" />
+      <div data-layer-name="breathing-markers-layer" className="absolute inset-0 h-full w-full" />
+      <div data-layer-name="debug-layer-number-layer" className="absolute inset-0 h-full w-full" />
+    </div>
+  );
 }
