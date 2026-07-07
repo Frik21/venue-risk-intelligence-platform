@@ -190,6 +190,26 @@ const COUNTRY_HIT_ZONES: CountryHitZone[] = [
 // content (the approved static map); layers 3-6 exist structurally but
 // render nothing yet. operational-layers hosts the invisible country
 // selection engine (Index 1.6) - hit zones only, no visual change.
+type CountryTestZone = {
+  name: string;
+  isoCode: string;
+  path: string;
+};
+
+const COUNTRY_TEST_ZONES: CountryTestZone[] = [
+  { name: "Australia", isoCode: "AUS", path: "M758 330 L832 324 L876 350 L866 396 L814 416 L754 390 Z" },
+  { name: "United States", isoCode: "USA", path: "M128 150 L315 145 L348 214 L285 248 L151 226 L102 185 Z" },
+  { name: "United Kingdom", isoCode: "GBR", path: "M468 126 L494 126 L502 156 L480 166 L463 148 Z" },
+  { name: "South Africa", isoCode: "ZAF", path: "M506 356 L570 360 L592 388 L560 420 L505 404 Z" },
+];
+
+function handleCountryTestZoneClick(country: CountryTestZone) {
+  console.log("Operational Canvas selected country:", {
+    name: country.name,
+    isoCode: country.isoCode,
+  });
+}
+
 function OperationalCanvas() {
   const showDebugLayerNumbers = false;
 
@@ -219,6 +239,23 @@ function OperationalCanvas() {
               draggable={false}
               aria-hidden="true"
             />
+          )}
+          {layer.className === "operational-layers" && (
+            <svg
+              className="country-selection-engine"
+              viewBox="0 0 1000 500"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              {COUNTRY_TEST_ZONES.map((country) => (
+                <path
+                  key={country.isoCode}
+                  d={country.path}
+                  className="country-hit-zone"
+                  onClick={() => handleCountryTestZoneClick(country)}
+                />
+              ))}
+            </svg>
           )}
         </div>
       ))}
