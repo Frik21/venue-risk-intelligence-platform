@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
@@ -321,6 +321,11 @@ function OperationalCanvas() {
   // instead of vanishing the instant Active Country clears.
   const [renderedCountry, setRenderedCountry] = useState<ActiveCountry | null>(null);
   const [focusEntered, setFocusEntered] = useState(false);
+  // Mirrors activeCountry for the return-timeout guard below (Index
+  // 3.4A) - a ref, not state, so the timeout callback can read the
+  // LATEST value instead of the one captured in its own closure.
+  const activeCountryRef = useRef<ActiveCountry | null>(null);
+  activeCountryRef.current = activeCountry;
 
   useEffect(() => {
     subscribe(setActiveCountry);
@@ -337,10 +342,19 @@ function OperationalCanvas() {
 
   // Two-phase mount so the CSS transition actually animates: paint the
   // "not entered" state first (opacity 0, no scale/shift), then flip to
-  // "entered" on the next frame so the browser has something to transition
-  // from. A second rAF guards against the browser coalescing both paints
-  // into one (confirmed necessary - a single rAF occasionally skipped the
-  // transition entirely in testing).
+  // "entered" shortly after so the browser has something to transition
+  // from.
+  //
+  // Index 3.4A: this used a nested double-requestAnimationFrame originally
+  // (wait for two paints, then flip). Confirmed by direct tracing that
+  // rAF callbacks can be arbitrarily delayed - in one reproduced case, a
+  // country selected immediately after clearing a previous one had its
+  // rAF chain fire nearly a second late, leaving the country stuck at
+  // opacity 0 (invisible) the whole time. rAF is tied to the rendering/
+  // compositing pipeline and isn't guaranteed promptly under all
+  // conditions; a plain macrotask (setTimeout) is not, and is what's used
+  // here instead - the exact delay only needs to be "next tick, after a
+  // paint has had a chance to happen," not tied to frame timing.
   //
   // Index 3.4: clearing selection no longer unmounts the focus layer
   // immediately - it flips focusEntered back to false (playing the 450ms
@@ -350,18 +364,22 @@ function OperationalCanvas() {
     if (activeCountry) {
       setRenderedCountry(activeCountry);
       setFocusEntered(false);
-      let secondFrame = 0;
-      const firstFrame = requestAnimationFrame(() => {
-        secondFrame = requestAnimationFrame(() => setFocusEntered(true));
-      });
-      return () => {
-        cancelAnimationFrame(firstFrame);
-        cancelAnimationFrame(secondFrame);
-      };
+      const enterTimeout = window.setTimeout(() => setFocusEntered(true), 20);
+      return () => window.clearTimeout(enterTimeout);
     }
 
     setFocusEntered(false);
-    const returnTimeout = window.setTimeout(() => setRenderedCountry(null), FOCUS_RETURN_MS);
+    const returnTimeout = window.setTimeout(() => {
+      // Index 3.4A: this timeout is cancelled by the cleanup function
+      // below whenever a new country is selected before it fires - but
+      // guard here too in case a new selection lands in the same tick a
+      // stale timer was already due to fire (confirmed reproducible:
+      // selecting a country shortly after clearing a previous one could
+      // otherwise wipe out the newly-selected country's render state).
+      if (!activeCountryRef.current) {
+        setRenderedCountry(null);
+      }
+    }, FOCUS_RETURN_MS);
     return () => window.clearTimeout(returnTimeout);
   }, [activeCountry]);
 
@@ -484,6 +502,7 @@ function OperationalCanvas() {
             <>
               <div className="country-focus-dim-overlay" style={getDimOverlayStyle(focusEntered)} aria-hidden="true" />
               <svg
+                key={renderedCountry.iso3}
                 className="country-focus-image-layer"
                 viewBox={OPERATIONAL_GEOMETRY_VIEWBOX}
                 preserveAspectRatio={OPERATIONAL_GEOMETRY_FIT}
