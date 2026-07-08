@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { MouseEvent } from "react";
 import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
-import { selectCountry, subscribe, unsubscribe } from "@/lib/country-selection-engine";
+import { clearSelection, selectCountry, subscribe, unsubscribe } from "@/lib/country-selection-engine";
 import type { ActiveCountry } from "@/lib/country-selection-engine";
 
 // Background tone for the outer page wrapper (behind MapLayer).
@@ -200,6 +200,37 @@ const QA_COUNTRIES = COUNTRY_REGISTRY;
 // devtools. No border/fill/highlight is added to the country itself.
 const SHOW_SELECTION_DEBUG = true;
 
+// Country Focus Animation Proof (Index 3.1) - first proof of the Country
+// Focus animation, built on the real Active Country from the Selection
+// Engine rather than a hand-typed single-country path (unlike the removed
+// Index 1.9/1.9A proof). The focus shape's own centre is computed from its
+// COUNTRY_REGISTRY bounding box, so this works for any of the 235
+// countries, not just one - no country-specific hack. Scale is anchored at
+// that centre (via transform-origin) so the shape grows in place before
+// being translated to the canvas centre in the same transform.
+const COUNTRY_FOCUS_ANIMATION_MS = 650;
+const COUNTRY_FOCUS_SCALE = 1.06;
+const OPERATIONAL_CANVAS_CENTER = 500; // mid-point of the 1000x1000 alignment-engine space
+
+function getCountryFocusTransform(boundingBox: ActiveCountry["boundingBox"], entered: boolean) {
+  const centerX = (boundingBox.minX + boundingBox.maxX) / 2;
+  const centerY = (boundingBox.minY + boundingBox.maxY) / 2;
+  const shiftX = OPERATIONAL_CANVAS_CENTER - centerX;
+  const shiftY = OPERATIONAL_CANVAS_CENTER - centerY;
+  return {
+    transformOrigin: `${centerX}px ${centerY}px`,
+    // Starts untranslated (at the country's real geographic position) and
+    // unscaled, so the transition genuinely animates a move toward centre
+    // alongside the fade/scale - not just a fade-in already at the
+    // destination.
+    transform: entered
+      ? `translate(${shiftX}px, ${shiftY}px) scale(${COUNTRY_FOCUS_SCALE})`
+      : "translate(0px, 0px) scale(1)",
+    opacity: entered ? 1 : 0,
+    transition: `transform ${COUNTRY_FOCUS_ANIMATION_MS}ms ease-out, opacity ${COUNTRY_FOCUS_ANIMATION_MS}ms ease-out`,
+  };
+}
+
 function countVertices(svgPath: string): number {
   const matches = svgPath.match(/[ML]\s/g);
   return matches ? matches.length : 0;
@@ -219,11 +250,42 @@ function OperationalCanvas() {
   const showDebugLayerNumbers = false;
   const [calibrationPoint, setCalibrationPoint] = useState<{ x: number; y: number } | null>(null);
   const [activeCountry, setActiveCountry] = useState<ActiveCountry | null>(null);
+  const [focusEntered, setFocusEntered] = useState(false);
 
   useEffect(() => {
     subscribe(setActiveCountry);
     return () => unsubscribe(setActiveCountry);
   }, []);
+
+  useEffect(() => {
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") clearSelection();
+    }
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, []);
+
+  // Two-phase mount so the CSS transition actually animates: paint the
+  // "not entered" state first (opacity 0, no scale/shift), then flip to
+  // "entered" on the next frame so the browser has something to transition
+  // from. A second rAF guards against the browser coalescing both paints
+  // into one (confirmed necessary - a single rAF occasionally skipped the
+  // transition entirely in testing).
+  useEffect(() => {
+    if (!activeCountry) {
+      setFocusEntered(false);
+      return;
+    }
+    setFocusEntered(false);
+    let secondFrame = 0;
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => setFocusEntered(true));
+    });
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(secondFrame);
+    };
+  }, [activeCountry]);
 
   const [qaCountryIndex, setQaCountryIndex] = useState(0);
   const [qaShowFill, setQaShowFill] = useState(false);
@@ -303,7 +365,11 @@ function OperationalCanvas() {
         >
           {layer.className === "base-map-layer" && (
             <img
-              className="approved-base-map-image"
+              className={
+                activeCountry
+                  ? "approved-base-map-image approved-base-map-image--focused"
+                  : "approved-base-map-image"
+              }
               src="/data/world-map-v17.png"
               alt=""
               draggable={false}
@@ -326,6 +392,22 @@ function OperationalCanvas() {
                 />
               ))}
             </svg>
+          )}
+          {layer.className === "operational-footprint-layer" && activeCountry && (
+            <>
+              <div className="country-focus-dim-overlay" aria-hidden="true" />
+              <svg
+                className="country-focus-shape"
+                viewBox={OPERATIONAL_GEOMETRY_VIEWBOX}
+                preserveAspectRatio={OPERATIONAL_GEOMETRY_FIT}
+                aria-hidden="true"
+              >
+                <path
+                  d={activeCountry.geometry}
+                  style={getCountryFocusTransform(activeCountry.boundingBox, focusEntered)}
+                />
+              </svg>
+            </>
           )}
           {layer.className === "country-intelligence-layer" && SHOW_COUNTRY_BOUNDARIES && (
             <svg

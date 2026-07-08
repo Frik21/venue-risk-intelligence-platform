@@ -200,6 +200,14 @@
   object-position: center center;
 }
 
+/* Country Focus Animation Proof (Index 3.1): dims/blurs the shared base
+   map while a country is Active, plus a full-screen dim/blur overlay and
+   the real registry geometry as a gold focus shape - no border/outline/
+   label/panel, per the ticket spec. */
+.approved-base-map-image--focused {
+  filter: blur(10px) brightness(0.45);
+}
+
 .operational-layers {
   z-index: 2;
   pointer-events: auto;
@@ -208,6 +216,31 @@
 .operational-footprint-layer {
   z-index: 3;
   pointer-events: none;
+}
+
+.country-focus-dim-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  background: rgba(11, 15, 20, 0.55);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+
+.country-focus-shape {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 11;
+  pointer-events: none;
+}
+
+.country-focus-shape path {
+  fill: rgba(255, 196, 87, 0.82);
+  stroke: none;
 }
 
 .country-intelligence-layer {
