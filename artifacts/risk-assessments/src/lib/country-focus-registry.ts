@@ -27,25 +27,29 @@ export type CountryFocusDefinition = CountryDefinition & {
 // otherwise.
 const OPERATIONAL_CANVAS_CENTER: CameraTarget = { x: 500, y: 500 };
 
-// Normalize Country Focus Display Size (Index 3.3): every country - large
-// or small - targets the same visual footprint on the Operational Canvas,
-// so Russia does not dwarf Syria once both are focused. Scale is derived
-// uniformly from each country's own stored bounding box, never hardcoded
-// per country, and clamped so the formula can't blow up a sliver country
-// or shrink a huge one to nothing.
+// Country Focus Normalisation Engine (Index 3.3): every country - large or
+// small - targets the same visual footprint on the Operational Canvas, so
+// Russia does not dwarf Syria once both are focused. Scale is derived
+// uniformly from each country's own stored bounding box (never hardcoded
+// per country) by finding its largest dimension - width or height - and
+// scaling that dimension to the target canvas fraction. Since both axes
+// share the same target fraction in this square 1000x1000 space, the
+// larger of the country's own width/height is always the binding
+// constraint, which is what keeps the scale-up uniform (no distortion) -
+// the same single multiplier is applied to both axes. Clamped so the
+// formula can't blow up a sliver country or shrink a huge one to nothing.
 const OPERATIONAL_CANVAS_SIZE = 1000; // the shared 1000x1000 alignment-engine space
-const TARGET_WIDTH_FRACTION = 0.46;
-const TARGET_HEIGHT_FRACTION = 0.42;
+const TARGET_DIMENSION_FRACTION = 0.45;
 const FOCUS_SCALE_MIN = 0.85;
 const FOCUS_SCALE_MAX = 9.0;
 
 function computeDefaultFocusScale(boundingBox: CountryDefinition["boundingBox"]): number {
   const countryWidth = boundingBox.maxX - boundingBox.minX;
   const countryHeight = boundingBox.maxY - boundingBox.minY;
-  if (countryWidth <= 0 || countryHeight <= 0) return FOCUS_SCALE_MAX;
-  const targetWidth = OPERATIONAL_CANVAS_SIZE * TARGET_WIDTH_FRACTION;
-  const targetHeight = OPERATIONAL_CANVAS_SIZE * TARGET_HEIGHT_FRACTION;
-  const scale = Math.min(targetWidth / countryWidth, targetHeight / countryHeight);
+  const largestDimension = Math.max(countryWidth, countryHeight);
+  if (largestDimension <= 0) return FOCUS_SCALE_MAX;
+  const targetDimension = OPERATIONAL_CANVAS_SIZE * TARGET_DIMENSION_FRACTION;
+  const scale = targetDimension / largestDimension;
   return Math.min(FOCUS_SCALE_MAX, Math.max(FOCUS_SCALE_MIN, scale));
 }
 
