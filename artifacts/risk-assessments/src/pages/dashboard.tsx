@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { MouseEvent } from "react";
 import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
-import { selectCountry } from "@/lib/country-selection-engine";
+import { selectCountry, subscribe, unsubscribe } from "@/lib/country-selection-engine";
+import type { ActiveCountry } from "@/lib/country-selection-engine";
 
 // Background tone for the outer page wrapper (behind MapLayer).
 const OCEAN_COLOR = "#00081a";
@@ -192,6 +193,13 @@ const SHOW_COUNTRY_QA = true;
 
 const QA_COUNTRIES = COUNTRY_REGISTRY;
 
+// Operational Country Selection Click-Event Proof (Index 3.0A) - dev-only,
+// temporary. Subscribes to the Country Selection Engine and renders a
+// small fixed badge bottom-right on selection, purely to make the
+// already-working click -> Active Country update visible without opening
+// devtools. No border/fill/highlight is added to the country itself.
+const SHOW_SELECTION_DEBUG = true;
+
 function countVertices(svgPath: string): number {
   const matches = svgPath.match(/[ML]\s/g);
   return matches ? matches.length : 0;
@@ -210,6 +218,12 @@ type CountryAdjustment = { status: "review-required"; notes: string };
 function OperationalCanvas() {
   const showDebugLayerNumbers = false;
   const [calibrationPoint, setCalibrationPoint] = useState<{ x: number; y: number } | null>(null);
+  const [activeCountry, setActiveCountry] = useState<ActiveCountry | null>(null);
+
+  useEffect(() => {
+    subscribe(setActiveCountry);
+    return () => unsubscribe(setActiveCountry);
+  }, []);
 
   const [qaCountryIndex, setQaCountryIndex] = useState(0);
   const [qaShowFill, setQaShowFill] = useState(false);
@@ -474,6 +488,12 @@ function OperationalCanvas() {
           {qaAdjustments[qaCurrent.iso3] && (
             <div className="country-qa-panel-flagged">Flagged: review-required</div>
           )}
+        </div>
+      )}
+
+      {SHOW_SELECTION_DEBUG && activeCountry && (
+        <div className="selection-debug-badge" aria-hidden="true">
+          Active Country: {activeCountry.name} / {activeCountry.iso3}
         </div>
       )}
     </section>
