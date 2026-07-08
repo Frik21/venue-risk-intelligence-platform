@@ -27,58 +27,70 @@ export type CountryFocusDefinition = CountryDefinition & {
 // otherwise.
 const OPERATIONAL_CANVAS_CENTER: CameraTarget = { x: 500, y: 500 };
 
-const FOCUS_SCALE_MIN = 1.04;
-const FOCUS_SCALE_MAX = 1.35;
-const FOCUS_SCALE_SPAN_FACTOR = 45;
+// Normalize Country Focus Display Size (Index 3.3): every country - large
+// or small - targets the same visual footprint on the Operational Canvas,
+// so Russia does not dwarf Syria once both are focused. Scale is derived
+// uniformly from each country's own stored bounding box, never hardcoded
+// per country, and clamped so the formula can't blow up a sliver country
+// or shrink a huge one to nothing.
+const OPERATIONAL_CANVAS_SIZE = 1000; // the shared 1000x1000 alignment-engine space
+const TARGET_WIDTH_FRACTION = 0.46;
+const TARGET_HEIGHT_FRACTION = 0.42;
+const FOCUS_SCALE_MIN = 0.85;
+const FOCUS_SCALE_MAX = 9.0;
 
-function scaleFromSpan(span: number): number {
-  if (span <= 0) return FOCUS_SCALE_MAX;
-  return Math.min(FOCUS_SCALE_MAX, Math.max(FOCUS_SCALE_MIN, 1 + FOCUS_SCALE_SPAN_FACTOR / span));
+function computeDefaultFocusScale(boundingBox: CountryDefinition["boundingBox"]): number {
+  const countryWidth = boundingBox.maxX - boundingBox.minX;
+  const countryHeight = boundingBox.maxY - boundingBox.minY;
+  if (countryWidth <= 0 || countryHeight <= 0) return FOCUS_SCALE_MAX;
+  const targetWidth = OPERATIONAL_CANVAS_SIZE * TARGET_WIDTH_FRACTION;
+  const targetHeight = OPERATIONAL_CANVAS_SIZE * TARGET_HEIGHT_FRACTION;
+  const scale = Math.min(targetWidth / countryWidth, targetHeight / countryHeight);
+  return Math.min(FOCUS_SCALE_MAX, Math.max(FOCUS_SCALE_MIN, scale));
 }
 
-// Hand-reviewed overrides for the Index 3.2 initial set. Focus points are
-// each country's own largest-ring (mainland) polygon centroid rather than
-// its overall bounding-box centre - the same generic formula the
-// unconfigured default below uses would put the USA's focus point far out
-// in the Pacific, since its stored bounding box is stretched to the
-// Aleutian Islands near the antimeridian seam. Focus scale is likewise
-// derived from the mainland ring's own span rather than that stretched
-// bounding box. Computed once (see the analysis in the Index 3.2 commit),
-// not recalculated at runtime.
-const FOCUS_OVERRIDES: Record<string, { focusPoint: FocusPoint; defaultFocusScale: number }> = {
-  AUS: { focusPoint: { x: 842.6, y: 574.9 }, defaultFocusScale: 1.35 },
-  USA: { focusPoint: { x: 193.3, y: 378.1 }, defaultFocusScale: 1.28 },
-  GBR: { focusPoint: { x: 462.0, y: 320.5 }, defaultFocusScale: 1.35 },
-  JPN: { focusPoint: { x: 852.6, y: 390.3 }, defaultFocusScale: 1.35 },
-  ZAF: { focusPoint: { x: 538.9, y: 584.6 }, defaultFocusScale: 1.35 },
-  BRA: { focusPoint: { x: 321.8, y: 531.4 }, defaultFocusScale: 1.35 },
+// Hand-reviewed focus-point overrides for the Index 3.2 initial set - each
+// country's own largest-ring (mainland) polygon centroid rather than its
+// overall bounding-box centre, since the generic default below would put
+// the USA's focus point far out in the Pacific (its stored bounding box is
+// stretched to the Aleutian Islands near the antimeridian seam). Only
+// focusPoint is hand-reviewed here - defaultFocusScale always comes from
+// the uniform formula above, per Index 3.3's own "do not hardcode
+// country-specific scale values" instruction, even for these six.
+const FOCUS_OVERRIDES: Record<string, { focusPoint: FocusPoint }> = {
+  AUS: { focusPoint: { x: 842.6, y: 574.9 } },
+  USA: { focusPoint: { x: 193.3, y: 378.1 } },
+  GBR: { focusPoint: { x: 462.0, y: 320.5 } },
+  JPN: { focusPoint: { x: 852.6, y: 390.3 } },
+  ZAF: { focusPoint: { x: 538.9, y: 584.6 } },
+  BRA: { focusPoint: { x: 321.8, y: 531.4 } },
 };
 
 function buildFocusDefinition(country: CountryDefinition): CountryFocusDefinition {
   const override = FOCUS_OVERRIDES[country.iso3];
+  const defaultFocusScale = computeDefaultFocusScale(country.boundingBox);
   if (override) {
     return {
       ...country,
       focusPoint: override.focusPoint,
       cameraTarget: OPERATIONAL_CANVAS_CENTER,
-      defaultFocusScale: override.defaultFocusScale,
+      defaultFocusScale,
       isConfigured: true,
     };
   }
 
   // Sensible default for every country not yet hand-reviewed: the stored
-  // bounding box's own centre and span. Good enough to be usable
-  // everywhere immediately; not guaranteed accurate for countries whose
-  // bounding box is skewed by remote territories (the exact problem the
+  // bounding box's own centre. Good enough to be usable everywhere
+  // immediately; not guaranteed accurate for countries whose bounding box
+  // is skewed by remote territories (the exact problem the focus-point
   // overrides above exist to fix) - isConfigured: false flags exactly
   // which countries still need that same treatment.
   const { minX, minY, maxX, maxY } = country.boundingBox;
-  const span = Math.max(maxX - minX, maxY - minY);
   return {
     ...country,
     focusPoint: { x: (minX + maxX) / 2, y: (minY + maxY) / 2 },
     cameraTarget: OPERATIONAL_CANVAS_CENTER,
-    defaultFocusScale: scaleFromSpan(span),
+    defaultFocusScale,
     isConfigured: false,
   };
 }
