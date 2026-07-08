@@ -201,27 +201,35 @@ const QA_COUNTRIES = COUNTRY_REGISTRY;
 // devtools. No border/fill/highlight is added to the country itself.
 const SHOW_SELECTION_DEBUG = true;
 
-// Country Focus Animation Proof (Index 3.1, fixed Index 3.2A) - first proof
-// of the Country Focus animation, built on the real Active Country from
-// the Selection Engine rather than a hand-typed single-country path
-// (unlike the removed Index 1.9/1.9A proof).
+// Operational Country Focus Engine (Index 3.3) - the country must feel
+// lifted from the world map and brought forward, not zoomed to like a
+// conventional map product. The selected country is the real approved map
+// image (world-map-v17.png), clipped to its own Operational Geometry as a
+// mask only - no gold fill, no SVG polygon, no coloured overlay, no
+// border/outline/glow (superseding the Index 3.1/3.2A flat gold-fill
+// proof). The clip and the country's own <image> copy share the exact
+// same viewBox/fit as every other geometry overlay (Index 2.2C), so the
+// cut-out aligns pixel-for-pixel with the real map before it ever moves -
+// clip-path is evaluated in the element's own pre-transform coordinate
+// system, so the country is masked out of its true position first, then
+// that already-clipped cutout is rigidly translated/scaled as one piece.
 //
-// Index 3.2A bug: this originally computed the shape's own centre from the
-// selected country's raw COUNTRY_REGISTRY bounding box. That bounding box
-// is the extent of every ring in the country's geometry, including remote
-// territories - for the USA it spans x=-0.5 to x=1000.5 (Aleutian islands
-// stretch to the antimeridian seam), so its centre landed nowhere near the
-// mainland. Anchoring the scale/translate at that wrong point flung the
-// mainland and Alaska rings to unrelated positions instead of the canvas
-// centre - a large, oddly-placed filled block, not the intended focus
-// shape. Selecting through the Country Focus Registry (Index 3.2) instead
-// - which stores a reviewed focusPoint (the largest-ring/mainland
-// centroid, not the whole bounding box) for exactly this reason - fixes
-// USA and is the same generic lookup for every one of the 235 countries,
-// not a USA-specific branch.
-const COUNTRY_FOCUS_ANIMATION_MS = 650;
+// Total sequence is 650ms, staggered per the ticket's own spec rather than
+// one uniform fade:
+//   0-150ms    the cutout separates from the world (opacity fade-in)
+//   150-650ms  background dims and blurs (500ms, starting at 150ms so it
+//              finishes exactly when the sequence does)
+//   350-650ms  the cutout scales and moves to its Camera Target (300ms)
+// A soft drop-shadow grows in during the same 350-650ms window as the
+// move/scale, reinforcing "lifted and brought forward" rather than a flat
+// zoom.
+const FOCUS_SEPARATION_MS = 150;
+const FOCUS_BACKGROUND_MS = 500;
+const FOCUS_BACKGROUND_DELAY_MS = 150;
+const FOCUS_TRANSFORM_MS = 300;
+const FOCUS_TRANSFORM_DELAY_MS = 350; // 350 + 300 = 650, the full sequence
 
-function getCountryFocusTransform(iso3: string, boundingBox: ActiveCountry["boundingBox"], entered: boolean) {
+function getCountryFocusImageStyle(iso3: string, boundingBox: ActiveCountry["boundingBox"], entered: boolean) {
   const focus = getCountryFocusDefinition(iso3);
   // Defensive fallback only - every Active Country comes from
   // COUNTRY_REGISTRY, which COUNTRY_FOCUS_REGISTRY is built 1:1 from, so
@@ -239,7 +247,12 @@ function getCountryFocusTransform(iso3: string, boundingBox: ActiveCountry["boun
     // destination.
     transform: entered ? `translate(${shiftX}px, ${shiftY}px) scale(${scale})` : "translate(0px, 0px) scale(1)",
     opacity: entered ? 1 : 0,
-    transition: `transform ${COUNTRY_FOCUS_ANIMATION_MS}ms ease-out, opacity ${COUNTRY_FOCUS_ANIMATION_MS}ms ease-out`,
+    filter: entered ? "drop-shadow(0 14px 34px rgba(0, 0, 0, 0.55))" : "drop-shadow(0 0px 0px rgba(0, 0, 0, 0))",
+    transition: [
+      `opacity ${FOCUS_SEPARATION_MS}ms ease-in-out`,
+      `transform ${FOCUS_TRANSFORM_MS}ms ease-in-out ${FOCUS_TRANSFORM_DELAY_MS}ms`,
+      `filter ${FOCUS_TRANSFORM_MS}ms ease-in-out ${FOCUS_TRANSFORM_DELAY_MS}ms`,
+    ].join(", "),
   };
 }
 
@@ -407,16 +420,34 @@ function OperationalCanvas() {
           )}
           {layer.className === "operational-footprint-layer" && activeCountry && (
             <>
-              <div className="country-focus-dim-overlay" aria-hidden="true" />
+              <div
+                className={
+                  focusEntered
+                    ? "country-focus-dim-overlay country-focus-dim-overlay--visible"
+                    : "country-focus-dim-overlay"
+                }
+                aria-hidden="true"
+              />
               <svg
-                className="country-focus-shape"
+                className="country-focus-image-layer"
                 viewBox={OPERATIONAL_GEOMETRY_VIEWBOX}
                 preserveAspectRatio={OPERATIONAL_GEOMETRY_FIT}
                 aria-hidden="true"
               >
-                <path
-                  d={activeCountry.geometry}
-                  style={getCountryFocusTransform(activeCountry.iso3, activeCountry.boundingBox, focusEntered)}
+                <defs>
+                  <clipPath id={`country-focus-clip-${activeCountry.iso3}`} clipPathUnits="userSpaceOnUse">
+                    <path d={activeCountry.geometry} />
+                  </clipPath>
+                </defs>
+                <image
+                  href="/data/world-map-v17.png"
+                  x={0}
+                  y={0}
+                  width={1000}
+                  height={1000}
+                  preserveAspectRatio="xMidYMid slice"
+                  clipPath={`url(#country-focus-clip-${activeCountry.iso3})`}
+                  style={getCountryFocusImageStyle(activeCountry.iso3, activeCountry.boundingBox, focusEntered)}
                 />
               </svg>
             </>

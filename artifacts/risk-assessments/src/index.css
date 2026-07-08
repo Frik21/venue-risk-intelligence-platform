@@ -198,12 +198,13 @@
   display: block;
   object-fit: cover;
   object-position: center center;
+  filter: blur(0px) brightness(1);
+  /* Index 3.3 (Operational Country Focus Engine): background dim/blur
+     begins at 150ms and finishes at 650ms (150+500), matching the
+     Country Focus animation's own timeline. */
+  transition: filter 500ms ease-in-out 150ms;
 }
 
-/* Country Focus Animation Proof (Index 3.1): dims/blurs the shared base
-   map while a country is Active, plus a full-screen dim/blur overlay and
-   the real registry geometry as a gold focus shape - no border/outline/
-   label/panel, per the ticket spec. */
 .approved-base-map-image--focused {
   filter: blur(10px) brightness(0.45);
 }
@@ -218,6 +219,11 @@
   pointer-events: none;
 }
 
+/* Operational Country Focus Engine (Index 3.3): the background dim/blur
+   overlay is always mounted (never conditionally removed) so it has
+   something to fade from/to - opacity 0 by default, only visible once
+   entered. Same 150ms-delayed, 500ms fade as the base map's own filter
+   transition above, so both finish together at 650ms. */
 .country-focus-dim-overlay {
   position: absolute;
   inset: 0;
@@ -227,20 +233,27 @@
   background: rgba(11, 15, 20, 0.55);
   backdrop-filter: blur(6px);
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 500ms ease-in-out 150ms;
 }
 
-.country-focus-shape {
+.country-focus-dim-overlay--visible {
+  opacity: 1;
+}
+
+/* Operational Country Focus Engine (Index 3.3): the selected country is
+   the real approved map image, clipped to its own Operational Geometry -
+   no gold fill, no SVG polygon, no coloured overlay, no border/outline/
+   glow. The clip-path and the <image> both live in the same viewBox as
+   every other geometry overlay (Index 2.2C), so the cut-out aligns
+   pixel-for-pixel with the real map underneath before it ever moves. */
+.country-focus-image-layer {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   z-index: 11;
   pointer-events: none;
-}
-
-.country-focus-shape path {
-  fill: rgba(255, 196, 87, 0.82);
-  stroke: none;
 }
 
 .country-intelligence-layer {
