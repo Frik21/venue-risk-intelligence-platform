@@ -4,6 +4,7 @@ import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-reac
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import { clearSelection, selectCountry, subscribe, unsubscribe } from "@/lib/country-selection-engine";
 import type { ActiveCountry } from "@/lib/country-selection-engine";
+import { getCountryFocusDefinition } from "@/lib/country-focus-registry";
 
 // Background tone for the outer page wrapper (behind MapLayer).
 const OCEAN_COLOR = "#00081a";
@@ -200,32 +201,43 @@ const QA_COUNTRIES = COUNTRY_REGISTRY;
 // devtools. No border/fill/highlight is added to the country itself.
 const SHOW_SELECTION_DEBUG = true;
 
-// Country Focus Animation Proof (Index 3.1) - first proof of the Country
-// Focus animation, built on the real Active Country from the Selection
-// Engine rather than a hand-typed single-country path (unlike the removed
-// Index 1.9/1.9A proof). The focus shape's own centre is computed from its
-// COUNTRY_REGISTRY bounding box, so this works for any of the 235
-// countries, not just one - no country-specific hack. Scale is anchored at
-// that centre (via transform-origin) so the shape grows in place before
-// being translated to the canvas centre in the same transform.
+// Country Focus Animation Proof (Index 3.1, fixed Index 3.2A) - first proof
+// of the Country Focus animation, built on the real Active Country from
+// the Selection Engine rather than a hand-typed single-country path
+// (unlike the removed Index 1.9/1.9A proof).
+//
+// Index 3.2A bug: this originally computed the shape's own centre from the
+// selected country's raw COUNTRY_REGISTRY bounding box. That bounding box
+// is the extent of every ring in the country's geometry, including remote
+// territories - for the USA it spans x=-0.5 to x=1000.5 (Aleutian islands
+// stretch to the antimeridian seam), so its centre landed nowhere near the
+// mainland. Anchoring the scale/translate at that wrong point flung the
+// mainland and Alaska rings to unrelated positions instead of the canvas
+// centre - a large, oddly-placed filled block, not the intended focus
+// shape. Selecting through the Country Focus Registry (Index 3.2) instead
+// - which stores a reviewed focusPoint (the largest-ring/mainland
+// centroid, not the whole bounding box) for exactly this reason - fixes
+// USA and is the same generic lookup for every one of the 235 countries,
+// not a USA-specific branch.
 const COUNTRY_FOCUS_ANIMATION_MS = 650;
-const COUNTRY_FOCUS_SCALE = 1.06;
-const OPERATIONAL_CANVAS_CENTER = 500; // mid-point of the 1000x1000 alignment-engine space
 
-function getCountryFocusTransform(boundingBox: ActiveCountry["boundingBox"], entered: boolean) {
-  const centerX = (boundingBox.minX + boundingBox.maxX) / 2;
-  const centerY = (boundingBox.minY + boundingBox.maxY) / 2;
-  const shiftX = OPERATIONAL_CANVAS_CENTER - centerX;
-  const shiftY = OPERATIONAL_CANVAS_CENTER - centerY;
+function getCountryFocusTransform(iso3: string, boundingBox: ActiveCountry["boundingBox"], entered: boolean) {
+  const focus = getCountryFocusDefinition(iso3);
+  // Defensive fallback only - every Active Country comes from
+  // COUNTRY_REGISTRY, which COUNTRY_FOCUS_REGISTRY is built 1:1 from, so
+  // this should never be reached.
+  const focusPoint = focus?.focusPoint ?? { x: (boundingBox.minX + boundingBox.maxX) / 2, y: (boundingBox.minY + boundingBox.maxY) / 2 };
+  const cameraTarget = focus?.cameraTarget ?? { x: 500, y: 500 };
+  const scale = focus?.defaultFocusScale ?? 1.06;
+  const shiftX = cameraTarget.x - focusPoint.x;
+  const shiftY = cameraTarget.y - focusPoint.y;
   return {
-    transformOrigin: `${centerX}px ${centerY}px`,
+    transformOrigin: `${focusPoint.x}px ${focusPoint.y}px`,
     // Starts untranslated (at the country's real geographic position) and
     // unscaled, so the transition genuinely animates a move toward centre
     // alongside the fade/scale - not just a fade-in already at the
     // destination.
-    transform: entered
-      ? `translate(${shiftX}px, ${shiftY}px) scale(${COUNTRY_FOCUS_SCALE})`
-      : "translate(0px, 0px) scale(1)",
+    transform: entered ? `translate(${shiftX}px, ${shiftY}px) scale(${scale})` : "translate(0px, 0px) scale(1)",
     opacity: entered ? 1 : 0,
     transition: `transform ${COUNTRY_FOCUS_ANIMATION_MS}ms ease-out, opacity ${COUNTRY_FOCUS_ANIMATION_MS}ms ease-out`,
   };
@@ -404,7 +416,7 @@ function OperationalCanvas() {
               >
                 <path
                   d={activeCountry.geometry}
-                  style={getCountryFocusTransform(activeCountry.boundingBox, focusEntered)}
+                  style={getCountryFocusTransform(activeCountry.iso3, activeCountry.boundingBox, focusEntered)}
                 />
               </svg>
             </>
