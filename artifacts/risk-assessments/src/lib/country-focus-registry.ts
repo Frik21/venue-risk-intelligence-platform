@@ -33,10 +33,25 @@ const OPERATIONAL_CANVAS_CENTER: CameraTarget = { x: 500, y: 500 };
 // (no distortion) - the same single multiplier is applied to both axes.
 // Clamped so the formula can't blow up a sliver country or shrink a huge
 // one to nothing.
+//
+// Scaling Engine refinement (Index 3.4B): the upper clamp must sit above
+// the largest raw scale any real country needs to reach the 45% target,
+// otherwise every country past that size gets capped at the same
+// ceiling and reads as visually smaller than the 45% target implies -
+// exactly what made Russia/USA/Australia/Brazil (whose raw scale need is
+// low) look inconsistent next to South Africa/Japan/UK/Syria (whose raw
+// scale need was above the old 9.0 ceiling and so got flattened to it).
+// The highest raw requirement across every ordinary country's own
+// largest-ring geometry tops out in the mid-20s (Syria, ~24.6x); only
+// degenerate micro-territories simplified down to a handful of pixels
+// (e.g. Nauru, Monaco) demand scales in the hundreds or thousands, which
+// is not a "sensible limit" to chase - clamping those is correct
+// behaviour, not a bug. 26 sits just above every ordinary country's
+// requirement while still capping the degenerate cases.
 const OPERATIONAL_CANVAS_SIZE = 1000; // the shared 1000x1000 alignment-engine space
 const TARGET_DIMENSION_FRACTION = 0.45;
 const FOCUS_SCALE_MIN = 0.85;
-const FOCUS_SCALE_MAX = 9.0;
+const FOCUS_SCALE_MAX = 26.0;
 
 function computeDefaultFocusScale(boundingBox: CountryDefinition["boundingBox"]): number {
   const countryWidth = boundingBox.maxX - boundingBox.minX;
