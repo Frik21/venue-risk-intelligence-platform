@@ -198,15 +198,10 @@
   display: block;
   object-fit: cover;
   object-position: center center;
-  filter: blur(0px) brightness(1);
-  /* Index 3.3 (Operational Country Focus Engine): background dim/blur
-     begins at 150ms and finishes at 650ms (150+500), matching the
-     Country Focus animation's own timeline. */
-  transition: filter 500ms ease-in-out 150ms;
-}
-
-.approved-base-map-image--focused {
-  filter: blur(10px) brightness(0.45);
+  /* filter + transition are inline (Index 3.3/3.4 getBackgroundFocusStyle)
+     since the transition timing itself must be direction-aware - staggered
+     on the way in, a single uniform 450ms ease-out on the way back to the
+     world map. */
 }
 
 .operational-layers {
@@ -219,11 +214,11 @@
   pointer-events: none;
 }
 
-/* Operational Country Focus Engine (Index 3.3): the background dim/blur
-   overlay is always mounted (never conditionally removed) so it has
-   something to fade from/to - opacity 0 by default, only visible once
-   entered. Same 150ms-delayed, 500ms fade as the base map's own filter
-   transition above, so both finish together at 650ms. */
+/* Operational Country Focus Engine (Index 3.3/3.4): the background dim/
+   blur overlay is always mounted while a country is rendered (never
+   conditionally removed) so it has something to fade from/to. opacity +
+   transition are inline (getDimOverlayStyle) for the same direction-aware
+   reason as the base map's filter above. */
 .country-focus-dim-overlay {
   position: absolute;
   inset: 0;
@@ -233,12 +228,6 @@
   background: rgba(11, 15, 20, 0.55);
   backdrop-filter: blur(6px);
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 500ms ease-in-out 150ms;
-}
-
-.country-focus-dim-overlay--visible {
-  opacity: 1;
 }
 
 /* Operational Country Focus Engine (Index 3.3): the selected country is

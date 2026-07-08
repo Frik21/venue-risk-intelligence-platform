@@ -214,8 +214,8 @@ const SHOW_SELECTION_DEBUG = true;
 // system, so the country is masked out of its true position first, then
 // that already-clipped cutout is rigidly translated/scaled as one piece.
 //
-// Total sequence is 650ms, staggered per the ticket's own spec rather than
-// one uniform fade:
+// Entrance sequence is 650ms, staggered per the ticket's own spec rather
+// than one uniform fade:
 //   0-150ms    the cutout separates from the world (opacity fade-in)
 //   150-650ms  background dims and blurs (500ms, starting at 150ms so it
 //              finishes exactly when the sequence does)
@@ -223,11 +223,27 @@ const SHOW_SELECTION_DEBUG = true;
 // A soft drop-shadow grows in during the same 350-650ms window as the
 // move/scale, reinforcing "lifted and brought forward" rather than a flat
 // zoom.
+//
+// Index 3.4: the RETURN to the world map is its own simpler, uniform
+// 450ms ease-out on every property at once (not the staggered entrance
+// timing) - CSS transitions are direction-aware for free here, since the
+// transition rule that applies to a property change is whichever
+// `transition` value is present on the style being transitioned TO, so
+// the "entered" style below carries the staggered entrance rule and the
+// "not entered" style carries the uniform return rule.
 const FOCUS_SEPARATION_MS = 150;
 const FOCUS_BACKGROUND_MS = 500;
 const FOCUS_BACKGROUND_DELAY_MS = 150;
 const FOCUS_TRANSFORM_MS = 300;
-const FOCUS_TRANSFORM_DELAY_MS = 350; // 350 + 300 = 650, the full sequence
+const FOCUS_TRANSFORM_DELAY_MS = 350; // 350 + 300 = 650, the full entrance sequence
+const FOCUS_RETURN_MS = 450;
+
+const FOCUS_ENTER_TRANSITION = [
+  `opacity ${FOCUS_SEPARATION_MS}ms ease-in-out`,
+  `transform ${FOCUS_TRANSFORM_MS}ms ease-in-out ${FOCUS_TRANSFORM_DELAY_MS}ms`,
+  `filter ${FOCUS_TRANSFORM_MS}ms ease-in-out ${FOCUS_TRANSFORM_DELAY_MS}ms`,
+].join(", ");
+const FOCUS_RETURN_TRANSITION = `opacity ${FOCUS_RETURN_MS}ms ease-out, transform ${FOCUS_RETURN_MS}ms ease-out, filter ${FOCUS_RETURN_MS}ms ease-out`;
 
 function getCountryFocusImageStyle(iso3: string, boundingBox: ActiveCountry["boundingBox"], entered: boolean) {
   const focus = getCountryFocusDefinition(iso3);
@@ -248,11 +264,35 @@ function getCountryFocusImageStyle(iso3: string, boundingBox: ActiveCountry["bou
     transform: entered ? `translate(${shiftX}px, ${shiftY}px) scale(${scale})` : "translate(0px, 0px) scale(1)",
     opacity: entered ? 1 : 0,
     filter: entered ? "drop-shadow(0 14px 34px rgba(0, 0, 0, 0.55))" : "drop-shadow(0 0px 0px rgba(0, 0, 0, 0))",
-    transition: [
-      `opacity ${FOCUS_SEPARATION_MS}ms ease-in-out`,
-      `transform ${FOCUS_TRANSFORM_MS}ms ease-in-out ${FOCUS_TRANSFORM_DELAY_MS}ms`,
-      `filter ${FOCUS_TRANSFORM_MS}ms ease-in-out ${FOCUS_TRANSFORM_DELAY_MS}ms`,
-    ].join(", "),
+    transition: entered ? FOCUS_ENTER_TRANSITION : FOCUS_RETURN_TRANSITION,
+    // Click-outside detection (Index 3.4) tests against this exact clipped
+    // shape, not the country's raw (unfocused) hit-zone - clip-path
+    // restricts hit-testing to the painted region same as rendering, so a
+    // click only registers here if it lands inside the visually focused
+    // country. The click handler stops propagation so the canvas-level
+    // "click outside" handler below never fires for it.
+    pointerEvents: "auto" as const,
+  };
+}
+
+// Index 3.4: background dim/blur uses the same direction-aware transition
+// pattern as the country image above - staggered+delayed on the way in,
+// a single uniform 450ms ease-out on the way back to the world map.
+function getBackgroundFocusStyle(entered: boolean) {
+  return {
+    filter: entered ? "blur(10px) brightness(0.45)" : "blur(0px) brightness(1)",
+    transition: entered
+      ? `filter ${FOCUS_BACKGROUND_MS}ms ease-in-out ${FOCUS_BACKGROUND_DELAY_MS}ms`
+      : `filter ${FOCUS_RETURN_MS}ms ease-out`,
+  };
+}
+
+function getDimOverlayStyle(entered: boolean) {
+  return {
+    opacity: entered ? 1 : 0,
+    transition: entered
+      ? `opacity ${FOCUS_BACKGROUND_MS}ms ease-in-out ${FOCUS_BACKGROUND_DELAY_MS}ms`
+      : `opacity ${FOCUS_RETURN_MS}ms ease-out`,
   };
 }
 
@@ -275,6 +315,11 @@ function OperationalCanvas() {
   const showDebugLayerNumbers = false;
   const [calibrationPoint, setCalibrationPoint] = useState<{ x: number; y: number } | null>(null);
   const [activeCountry, setActiveCountry] = useState<ActiveCountry | null>(null);
+  // What's actually mounted/animating - lags behind activeCountry while a
+  // return-to-world-map animation (Index 3.4) is playing, so the country
+  // cutout and background dim/blur have something to transition FROM
+  // instead of vanishing the instant Active Country clears.
+  const [renderedCountry, setRenderedCountry] = useState<ActiveCountry | null>(null);
   const [focusEntered, setFocusEntered] = useState(false);
 
   useEffect(() => {
@@ -296,20 +341,28 @@ function OperationalCanvas() {
   // from. A second rAF guards against the browser coalescing both paints
   // into one (confirmed necessary - a single rAF occasionally skipped the
   // transition entirely in testing).
+  //
+  // Index 3.4: clearing selection no longer unmounts the focus layer
+  // immediately - it flips focusEntered back to false (playing the 450ms
+  // return transition) and only clears renderedCountry, actually removing
+  // the DOM nodes, once that transition has had time to finish.
   useEffect(() => {
-    if (!activeCountry) {
+    if (activeCountry) {
+      setRenderedCountry(activeCountry);
       setFocusEntered(false);
-      return;
+      let secondFrame = 0;
+      const firstFrame = requestAnimationFrame(() => {
+        secondFrame = requestAnimationFrame(() => setFocusEntered(true));
+      });
+      return () => {
+        cancelAnimationFrame(firstFrame);
+        cancelAnimationFrame(secondFrame);
+      };
     }
+
     setFocusEntered(false);
-    let secondFrame = 0;
-    const firstFrame = requestAnimationFrame(() => {
-      secondFrame = requestAnimationFrame(() => setFocusEntered(true));
-    });
-    return () => {
-      cancelAnimationFrame(firstFrame);
-      cancelAnimationFrame(secondFrame);
-    };
+    const returnTimeout = window.setTimeout(() => setRenderedCountry(null), FOCUS_RETURN_MS);
+    return () => window.clearTimeout(returnTimeout);
   }, [activeCountry]);
 
   const [qaCountryIndex, setQaCountryIndex] = useState(0);
@@ -369,9 +422,18 @@ function OperationalCanvas() {
     setCalibrationPoint({ x, y });
   }
 
-  function handleCalibrationClick() {
-    if (!calibrationPoint) return;
-    console.log("Operational Canvas calibration point:", calibrationPoint);
+  // Index 3.4: click-outside-to-clear. Every actionable shape (the country
+  // hit-zones below, and the focused country's own clipped image) stops
+  // propagation on click, so this canvas-level handler only ever fires for
+  // clicks that didn't land on anything - i.e. genuinely "outside" any
+  // country, focused or not.
+  function handleCanvasClick() {
+    if (activeCountry) {
+      clearSelection();
+    }
+    if (SHOW_CANVAS_CALIBRATION && calibrationPoint) {
+      console.log("Operational Canvas calibration point:", calibrationPoint);
+    }
   }
 
   return (
@@ -379,7 +441,7 @@ function OperationalCanvas() {
       className="operational-canvas"
       aria-label="Operational Canvas"
       onMouseMove={SHOW_CANVAS_CALIBRATION ? handleCalibrationMove : undefined}
-      onClick={SHOW_CANVAS_CALIBRATION ? handleCalibrationClick : undefined}
+      onClick={handleCanvasClick}
     >
       {CANVAS_LAYERS.map((layer) => (
         <div
@@ -390,11 +452,8 @@ function OperationalCanvas() {
         >
           {layer.className === "base-map-layer" && (
             <img
-              className={
-                activeCountry
-                  ? "approved-base-map-image approved-base-map-image--focused"
-                  : "approved-base-map-image"
-              }
+              className="approved-base-map-image"
+              style={getBackgroundFocusStyle(focusEntered)}
               src="/data/world-map-v17.png"
               alt=""
               draggable={false}
@@ -413,21 +472,17 @@ function OperationalCanvas() {
                   key={country.id}
                   d={country.svgPath}
                   className="country-hit-zone"
-                  onClick={() => selectCountry(country)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    selectCountry(country);
+                  }}
                 />
               ))}
             </svg>
           )}
-          {layer.className === "operational-footprint-layer" && activeCountry && (
+          {layer.className === "operational-footprint-layer" && renderedCountry && (
             <>
-              <div
-                className={
-                  focusEntered
-                    ? "country-focus-dim-overlay country-focus-dim-overlay--visible"
-                    : "country-focus-dim-overlay"
-                }
-                aria-hidden="true"
-              />
+              <div className="country-focus-dim-overlay" style={getDimOverlayStyle(focusEntered)} aria-hidden="true" />
               <svg
                 className="country-focus-image-layer"
                 viewBox={OPERATIONAL_GEOMETRY_VIEWBOX}
@@ -435,8 +490,8 @@ function OperationalCanvas() {
                 aria-hidden="true"
               >
                 <defs>
-                  <clipPath id={`country-focus-clip-${activeCountry.iso3}`} clipPathUnits="userSpaceOnUse">
-                    <path d={activeCountry.geometry} />
+                  <clipPath id={`country-focus-clip-${renderedCountry.iso3}`} clipPathUnits="userSpaceOnUse">
+                    <path d={renderedCountry.geometry} />
                   </clipPath>
                 </defs>
                 <image
@@ -446,8 +501,9 @@ function OperationalCanvas() {
                   width={1000}
                   height={1000}
                   preserveAspectRatio="xMidYMid slice"
-                  clipPath={`url(#country-focus-clip-${activeCountry.iso3})`}
-                  style={getCountryFocusImageStyle(activeCountry.iso3, activeCountry.boundingBox, focusEntered)}
+                  clipPath={`url(#country-focus-clip-${renderedCountry.iso3})`}
+                  onClick={(event) => event.stopPropagation()}
+                  style={getCountryFocusImageStyle(renderedCountry.iso3, renderedCountry.boundingBox, focusEntered)}
                 />
               </svg>
             </>
