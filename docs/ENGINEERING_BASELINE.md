@@ -289,6 +289,84 @@ doing so would have reversed the Index 3.4A decision to keep the registry
 free of hardcoded per-country values, and the measured gap didn't justify
 that trade-off.
 
+**3.8 — United States, Canada, Brazil, United Kingdom, Australia, New
+Zealand (Process Index 3.8, "Fix Country Focus For Problem Countries").**
+Reproduced all six using the same live-render, high-contrast-proof
+technique as 3.7 (dim overlay swapped to solid red so the clipped/scaled
+cutout is unambiguous against the base map, since the approved palette's
+own land/ocean contrast is too low to eyeball reliably).
+
+Findings per country:
+- **USA**: mainland correct, but Alaska (a real, "significant" secondary
+  ring per `FOCUS_SIGNIFICANT_RING_AREA_FRACTION`) rendered close enough
+  to the top edge of the viewport to be at risk of clipping, pulling the
+  whole composition's visual balance up-left.
+- **Canada**: high-Arctic archipelago visibly clipped at the top edge of
+  the viewport - a real, reproducible framing bug, not a fragment/render
+  artifact.
+- **Brazil**: correct - single compact landmass, no secondary "significant"
+  ring, unaffected either way.
+- **United Kingdom**: correct framing/centring/scale. Coastline shows a
+  few sharp inward notches (e.g. near The Wash / Thames Estuary) at its
+  high default scale (10.9x) - confirmed via a raw-vs-simplified clip
+  path and nonzero-vs-evenodd fill-rule comparison that this is **not**
+  a clip-path or fill-rule bug, but the pre-generated registry
+  geometry's own simplification resolution becoming visible at high
+  per-country zoom. Left as-is: out of scope (would mean regenerating
+  `country-registry.ts` from source, which this ticket's file list does
+  not license, and it doesn't violate any of the ticket's required-result
+  criteria - it's a concave notch in one connected shape, not a
+  disconnected fragment or a rectangular patch).
+- **Australia**: re-verified correct, consistent with 3.7 - has no
+  secondary ring anywhere near the significance threshold (Tasmania is
+  ~1.2% of the mainland's area), so it was never exposed to the bug
+  below.
+- **New Zealand**: North Island visibly clipped at the top edge - the
+  same bug as Canada, on a smaller scale.
+
+**Shared root cause** (`country-focus-registry.ts`,
+`constrainScaleForVisibility`): the Index 3.4I visibility constraint
+only ever checked the *vertical* offset of a country's significant
+secondary territory, on the stated assumption that the Operational
+Canvas's world-view viewBox ("xMidYMid slice") never crops horizontally
+on a landscape viewport. That assumption is true for the passive
+world-view scaling, but the Country Focus transform applies its own
+additional translate+scale on top of it - and the pre-focus local space
+already fills the viewport edge-to-edge horizontally with zero spare
+margin, so a focus-scale transform can push real territory off the
+left/right edges too, not just top/bottom. Separately, the existing
+`FOCUS_SAFE_VERTICAL_HALF_EXTENT` constant (300) was never converted
+through the world-view viewBox's own scale factor
+(`viewportWidth / 1000`, e.g. 1.6x at 1600px wide): 300 local units at
+that scale is already 480 screen px, past the 450px half-height of a
+900px-tall viewport before the focus scale is even multiplied in -
+under-constraining exactly the way Canada and New Zealand's clipping
+demonstrated.
+
+**Fix**: added a matching horizontal check
+(`FOCUS_SAFE_HORIZONTAL_HALF_EXTENT = 450`) alongside the existing
+vertical one, and reduced the vertical constant to `250` so it actually
+holds at common wide viewports. Both changes are generic, apply to all
+235 countries via the same formula, and only ever reduce a candidate
+scale (never increase it) - no per-country override, no registry data
+edited by hand. Verified against every ring individually (not just the
+one driving the old bug) that applying the check to *all* non-degenerate
+rings instead of just "significant" ones over-corrects (shrinks the USA
+to its scale floor just to keep a peripheral Aleutian speck on-screen),
+confirming the existing significance filter should stay relative, not
+absolute.
+
+Before/after applied `defaultFocusScale`:
+
+| Country | Before | After | Visible clipping before | Visible clipping after |
+|---|---|---|---|---|
+| USA | 1.806 | 1.505 | Alaska near top edge | none |
+| CAN | 1.254 | 1.045 | Arctic archipelago clipped at top | none |
+| BRA | 3.940 | 3.940 | none | none |
+| GBR | 10.922 | 10.922 | none (coastline notch, separate issue) | unchanged |
+| AUS | 4.007 | 4.007 | none | none |
+| NZL | 8.689 | 7.240 | North Island clipped at top | none |
+
 ---
 
 ## Current Development Workflow

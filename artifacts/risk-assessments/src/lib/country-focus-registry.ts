@@ -148,45 +148,73 @@ function summarizeRings(svgPath: string): RingSummary[] {
 // viewports (reported directly: "US mainland showing... Alaska is cut
 // off").
 //
-// The Operational Canvas's viewBox is always shown at FULL WIDTH for any
-// wider-than-tall browser window (Index 2.2's "xMidYMid slice"
-// convention scales to cover width first whenever the viewport is
-// landscape, which is this product's only real usage shape) - only the
-// VERTICAL extent ever gets cropped, more so on wider monitors. So this
-// constrains scale only on the vertical axis, and only for OTHER
-// significant rings - not the largest ring itself, whose own natural
-// spread around its own centroid is already exactly what the 45%-target
-// formula above accounts for; re-checking it here would fight that
-// formula on every ordinary, single-landmass country (Brazil, for
-// example, has no second territory at all, yet its own mainland already
-// spans close to the target fraction - that is correct, not a bug).
-// "Significant" means at least a meaningful fraction of the largest
+// Index 3.8 bug fix: the Index 3.4I comment above assumed only the
+// VERTICAL extent ever gets cropped, because the Operational Canvas's own
+// world-view viewBox ("xMidYMid slice") scales to cover width first on a
+// landscape viewport, so the full 0-1000 horizontal range is always shown
+// with zero crop. That is true for the passive world-view scaling - but
+// the Country Focus transform applies its OWN additional translate+scale
+// on top of it, centred on the focus point. Because the pre-focus local
+// space already fills the viewport edge-to-edge horizontally with zero
+// spare margin (unlike vertically, where the slice crop already hides a
+// large band of the local space even at rest), any horizontal excursion
+// introduced by that focus-scale transform can push real territory off
+// the left/right edges just as easily as off the top/bottom - confirmed
+// directly: Canada's high-Arctic islands and New Zealand's North Island
+// were both measured rendering partly off-screen (mostly above the top
+// edge) even though a "significant ring" existed and the old vertical-only
+// constraint had already reduced the scale - the constant it reduced
+// scale TO was itself too large. FOCUS_SAFE_VERTICAL_HALF_EXTENT=300 was
+// picked without converting through the world-view viewBox's own scale
+// factor (viewportWidth/1000, e.g. 1.6x at a 1600px-wide viewport): 300
+// local units at that scale is 480 screen px, already past the 450px
+// half-height of a 900px-tall viewport before the focus scale is even
+// multiplied in. 250 keeps the same margin's intent while actually
+// staying under a common wide (~16:9) viewport's real half-height. The
+// horizontal counterpart uses the same reasoning against the viewport's
+// own half-WIDTH, which is why its safe extent (450) is close to, but
+// deliberately under, the theoretical max of 500 (half of the always-
+// fully-visible 1000-unit local width) - it needs a margin of its own for
+// the same reason 250 undercuts 300.
+//
+// "Significant" still means at least a meaningful fraction of the largest
 // ring's own area, so a real second territory (Alaska) counts but a
 // peripheral sliver a few pixels wide does not - otherwise a single
-// far-flung sliver would crush the zoom for every country that has one.
-// The safe half-extent is deliberately generous (larger than the
-// largest ring's own typical spread) so nearby secondary islands
-// (Hokkaido next to Honshu, the Isle of Wight next to Great Britain)
-// never trigger it - only genuinely distant territory does. This only
-// ever REDUCES the candidate scale (never increases it), and runs
-// generically for all 235 countries, not as a per-country override.
+// far-flung sliver would crush the zoom for every country that has one
+// (confirmed: applying this per-axis check to every non-degenerate ring
+// regardless of size, instead of only "significant" ones, shrinks the USA
+// down to the minimum clamp just to keep the westernmost Aleutian speck
+// on-screen - the opposite of "large enough to inspect"). Nearby secondary
+// islands (Hokkaido next to Honshu, the Isle of Wight next to Great
+// Britain) still never trigger either check - only genuinely distant,
+// substantial territory does. This only ever REDUCES the candidate scale
+// (never increases it), and runs generically for all 235 countries, not
+// as a per-country override.
 const FOCUS_SIGNIFICANT_RING_AREA_FRACTION = 0.05;
-const FOCUS_SAFE_VERTICAL_HALF_EXTENT = 300;
+const FOCUS_SAFE_VERTICAL_HALF_EXTENT = 250;
+const FOCUS_SAFE_HORIZONTAL_HALF_EXTENT = 450;
 
 function constrainScaleForVisibility(rings: RingSummary[], focusPoint: Point, candidateScale: number): number {
   if (rings.length === 0) return candidateScale;
   const largestArea = Math.max(...rings.map((ring) => ring.area));
   if (largestArea <= 0) return candidateScale;
   let maxVerticalOffset = 0;
+  let maxHorizontalOffset = 0;
   for (const ring of rings) {
     if (ring.area >= largestArea) continue; // the largest ring's own spread is not re-checked here
     if (ring.area < largestArea * FOCUS_SIGNIFICANT_RING_AREA_FRACTION) continue;
-    const { minY, maxY } = ring.boundingBox;
+    const { minX, minY, maxX, maxY } = ring.boundingBox;
     maxVerticalOffset = Math.max(maxVerticalOffset, Math.abs(minY - focusPoint.y), Math.abs(maxY - focusPoint.y));
+    maxHorizontalOffset = Math.max(maxHorizontalOffset, Math.abs(minX - focusPoint.x), Math.abs(maxX - focusPoint.x));
   }
-  if (maxVerticalOffset <= 0) return candidateScale;
-  const visibilityScale = FOCUS_SAFE_VERTICAL_HALF_EXTENT / maxVerticalOffset;
-  return Math.min(candidateScale, visibilityScale);
+  let visibilityScale = candidateScale;
+  if (maxVerticalOffset > 0) {
+    visibilityScale = Math.min(visibilityScale, FOCUS_SAFE_VERTICAL_HALF_EXTENT / maxVerticalOffset);
+  }
+  if (maxHorizontalOffset > 0) {
+    visibilityScale = Math.min(visibilityScale, FOCUS_SAFE_HORIZONTAL_HALF_EXTENT / maxHorizontalOffset);
+  }
+  return visibilityScale;
 }
 
 function buildFocusDefinition(country: CountryDefinition): CountryFocusDefinition {
