@@ -256,6 +256,41 @@ flag) is currently hardcoded `false`.
 
 ---
 
+## Country Focus Verification Log
+
+Spot-checks of the Country Focus Engine's rendered output against the
+Product Constitution's "lifted, not zoomed" requirement, recorded as they
+happen so future sessions don't have to re-derive them.
+
+**3.7 — Australia (Process Index 3.7, "Perfect Australia Operational
+Focus").** Verified the generic, non-hardcoded Country Focus Registry
+values already computed for Australia — no registry edit was made.
+Verification used the running app (Playwright over a real, non-headless
+Chromium under Xvfb), not static code reading, because the approved map's
+"earth at night" palette is low-contrast enough that the lift is easy to
+misjudge from a screenshot alone:
+
+- `getScreenCTM()` on the focused `<image>` confirmed the composed
+  transform matrix is exact (`1.6 × 4.007 = 6.4114` scale, matching
+  translate values).
+- `elementFromPoint()` at the intended screen centre returned the focused
+  image element on top, as expected.
+- A high-contrast proof render (dim overlay swapped to solid red)
+  revealed a correctly shaped, scaled, and positioned Australia cutout.
+- Pixel-level connected-component measurement of that cutout: **44.7% of
+  viewport width**, against the ticket's ~45% target — mainland and
+  Tasmania both rendered, reasonably centred.
+
+Conclusion: Australia's current Focus Point (`{ x: 842.63, y: 574.91 }`,
+the mainland ring's own centroid), Camera Target (`{ x: 500, y: 500 }`),
+and Default Focus Scale (`4.007`) already satisfy the stated visual goal
+via the existing generic algorithm. No per-country override was added -
+doing so would have reversed the Index 3.4A decision to keep the registry
+free of hardcoded per-country values, and the measured gap didn't justify
+that trade-off.
+
+---
+
 ## Current Development Workflow
 
 Per `CLAUDE.md` (project instructions, checked into the repo):
