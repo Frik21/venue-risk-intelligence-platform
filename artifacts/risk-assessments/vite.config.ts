@@ -26,6 +26,24 @@ if (!basePath) {
   );
 }
 
+// DEV-1: GitHub Codespaces forwards this dev server through its own HTTPS
+// edge proxy (https://<codespace-name>-<port>.app.github.dev), which is a
+// different host/port than the one Vite's dev server actually binds to
+// inside the container (0.0.0.0:5173, plain HTTP). Vite's HMR client has
+// no way to know that externally-visible host/port on its own - left at
+// its defaults it tries to open a websocket back to the container's own
+// address, which the browser (talking to the forwarded HTTPS URL) cannot
+// reach, so it keeps retrying/failing. Codespaces sets CODESPACE_NAME and
+// GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN in every codespace
+// automatically - using them here to point the HMR client at the real
+// forwarded HTTPS host on port 443 (wss, since the forwarding proxy
+// terminates TLS there) fixes this without hardcoding any codespace name.
+// Local (non-Codespaces) dev is untouched - hmr stays at its normal
+// same-origin default there.
+const codespaceName = process.env.CODESPACE_NAME;
+const codespacePortForwardingDomain = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
+const isCodespaces = process.env.CODESPACES === "true" && Boolean(codespaceName) && Boolean(codespacePortForwardingDomain);
+
 export default defineConfig({
   base: basePath,
   plugins: [
@@ -66,6 +84,15 @@ export default defineConfig({
     fs: {
       strict: true,
     },
+    ...(isCodespaces
+      ? {
+          hmr: {
+            protocol: "wss",
+            host: `${codespaceName}-${port}.${codespacePortForwardingDomain}`,
+            clientPort: 443,
+          },
+        }
+      : {}),
   },
   preview: {
     port,
