@@ -120,27 +120,81 @@ function ringAreaAndCentroid(ring: Point[]): { area: number; centroid: Point } |
   };
 }
 
-function largestRingCentroidAndBounds(
-  svgPath: string,
-): { centroid: Point; boundingBox: CountryDefinition["boundingBox"] } | null {
-  let best: { area: number; centroid: Point; boundingBox: CountryDefinition["boundingBox"] } | null = null;
+type RingSummary = { area: number; centroid: Point; boundingBox: CountryDefinition["boundingBox"] };
+
+function ringBoundingBox(ring: Point[]): CountryDefinition["boundingBox"] {
+  const xs = ring.map((p) => p.x);
+  const ys = ring.map((p) => p.y);
+  return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) };
+}
+
+function summarizeRings(svgPath: string): RingSummary[] {
+  const summaries: RingSummary[] = [];
   for (const ring of parseRings(svgPath)) {
     const result = ringAreaAndCentroid(ring);
     if (!result) continue;
-    if (best && result.area <= best.area) continue;
-    const xs = ring.map((p) => p.x);
-    const ys = ring.map((p) => p.y);
-    best = {
-      area: result.area,
-      centroid: result.centroid,
-      boundingBox: { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) },
-    };
+    summaries.push({ area: result.area, centroid: result.centroid, boundingBox: ringBoundingBox(ring) });
   }
-  return best;
+  return summaries;
+}
+
+// Index 3.4I bug fix: defaultFocusScale was derived purely from the
+// largest ring's own bounding box (Index 3.4A) - correct for choosing a
+// sensible zoom level, but it never checked whether OTHER real, sizeable
+// territory (e.g. USA's Alaska - a real landmass, not a data artifact)
+// stays inside the visible viewport once that scale and centring are
+// applied. Alaska sits far enough from the mainland's own centroid that
+// a tight mainland-only zoom pushed it off-screen entirely on wide
+// viewports (reported directly: "US mainland showing... Alaska is cut
+// off").
+//
+// The Operational Canvas's viewBox is always shown at FULL WIDTH for any
+// wider-than-tall browser window (Index 2.2's "xMidYMid slice"
+// convention scales to cover width first whenever the viewport is
+// landscape, which is this product's only real usage shape) - only the
+// VERTICAL extent ever gets cropped, more so on wider monitors. So this
+// constrains scale only on the vertical axis, and only for OTHER
+// significant rings - not the largest ring itself, whose own natural
+// spread around its own centroid is already exactly what the 45%-target
+// formula above accounts for; re-checking it here would fight that
+// formula on every ordinary, single-landmass country (Brazil, for
+// example, has no second territory at all, yet its own mainland already
+// spans close to the target fraction - that is correct, not a bug).
+// "Significant" means at least a meaningful fraction of the largest
+// ring's own area, so a real second territory (Alaska) counts but a
+// peripheral sliver a few pixels wide does not - otherwise a single
+// far-flung sliver would crush the zoom for every country that has one.
+// The safe half-extent is deliberately generous (larger than the
+// largest ring's own typical spread) so nearby secondary islands
+// (Hokkaido next to Honshu, the Isle of Wight next to Great Britain)
+// never trigger it - only genuinely distant territory does. This only
+// ever REDUCES the candidate scale (never increases it), and runs
+// generically for all 235 countries, not as a per-country override.
+const FOCUS_SIGNIFICANT_RING_AREA_FRACTION = 0.05;
+const FOCUS_SAFE_VERTICAL_HALF_EXTENT = 300;
+
+function constrainScaleForVisibility(rings: RingSummary[], focusPoint: Point, candidateScale: number): number {
+  if (rings.length === 0) return candidateScale;
+  const largestArea = Math.max(...rings.map((ring) => ring.area));
+  if (largestArea <= 0) return candidateScale;
+  let maxVerticalOffset = 0;
+  for (const ring of rings) {
+    if (ring.area >= largestArea) continue; // the largest ring's own spread is not re-checked here
+    if (ring.area < largestArea * FOCUS_SIGNIFICANT_RING_AREA_FRACTION) continue;
+    const { minY, maxY } = ring.boundingBox;
+    maxVerticalOffset = Math.max(maxVerticalOffset, Math.abs(minY - focusPoint.y), Math.abs(maxY - focusPoint.y));
+  }
+  if (maxVerticalOffset <= 0) return candidateScale;
+  const visibilityScale = FOCUS_SAFE_VERTICAL_HALF_EXTENT / maxVerticalOffset;
+  return Math.min(candidateScale, visibilityScale);
 }
 
 function buildFocusDefinition(country: CountryDefinition): CountryFocusDefinition {
-  const largestRing = largestRingCentroidAndBounds(country.svgPath);
+  const rings = summarizeRings(country.svgPath);
+  const largestRing = rings.reduce<RingSummary | null>(
+    (best, ring) => (!best || ring.area > best.area ? ring : best),
+    null,
+  );
   // Defensive fallback only, for the rare degenerate/near-zero-size
   // geometry (e.g. a micro-nation simplified to a single point) where no
   // ring encloses any measurable area - the overall stored bounding box
@@ -148,11 +202,16 @@ function buildFocusDefinition(country: CountryDefinition): CountryFocusDefinitio
   const { minX, minY, maxX, maxY } = country.boundingBox;
   const focusPoint = largestRing?.centroid ?? { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
   const scaleBoundingBox = largestRing?.boundingBox ?? country.boundingBox;
+
+  const candidateScale = computeDefaultFocusScale(scaleBoundingBox);
+  const visibilityConstrainedScale = constrainScaleForVisibility(rings, focusPoint, candidateScale);
+  const defaultFocusScale = Math.min(FOCUS_SCALE_MAX, Math.max(FOCUS_SCALE_MIN, visibilityConstrainedScale));
+
   return {
     ...country,
     focusPoint,
     cameraTarget: OPERATIONAL_CANVAS_CENTER,
-    defaultFocusScale: computeDefaultFocusScale(scaleBoundingBox),
+    defaultFocusScale,
   };
 }
 
