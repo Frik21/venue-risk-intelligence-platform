@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
@@ -301,6 +301,95 @@ function countVertices(svgPath: string): number {
   return matches ? matches.length : 0;
 }
 
+// Index 3.4C: the focus renderer's <clipPath> was built directly from a
+// country's raw stored geometry. For high-vertex-count countries (Russia,
+// USA - both tens of thousands of coastline points across 100+ separate
+// landmass/island rings) that raw geometry includes data artifacts the
+// generation pipeline leaves behind: zero-area "rings" - a handful of
+// near-duplicate points enclosing no real space, not a real island or
+// territory, just noise. A single such degenerate ring is enough to
+// corrupt the entire clip mask, so instead of the country's own
+// silhouette the browser paints nothing inside the clip and the focused
+// country fails to appear (reported as United States rendering as a
+// large map-image fragment instead of its own shape). Every real ring -
+// mainland or the smallest territory - is kept and still traces its own
+// true coastline; only genuinely zero-area artifacts are dropped, and a
+// light tolerance simplification thins redundant near-duplicate coastline
+// points that don't change the visible silhouette at this canvas's scale.
+// This is a render-time cleanup only (memoised per selection below, not
+// recomputed per frame) - it never touches the stored registry data.
+type FocusClipPoint = { x: number; y: number };
+
+const FOCUS_CLIP_MIN_RING_AREA = 0.01;
+const FOCUS_CLIP_SIMPLIFY_EPSILON = 0.15;
+
+function parseFocusClipRingPoints(ringString: string): FocusClipPoint[] {
+  const numberPairs = ringString.match(/-?\d+(?:\.\d+)?\s+-?\d+(?:\.\d+)?/g) ?? [];
+  return numberPairs.map((pair) => {
+    const [x, y] = pair.split(/\s+/).map(Number);
+    return { x, y };
+  });
+}
+
+function focusClipRingSignedArea(ring: FocusClipPoint[]): number {
+  let signedArea2 = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const p0 = ring[i];
+    const p1 = ring[(i + 1) % ring.length];
+    signedArea2 += p0.x * p1.y - p1.x * p0.y;
+  }
+  return signedArea2 / 2;
+}
+
+function focusClipPerpendicularDistance(point: FocusClipPoint, start: FocusClipPoint, end: FocusClipPoint): number {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared === 0) return Math.hypot(point.x - start.x, point.y - start.y);
+  const t = ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared;
+  const projX = start.x + t * dx;
+  const projY = start.y + t * dy;
+  return Math.hypot(point.x - projX, point.y - projY);
+}
+
+// Ramer-Douglas-Peucker simplification, applied per ring.
+function simplifyFocusClipRing(points: FocusClipPoint[], epsilon: number): FocusClipPoint[] {
+  if (points.length < 3) return points;
+  let maxDistance = 0;
+  let splitIndex = 0;
+  const start = points[0];
+  const end = points[points.length - 1];
+  for (let i = 1; i < points.length - 1; i++) {
+    const distance = focusClipPerpendicularDistance(points[i], start, end);
+    if (distance > maxDistance) {
+      maxDistance = distance;
+      splitIndex = i;
+    }
+  }
+  if (maxDistance <= epsilon) return [start, end];
+  const left = simplifyFocusClipRing(points.slice(0, splitIndex + 1), epsilon);
+  const right = simplifyFocusClipRing(points.slice(splitIndex), epsilon);
+  return left.slice(0, -1).concat(right);
+}
+
+function buildFocusClipPath(svgPath: string): string {
+  const ringStrings = svgPath.match(/M[^M]*Z/g) ?? [];
+  let cleaned = "";
+  for (const ringString of ringStrings) {
+    const points = parseFocusClipRingPoints(ringString);
+    if (points.length < 3) continue;
+    if (Math.abs(focusClipRingSignedArea(points)) < FOCUS_CLIP_MIN_RING_AREA) continue;
+    const simplified = simplifyFocusClipRing(points, FOCUS_CLIP_SIMPLIFY_EPSILON);
+    if (simplified.length < 3) continue;
+    cleaned += `M ${simplified[0].x} ${simplified[0].y} `;
+    for (let i = 1; i < simplified.length; i++) {
+      cleaned += `L ${simplified[i].x} ${simplified[i].y} `;
+    }
+    cleaned += "Z ";
+  }
+  return cleaned.trim();
+}
+
 // Adjustment records are reviewer-authored review flags, kept entirely
 // separate from the generated registry (public/data/country-adjustments.json
 // - seeded empty, since generating it is out of scope for this ticket:
@@ -326,6 +415,14 @@ function OperationalCanvas() {
   // LATEST value instead of the one captured in its own closure.
   const activeCountryRef = useRef<ActiveCountry | null>(null);
   activeCountryRef.current = activeCountry;
+
+  // Index 3.4C: cleaned/simplified once per country selection, not per
+  // frame - see buildFocusClipPath for why this differs from
+  // renderedCountry.geometry (the raw registry path).
+  const focusClipPath = useMemo(
+    () => (renderedCountry ? buildFocusClipPath(renderedCountry.geometry) : null),
+    [renderedCountry],
+  );
 
   useEffect(() => {
     subscribe(setActiveCountry);
@@ -510,7 +607,7 @@ function OperationalCanvas() {
               >
                 <defs>
                   <clipPath id={`country-focus-clip-${renderedCountry.iso3}`} clipPathUnits="userSpaceOnUse">
-                    <path d={renderedCountry.geometry} />
+                    <path d={focusClipPath ?? renderedCountry.geometry} />
                   </clipPath>
                 </defs>
                 <image
