@@ -201,6 +201,20 @@ const QA_COUNTRIES = COUNTRY_REGISTRY;
 // devtools. No border/fill/highlight is added to the country itself.
 const SHOW_SELECTION_DEBUG = true;
 
+// Country Focus Cutout Kill Switch (Index 3.8A) - the cutout renderer
+// below (clip-path + transform lift) produces disconnected ghost
+// fragments and stray rectangular map-image pieces for multipart
+// countries (confirmed directly: USA, Canada, New Zealand, Indonesia),
+// and 3.8's shared-root-cause fix to the Country Focus Registry's scale/
+// visibility math did not resolve it for every shape. Rather than ship a
+// broken cutout, or attempt another fix under time pressure, this flag
+// turns the entire cutout - including its dim/blur background - off at
+// the render level without touching the registry, the renderer's
+// supporting state/animation logic, or Country Selection. Active Country
+// selection, the debug badge, click-outside-to-clear, and Escape-to-
+// clear are all handled elsewhere and are unaffected by this flag.
+const SHOW_COUNTRY_FOCUS_CUTOUT = false;
+
 // Operational Country Focus Engine (Index 3.3) - the country must feel
 // lifted from the world map and brought forward, not zoomed to like a
 // conventional map product. The selected country is the real approved map
@@ -568,7 +582,7 @@ function OperationalCanvas() {
           {layer.className === "base-map-layer" && (
             <img
               className="approved-base-map-image"
-              style={getBackgroundFocusStyle(focusEntered)}
+              style={getBackgroundFocusStyle(SHOW_COUNTRY_FOCUS_CUTOUT && focusEntered)}
               src="/data/world-map-v17.png"
               alt=""
               draggable={false}
@@ -595,7 +609,7 @@ function OperationalCanvas() {
               ))}
             </svg>
           )}
-          {layer.className === "operational-footprint-layer" && renderedCountry && (
+          {layer.className === "operational-footprint-layer" && SHOW_COUNTRY_FOCUS_CUTOUT && renderedCountry && (
             <>
               <div className="country-focus-dim-overlay" style={getDimOverlayStyle(focusEntered)} aria-hidden="true" />
               <svg
