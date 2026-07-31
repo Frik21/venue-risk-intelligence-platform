@@ -228,29 +228,31 @@ const SHOW_COUNTRY_FOCUS_CUTOUT = true;
 // system, so the country is masked out of its true position first, then
 // that already-clipped cutout is rigidly translated/scaled as one piece.
 //
-// Entrance sequence is 650ms, staggered per the ticket's own spec rather
-// than one uniform fade:
-//   0-150ms    the cutout separates from the world (opacity fade-in)
-//   150-650ms  background dims and blurs (500ms, starting at 150ms so it
-//              finishes exactly when the sequence does)
-//   350-650ms  the cutout scales and moves to its Camera Target (300ms)
-// A soft drop-shadow grows in during the same 350-650ms window as the
+// Entrance sequence is 280ms, staggered rather than one uniform fade
+// (shortened from the original 650ms per direct feedback that the
+// selection felt delayed - same staggered structure, same relative
+// proportions, just compressed):
+//   0-80ms    the cutout separates from the world (opacity fade-in)
+//   80-300ms  background dims and blurs (220ms, starting at 80ms so it
+//             finishes close to when the sequence does)
+//   140-280ms the cutout scales and moves to its Camera Target (140ms)
+// A soft drop-shadow grows in during the same 140-280ms window as the
 // move/scale, reinforcing "lifted and brought forward" rather than a flat
 // zoom.
 //
 // Index 3.4: the RETURN to the world map is its own simpler, uniform
-// 450ms ease-out on every property at once (not the staggered entrance
+// ease-out on every property at once (not the staggered entrance
 // timing) - CSS transitions are direction-aware for free here, since the
 // transition rule that applies to a property change is whichever
 // `transition` value is present on the style being transitioned TO, so
 // the "entered" style below carries the staggered entrance rule and the
 // "not entered" style carries the uniform return rule.
-const FOCUS_SEPARATION_MS = 150;
-const FOCUS_BACKGROUND_MS = 500;
-const FOCUS_BACKGROUND_DELAY_MS = 150;
-const FOCUS_TRANSFORM_MS = 300;
-const FOCUS_TRANSFORM_DELAY_MS = 350; // 350 + 300 = 650, the full entrance sequence
-const FOCUS_RETURN_MS = 450;
+const FOCUS_SEPARATION_MS = 80;
+const FOCUS_BACKGROUND_MS = 220;
+const FOCUS_BACKGROUND_DELAY_MS = 80;
+const FOCUS_TRANSFORM_MS = 140;
+const FOCUS_TRANSFORM_DELAY_MS = 140; // 140 + 140 = 280, the full entrance sequence
+const FOCUS_RETURN_MS = 220;
 
 const FOCUS_ENTER_TRANSITION = [
   `opacity ${FOCUS_SEPARATION_MS}ms ease-in-out`,
