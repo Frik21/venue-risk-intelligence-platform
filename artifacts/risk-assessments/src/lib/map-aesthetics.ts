@@ -46,14 +46,14 @@ export const MAP_OCEAN_EDGE = "#0b0f14";
 export const MAP_FOCUS_BORDER_VISIBLE = true;
 export const MAP_FOCUS_BORDER_WIDTH = 1.5;
 
-// Selected-country paint: a colour wash across the entire cutout shape
+// Selected-country paint: a solid colour across the entire cutout shape
 // (same clip path/transform as the image and rim-light above), not just
 // its edge - per explicit direction ("I want the entire country to be
-// painted over" when you click it). Semi-transparent so the underlying
-// map texture still reads through and the country stays recognisable,
-// rather than a flat opaque block.
+// painted over" when you click it). Fully opaque navy blue, matching a
+// reference image supplied directly - the underlying map's city lights
+// must not show through at all ("I want it completely covered").
 export const MAP_FOCUS_FILL_VISIBLE = true;
-export const MAP_FOCUS_FILL_OPACITY = 0.4;
+export const MAP_FOCUS_FILL_RGB = "11, 29, 58";
 
 // Border edge crispness. buildFocusClipPath (dashboard.tsx) only needs to
 // thin a ring's points at all to protect performance on the handful of
