@@ -166,8 +166,10 @@ const CANVAS_LAYERS: OperationalCanvasLayer[] = [
 // Lets country hit-zone paths be aligned exactly to the rendered PNG by
 // reading live x/y coordinates (0-1000 / 0-500, matching the hit-zone
 // viewBox) under the mouse, and logging the clicked point. No country or
-// focus logic - purely a measurement aid.
-const SHOW_CANVAS_CALIBRATION = true;
+// focus logic - purely a measurement aid. Off by default - its grid
+// overlay is the one visible in production until now, separate from
+// (and not previously wired to) MAP_GRID_VISIBLE.
+const SHOW_CANVAS_CALIBRATION = false;
 
 // Operational Geometry Alignment Engine (Index 2.2C). The runtime
 // transform that keeps invisible COUNTRY_REGISTRY geometry locked to the
