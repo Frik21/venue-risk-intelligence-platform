@@ -260,9 +260,10 @@ const FOCUS_RETURN_MS = 110;
 const FOCUS_ENTER_TRANSITION = [
   `opacity ${FOCUS_SEPARATION_MS}ms ease-in-out`,
   `transform ${FOCUS_TRANSFORM_MS}ms ease-in-out ${FOCUS_TRANSFORM_DELAY_MS}ms`,
-  `filter ${FOCUS_TRANSFORM_MS}ms ease-in-out ${FOCUS_TRANSFORM_DELAY_MS}ms`,
 ].join(", ");
-const FOCUS_RETURN_TRANSITION = `opacity ${FOCUS_RETURN_MS}ms ease-out, transform ${FOCUS_RETURN_MS}ms ease-out, filter ${FOCUS_RETURN_MS}ms ease-out`;
+const FOCUS_RETURN_TRANSITION = `opacity ${FOCUS_RETURN_MS}ms ease-out, transform ${FOCUS_RETURN_MS}ms ease-out`;
+const FOCUS_FILTER_ENTER_TRANSITION = `filter ${FOCUS_TRANSFORM_MS}ms ease-in-out ${FOCUS_TRANSFORM_DELAY_MS}ms`;
+const FOCUS_FILTER_RETURN_TRANSITION = `filter ${FOCUS_RETURN_MS}ms ease-out`;
 
 // Index 3.8 rebuild: takes an already-resolved focus point/camera
 // target/scale directly (one call per rendered piece - a single piece
@@ -280,7 +281,6 @@ function getCountryFocusImageStyle(focusPoint: FocusPoint, cameraTarget: CameraT
     // destination.
     transform: entered ? `translate(${shiftX}px, ${shiftY}px) scale(${scale})` : "translate(0px, 0px) scale(1)",
     opacity: entered ? 1 : 0,
-    filter: entered ? "drop-shadow(0 14px 34px rgba(0, 0, 0, 0.55))" : "drop-shadow(0 0px 0px rgba(0, 0, 0, 0))",
     transition: entered ? FOCUS_ENTER_TRANSITION : FOCUS_RETURN_TRANSITION,
     // Click-outside detection (Index 3.4) tests against this exact clipped
     // shape, not the country's raw (unfocused) hit-zone - clip-path
@@ -289,6 +289,22 @@ function getCountryFocusImageStyle(focusPoint: FocusPoint, cameraTarget: CameraT
     // country. The click handler stops propagation so the canvas-level
     // "click outside" handler below never fires for it.
     pointerEvents: "auto" as const,
+  };
+}
+
+// The drop-shadow lives on the unscaled SVG wrapper, not the scaled
+// <image> itself. A CSS filter on an element that also carries a large
+// `transform: scale(N)` forces the browser to rasterize the blur at N
+// times the resolution (so the shadow stays crisp at full zoom), which
+// is what made small, high-zoom-need countries (Hawaii, then Dominican
+// Republic at the same scale(30) ceiling) hang for seconds rather than
+// milliseconds. Applying the filter one level up, after the scale has
+// already been baked into the composited bitmap, decouples the blur's
+// cost from the country's zoom factor entirely.
+function getCountryFocusWrapperStyle(entered: boolean) {
+  return {
+    filter: entered ? "drop-shadow(0 14px 34px rgba(0, 0, 0, 0.55))" : "drop-shadow(0 0px 0px rgba(0, 0, 0, 0))",
+    transition: entered ? FOCUS_FILTER_ENTER_TRANSITION : FOCUS_FILTER_RETURN_TRANSITION,
   };
 }
 
@@ -637,6 +653,7 @@ function OperationalCanvas() {
                 className="country-focus-image-layer"
                 viewBox={OPERATIONAL_GEOMETRY_VIEWBOX}
                 preserveAspectRatio={OPERATIONAL_GEOMETRY_FIT}
+                style={getCountryFocusWrapperStyle(focusEntered)}
                 aria-hidden="true"
               >
                 <defs>
