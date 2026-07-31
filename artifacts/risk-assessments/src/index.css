@@ -298,6 +298,15 @@
   pointer-events: none;
 }
 
+/* Soft diagonal sheen (MAP_FOCUS_FILL_SHEEN_VISIBLE, map-aesthetics.ts) -
+   blended on top of the fill/texture, not painted flat over it, so it
+   lifts and deepens the base colour rather than washing it out. */
+.country-focus-sheen-path {
+  stroke: none;
+  pointer-events: none;
+  mix-blend-mode: soft-light;
+}
+
 .breathing-markers-layer {
   z-index: 5;
   pointer-events: none;

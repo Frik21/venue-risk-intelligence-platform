@@ -53,7 +53,11 @@ export const MAP_FOCUS_BORDER_WIDTH = 1.5;
 // reference image supplied directly - the underlying map's city lights
 // must not show through at all ("I want it completely covered").
 export const MAP_FOCUS_FILL_VISIBLE = true;
-export const MAP_FOCUS_FILL_RGB = "11, 29, 58";
+// A deeper, more saturated sapphire navy than the first pass's near-black
+// (11, 29, 58) - richer/more jewel-toned per direct feedback ("much more
+// premium"), while staying dark enough that the map's city lights still
+// read as fully covered underneath it.
+export const MAP_FOCUS_FILL_RGB = "18, 42, 88";
 
 // Selected-country paint texture: a fine papermache/paper-grain finish
 // over the solid fill above, matched directly to a reference image. Not
@@ -69,7 +73,26 @@ export const MAP_FOCUS_FILL_RGB = "11, 29, 58";
 // rim-light border, generalised to a fill via the pattern's own
 // transform instead of a stroke-only CSS property.
 export const MAP_FOCUS_FILL_TEXTURE_VISIBLE = true;
-export const MAP_FOCUS_FILL_TEXTURE_TILE_SIZE = 10;
+export const MAP_FOCUS_FILL_TEXTURE_TILE_SIZE = 14;
+// Higher numOctaves layers finer detail on top of coarser (fractal
+// noise's own definition), reading as fibrous paper rather than flat
+// static; a gamma curve on the alpha channel (feFuncA) then compresses
+// most of that noise toward faint, letting only its brightest flecks
+// stand out, and a low opacity + soft-light blend (dashboard.tsx) keeps
+// the whole thing a quiet undertone rather than a busy, cheap-looking
+// pattern - the "premium" note from direct feedback on the first pass.
+export const MAP_FOCUS_FILL_TEXTURE_BASE_FREQUENCY = 0.75;
+export const MAP_FOCUS_FILL_TEXTURE_OCTAVES = 4;
+export const MAP_FOCUS_FILL_TEXTURE_GAMMA = 2.5;
+export const MAP_FOCUS_FILL_TEXTURE_OPACITY = 0.18;
+
+// A soft diagonal sheen across the same fill - a faint lift toward one
+// corner fading through the base colour to a faint deepening at the
+// opposite corner, the classic cue for a glossy/leather-bound premium
+// surface catching light, rather than a flat matte block. Cheap at any
+// scale (a gradient has none of feTurbulence's rasterization cost, so it
+// can sit directly on the scaled fill path with no pattern trick needed).
+export const MAP_FOCUS_FILL_SHEEN_VISIBLE = true;
 
 // Border edge crispness. buildFocusClipPath (dashboard.tsx) only needs to
 // thin a ring's points at all to protect performance on the handful of
