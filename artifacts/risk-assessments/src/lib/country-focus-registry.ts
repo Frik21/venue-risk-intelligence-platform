@@ -116,32 +116,11 @@ export type CountryFocusDefinition = CountryDefinition & {
   defaultFocusScale: number;
 };
 
-function buildGenericFocusDefinition(country: CountryDefinition): CountryFocusDefinition {
-  // The registry's own boundingBox is already the union of every ring in
-  // the country's geometry - mainland, every island, every territory -
-  // so fitting it to the block is fitting the COMPLETE country, not a
-  // largest-piece approximation of it.
-  const focusPoint = boxCenter(country.boundingBox);
-  const cameraTarget = boxCenter(OPERATIONAL_FOCUS_BLOCK);
-  const defaultFocusScale = scaleToFit(country.boundingBox, OPERATIONAL_FOCUS_BLOCK_WIDTH, OPERATIONAL_FOCUS_BLOCK_HEIGHT);
-  return { ...country, focusPoint, cameraTarget, defaultFocusScale };
-}
-
-// --- Splitting a country into independently selectable regions --------
-// Some countries have territory separated from their mainland by whole
-// oceans - on the Operational Canvas, treating a single click anywhere in
-// any of them as "select the country" made it feel like the territory
-// belonged to itself rather than to the operator. Per explicit direction
-// (first for the USA's mainland/Alaska/Hawaii, later generalised for
-// France's French Guiana and Spain's Canary Islands), each such piece is
-// its own click target and its own focus target - filling the
-// Operational Focus Block on its own, exactly like any ordinary country -
-// rather than only reachable as part of a click on the whole. This is
-// still the only country-specific logic in this file - every other
-// country is unaffected and still selects/focuses as a single whole via
-// buildGenericFocusDefinition above. It only derives new region geometry
-// from a country's own already-approved registry path - the Operational
-// Country Registry itself is never touched.
+// --- Ring geometry helpers ----------------------------------------------
+// Shared by both the ordinary (single-piece) focus path below and the
+// country-splitting section further down - a country's stored geometry is
+// a single SVG path string encoding one or more "rings" (M...Z segments),
+// each a separate landmass/island/territory.
 type RingPoint = { x: number; y: number };
 
 function parsePathRings(svgPath: string): RingPoint[][] {
@@ -158,10 +137,10 @@ function parsePathRings(svgPath: string): RingPoint[][] {
   return rings;
 }
 
-// Shoelace formula: centroid (used for classification - every ring is
-// bucketed by position, not by size, so nothing is ever dropped as "too
-// small to matter") and area (used below to pick each region's own
-// largest ring as its scale/focus reference).
+// Shoelace formula: centroid (used for split-region classification below -
+// every ring is bucketed by position, not by size, so nothing is ever
+// dropped as "too small to matter") and area (used both for split-region
+// classification and for computeScaleReferenceBox's own ring ranking).
 function ringCentroidAndArea(ring: RingPoint[]): { centroid: FocusPoint; area: number } | null {
   let signedArea2 = 0;
   let cx = 0;
@@ -207,6 +186,130 @@ function pathBoundingBox(svgPath: string): BoundingBox {
   if (!Number.isFinite(minX)) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
   return { minX, minY, maxX, maxY };
 }
+
+function boxArea(box: BoundingBox): number {
+  return Math.max(0, box.maxX - box.minX) * Math.max(0, box.maxY - box.minY);
+}
+
+function unionBoundingBox(a: BoundingBox, b: BoundingBox): BoundingBox {
+  return { minX: Math.min(a.minX, b.minX), minY: Math.min(a.minY, b.minY), maxX: Math.max(a.maxX, b.maxX), maxY: Math.max(a.maxY, b.maxY) };
+}
+
+// Originally a narrower "antimeridian wrap" special case written for
+// Alaska alone (Index 3.8 bug fix): scaling to a country/region's naive
+// combined bounding box breaks whenever some of its rings sit far from
+// the rest, because the box has to stretch to cover the empty space
+// between them, shrinking the scale and pulling the focus point away
+// from the country's real, recognisable territory. Two different real
+// causes produce the same symptom:
+//  - Alaska's own ring set legitimately includes the westernmost
+//    Aleutian islands, which cross the antimeridian and render near
+//    x=1000 in this equirectangular-style projection while the rest of
+//    Alaska sits near x=0-100 - a data/projection artifact, not real
+//    geographic distance.
+//  - Chile's Easter Island (~3,500 real km from the mainland),
+//    Portugal's Azores/Madeira - genuinely distant real territory, no
+//    projection artifact involved, but the same effect on the box.
+//    Reported directly: Chile rendered visibly off-centre, its combined
+//    bounding box (including the Easter Island ring, ~5.3x the mainland
+//    ring's own area) pulling the focus point west of the actual visible
+//    mainland.
+//
+// Generalises what was a single width-threshold check into ring-by-ring
+// accretion: starting from the largest ring, greedily absorb every other
+// ring (largest-first) into a running "core" box as long as doing so
+// doesn't multiply the box's own area by more than GROWTH_FACTOR - a
+// nearby island (Hawaii's own chain, Chile's own southern archipelago)
+// barely grows the box and is absorbed; a genuinely distant, disconnected
+// outlier would blow the box up far past what its own real close
+// territory needs, and is excluded from the reference. Either way, every
+// ring - including any excluded ones - still goes into the country's
+// rendered svgPath and still renders; only the scale/focus calculation
+// ever ignores any of them.
+//
+// GROWTH_FACTOR is deliberately generous: real, legitimately spread
+// archipelago nations (Indonesia, Philippines, Fiji - none of which has
+// one dominant ring in the first place, measured directly at 28-56% for
+// their largest ring's own share of the total area) never come close to
+// tripping it, since their islands sit close enough together that
+// absorbing each one barely changes the box. It only excludes rings that
+// would multiply the box's area several times over on their own -
+// confirmed directly against Hawaii's tight ~15x10 unit cluster (nothing
+// excluded, matches its long-verified behaviour) and Alaska's wrapped
+// Aleutian tip (excluded, matches its long-verified behaviour).
+const SCALE_REFERENCE_GROWTH_FACTOR = 4;
+
+function computeScaleReferenceBox(rings: RingPoint[][]): BoundingBox {
+  const ringsWithArea = rings
+    .map((ring) => {
+      const summary = ringCentroidAndArea(ring);
+      return summary ? { bbox: pathBoundingBox(ringsToPath([ring])), area: summary.area } : null;
+    })
+    .filter((r): r is { bbox: BoundingBox; area: number } => r !== null)
+    .sort((a, b) => b.area - a.area);
+
+  if (ringsWithArea.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+
+  let core = ringsWithArea[0].bbox;
+  let coreArea = boxArea(core);
+  for (let i = 1; i < ringsWithArea.length; i++) {
+    const candidate = unionBoundingBox(core, ringsWithArea[i].bbox);
+    const candidateArea = boxArea(candidate);
+    if (coreArea <= 0 || candidateArea <= coreArea * SCALE_REFERENCE_GROWTH_FACTOR) {
+      core = candidate;
+      coreArea = candidateArea;
+    }
+    // else: a genuinely distant outlier, excluded from the scale/focus
+    // reference (still rendered - see the comment above).
+  }
+  return core;
+}
+
+function buildGenericFocusDefinition(country: CountryDefinition): CountryFocusDefinition {
+  // The registry's own boundingBox is still what's rendered and clicked -
+  // mainland, every island, every territory, nothing dropped. Only the
+  // reference used to compute the focus point and scale is narrowed to
+  // the country's own close, contiguous territory (computeScaleReferenceBox
+  // above) - a genuinely distant outlier would otherwise pull the focus
+  // point away from the country's real, recognisable landmass and shrink
+  // the scale to accommodate empty ocean between them.
+  const rings = parsePathRings(country.svgPath);
+  const scaleReferenceBox = computeScaleReferenceBox(rings);
+  const focusPoint = boxCenter(scaleReferenceBox);
+  const cameraTarget = boxCenter(OPERATIONAL_FOCUS_BLOCK);
+  const defaultFocusScale = scaleToFit(scaleReferenceBox, OPERATIONAL_FOCUS_BLOCK_WIDTH, OPERATIONAL_FOCUS_BLOCK_HEIGHT);
+  return { ...country, focusPoint, cameraTarget, defaultFocusScale };
+}
+
+function buildRegionFocusDefinition(base: CountryDefinition, rings: RingPoint[][]): CountryFocusDefinition {
+  const svgPath = ringsToPath(rings);
+  const boundingBox = pathBoundingBox(svgPath);
+  const region: CountryDefinition = { ...base, svgPath, boundingBox };
+  const scaleReferenceBox = computeScaleReferenceBox(rings);
+
+  return {
+    ...region,
+    focusPoint: boxCenter(scaleReferenceBox),
+    cameraTarget: boxCenter(OPERATIONAL_FOCUS_BLOCK),
+    defaultFocusScale: scaleToFit(scaleReferenceBox, OPERATIONAL_FOCUS_BLOCK_WIDTH, OPERATIONAL_FOCUS_BLOCK_HEIGHT),
+  };
+}
+
+// --- Splitting a country into independently selectable regions --------
+// Some countries have territory separated from their mainland by whole
+// oceans - on the Operational Canvas, treating a single click anywhere in
+// any of them as "select the country" made it feel like the territory
+// belonged to itself rather than to the operator. Per explicit direction
+// (first for the USA's mainland/Alaska/Hawaii, later generalised for
+// France's French Guiana and Spain's Canary Islands), each such piece is
+// its own click target and its own focus target - filling the
+// Operational Focus Block on its own, exactly like any ordinary country -
+// rather than only reachable as part of a click on the whole. This is
+// still the only country-specific logic in this file - every other
+// country is unaffected and still selects/focuses as a single whole via
+// buildGenericFocusDefinition above. It only derives new region geometry
+// from a country's own already-approved registry path - the Operational
+// Country Registry itself is never touched.
 
 // Classification is purely geometric (ring centroid position in the same
 // 1000x1000 Operational Geometry space every country's own registry path
@@ -334,64 +437,6 @@ const COUNTRY_SPLITS: { iso3: string; regions: SplitRegionRule[] }[] = [
   { iso3: "FRA", regions: [FRANCE_GUIANA, FRANCE_MARTINIQUE, FRANCE_GUADELOUPE, FRANCE_MAYOTTE, FRANCE_REUNION] },
   { iso3: "ESP", regions: [SPAIN_CANARY_ISLANDS] },
 ];
-
-// Index 3.8 bug fix, still needed here: scaling to a region's naive
-// combined bounding box breaks for Alaska specifically - its ring set
-// legitimately includes the westernmost Aleutian islands, which cross
-// the antimeridian and render near x=1000 in this equirectangular-style
-// projection, the same wraparound that inflated the whole pre-rebuild
-// USA registry bounding box to x:-0.5-1000.5. A combined bbox across
-// both x~2 and x~1000 is ~1000 units wide, computing a near-zero scale.
-//
-// Follow-up fix: always falling back to the LARGEST ring alone (ignoring
-// every other ring's real position) went too far the other way for
-// Hawaii - its islands are a genuinely tight cluster (~15x10 units,
-// nowhere near a wraparound), but anchoring on the Big Island ring alone
-// meant the other islands' real, modest offset from it (a few units)
-// got magnified by Hawaii's own necessarily-high scale into a
-// disproportionate spread, pushing Kauai/Niihau far from the rest
-// instead of rendering the chain as the tight group it actually is
-// (reported directly: "one island a little high on the left"). The
-// combined bounding box is the geometrically correct reference whenever
-// it's trustworthy - it only stops being trustworthy when the
-// antimeridian wraparound inflates it far past what any real, compact
-// territory needs. 500 (half the full 1000-unit Operational Geometry
-// space) cleanly separates the two cases: Hawaii's combined box is ~15
-// wide, Alaska's is ~998 - so this uses the combined box whenever it's
-// under that width, and only falls back to the largest-ring-only
-// approach for the genuinely wrapped case. Either way, every ring in the
-// group - including any wrapped fragments - still goes into the
-// region's `svgPath` and still renders; only the scale/focus calculation
-// ever ignores any of them.
-const ANTIMERIDIAN_WRAP_WIDTH_THRESHOLD = 500;
-
-function buildRegionFocusDefinition(base: CountryDefinition, rings: RingPoint[][]): CountryFocusDefinition {
-  const svgPath = ringsToPath(rings);
-  const boundingBox = pathBoundingBox(svgPath);
-  const region: CountryDefinition = { ...base, svgPath, boundingBox };
-
-  let scaleReferenceBox = boundingBox;
-  if (boundingBox.maxX - boundingBox.minX > ANTIMERIDIAN_WRAP_WIDTH_THRESHOLD) {
-    const ringsWithArea = rings
-      .map((ring) => {
-        const summary = ringCentroidAndArea(ring);
-        return summary ? { ring, area: summary.area } : null;
-      })
-      .filter((r): r is { ring: RingPoint[]; area: number } => r !== null);
-    const largestRing = ringsWithArea.reduce<{ ring: RingPoint[]; area: number } | null>(
-      (best, current) => (!best || current.area > best.area ? current : best),
-      null,
-    );
-    if (largestRing) scaleReferenceBox = pathBoundingBox(ringsToPath([largestRing.ring]));
-  }
-
-  return {
-    ...region,
-    focusPoint: boxCenter(scaleReferenceBox),
-    cameraTarget: boxCenter(OPERATIONAL_FOCUS_BLOCK),
-    defaultFocusScale: scaleToFit(scaleReferenceBox, OPERATIONAL_FOCUS_BLOCK_WIDTH, OPERATIONAL_FOCUS_BLOCK_HEIGHT),
-  };
-}
 
 // Splits a real registry entry into independently selectable
 // CountryDefinition-shaped regions: everything not claimed by one of its
