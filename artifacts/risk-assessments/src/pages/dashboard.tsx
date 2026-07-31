@@ -4,7 +4,7 @@ import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-reac
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import { clearSelection, selectCountry, subscribe, unsubscribe } from "@/lib/country-selection-engine";
 import type { ActiveCountry } from "@/lib/country-selection-engine";
-import { getCountryFocusDefinition } from "@/lib/country-focus-registry";
+import { getCountryFocusDefinition, OPERATIONAL_SELECTABLE_REGIONS } from "@/lib/country-focus-registry";
 import type { FocusPoint, CameraTarget } from "@/lib/country-focus-registry";
 
 // Background tone for the outer page wrapper (behind MapLayer).
@@ -428,43 +428,29 @@ function OperationalCanvas() {
   const activeCountryRef = useRef<ActiveCountry | null>(null);
   activeCountryRef.current = activeCountry;
 
-  // Index 3.8 rebuild: one or more pieces to render for the current
-  // selection - three (main/Alaska/Hawaii) for the USA's approved custom
-  // layout, one for every other country. Each piece's clip path is
-  // cleaned/simplified once per selection here, not per frame - see
-  // buildFocusClipPath for why this differs from the piece's raw
-  // geometry. Falls back to a single piece built from the Active
-  // Country's own registry fields if a focus definition is somehow
-  // missing (defensive only - every Active Country comes from
-  // COUNTRY_REGISTRY, which COUNTRY_FOCUS_REGISTRY is built 1:1 from).
-  const focusPieces = useMemo(() => {
-    if (!renderedCountry) return [];
+  // Index 3.8 rebuild (follow-up): every selectable region - including
+  // the USA's mainland, Alaska, and Hawaii, each its own independently
+  // clickable region since the follow-up split below - renders as a
+  // single piece now; there is no longer a multi-piece "dominant +
+  // insets" layout for any country. The clip path is cleaned/simplified
+  // once per selection here, not per frame - see buildFocusClipPath for
+  // why this differs from the region's raw geometry. Falls back to the
+  // Active Country's own registry fields if a focus definition is
+  // somehow missing (defensive only - every Active Country comes from
+  // OPERATIONAL_SELECTABLE_REGIONS, which COUNTRY_FOCUS_REGISTRY is
+  // built 1:1 from).
+  const focusRender = useMemo(() => {
+    if (!renderedCountry) return null;
     const focusDefinition = getCountryFocusDefinition(renderedCountry.iso3);
-    const rawPieces =
-      focusDefinition?.pieces ??
-      (focusDefinition
-        ? [
-            {
-              id: "default",
-              geometry: renderedCountry.geometry,
-              focusPoint: focusDefinition.focusPoint,
-              cameraTarget: focusDefinition.cameraTarget,
-              scale: focusDefinition.defaultFocusScale,
-            },
-          ]
-        : [
-            {
-              id: "default",
-              geometry: renderedCountry.geometry,
-              focusPoint: {
-                x: (renderedCountry.boundingBox.minX + renderedCountry.boundingBox.maxX) / 2,
-                y: (renderedCountry.boundingBox.minY + renderedCountry.boundingBox.maxY) / 2,
-              },
-              cameraTarget: { x: 525, y: 250 },
-              scale: 1,
-            },
-          ]);
-    return rawPieces.map((piece) => ({ ...piece, clipPath: buildFocusClipPath(piece.geometry) }));
+    const focusPoint =
+      focusDefinition?.focusPoint ??
+      {
+        x: (renderedCountry.boundingBox.minX + renderedCountry.boundingBox.maxX) / 2,
+        y: (renderedCountry.boundingBox.minY + renderedCountry.boundingBox.maxY) / 2,
+      };
+    const cameraTarget = focusDefinition?.cameraTarget ?? { x: 500, y: 500 };
+    const scale = focusDefinition?.defaultFocusScale ?? 1;
+    return { focusPoint, cameraTarget, scale, clipPath: buildFocusClipPath(renderedCountry.geometry) };
   }, [renderedCountry]);
 
   useEffect(() => {
@@ -625,48 +611,46 @@ function OperationalCanvas() {
               preserveAspectRatio={OPERATIONAL_GEOMETRY_FIT}
               aria-hidden="true"
             >
-              {COUNTRY_REGISTRY.map((country) => (
+              {OPERATIONAL_SELECTABLE_REGIONS.map((region) => (
                 <path
-                  key={country.id}
-                  d={country.svgPath}
+                  key={region.id}
+                  d={region.svgPath}
                   className="country-hit-zone"
                   onClick={(event) => {
                     event.stopPropagation();
-                    selectCountry(country);
+                    selectCountry(region);
                   }}
                 />
               ))}
             </svg>
           )}
-          {layer.className === "operational-footprint-layer" && SHOW_COUNTRY_FOCUS_CUTOUT && renderedCountry && focusPieces.length > 0 && (
+          {layer.className === "operational-footprint-layer" && SHOW_COUNTRY_FOCUS_CUTOUT && renderedCountry && focusRender && (
             <>
               <div className="country-focus-dim-overlay" style={getDimOverlayStyle(focusEntered)} aria-hidden="true" />
-              {focusPieces.map((piece) => (
-                <svg
-                  key={`${renderedCountry.iso3}-${piece.id}`}
-                  className="country-focus-image-layer"
-                  viewBox={OPERATIONAL_GEOMETRY_VIEWBOX}
-                  preserveAspectRatio={OPERATIONAL_GEOMETRY_FIT}
-                  aria-hidden="true"
-                >
-                  <defs>
-                    <clipPath id={`country-focus-clip-${renderedCountry.iso3}-${piece.id}`} clipPathUnits="userSpaceOnUse">
-                      <path d={piece.clipPath || piece.geometry} />
-                    </clipPath>
-                  </defs>
-                  <image
-                    href="/data/world-map-v17.png"
-                    x={0}
-                    y={0}
-                    width={1000}
-                    height={1000}
-                    preserveAspectRatio="xMidYMid slice"
-                    clipPath={`url(#country-focus-clip-${renderedCountry.iso3}-${piece.id})`}
-                    onClick={(event) => event.stopPropagation()}
-                    style={getCountryFocusImageStyle(piece.focusPoint, piece.cameraTarget, piece.scale, focusEntered)}
-                  />
-                </svg>
-              ))}
+              <svg
+                key={renderedCountry.iso3}
+                className="country-focus-image-layer"
+                viewBox={OPERATIONAL_GEOMETRY_VIEWBOX}
+                preserveAspectRatio={OPERATIONAL_GEOMETRY_FIT}
+                aria-hidden="true"
+              >
+                <defs>
+                  <clipPath id={`country-focus-clip-${renderedCountry.iso3}`} clipPathUnits="userSpaceOnUse">
+                    <path d={focusRender.clipPath || renderedCountry.geometry} />
+                  </clipPath>
+                </defs>
+                <image
+                  href="/data/world-map-v17.png"
+                  x={0}
+                  y={0}
+                  width={1000}
+                  height={1000}
+                  preserveAspectRatio="xMidYMid slice"
+                  clipPath={`url(#country-focus-clip-${renderedCountry.iso3})`}
+                  onClick={(event) => event.stopPropagation()}
+                  style={getCountryFocusImageStyle(focusRender.focusPoint, focusRender.cameraTarget, focusRender.scale, focusEntered)}
+                />
+              </svg>
             </>
           )}
           {layer.className === "country-intelligence-layer" && SHOW_COUNTRY_BOUNDARIES && (

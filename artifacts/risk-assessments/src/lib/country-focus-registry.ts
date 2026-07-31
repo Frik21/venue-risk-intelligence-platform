@@ -52,37 +52,40 @@ function boxCenter(box: BoundingBox): FocusPoint {
 // ratios is what guarantees the box's own larger dimension is the
 // binding constraint, so the other dimension always finishes with room
 // to spare rather than overflowing the block.
+//
+// Hard ceiling, reintroduced after the follow-up USA split surfaced
+// exactly the case it exists for: Hawaii's real geographic footprint is
+// small enough that fitting it to the full 550x300 block needs ~79x
+// scale - and at that scale the focused image's own drop-shadow filter
+// (getCountryFocusImageStyle, dashboard.tsx) became catastrophically
+// expensive to rasterize, hanging the browser for 90+ seconds on every
+// selection (reproduced directly, not theoretical). The pre-3.8 code had
+// this exact ceiling for the same reason ("only degenerate micro-
+// territories... demand scales in the hundreds or thousands, which is
+// not a sensible limit to chase") and it was dropped during the 3.8
+// rebuild on the assumption that fitting each country's own real,
+// complete bounding box to the block would never need it - true for
+// every ordinary country, not true for a genuinely tiny standalone
+// region like Hawaii. Clamping means Hawaii (and anything similarly
+// small) renders smaller than a full block-filling size rather than
+// hanging the tab - a real, inspectable size with breathing room, not
+// the block's own upper bound.
+const FOCUS_SCALE_MAX = 30;
+
 function scaleToFit(box: BoundingBox, targetWidth: number, targetHeight: number): number {
   const width = box.maxX - box.minX;
   const height = box.maxY - box.minY;
   // Defensive fallback only, for the rare degenerate/near-zero-size
   // geometry (e.g. a micro-nation simplified to a single point) where
   // there is no real extent to scale against.
-  if (width <= 0 || height <= 0) return Math.min(targetWidth, targetHeight);
-  return Math.min(targetWidth / width, targetHeight / height);
+  if (width <= 0 || height <= 0) return FOCUS_SCALE_MAX;
+  return Math.min(targetWidth / width, targetHeight / height, FOCUS_SCALE_MAX);
 }
-
-// A focused country's rendered piece: its own geometry (an SVG path
-// subset - the whole country for every ordinary country, one of three
-// subsets for the USA's approved custom layout below), the point in
-// that geometry which lands on the Camera Target, the Camera Target
-// itself, and the uniform scale that fits it to its target area.
-export type CountryFocusPiece = {
-  id: string;
-  geometry: string;
-  focusPoint: FocusPoint;
-  cameraTarget: CameraTarget;
-  scale: number;
-};
 
 export type CountryFocusDefinition = CountryDefinition & {
   focusPoint: FocusPoint;
   cameraTarget: CameraTarget;
   defaultFocusScale: number;
-  // Present only for the USA's approved custom Operational Layout below.
-  // Every other country renders as a single piece built from its own
-  // top-level focusPoint/cameraTarget/defaultFocusScale.
-  pieces?: CountryFocusPiece[];
 };
 
 function buildGenericFocusDefinition(country: CountryDefinition): CountryFocusDefinition {
@@ -96,17 +99,22 @@ function buildGenericFocusDefinition(country: CountryDefinition): CountryFocusDe
   return { ...country, focusPoint, cameraTarget, defaultFocusScale };
 }
 
-// --- USA's approved custom Operational Layout (Index 3.8) -------------
-// The ticket's only sanctioned exception to "no country-specific hacks":
-// the mainland stays the dominant focus, filling the block exactly like
-// any ordinary country would; Alaska and Hawaii - both real, both kept,
-// neither distorted - are pulled out of that dominant fit and rendered
-// as their own small insets so they no longer drag the whole country's
-// scale down or get cut off, the two failure modes every previous model
-// hit for the USA specifically. This only ever touches how the USA's
-// own three focus pieces are computed here in the registry - it does
-// not change the stored geometry, and does not run for any other
-// country.
+// --- Splitting the USA into independently selectable regions ----------
+// The USA's mainland, Alaska, and Hawaii are separated by whole oceans -
+// on the Operational Canvas, treating a single click anywhere in any of
+// the three as "select the United States" made the country feel like it
+// belonged to itself rather than to the operator. Per explicit direction,
+// each is now its own click target and its own focus target: selecting
+// the mainland shows the mainland; selecting Alaska shows Alaska;
+// selecting Hawaii shows Hawaii - each filling the Operational Focus
+// Block on its own, exactly like any ordinary country, rather than the
+// mainland-dominant-plus-two-small-insets layout this replaces. This is
+// still the only country-specific logic in this file - every other
+// country (Russia, France, Canada, all 234 others) is unaffected and
+// still selects/focuses as a single whole via buildGenericFocusDefinition
+// above. It only derives new region geometry from the USA's own already-
+// approved registry path - Operational Country Registry itself is never
+// touched.
 type RingPoint = { x: number; y: number };
 
 function parsePathRings(svgPath: string): RingPoint[][] {
@@ -125,7 +133,7 @@ function parsePathRings(svgPath: string): RingPoint[][] {
 
 // Shoelace formula: centroid (used for classification - every ring is
 // bucketed by position, not by size, so nothing is ever dropped as "too
-// small to matter") and area (used below to pick each piece's own
+// small to matter") and area (used below to pick each region's own
 // largest ring as its scale/focus reference).
 function ringCentroidAndArea(ring: RingPoint[]): { centroid: FocusPoint; area: number } | null {
   let signedArea2 = 0;
@@ -190,33 +198,24 @@ function isUsaHawaiiRing(centroid: FocusPoint): boolean {
   return centroid.y > 430 && centroid.x < 115;
 }
 
-// Small inset boxes inside the (now screen-centred) Operational Focus
-// Block, top-left for Alaska and bottom-left for Hawaii per the ticket -
-// comfortably clear of the block's own edges and of each other. With the
-// block re-centred on the Operational Geometry space's true visible
-// middle (500, 500), its entire Y:350-650 span is on screen at common
-// viewport sizes, so these no longer need to dodge a crop margin the way
-// the pre-recentring version did.
-const USA_ALASKA_INSET_BOX: BoundingBox = { minX: 235, minY: 360, maxX: 405, maxY: 460 };
-const USA_HAWAII_INSET_BOX: BoundingBox = { minX: 235, minY: 540, maxX: 405, maxY: 640 };
-
-// Index 3.8 follow-up fix: fitting the SCALE to each piece's naive
-// combined bounding box broke for Alaska specifically - its ring set
+// Index 3.8 bug fix, still needed here: scaling to a region's naive
+// combined bounding box breaks for Alaska specifically - its ring set
 // legitimately includes the westernmost Aleutian islands, which cross
 // the antimeridian and render near x=1000 in this equirectangular-style
 // projection, the same wraparound that inflated the whole pre-rebuild
-// USA registry bounding box to x:-0.5-1000.5 (documented in Index 3.8's
-// own investigation). A combined bbox across both x~2 and x~1000 is
-// ~1000 units wide, computing a scale of ~0.17 - Alaska rendering as a
-// barely-visible speck instead of the intended dominant inset. Using
-// only the LARGEST ring in the group for the scale/focus reference (the
-// same "trust the mainland ring, not the whole multi-territory bbox"
-// fix Index 3.4A already applied everywhere else in this file) sidesteps
-// the wraparound without dropping anything - every ring in the group,
-// including the wrapped Aleutian fragments, still goes into `geometry`
-// and still renders.
-function buildUsaFocusPiece(id: string, rings: RingPoint[][], targetBox: BoundingBox): CountryFocusPiece {
-  const geometry = ringsToPath(rings);
+// USA registry bounding box to x:-0.5-1000.5. A combined bbox across
+// both x~2 and x~1000 is ~1000 units wide, computing a near-zero scale.
+// Using only the LARGEST ring in the group as the scale/focus reference
+// (the same "trust the mainland ring, not the whole multi-territory
+// bbox" fix Index 3.4A already applied generically) sidesteps the
+// wraparound without dropping anything - every ring in the group,
+// including the wrapped Aleutian fragments, still goes into the region's
+// `svgPath` and still renders; only the scale/focus calculation ignores
+// them in favour of the one ring that actually represents the region's
+// real size.
+function buildRegionFocusDefinition(base: CountryDefinition, rings: RingPoint[][]): CountryFocusDefinition {
+  const svgPath = ringsToPath(rings);
+  const boundingBox = pathBoundingBox(svgPath);
   const ringsWithArea = rings
     .map((ring) => {
       const summary = ringCentroidAndArea(ring);
@@ -227,53 +226,84 @@ function buildUsaFocusPiece(id: string, rings: RingPoint[][], targetBox: Boundin
     (best, current) => (!best || current.area > best.area ? current : best),
     null,
   );
-  const scaleReferenceBox = largestRing ? pathBoundingBox(ringsToPath([largestRing.ring])) : pathBoundingBox(geometry);
+  const scaleReferenceBox = largestRing ? pathBoundingBox(ringsToPath([largestRing.ring])) : boundingBox;
+  const region: CountryDefinition = { ...base, svgPath, boundingBox };
   return {
-    id,
-    geometry,
+    ...region,
     focusPoint: boxCenter(scaleReferenceBox),
-    cameraTarget: boxCenter(targetBox),
-    scale: scaleToFit(scaleReferenceBox, targetBox.maxX - targetBox.minX, targetBox.maxY - targetBox.minY),
+    cameraTarget: boxCenter(OPERATIONAL_FOCUS_BLOCK),
+    defaultFocusScale: scaleToFit(scaleReferenceBox, OPERATIONAL_FOCUS_BLOCK_WIDTH, OPERATIONAL_FOCUS_BLOCK_HEIGHT),
   };
 }
 
-function buildUsaFocusDefinition(country: CountryDefinition): CountryFocusDefinition {
-  const rings = parsePathRings(country.svgPath);
-  const alaskaRings: RingPoint[][] = [];
-  const hawaiiRings: RingPoint[][] = [];
-  const mainRings: RingPoint[][] = [];
+// Splits the real USA registry entry into three independently selectable
+// CountryDefinition-shaped regions. Mainland keeps the real "USA"
+// identity (it is still, conceptually, the United States); Alaska and
+// Hawaii get their own synthetic identifiers (ALK/HAW - not real
+// ISO 3166 codes, chosen not to collide with any) since they aren't
+// countries in their own right, only separately-focusable regions of one.
+type UsaSplit = { mainRings: RingPoint[][]; alaskaRings: RingPoint[][]; hawaiiRings: RingPoint[][] };
+
+// Ring classification happens exactly once per the USA's own registry
+// entry (there is only one) - both the selectable regions below and
+// their focus definitions are derived from this single result, so the
+// two can never drift apart from each other.
+function classifyUsaRings(usa: CountryDefinition): UsaSplit {
+  const rings = parsePathRings(usa.svgPath);
+  const split: UsaSplit = { mainRings: [], alaskaRings: [], hawaiiRings: [] };
   for (const ring of rings) {
-    const summary = ringCentroidAndArea(ring);
-    const centroid = summary?.centroid ?? null;
+    const centroid = ringCentroidAndArea(ring)?.centroid ?? null;
     if (centroid && isUsaAlaskaRing(centroid)) {
-      alaskaRings.push(ring);
+      split.alaskaRings.push(ring);
     } else if (centroid && isUsaHawaiiRing(centroid)) {
-      hawaiiRings.push(ring);
+      split.hawaiiRings.push(ring);
     } else {
       // Every ring not classified as Alaska or Hawaii - CONUS mainland,
-      // Puerto Rico, every other small real feature - stays together and
-      // moves with the mainland's own dominant fit, exactly like an
-      // ordinary country. Nothing is dropped.
-      mainRings.push(ring);
+      // Puerto Rico, every other small real feature - stays together as
+      // the mainland region. Nothing is dropped.
+      split.mainRings.push(ring);
     }
   }
-
-  const mainPiece = buildUsaFocusPiece("main", mainRings, OPERATIONAL_FOCUS_BLOCK);
-  const alaskaPiece = buildUsaFocusPiece("alaska", alaskaRings, USA_ALASKA_INSET_BOX);
-  const hawaiiPiece = buildUsaFocusPiece("hawaii", hawaiiRings, USA_HAWAII_INSET_BOX);
-
-  return {
-    ...country,
-    focusPoint: mainPiece.focusPoint,
-    cameraTarget: mainPiece.cameraTarget,
-    defaultFocusScale: mainPiece.scale,
-    pieces: [mainPiece, alaskaPiece, hawaiiPiece],
-  };
+  return split;
 }
 
-export const COUNTRY_FOCUS_REGISTRY: CountryFocusDefinition[] = COUNTRY_REGISTRY.map((country) =>
-  country.iso3 === "USA" ? buildUsaFocusDefinition(country) : buildGenericFocusDefinition(country),
-);
+// Alaska and Hawaii get their own synthetic identifiers (ALK/HAW - not
+// real ISO 3166 codes, chosen not to collide with any) since they aren't
+// countries in their own right, only separately-focusable regions of
+// one. Mainland keeps the real "USA" identity - it is still,
+// conceptually, the United States.
+function buildUsaRegion(base: CountryDefinition, rings: RingPoint[][]): CountryDefinition {
+  const svgPath = ringsToPath(rings);
+  return { ...base, svgPath, boundingBox: pathBoundingBox(svgPath) };
+}
+
+const USA_BASE = COUNTRY_REGISTRY.find((country) => country.iso3 === "USA");
+const USA_SPLIT = USA_BASE ? classifyUsaRings(USA_BASE) : null;
+const USA_ALASKA_BASE: CountryDefinition = { id: "usa-alaska", iso2: "AK", iso3: "ALK", name: "Alaska", svgPath: "", boundingBox: { minX: 0, minY: 0, maxX: 0, maxY: 0 } };
+const USA_HAWAII_BASE: CountryDefinition = { id: "usa-hawaii", iso2: "HI", iso3: "HAW", name: "Hawaii", svgPath: "", boundingBox: { minX: 0, minY: 0, maxX: 0, maxY: 0 } };
+
+// The USA's own registry entry, replaced by its three split regions;
+// every other country passes through unchanged. This is what the
+// Operational Canvas's selection hit-zones render from, so Alaska and
+// Hawaii become their own clickable shapes on the map instead of only
+// reachable as part of a USA click.
+export const OPERATIONAL_SELECTABLE_REGIONS: CountryDefinition[] = COUNTRY_REGISTRY.flatMap((country) => {
+  if (country.iso3 !== "USA" || !USA_SPLIT) return [country];
+  return [
+    buildUsaRegion(country, USA_SPLIT.mainRings),
+    buildUsaRegion(USA_ALASKA_BASE, USA_SPLIT.alaskaRings),
+    buildUsaRegion(USA_HAWAII_BASE, USA_SPLIT.hawaiiRings),
+  ];
+});
+
+export const COUNTRY_FOCUS_REGISTRY: CountryFocusDefinition[] = COUNTRY_REGISTRY.flatMap((country) => {
+  if (country.iso3 !== "USA" || !USA_SPLIT) return [buildGenericFocusDefinition(country)];
+  return [
+    buildRegionFocusDefinition(country, USA_SPLIT.mainRings),
+    buildRegionFocusDefinition(USA_ALASKA_BASE, USA_SPLIT.alaskaRings),
+    buildRegionFocusDefinition(USA_HAWAII_BASE, USA_SPLIT.hawaiiRings),
+  ];
+});
 
 export function getCountryFocusDefinition(iso3: string): CountryFocusDefinition | undefined {
   return COUNTRY_FOCUS_REGISTRY.find((country) => country.iso3 === iso3);
