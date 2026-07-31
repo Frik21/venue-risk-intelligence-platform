@@ -611,10 +611,38 @@ function OperationalCanvas() {
     });
   }
 
+  // The Calibration Tool's mouse<->canvas conversion (both this function
+  // and the crosshair's own screen position below) has to reproduce the
+  // exact same "xMidYMid slice" mapping every other Operational Canvas
+  // overlay already shares (Index 2.2C) - source content is a 1000x1000
+  // square, uniformly scaled up to COVER the viewport (scale = the
+  // larger of viewportWidth/1000 and viewportHeight/1000), then centred,
+  // so on a landscape viewport the full 0-1000 X range is visible but
+  // only a centred WINDOW of the 0-1000 Y range is (and vice versa on a
+  // portrait one). The tool's original formula (`y = fraction * 500`)
+  // predates that model and always reported the true canvas centre
+  // (y=500) as y=250 regardless of viewport shape - confirmed directly
+  // against a country whose real transform-origin measured exactly
+  // centre-screen (New Zealand, verified via getBoundingClientRect()),
+  // reported by a user calibrating against this tool as looking
+  // off-centre with "my centre is grid X 500, Y 250".
+  function getVisibleCanvasRange(viewportWidth: number, viewportHeight: number) {
+    const scale = Math.max(viewportWidth, viewportHeight) / 1000;
+    const visibleWidth = viewportWidth / scale;
+    const visibleHeight = viewportHeight / scale;
+    return {
+      xMin: 500 - visibleWidth / 2,
+      xMax: 500 + visibleWidth / 2,
+      yMin: 500 - visibleHeight / 2,
+      yMax: 500 + visibleHeight / 2,
+    };
+  }
+
   function handleCalibrationMove(event: MouseEvent<HTMLElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
-    const x = Math.round(((event.clientX - rect.left) / rect.width) * 1000);
-    const y = Math.round(((event.clientY - rect.top) / rect.height) * 500);
+    const { xMin, xMax, yMin, yMax } = getVisibleCanvasRange(rect.width, rect.height);
+    const x = Math.round(xMin + ((event.clientX - rect.left) / rect.width) * (xMax - xMin));
+    const y = Math.round(yMin + ((event.clientY - rect.top) / rect.height) * (yMax - yMin));
     setCalibrationPoint({ x, y });
   }
 
@@ -781,24 +809,29 @@ function OperationalCanvas() {
         </div>
       )}
 
-      {SHOW_CANVAS_CALIBRATION && calibrationPoint && (
-        <div className="canvas-calibration-overlay" aria-hidden="true">
-          <div className="canvas-calibration-grid" />
-          <div
-            className="canvas-calibration-crosshair-x"
-            style={{ top: `${(calibrationPoint.y / 500) * 100}%` }}
-          />
-          <div
-            className="canvas-calibration-crosshair-y"
-            style={{ left: `${(calibrationPoint.x / 1000) * 100}%` }}
-          />
-          <div className="canvas-calibration-readout">
-            Canvas X: {calibrationPoint.x}
-            <br />
-            Canvas Y: {calibrationPoint.y}
-          </div>
-        </div>
-      )}
+      {SHOW_CANVAS_CALIBRATION &&
+        calibrationPoint &&
+        (() => {
+          // Exact inverse of handleCalibrationMove's conversion above -
+          // same getVisibleCanvasRange, so the crosshair always redraws
+          // at the real screen position of the canvas point it reports,
+          // instead of the stale fixed 0-500 assumption.
+          const { xMin, xMax, yMin, yMax } = getVisibleCanvasRange(window.innerWidth, window.innerHeight);
+          const leftPercent = ((calibrationPoint.x - xMin) / (xMax - xMin)) * 100;
+          const topPercent = ((calibrationPoint.y - yMin) / (yMax - yMin)) * 100;
+          return (
+            <div className="canvas-calibration-overlay" aria-hidden="true">
+              <div className="canvas-calibration-grid" />
+              <div className="canvas-calibration-crosshair-x" style={{ top: `${topPercent}%` }} />
+              <div className="canvas-calibration-crosshair-y" style={{ left: `${leftPercent}%` }} />
+              <div className="canvas-calibration-readout">
+                Canvas X: {calibrationPoint.x}
+                <br />
+                Canvas Y: {calibrationPoint.y}
+              </div>
+            </div>
+          );
+        })()}
 
 
       {SHOW_COUNTRY_QA && qaCurrent && (
