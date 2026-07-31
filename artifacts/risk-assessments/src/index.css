@@ -281,30 +281,23 @@
    the focused country's exact cutout shape (same clip path and transform
    as the image itself - see focusRender in dashboard.tsx). Non-scaling
    stroke keeps the line a constant screen-space width from Russia down
-   to a scale(30) Dominican Republic. */
+   to a scale(30) Dominican Republic. Colour is its own "Aurora Glass"
+   neon blue (--map-focus-border-rgb), separate from the shared gold
+   --map-accent-rgb the debug grid still uses. */
 .country-focus-border-path {
   fill: none;
-  stroke: rgba(var(--map-accent-rgb, 255, 196, 87), 0.6);
+  stroke: rgba(var(--map-focus-border-rgb, 95, 212, 255), 0.85);
   vector-effect: non-scaling-stroke;
   pointer-events: none;
 }
 
-/* Selected-country paint: fill colour is set inline (dashboard.tsx) from
-   MAP_FOCUS_FILL_RGB, opaque, so the country reads as fully covered;
-   stroke stays off here so this isn't a second outline (the rim-light
-   above already owns the edge). */
+/* Selected-country paint: fill is the "Aurora Glass" diagonal gradient,
+   set inline (dashboard.tsx) via MAP_FOCUS_FILL_GRADIENT_STOPS; stroke
+   stays off here so this isn't a second outline (the rim-light above
+   already owns the edge). */
 .country-focus-fill-path {
   stroke: none;
   pointer-events: none;
-}
-
-/* Soft diagonal sheen (MAP_FOCUS_FILL_SHEEN_VISIBLE, map-aesthetics.ts) -
-   blended on top of the fill/texture, not painted flat over it, so it
-   lifts and deepens the base colour rather than washing it out. */
-.country-focus-sheen-path {
-  stroke: none;
-  pointer-events: none;
-  mix-blend-mode: soft-light;
 }
 
 .breathing-markers-layer {

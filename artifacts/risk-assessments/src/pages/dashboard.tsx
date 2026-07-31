@@ -13,15 +13,9 @@ import {
   MAP_ACCENT_RGB,
   MAP_FOCUS_BORDER_VISIBLE,
   MAP_FOCUS_BORDER_WIDTH,
+  MAP_FOCUS_BORDER_RGB,
   MAP_FOCUS_FILL_VISIBLE,
-  MAP_FOCUS_FILL_RGB,
-  MAP_FOCUS_FILL_TEXTURE_VISIBLE,
-  MAP_FOCUS_FILL_TEXTURE_TILE_SIZE,
-  MAP_FOCUS_FILL_TEXTURE_BASE_FREQUENCY,
-  MAP_FOCUS_FILL_TEXTURE_OCTAVES,
-  MAP_FOCUS_FILL_TEXTURE_GAMMA,
-  MAP_FOCUS_FILL_TEXTURE_OPACITY,
-  MAP_FOCUS_FILL_SHEEN_VISIBLE,
+  MAP_FOCUS_FILL_GRADIENT_STOPS,
   MAP_BORDER_FULL_DETAIL_MAX_POINTS,
 } from "@/lib/map-aesthetics";
 
@@ -687,6 +681,7 @@ function OperationalCanvas() {
           "--map-ocean-centre": MAP_OCEAN_CENTRE,
           "--map-ocean-edge": MAP_OCEAN_EDGE,
           "--map-accent-rgb": MAP_ACCENT_RGB,
+          "--map-focus-border-rgb": MAP_FOCUS_BORDER_RGB,
         } as CSSProperties
       }
     >
@@ -742,51 +737,18 @@ function OperationalCanvas() {
                   <clipPath id={`country-focus-clip-${renderedCountry.iso3}`} clipPathUnits="userSpaceOnUse">
                     <path d={focusRender.clipPath || renderedCountry.geometry} />
                   </clipPath>
-                  {MAP_FOCUS_FILL_TEXTURE_VISIBLE && (
-                    <>
-                      {/* Grain generated once on a small, fixed-size tile -
-                          see MAP_FOCUS_FILL_TEXTURE_VISIBLE (map-aesthetics.ts)
-                          for why this can't live on the scaled fill path
-                          itself. A gamma curve on the alpha channel keeps
-                          only the noise's brightest flecks visible, so it
-                          reads as fine paper fibre rather than flat static. */}
-                      <filter id={`country-focus-paper-noise-${renderedCountry.iso3}`} x="-20%" y="-20%" width="140%" height="140%">
-                        <feTurbulence
-                          type="fractalNoise"
-                          baseFrequency={MAP_FOCUS_FILL_TEXTURE_BASE_FREQUENCY}
-                          numOctaves={MAP_FOCUS_FILL_TEXTURE_OCTAVES}
-                          seed={7}
-                          stitchTiles="stitch"
-                          result="noise"
-                        />
-                        <feColorMatrix in="noise" type="saturate" values="0" result="grayNoise" />
-                        <feComponentTransfer in="grayNoise">
-                          <feFuncA type="gamma" amplitude={1} exponent={MAP_FOCUS_FILL_TEXTURE_GAMMA} offset={0} />
-                        </feComponentTransfer>
-                      </filter>
-                      <pattern
-                        id={`country-focus-paper-texture-${renderedCountry.iso3}`}
-                        patternUnits="userSpaceOnUse"
-                        width={MAP_FOCUS_FILL_TEXTURE_TILE_SIZE}
-                        height={MAP_FOCUS_FILL_TEXTURE_TILE_SIZE}
-                        patternTransform={`scale(${1 / focusRender.scale})`}
-                      >
-                        <rect width={MAP_FOCUS_FILL_TEXTURE_TILE_SIZE} height={MAP_FOCUS_FILL_TEXTURE_TILE_SIZE} fill={`rgb(${MAP_FOCUS_FILL_RGB})`} />
-                        <rect
-                          width={MAP_FOCUS_FILL_TEXTURE_TILE_SIZE}
-                          height={MAP_FOCUS_FILL_TEXTURE_TILE_SIZE}
-                          filter={`url(#country-focus-paper-noise-${renderedCountry.iso3})`}
-                          style={{ mixBlendMode: "soft-light", opacity: MAP_FOCUS_FILL_TEXTURE_OPACITY }}
-                        />
-                      </pattern>
-                    </>
-                  )}
-                  {MAP_FOCUS_FILL_SHEEN_VISIBLE && (
-                    <linearGradient id={`country-focus-sheen-${renderedCountry.iso3}`} x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor="rgba(255, 255, 255, 0.16)" />
-                      <stop offset="40%" stopColor="rgba(255, 255, 255, 0.02)" />
-                      <stop offset="65%" stopColor="rgba(0, 0, 0, 0)" />
-                      <stop offset="100%" stopColor="rgba(0, 0, 0, 0.18)" />
+                  {/* "Aurora Glass" fill - a diagonal iridescent gradient,
+                      not a flat colour or a patterned texture (see
+                      MAP_FOCUS_FILL_GRADIENT_STOPS, map-aesthetics.ts).
+                      A gradient is cheap at any scale, so unlike the
+                      papermache texture this replaced, it needs no
+                      pattern/scale trick and sits directly on the scaled
+                      fill path below. */}
+                  {MAP_FOCUS_FILL_VISIBLE && (
+                    <linearGradient id={`country-focus-aurora-${renderedCountry.iso3}`} x1="0" y1="0" x2="1" y2="1">
+                      {MAP_FOCUS_FILL_GRADIENT_STOPS.map((stop) => (
+                        <stop key={stop.offset} offset={stop.offset} stopColor={stop.color} />
+                      ))}
                     </linearGradient>
                   )}
                 </defs>
@@ -801,12 +763,12 @@ function OperationalCanvas() {
                   onClick={(event) => event.stopPropagation()}
                   style={getCountryFocusImageStyle(focusRender.focusPoint, focusRender.cameraTarget, focusRender.scale, focusEntered)}
                 />
-                {/* Map Aesthetics Engine: a solid colour across the whole
-                    selected shape, same clip path/transform as the image
-                    above so it moves and scales in lockstep - per explicit
-                    direction ("I want the entire country to be painted
-                    over" on click, "completely covered", not the rim-light
-                    below). Fully opaque - the map's city lights must not
+                {/* Map Aesthetics Engine: "Aurora Glass" - a diagonal
+                    iridescent gradient across the whole selected shape,
+                    same clip path/transform as the image above so it
+                    moves and scales in lockstep - per explicit direction
+                    ("I want the entire country to be painted over" on
+                    click). Fully opaque - the map's city lights must not
                     show through. */}
                 {MAP_FOCUS_FILL_VISIBLE && (
                   <path
@@ -815,27 +777,7 @@ function OperationalCanvas() {
                     aria-hidden="true"
                     style={{
                       ...getCountryFocusImageStyle(focusRender.focusPoint, focusRender.cameraTarget, focusRender.scale, focusEntered),
-                      fill: MAP_FOCUS_FILL_TEXTURE_VISIBLE
-                        ? `url(#country-focus-paper-texture-${renderedCountry.iso3})`
-                        : `rgb(${MAP_FOCUS_FILL_RGB})`,
-                      pointerEvents: "none",
-                    }}
-                  />
-                )}
-                {/* Map Aesthetics Engine: a soft diagonal sheen on top of
-                    the fill/texture above - a gradient, not a filter, so
-                    it's cheap at any scale with no pattern trick needed
-                    (see MAP_FOCUS_FILL_SHEEN_VISIBLE, map-aesthetics.ts).
-                    The classic "light catching a glossy surface" cue that
-                    reads as premium rather than a flat matte block. */}
-                {MAP_FOCUS_FILL_SHEEN_VISIBLE && (
-                  <path
-                    d={focusRender.clipPath || renderedCountry.geometry}
-                    className="country-focus-sheen-path"
-                    aria-hidden="true"
-                    style={{
-                      ...getCountryFocusImageStyle(focusRender.focusPoint, focusRender.cameraTarget, focusRender.scale, focusEntered),
-                      fill: `url(#country-focus-sheen-${renderedCountry.iso3})`,
+                      fill: `url(#country-focus-aurora-${renderedCountry.iso3})`,
                       pointerEvents: "none",
                     }}
                   />
