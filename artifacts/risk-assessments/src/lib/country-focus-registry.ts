@@ -205,29 +205,49 @@ function isUsaHawaiiRing(centroid: FocusPoint): boolean {
 // projection, the same wraparound that inflated the whole pre-rebuild
 // USA registry bounding box to x:-0.5-1000.5. A combined bbox across
 // both x~2 and x~1000 is ~1000 units wide, computing a near-zero scale.
-// Using only the LARGEST ring in the group as the scale/focus reference
-// (the same "trust the mainland ring, not the whole multi-territory
-// bbox" fix Index 3.4A already applied generically) sidesteps the
-// wraparound without dropping anything - every ring in the group,
-// including the wrapped Aleutian fragments, still goes into the region's
-// `svgPath` and still renders; only the scale/focus calculation ignores
-// them in favour of the one ring that actually represents the region's
-// real size.
+//
+// Follow-up fix: always falling back to the LARGEST ring alone (ignoring
+// every other ring's real position) went too far the other way for
+// Hawaii - its islands are a genuinely tight cluster (~15x10 units,
+// nowhere near a wraparound), but anchoring on the Big Island ring alone
+// meant the other islands' real, modest offset from it (a few units)
+// got magnified by Hawaii's own necessarily-high scale into a
+// disproportionate spread, pushing Kauai/Niihau far from the rest
+// instead of rendering the chain as the tight group it actually is
+// (reported directly: "one island a little high on the left"). The
+// combined bounding box is the geometrically correct reference whenever
+// it's trustworthy - it only stops being trustworthy when the
+// antimeridian wraparound inflates it far past what any real, compact
+// territory needs. 500 (half the full 1000-unit Operational Geometry
+// space) cleanly separates the two cases: Hawaii's combined box is ~15
+// wide, Alaska's is ~998 - so this uses the combined box whenever it's
+// under that width, and only falls back to the largest-ring-only
+// approach for the genuinely wrapped case. Either way, every ring in the
+// group - including any wrapped fragments - still goes into the
+// region's `svgPath` and still renders; only the scale/focus calculation
+// ever ignores any of them.
+const ANTIMERIDIAN_WRAP_WIDTH_THRESHOLD = 500;
+
 function buildRegionFocusDefinition(base: CountryDefinition, rings: RingPoint[][]): CountryFocusDefinition {
   const svgPath = ringsToPath(rings);
   const boundingBox = pathBoundingBox(svgPath);
-  const ringsWithArea = rings
-    .map((ring) => {
-      const summary = ringCentroidAndArea(ring);
-      return summary ? { ring, area: summary.area } : null;
-    })
-    .filter((r): r is { ring: RingPoint[]; area: number } => r !== null);
-  const largestRing = ringsWithArea.reduce<{ ring: RingPoint[]; area: number } | null>(
-    (best, current) => (!best || current.area > best.area ? current : best),
-    null,
-  );
-  const scaleReferenceBox = largestRing ? pathBoundingBox(ringsToPath([largestRing.ring])) : boundingBox;
   const region: CountryDefinition = { ...base, svgPath, boundingBox };
+
+  let scaleReferenceBox = boundingBox;
+  if (boundingBox.maxX - boundingBox.minX > ANTIMERIDIAN_WRAP_WIDTH_THRESHOLD) {
+    const ringsWithArea = rings
+      .map((ring) => {
+        const summary = ringCentroidAndArea(ring);
+        return summary ? { ring, area: summary.area } : null;
+      })
+      .filter((r): r is { ring: RingPoint[]; area: number } => r !== null);
+    const largestRing = ringsWithArea.reduce<{ ring: RingPoint[]; area: number } | null>(
+      (best, current) => (!best || current.area > best.area ? current : best),
+      null,
+    );
+    if (largestRing) scaleReferenceBox = pathBoundingBox(ringsToPath([largestRing.ring]));
+  }
+
   return {
     ...region,
     focusPoint: boxCenter(scaleReferenceBox),
