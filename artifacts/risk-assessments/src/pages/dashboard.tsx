@@ -542,7 +542,7 @@ function OperationalCanvas() {
 
   const [qaCountryIndex, setQaCountryIndex] = useState(0);
   const [qaShowFill, setQaShowFill] = useState(false);
-  const [qaShowOutline, setQaShowOutline] = useState(true);
+  const [qaShowOutline, setQaShowOutline] = useState(false);
   const [qaOpacity, setQaOpacity] = useState(1);
   const [qaJumpIso, setQaJumpIso] = useState("");
   const [qaNotes, setQaNotes] = useState("");
