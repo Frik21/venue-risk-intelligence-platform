@@ -34,3 +34,19 @@ export const MAP_OCEAN_EDGE = "#0b0f14";
 // "no border/outline/glow". Flip to true to turn it on.
 export const MAP_FOCUS_BORDER_VISIBLE = false;
 export const MAP_FOCUS_BORDER_WIDTH = 1.5;
+
+// Border edge crispness. buildFocusClipPath (dashboard.tsx) only needs to
+// thin a ring's points at all to protect performance on the handful of
+// genuinely huge coastlines - measured directly off the real registry
+// data: Russia's mainland ring alone is ~4,894 points, Canada's ~3,317,
+// USA's two largest ~1,988/~1,618. Every other country's largest ring,
+// however small and however far it has to zoom to fill the Operational
+// Focus Block, tops out far below that (Indonesia's largest is ~363,
+// Canada's own second-largest is ~299) - nowhere near a performance
+// concern, so there is no reason to simplify them at all. A ring at or
+// under this point count renders at full, unsimplified fidelity; only
+// rings above it fall back to distance-based thinning (still scaled by
+// the country's own zoom - see FOCUS_CLIP_SIMPLIFY_EPSILON), which is
+// exactly the world's biggest countries, rendered at close to 1x zoom,
+// where that thinning was always imperceptible in the first place.
+export const MAP_BORDER_FULL_DETAIL_MAX_POINTS = 600;

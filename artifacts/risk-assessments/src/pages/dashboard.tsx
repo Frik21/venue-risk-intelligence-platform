@@ -13,6 +13,7 @@ import {
   MAP_ACCENT_RGB,
   MAP_FOCUS_BORDER_VISIBLE,
   MAP_FOCUS_BORDER_WIDTH,
+  MAP_BORDER_FULL_DETAIL_MAX_POINTS,
 } from "@/lib/map-aesthetics";
 
 // Background tone for the outer page wrapper (behind MapLayer).
@@ -415,19 +416,22 @@ function simplifyFocusClipRing(points: FocusClipPoint[], epsilon: number): Focus
   return left.slice(0, -1).concat(right);
 }
 
-// Map Aesthetics Engine: the simplification tolerance below was tuned in
-// world-space units, invisible at the ~1x zoom a large country (Russia,
-// Australia) needs to fill the Operational Focus Block. A small country
-// needing much more zoom (Cuba ~18x, Dominican Republic ~30x) magnifies
-// that exact same world-space error right along with everything else,
-// turning imperceptible simplification corners into visibly chunky,
-// low-poly coastline facets - reported directly as only some countries'
-// borders looking crisp on selection. Dividing the tolerance by the
-// country's own focus scale keeps the resulting on-SCREEN error roughly
-// constant instead of constant in world-space, so every country reads as
-// equally crisp regardless of how far it has to zoom in. Bounded by
-// FOCUS_SCALE_MAX (30) either way, so the finest this ever gets is
-// 0.15/30 - still well short of the raw, unsimplified point count.
+// Map Aesthetics Engine: a ring only gets simplified at all once its own
+// raw point count passes MAP_BORDER_FULL_DETAIL_MAX_POINTS - measured
+// directly off the real registry data, the only rings that large belong
+// to a handful of the world's biggest countries (Russia's mainland ring
+// ~4,894 points, Canada's ~3,317, USA's two largest ~1,988/~1,618); every
+// other country's largest ring, however small and however far it has to
+// zoom to fill the Operational Focus Block, comes in far below that
+// (Indonesia's largest ~363). Below the threshold, a ring renders at
+// full, unsimplified fidelity - no reason to thin a coastline that was
+// never a performance concern just because it needs a high zoom scale.
+// At or above it, the existing distance-based thinning still applies,
+// with its tolerance divided by the country's own focus scale so the
+// resulting on-screen error stays roughly constant - but since every
+// ring that large belongs to a country rendered at close to 1x zoom
+// anyway, that tolerance was already imperceptible before this ticket
+// and stays that way now. Bounded by FOCUS_SCALE_MAX (30) either way.
 function buildFocusClipPath(svgPath: string, scale: number): string {
   const epsilon = FOCUS_CLIP_SIMPLIFY_EPSILON / Math.max(scale, 1);
   const ringStrings = svgPath.match(/M[^M]*Z/g) ?? [];
@@ -436,7 +440,8 @@ function buildFocusClipPath(svgPath: string, scale: number): string {
     const points = parseFocusClipRingPoints(ringString);
     if (points.length < 3) continue;
     if (Math.abs(focusClipRingSignedArea(points)) < FOCUS_CLIP_MIN_RING_AREA) continue;
-    const simplified = simplifyFocusClipRing(points, epsilon);
+    const simplified =
+      points.length > MAP_BORDER_FULL_DETAIL_MAX_POINTS ? simplifyFocusClipRing(points, epsilon) : points;
     if (simplified.length < 3) continue;
     cleaned += `M ${simplified[0].x} ${simplified[0].y} `;
     for (let i = 1; i < simplified.length; i++) {
