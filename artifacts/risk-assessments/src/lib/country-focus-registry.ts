@@ -77,11 +77,37 @@ function boxCenter(box: BoundingBox): FocusPoint {
 // fallback exists for that literal division-by-zero case only.
 const DEGENERATE_GEOMETRY_FALLBACK_SCALE = 30;
 
+// Product decision: tall/narrow countries (Fiji, New Zealand, Chile -
+// all noticeably taller than wide) rendered as thin vertical slivers
+// under the standard uniform fit-to-block rule, since the block itself
+// is landscape-shaped (550 wide x 300 tall) - a portrait country's own
+// greater height hits that 300-unit ceiling long before its width uses
+// any meaningful fraction of the 550-unit budget (measured directly:
+// New Zealand's real fit-to-block scale filled only ~23% of the block's
+// width). Per explicit direction ("make an exception for these
+// countries to render bigger"), a country whose own bounding box is
+// taller than it is wide scales against a taller effective height
+// budget instead of the standard block height - its width is still
+// capped at the block's own 550-unit width exactly as before, so it can
+// never overflow the block horizontally, only render larger overall.
+//
+// Bounded at 400, not the ~562.5 units visible at the 16:9 viewport
+// every past Operational Focus Block measurement in this file uses -
+// deliberately conservative so a portrait country scaled against it
+// still stays inside the Operational Canvas's always-visible region on
+// a notably wider-than-16:9 display too. Reusing the exact "xMidYMid
+// slice" visible-range math from the block's own original re-centring
+// (Index 3.8) - visible half-height at aspect ratio W:H is 500*(H/W) -
+// 400 stays safely under the ~429-unit ceiling a 21:9 ultrawide display
+// allows, with real margin to spare.
+const PORTRAIT_HEIGHT_BUDGET = 400;
+
 function scaleToFit(box: BoundingBox, targetWidth: number, targetHeight: number): number {
   const width = box.maxX - box.minX;
   const height = box.maxY - box.minY;
   if (width <= 0 || height <= 0) return DEGENERATE_GEOMETRY_FALLBACK_SCALE;
-  return Math.min(targetWidth / width, targetHeight / height);
+  const effectiveHeight = height > width ? Math.max(targetHeight, PORTRAIT_HEIGHT_BUDGET) : targetHeight;
+  return Math.min(targetWidth / width, effectiveHeight / height);
 }
 
 export type CountryFocusDefinition = CountryDefinition & {
