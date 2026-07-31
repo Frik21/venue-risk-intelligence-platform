@@ -5,6 +5,7 @@ import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import { clearSelection, selectCountry, subscribe, unsubscribe } from "@/lib/country-selection-engine";
 import type { ActiveCountry } from "@/lib/country-selection-engine";
 import { getCountryFocusDefinition } from "@/lib/country-focus-registry";
+import type { FocusPoint, CameraTarget } from "@/lib/country-focus-registry";
 
 // Background tone for the outer page wrapper (behind MapLayer).
 const OCEAN_COLOR = "#00081a";
@@ -201,19 +202,18 @@ const QA_COUNTRIES = COUNTRY_REGISTRY;
 // devtools. No border/fill/highlight is added to the country itself.
 const SHOW_SELECTION_DEBUG = true;
 
-// Country Focus Cutout Kill Switch (Index 3.8A) - the cutout renderer
-// below (clip-path + transform lift) produces disconnected ghost
-// fragments and stray rectangular map-image pieces for multipart
-// countries (confirmed directly: USA, Canada, New Zealand, Indonesia),
-// and 3.8's shared-root-cause fix to the Country Focus Registry's scale/
-// visibility math did not resolve it for every shape. Rather than ship a
-// broken cutout, or attempt another fix under time pressure, this flag
-// turns the entire cutout - including its dim/blur background - off at
-// the render level without touching the registry, the renderer's
-// supporting state/animation logic, or Country Selection. Active Country
-// selection, the debug badge, click-outside-to-clear, and Escape-to-
-// clear are all handled elsewhere and are unaffected by this flag.
-const SHOW_COUNTRY_FOCUS_CUTOUT = false;
+// Country Focus Cutout Kill Switch (Index 3.8A, re-enabled Index 3.8
+// rebuild) - was flipped off after the pre-rebuild cutout renderer
+// produced disconnected ghost fragments and stray rectangular map-image
+// pieces for multipart countries (USA, Canada, New Zealand, Indonesia).
+// The Country Focus Registry rebuild (see country-focus-registry.ts -
+// every country now scaled/translated to fit completely inside the
+// fixed Operational Focus Block, rather than a per-ring heuristic)
+// replaces that renderer's data, so the cutout is back on. Kept as a
+// flag rather than removed - a fast, render-level way to fully disable
+// the cutout (and its dim/blur background) again without touching the
+// registry or Country Selection, if a future regression needs it.
+const SHOW_COUNTRY_FOCUS_CUTOUT = true;
 
 // Operational Country Focus Engine (Index 3.3) - the country must feel
 // lifted from the world map and brought forward, not zoomed to like a
@@ -259,14 +259,12 @@ const FOCUS_ENTER_TRANSITION = [
 ].join(", ");
 const FOCUS_RETURN_TRANSITION = `opacity ${FOCUS_RETURN_MS}ms ease-out, transform ${FOCUS_RETURN_MS}ms ease-out, filter ${FOCUS_RETURN_MS}ms ease-out`;
 
-function getCountryFocusImageStyle(iso3: string, boundingBox: ActiveCountry["boundingBox"], entered: boolean) {
-  const focus = getCountryFocusDefinition(iso3);
-  // Defensive fallback only - every Active Country comes from
-  // COUNTRY_REGISTRY, which COUNTRY_FOCUS_REGISTRY is built 1:1 from, so
-  // this should never be reached.
-  const focusPoint = focus?.focusPoint ?? { x: (boundingBox.minX + boundingBox.maxX) / 2, y: (boundingBox.minY + boundingBox.maxY) / 2 };
-  const cameraTarget = focus?.cameraTarget ?? { x: 500, y: 500 };
-  const scale = focus?.defaultFocusScale ?? 1.06;
+// Index 3.8 rebuild: takes an already-resolved focus point/camera
+// target/scale directly (one call per rendered piece - a single piece
+// for an ordinary country, three for the USA's approved custom layout)
+// rather than looking a country up by iso3 itself, since a single
+// country can now render more than one piece.
+function getCountryFocusImageStyle(focusPoint: FocusPoint, cameraTarget: CameraTarget, scale: number, entered: boolean) {
   const shiftX = cameraTarget.x - focusPoint.x;
   const shiftY = cameraTarget.y - focusPoint.y;
   return {
@@ -430,13 +428,44 @@ function OperationalCanvas() {
   const activeCountryRef = useRef<ActiveCountry | null>(null);
   activeCountryRef.current = activeCountry;
 
-  // Index 3.4C: cleaned/simplified once per country selection, not per
-  // frame - see buildFocusClipPath for why this differs from
-  // renderedCountry.geometry (the raw registry path).
-  const focusClipPath = useMemo(
-    () => (renderedCountry ? buildFocusClipPath(renderedCountry.geometry) : null),
-    [renderedCountry],
-  );
+  // Index 3.8 rebuild: one or more pieces to render for the current
+  // selection - three (main/Alaska/Hawaii) for the USA's approved custom
+  // layout, one for every other country. Each piece's clip path is
+  // cleaned/simplified once per selection here, not per frame - see
+  // buildFocusClipPath for why this differs from the piece's raw
+  // geometry. Falls back to a single piece built from the Active
+  // Country's own registry fields if a focus definition is somehow
+  // missing (defensive only - every Active Country comes from
+  // COUNTRY_REGISTRY, which COUNTRY_FOCUS_REGISTRY is built 1:1 from).
+  const focusPieces = useMemo(() => {
+    if (!renderedCountry) return [];
+    const focusDefinition = getCountryFocusDefinition(renderedCountry.iso3);
+    const rawPieces =
+      focusDefinition?.pieces ??
+      (focusDefinition
+        ? [
+            {
+              id: "default",
+              geometry: renderedCountry.geometry,
+              focusPoint: focusDefinition.focusPoint,
+              cameraTarget: focusDefinition.cameraTarget,
+              scale: focusDefinition.defaultFocusScale,
+            },
+          ]
+        : [
+            {
+              id: "default",
+              geometry: renderedCountry.geometry,
+              focusPoint: {
+                x: (renderedCountry.boundingBox.minX + renderedCountry.boundingBox.maxX) / 2,
+                y: (renderedCountry.boundingBox.minY + renderedCountry.boundingBox.maxY) / 2,
+              },
+              cameraTarget: { x: 525, y: 250 },
+              scale: 1,
+            },
+          ]);
+    return rawPieces.map((piece) => ({ ...piece, clipPath: buildFocusClipPath(piece.geometry) }));
+  }, [renderedCountry]);
 
   useEffect(() => {
     subscribe(setActiveCountry);
@@ -609,33 +638,35 @@ function OperationalCanvas() {
               ))}
             </svg>
           )}
-          {layer.className === "operational-footprint-layer" && SHOW_COUNTRY_FOCUS_CUTOUT && renderedCountry && (
+          {layer.className === "operational-footprint-layer" && SHOW_COUNTRY_FOCUS_CUTOUT && renderedCountry && focusPieces.length > 0 && (
             <>
               <div className="country-focus-dim-overlay" style={getDimOverlayStyle(focusEntered)} aria-hidden="true" />
-              <svg
-                key={renderedCountry.iso3}
-                className="country-focus-image-layer"
-                viewBox={OPERATIONAL_GEOMETRY_VIEWBOX}
-                preserveAspectRatio={OPERATIONAL_GEOMETRY_FIT}
-                aria-hidden="true"
-              >
-                <defs>
-                  <clipPath id={`country-focus-clip-${renderedCountry.iso3}`} clipPathUnits="userSpaceOnUse">
-                    <path d={focusClipPath ?? renderedCountry.geometry} />
-                  </clipPath>
-                </defs>
-                <image
-                  href="/data/world-map-v17.png"
-                  x={0}
-                  y={0}
-                  width={1000}
-                  height={1000}
-                  preserveAspectRatio="xMidYMid slice"
-                  clipPath={`url(#country-focus-clip-${renderedCountry.iso3})`}
-                  onClick={(event) => event.stopPropagation()}
-                  style={getCountryFocusImageStyle(renderedCountry.iso3, renderedCountry.boundingBox, focusEntered)}
-                />
-              </svg>
+              {focusPieces.map((piece) => (
+                <svg
+                  key={`${renderedCountry.iso3}-${piece.id}`}
+                  className="country-focus-image-layer"
+                  viewBox={OPERATIONAL_GEOMETRY_VIEWBOX}
+                  preserveAspectRatio={OPERATIONAL_GEOMETRY_FIT}
+                  aria-hidden="true"
+                >
+                  <defs>
+                    <clipPath id={`country-focus-clip-${renderedCountry.iso3}-${piece.id}`} clipPathUnits="userSpaceOnUse">
+                      <path d={piece.clipPath || piece.geometry} />
+                    </clipPath>
+                  </defs>
+                  <image
+                    href="/data/world-map-v17.png"
+                    x={0}
+                    y={0}
+                    width={1000}
+                    height={1000}
+                    preserveAspectRatio="xMidYMid slice"
+                    clipPath={`url(#country-focus-clip-${renderedCountry.iso3}-${piece.id})`}
+                    onClick={(event) => event.stopPropagation()}
+                    style={getCountryFocusImageStyle(piece.focusPoint, piece.cameraTarget, piece.scale, focusEntered)}
+                  />
+                </svg>
+              ))}
             </>
           )}
           {layer.className === "country-intelligence-layer" && SHOW_COUNTRY_BOUNDARIES && (
