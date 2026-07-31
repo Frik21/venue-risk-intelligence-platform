@@ -26,7 +26,20 @@ type BoundingBox = CountryDefinition["boundingBox"];
 // translated so it fits entirely inside this block. The block itself
 // never moves or resizes to accommodate a country - countries adapt to
 // the block, never the reverse.
-const OPERATIONAL_FOCUS_BLOCK: BoundingBox = { minX: 250, minY: 100, maxX: 800, maxY: 400 };
+//
+// Centred on (500, 500) - the Operational Geometry space's own true
+// visible centre, not an arbitrary choice: the Operational Canvas's
+// "xMidYMid slice" viewBox (Index 2.2C, unmodified by this ticket) keeps
+// (500, 500) at the centre of the screen at any viewport size, while a
+// block centred elsewhere in that space (the ticket's original
+// (250,100)-(800,400), centred at (525,250)) sits in a region the slice
+// crop doesn't always show on a landscape viewport - confirmed directly:
+// tall countries (Canada, Russia, South Africa, Australia, USA mainland)
+// rendered with their top portion above the visible screen. Re-centring
+// on the space's own true middle - per explicit follow-up direction to
+// show the selected country in the middle of the screen - fixes that
+// directly, while keeping the exact 550x300 size the ticket specified.
+const OPERATIONAL_FOCUS_BLOCK: BoundingBox = { minX: 225, minY: 350, maxX: 775, maxY: 650 };
 const OPERATIONAL_FOCUS_BLOCK_WIDTH = OPERATIONAL_FOCUS_BLOCK.maxX - OPERATIONAL_FOCUS_BLOCK.minX; // 550
 const OPERATIONAL_FOCUS_BLOCK_HEIGHT = OPERATIONAL_FOCUS_BLOCK.maxY - OPERATIONAL_FOCUS_BLOCK.minY; // 300
 
@@ -110,10 +123,11 @@ function parsePathRings(svgPath: string): RingPoint[][] {
   return rings;
 }
 
-// Shoelace formula, centroid only (area isn't needed for classification
-// here - every ring is bucketed by position, not by size, so nothing is
-// ever dropped as "too small to matter").
-function ringCentroid(ring: RingPoint[]): FocusPoint | null {
+// Shoelace formula: centroid (used for classification - every ring is
+// bucketed by position, not by size, so nothing is ever dropped as "too
+// small to matter") and area (used below to pick each piece's own
+// largest ring as its scale/focus reference).
+function ringCentroidAndArea(ring: RingPoint[]): { centroid: FocusPoint; area: number } | null {
   let signedArea2 = 0;
   let cx = 0;
   let cy = 0;
@@ -126,7 +140,7 @@ function ringCentroid(ring: RingPoint[]): FocusPoint | null {
     cy += (p0.y + p1.y) * cross;
   }
   if (Math.abs(signedArea2) < 1e-9) return null;
-  return { x: cx / (3 * signedArea2), y: cy / (3 * signedArea2) };
+  return { centroid: { x: cx / (3 * signedArea2), y: cy / (3 * signedArea2) }, area: Math.abs(signedArea2) / 2 };
 }
 
 function ringsToPath(rings: RingPoint[][]): string {
@@ -176,30 +190,50 @@ function isUsaHawaiiRing(centroid: FocusPoint): boolean {
   return centroid.y > 430 && centroid.x < 115;
 }
 
-// Small inset boxes inside the Operational Focus Block, top-left for
-// Alaska and bottom-left for Hawaii per the ticket. Positioned within
-// Y:225-395 rather than using the block's own full Y:100-400 span:
-// the Operational Canvas's existing, unmodified "xMidYMid slice"
-// viewBox only ever shows the vertically-CENTRED band of the shared
-// 1000x1000 Operational Geometry space (Index 2.2C) - on a typical
-// landscape viewport that band does not reach all the way up to the
-// block's own Y:100 top edge (confirmed directly: at 1600x900, only
-// Y:218.75-781.25 is ever visible). That crop is outside this ticket's
-// scope to change, so the insets are placed inside the portion of the
-// block that's actually on screen, while still reading as top-left/
-// bottom-left relative to each other and to the block's own left edge.
-const USA_ALASKA_INSET_BOX: BoundingBox = { minX: 260, minY: 225, maxX: 400, maxY: 300 };
-const USA_HAWAII_INSET_BOX: BoundingBox = { minX: 260, minY: 320, maxX: 400, maxY: 395 };
+// Small inset boxes inside the (now screen-centred) Operational Focus
+// Block, top-left for Alaska and bottom-left for Hawaii per the ticket -
+// comfortably clear of the block's own edges and of each other. With the
+// block re-centred on the Operational Geometry space's true visible
+// middle (500, 500), its entire Y:350-650 span is on screen at common
+// viewport sizes, so these no longer need to dodge a crop margin the way
+// the pre-recentring version did.
+const USA_ALASKA_INSET_BOX: BoundingBox = { minX: 235, minY: 360, maxX: 405, maxY: 460 };
+const USA_HAWAII_INSET_BOX: BoundingBox = { minX: 235, minY: 540, maxX: 405, maxY: 640 };
 
+// Index 3.8 follow-up fix: fitting the SCALE to each piece's naive
+// combined bounding box broke for Alaska specifically - its ring set
+// legitimately includes the westernmost Aleutian islands, which cross
+// the antimeridian and render near x=1000 in this equirectangular-style
+// projection, the same wraparound that inflated the whole pre-rebuild
+// USA registry bounding box to x:-0.5-1000.5 (documented in Index 3.8's
+// own investigation). A combined bbox across both x~2 and x~1000 is
+// ~1000 units wide, computing a scale of ~0.17 - Alaska rendering as a
+// barely-visible speck instead of the intended dominant inset. Using
+// only the LARGEST ring in the group for the scale/focus reference (the
+// same "trust the mainland ring, not the whole multi-territory bbox"
+// fix Index 3.4A already applied everywhere else in this file) sidesteps
+// the wraparound without dropping anything - every ring in the group,
+// including the wrapped Aleutian fragments, still goes into `geometry`
+// and still renders.
 function buildUsaFocusPiece(id: string, rings: RingPoint[][], targetBox: BoundingBox): CountryFocusPiece {
   const geometry = ringsToPath(rings);
-  const box = pathBoundingBox(geometry);
+  const ringsWithArea = rings
+    .map((ring) => {
+      const summary = ringCentroidAndArea(ring);
+      return summary ? { ring, area: summary.area } : null;
+    })
+    .filter((r): r is { ring: RingPoint[]; area: number } => r !== null);
+  const largestRing = ringsWithArea.reduce<{ ring: RingPoint[]; area: number } | null>(
+    (best, current) => (!best || current.area > best.area ? current : best),
+    null,
+  );
+  const scaleReferenceBox = largestRing ? pathBoundingBox(ringsToPath([largestRing.ring])) : pathBoundingBox(geometry);
   return {
     id,
     geometry,
-    focusPoint: boxCenter(box),
+    focusPoint: boxCenter(scaleReferenceBox),
     cameraTarget: boxCenter(targetBox),
-    scale: scaleToFit(box, targetBox.maxX - targetBox.minX, targetBox.maxY - targetBox.minY),
+    scale: scaleToFit(scaleReferenceBox, targetBox.maxX - targetBox.minX, targetBox.maxY - targetBox.minY),
   };
 }
 
@@ -209,7 +243,8 @@ function buildUsaFocusDefinition(country: CountryDefinition): CountryFocusDefini
   const hawaiiRings: RingPoint[][] = [];
   const mainRings: RingPoint[][] = [];
   for (const ring of rings) {
-    const centroid = ringCentroid(ring);
+    const summary = ringCentroidAndArea(ring);
+    const centroid = summary?.centroid ?? null;
     if (centroid && isUsaAlaskaRing(centroid)) {
       alaskaRings.push(ring);
     } else if (centroid && isUsaHawaiiRing(centroid)) {
