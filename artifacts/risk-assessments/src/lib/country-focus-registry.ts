@@ -432,10 +432,115 @@ const SPAIN_CANARY_ISLANDS: SplitRegionRule = {
   isMember: (c) => c.y > 400,
 };
 
+// Chile: mainland (the full continental strip, plus its own nearby
+// southern archipelago - Chiloé, Tierra del Fuego - already covered by
+// computeScaleReferenceBox's own growth-based accretion, not this
+// classifier) split from Easter Island (Rapa Nui), ~3,500 real km into
+// the Pacific - the ring that originally caused Chile to render visibly
+// off-centre (see computeScaleReferenceBox). Mainland's own westernmost
+// extent is x=258.9; Easter Island sits at x~165.4, a clean gap. No
+// distinct ISO 3166-1 code of its own (fully part of Chile in that
+// standard), so a synthetic one.
+const CHILE_EASTER_ISLAND: SplitRegionRule = {
+  id: "chile-easter-island",
+  iso2: "EI",
+  iso3: "EAS",
+  name: "Easter Island",
+  isMember: (c) => c.x < 250,
+};
+
+// Norway: mainland (the full length of continental Norway, y:214.7-301.1)
+// split from Svalbard, a real archipelago ~55 units further north than
+// mainland's own northernmost point with no gap in between - measured
+// directly off the registry's own ring set: Svalbard's own several
+// islands (Spitsbergen, Nordaustlandet, Edgeøya) all sit at y<160, every
+// one of mainland's own nearby small islands sits at y>214. Has a real
+// ISO 3166-1 code of its own (Svalbard and Jan Mayen, SJ/SJM), not
+// present as its own entry in this registry.
+const NORWAY_SVALBARD: SplitRegionRule = {
+  id: "norway-svalbard",
+  iso2: "SJ",
+  iso3: "SJM",
+  name: "Svalbard",
+  isMember: (c) => c.y < 200,
+};
+
+// Australia: mainland split from Tasmania - mainland's own southernmost
+// point sits at y=618.3, every Tasmania-cluster ring sits at y>619.9, a
+// clean gap with no real territory in between. No distinct ISO 3166-1
+// code of its own (an Australian state, not a separate country), so a
+// synthetic one.
+const AUSTRALIA_TASMANIA: SplitRegionRule = {
+  id: "australia-tasmania",
+  iso2: "TS",
+  iso3: "TAS",
+  name: "Tasmania",
+  isMember: (c) => c.y > 619,
+};
+
+// Ecuador: mainland split from the Galápagos Islands - mainland's own
+// westernmost point sits at x=244.4, the Galápagos ring cluster sits at
+// x<218.6, a clean gap (one small ring at x=246.6 stays with the
+// mainland - within its own bounding box, a real nearshore feature, not
+// Galápagos). No distinct ISO 3166-1 code of its own (part of Ecuador in
+// that standard), so a synthetic one.
+const ECUADOR_GALAPAGOS: SplitRegionRule = {
+  id: "ecuador-galapagos",
+  iso2: "GX",
+  iso3: "GAL",
+  name: "Galápagos Islands",
+  isMember: (c) => c.x < 230,
+};
+
+// Portugal: mainland split into two real, separately-named Atlantic
+// archipelagos, distinguished by position, not just excluded as one
+// lump: Madeira is a single ring at y~403.6, notably further south than
+// both mainland (y~379.8) and the Azores cluster (y~380-389) - y > 395
+// isolates it cleanly. The Azores are seven rings clustered at
+// x~382-399, y~380-389 - similar latitude to mainland but well west of
+// it (mainland's own westernmost point is x=443.9) - y <= 395 && x < 420
+// catches the whole cluster without also catching mainland. Neither has
+// a distinct ISO 3166-1 code of its own (both autonomous regions of
+// Portugal in that standard), so both get synthetic ones.
+const PORTUGAL_MADEIRA: SplitRegionRule = {
+  id: "portugal-madeira",
+  iso2: "MI",
+  iso3: "MAD",
+  name: "Madeira",
+  isMember: (c) => c.y > 395,
+};
+const PORTUGAL_AZORES: SplitRegionRule = {
+  id: "portugal-azores",
+  iso2: "AC",
+  iso3: "AZO",
+  name: "Azores",
+  isMember: (c) => c.y <= 395 && c.x < 420,
+};
+
+// Russia: mainland split from Kaliningrad, the exclave separated from
+// the rest of Russia by Lithuania, Poland, and Belarus - mainland's own
+// westernmost point sits at x=545.1, Kaliningrad sits at x~528.6, a
+// clean (if modest, matching the two countries' real modest separation)
+// gap. No distinct ISO 3166-1 code of its own (a Russian federal subject,
+// not a separate country), so a synthetic one.
+const RUSSIA_KALININGRAD: SplitRegionRule = {
+  id: "russia-kaliningrad",
+  iso2: "KA",
+  iso3: "KGD",
+  name: "Kaliningrad",
+  isMember: (c) => c.x < 545,
+};
+
 const COUNTRY_SPLITS: { iso3: string; regions: SplitRegionRule[] }[] = [
   { iso3: "USA", regions: [USA_ALASKA, USA_HAWAII] },
   { iso3: "FRA", regions: [FRANCE_GUIANA, FRANCE_MARTINIQUE, FRANCE_GUADELOUPE, FRANCE_MAYOTTE, FRANCE_REUNION] },
   { iso3: "ESP", regions: [SPAIN_CANARY_ISLANDS] },
+  { iso3: "CHL", regions: [CHILE_EASTER_ISLAND] },
+  { iso3: "NOR", regions: [NORWAY_SVALBARD] },
+  { iso3: "AUS", regions: [AUSTRALIA_TASMANIA] },
+  { iso3: "ECU", regions: [ECUADOR_GALAPAGOS] },
+  { iso3: "PRT", regions: [PORTUGAL_MADEIRA, PORTUGAL_AZORES] },
+  { iso3: "RUS", regions: [RUSSIA_KALININGRAD] },
 ];
 
 // Splits a real registry entry into independently selectable
