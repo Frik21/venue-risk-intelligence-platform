@@ -29,10 +29,20 @@ export const MAP_OCEAN_CENTRE = "#0b0f14";
 export const MAP_OCEAN_EDGE = "#0b0f14";
 
 // Focused-country rim-light: an outline traced on the exact cutout shape
-// (same clip path/transform as the image), off by default since
-// VenueGuard's Country Focus Engine (Index 3.3) was explicitly built with
-// "no border/outline/glow". Flip to true to turn it on.
-export const MAP_FOCUS_BORDER_VISIBLE = false;
+// (same clip path/transform as the image). Switched on as the direct
+// answer to removing the old FOCUS_SCALE_MAX ceiling in
+// country-focus-registry.ts: once a country's own true fit-to-block
+// scale is honoured with no cap, a genuinely tiny territory (Aruba,
+// Monaco, Nauru - anything needing several hundred to several thousand
+// times zoom) is viewing far less than a single pixel of the source map
+// image, so its interior renders as a flat, textureless block - crisp
+// edges, but no content to show inside them. The rim-light is what keeps
+// that reading as a deliberate, premium "this is the whole of a very
+// small place" presentation instead of a plain blank rectangle: a
+// visible border was never optional once uncapped scale could produce
+// zero interior content, only deferred until this was the actual issue
+// to solve, rather than switched on speculatively.
+export const MAP_FOCUS_BORDER_VISIBLE = true;
 export const MAP_FOCUS_BORDER_WIDTH = 1.5;
 
 // Border edge crispness. buildFocusClipPath (dashboard.tsx) only needs to

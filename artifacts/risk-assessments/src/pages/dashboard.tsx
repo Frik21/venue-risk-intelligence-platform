@@ -431,7 +431,9 @@ function simplifyFocusClipRing(points: FocusClipPoint[], epsilon: number): Focus
 // resulting on-screen error stays roughly constant - but since every
 // ring that large belongs to a country rendered at close to 1x zoom
 // anyway, that tolerance was already imperceptible before this ticket
-// and stays that way now. Bounded by FOCUS_SCALE_MAX (30) either way.
+// and stays that way now - the giant rings all belong to countries whose
+// own true fit-to-block scale stays near 1x regardless of whether the
+// country-focus-registry ceiling that used to bound it is still in place.
 function buildFocusClipPath(svgPath: string, scale: number): string {
   const epsilon = FOCUS_CLIP_SIMPLIFY_EPSILON / Math.max(scale, 1);
   const ringStrings = svgPath.match(/M[^M]*Z/g) ?? [];

@@ -268,7 +268,7 @@
 
 .country-boundary-debug-path {
   fill: none;
-  stroke: rgb(var(--map-accent-rgb, 255, 196, 87) / 0.55);
+  stroke: rgba(var(--map-accent-rgb, 255, 196, 87), 0.55);
   stroke-width: 0.5;
   vector-effect: non-scaling-stroke;
 }
@@ -284,7 +284,7 @@
    to a scale(30) Dominican Republic. */
 .country-focus-border-path {
   fill: none;
-  stroke: rgb(var(--map-accent-rgb, 255, 196, 87) / 0.6);
+  stroke: rgba(var(--map-accent-rgb, 255, 196, 87), 0.6);
   vector-effect: non-scaling-stroke;
   pointer-events: none;
 }

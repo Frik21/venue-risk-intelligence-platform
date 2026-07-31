@@ -53,33 +53,35 @@ function boxCenter(box: BoundingBox): FocusPoint {
 // binding constraint, so the other dimension always finishes with room
 // to spare rather than overflowing the block.
 //
-// Hard ceiling, reintroduced after the follow-up USA split surfaced
-// exactly the case it exists for: Hawaii's real geographic footprint is
-// small enough that fitting it to the full 550x300 block needs ~79x
-// scale - and at that scale the focused image's own drop-shadow filter
-// (getCountryFocusImageStyle, dashboard.tsx) became catastrophically
-// expensive to rasterize, hanging the browser for 90+ seconds on every
-// selection (reproduced directly, not theoretical). The pre-3.8 code had
-// this exact ceiling for the same reason ("only degenerate micro-
-// territories... demand scales in the hundreds or thousands, which is
-// not a sensible limit to chase") and it was dropped during the 3.8
-// rebuild on the assumption that fitting each country's own real,
-// complete bounding box to the block would never need it - true for
-// every ordinary country, not true for a genuinely tiny standalone
-// region like Hawaii. Clamping means Hawaii (and anything similarly
-// small) renders smaller than a full block-filling size rather than
-// hanging the tab - a real, inspectable size with breathing room, not
-// the block's own upper bound.
-const FOCUS_SCALE_MAX = 30;
+// A hard ceiling (FOCUS_SCALE_MAX = 30) lived here for a while - Hawaii's
+// real footprint needs ~79x scale to fill the 550x300 block, and at that
+// scale the focused image's own drop-shadow filter (getCountryFocusImageStyle,
+// dashboard.tsx) became catastrophically expensive to rasterize, hanging
+// the browser for 90+ seconds on every selection (reproduced directly).
+// The actual cause turned out to be the filter living on the same element
+// as the scale transform, not the scale value itself - moving the
+// drop-shadow to the cutout's unscaled wrapper (getCountryFocusWrapperStyle)
+// fixed the real problem at its root. Reproduced and confirmed directly
+// afterward: scale settles in single-digit milliseconds at every value
+// tested up to 3000x with that fix in place, so the ceiling was only ever
+// protecting against the filter bug, not scale itself - every country now
+// gets its own true, independent fit-to-block scale, however small its
+// real footprint is, per direct product direction ("each country zoom
+// scale must be independent" / "make smaller countries bigger").
+//
+// One genuine edge case remains, unrelated to that old performance bug:
+// a handful of countries reduce to a truly zero-area bounding box in the
+// registry (currently just Vatican City), where there is no real extent
+// to scale against at all - not "very small", but exactly zero, so
+// width/height-based scaling is undefined rather than merely large. This
+// fallback exists for that literal division-by-zero case only.
+const DEGENERATE_GEOMETRY_FALLBACK_SCALE = 30;
 
 function scaleToFit(box: BoundingBox, targetWidth: number, targetHeight: number): number {
   const width = box.maxX - box.minX;
   const height = box.maxY - box.minY;
-  // Defensive fallback only, for the rare degenerate/near-zero-size
-  // geometry (e.g. a micro-nation simplified to a single point) where
-  // there is no real extent to scale against.
-  if (width <= 0 || height <= 0) return FOCUS_SCALE_MAX;
-  return Math.min(targetWidth / width, targetHeight / height, FOCUS_SCALE_MAX);
+  if (width <= 0 || height <= 0) return DEGENERATE_GEOMETRY_FALLBACK_SCALE;
+  return Math.min(targetWidth / width, targetHeight / height);
 }
 
 export type CountryFocusDefinition = CountryDefinition & {
