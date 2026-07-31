@@ -55,6 +55,22 @@ export const MAP_FOCUS_BORDER_WIDTH = 1.5;
 export const MAP_FOCUS_FILL_VISIBLE = true;
 export const MAP_FOCUS_FILL_RGB = "11, 29, 58";
 
+// Selected-country paint texture: a fine papermache/paper-grain finish
+// over the solid fill above, matched directly to a reference image. Not
+// a filter applied straight to the fill path itself - that would repeat
+// the drop-shadow-at-scale bug this file's border section documents
+// (filter cost tied to the element's own scale transform, catastrophic
+// once a tiny territory's fit-to-block scale reaches into the
+// hundreds/thousands). Instead the grain is generated once on a small,
+// fixed-size pattern tile, then tiled across the fill with a
+// patternTransform that inversely cancels the country's own scale - the
+// same "stay a constant size on screen no matter how far a country
+// zooms" idea vector-effect: non-scaling-stroke already gives the
+// rim-light border, generalised to a fill via the pattern's own
+// transform instead of a stroke-only CSS property.
+export const MAP_FOCUS_FILL_TEXTURE_VISIBLE = true;
+export const MAP_FOCUS_FILL_TEXTURE_TILE_SIZE = 10;
+
 // Border edge crispness. buildFocusClipPath (dashboard.tsx) only needs to
 // thin a ring's points at all to protect performance on the handful of
 // genuinely huge coastlines - measured directly off the real registry

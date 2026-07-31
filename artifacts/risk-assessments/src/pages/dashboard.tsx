@@ -15,6 +15,8 @@ import {
   MAP_FOCUS_BORDER_WIDTH,
   MAP_FOCUS_FILL_VISIBLE,
   MAP_FOCUS_FILL_RGB,
+  MAP_FOCUS_FILL_TEXTURE_VISIBLE,
+  MAP_FOCUS_FILL_TEXTURE_TILE_SIZE,
   MAP_BORDER_FULL_DETAIL_MAX_POINTS,
 } from "@/lib/map-aesthetics";
 
@@ -735,6 +737,33 @@ function OperationalCanvas() {
                   <clipPath id={`country-focus-clip-${renderedCountry.iso3}`} clipPathUnits="userSpaceOnUse">
                     <path d={focusRender.clipPath || renderedCountry.geometry} />
                   </clipPath>
+                  {MAP_FOCUS_FILL_TEXTURE_VISIBLE && (
+                    <>
+                      {/* Grain generated once on a small, fixed-size tile -
+                          see MAP_FOCUS_FILL_TEXTURE_VISIBLE (map-aesthetics.ts)
+                          for why this can't live on the scaled fill path
+                          itself. */}
+                      <filter id={`country-focus-paper-noise-${renderedCountry.iso3}`} x="-20%" y="-20%" width="140%" height="140%">
+                        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" stitchTiles="stitch" result="noise" />
+                        <feColorMatrix in="noise" type="saturate" values="0" />
+                      </filter>
+                      <pattern
+                        id={`country-focus-paper-texture-${renderedCountry.iso3}`}
+                        patternUnits="userSpaceOnUse"
+                        width={MAP_FOCUS_FILL_TEXTURE_TILE_SIZE}
+                        height={MAP_FOCUS_FILL_TEXTURE_TILE_SIZE}
+                        patternTransform={`scale(${1 / focusRender.scale})`}
+                      >
+                        <rect width={MAP_FOCUS_FILL_TEXTURE_TILE_SIZE} height={MAP_FOCUS_FILL_TEXTURE_TILE_SIZE} fill={`rgb(${MAP_FOCUS_FILL_RGB})`} />
+                        <rect
+                          width={MAP_FOCUS_FILL_TEXTURE_TILE_SIZE}
+                          height={MAP_FOCUS_FILL_TEXTURE_TILE_SIZE}
+                          filter={`url(#country-focus-paper-noise-${renderedCountry.iso3})`}
+                          style={{ mixBlendMode: "overlay", opacity: 0.4 }}
+                        />
+                      </pattern>
+                    </>
+                  )}
                 </defs>
                 <image
                   href="/data/world-map-v17.png"
@@ -761,7 +790,9 @@ function OperationalCanvas() {
                     aria-hidden="true"
                     style={{
                       ...getCountryFocusImageStyle(focusRender.focusPoint, focusRender.cameraTarget, focusRender.scale, focusEntered),
-                      fill: `rgb(${MAP_FOCUS_FILL_RGB})`,
+                      fill: MAP_FOCUS_FILL_TEXTURE_VISIBLE
+                        ? `url(#country-focus-paper-texture-${renderedCountry.iso3})`
+                        : `rgb(${MAP_FOCUS_FILL_RGB})`,
                       pointerEvents: "none",
                     }}
                   />
