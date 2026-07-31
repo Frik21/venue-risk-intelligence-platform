@@ -531,6 +531,27 @@ const RUSSIA_KALININGRAD: SplitRegionRule = {
   isMember: (c) => c.x < 545,
 };
 
+// South Africa: mainland (plus its own Lesotho-enclave inner ring, y up
+// to 603.2) split from the Prince Edward Islands, ~1,900 real km
+// southeast in the sub-Antarctic Indian Ocean - a single near-degenerate
+// ring (area 0.31, the smallest of any split in this file) at
+// y~647.6-648.1, well past the clean gap after mainland's own southern
+// tip. This is what caused South Africa to render off-centre: at 0.31
+// area, this ring alone barely affects computeScaleReferenceBox's growth
+// check, but unioning its distant bbox with the mainland's still nearly
+// tripled the combined box (1819 to 5045 sq units), understating the
+// scale and dragging the focus point south-east away from the real,
+// recognisable mainland - reported directly ("some territory attached").
+// No distinct ISO 3166-1 code of its own (part of South Africa in that
+// standard), so a synthetic one.
+const SOUTH_AFRICA_PRINCE_EDWARD_ISLANDS: SplitRegionRule = {
+  id: "south-africa-prince-edward-islands",
+  iso2: "PZ",
+  iso3: "PEI",
+  name: "Prince Edward Islands",
+  isMember: (c) => c.y > 620,
+};
+
 const COUNTRY_SPLITS: { iso3: string; regions: SplitRegionRule[] }[] = [
   { iso3: "USA", regions: [USA_ALASKA, USA_HAWAII] },
   { iso3: "FRA", regions: [FRANCE_GUIANA, FRANCE_MARTINIQUE, FRANCE_GUADELOUPE, FRANCE_MAYOTTE, FRANCE_REUNION] },
@@ -541,6 +562,7 @@ const COUNTRY_SPLITS: { iso3: string; regions: SplitRegionRule[] }[] = [
   { iso3: "ECU", regions: [ECUADOR_GALAPAGOS] },
   { iso3: "PRT", regions: [PORTUGAL_MADEIRA, PORTUGAL_AZORES] },
   { iso3: "RUS", regions: [RUSSIA_KALININGRAD] },
+  { iso3: "ZAF", regions: [SOUTH_AFRICA_PRINCE_EDWARD_ISLANDS] },
 ];
 
 // Splits a real registry entry into independently selectable
