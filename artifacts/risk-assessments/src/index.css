@@ -289,6 +289,15 @@
   pointer-events: none;
 }
 
+/* Selected-country paint: fill colour is set inline (dashboard.tsx) from
+   MAP_ACCENT_RGB/MAP_FOCUS_FILL_OPACITY, since it varies by selection
+   state; stroke stays off here so this is a pure wash, not a second
+   outline (the rim-light above already owns the edge). */
+.country-focus-fill-path {
+  stroke: none;
+  pointer-events: none;
+}
+
 .breathing-markers-layer {
   z-index: 5;
   pointer-events: none;

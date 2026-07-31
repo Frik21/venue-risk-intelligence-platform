@@ -13,6 +13,8 @@ import {
   MAP_ACCENT_RGB,
   MAP_FOCUS_BORDER_VISIBLE,
   MAP_FOCUS_BORDER_WIDTH,
+  MAP_FOCUS_FILL_VISIBLE,
+  MAP_FOCUS_FILL_OPACITY,
   MAP_BORDER_FULL_DETAIL_MAX_POINTS,
 } from "@/lib/map-aesthetics";
 
@@ -745,6 +747,23 @@ function OperationalCanvas() {
                   onClick={(event) => event.stopPropagation()}
                   style={getCountryFocusImageStyle(focusRender.focusPoint, focusRender.cameraTarget, focusRender.scale, focusEntered)}
                 />
+                {/* Map Aesthetics Engine: a colour wash across the whole
+                    selected shape, same clip path/transform as the image
+                    above so it moves and scales in lockstep - per explicit
+                    direction ("I want the entire country to be painted
+                    over" on click), not just the rim-light below. */}
+                {MAP_FOCUS_FILL_VISIBLE && (
+                  <path
+                    d={focusRender.clipPath || renderedCountry.geometry}
+                    className="country-focus-fill-path"
+                    aria-hidden="true"
+                    style={{
+                      ...getCountryFocusImageStyle(focusRender.focusPoint, focusRender.cameraTarget, focusRender.scale, focusEntered),
+                      fill: `rgba(${MAP_ACCENT_RGB}, ${MAP_FOCUS_FILL_OPACITY})`,
+                      pointerEvents: "none",
+                    }}
+                  />
+                )}
                 {/* Map Aesthetics Engine: dormant until MAP_FOCUS_BORDER_VISIBLE
                     is switched on (map-aesthetics.ts) - not rendered at all
                     by default, matching Country Focus Engine's original "no
