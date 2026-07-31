@@ -52,29 +52,33 @@ export const MAP_OCEAN_EDGE = "#0b0f14";
 // 3000x), and a Gaussian-blur glow filter on the same scaled element
 // would reintroduce the drop-shadow-at-scale risk documented below for
 // the fill's own gradient. A saturated, bright rim colour carries the
-// "neon" read without needing an actual blur. Thinned from 1.5 to 0.9
-// per direct feedback ("border must be thinner").
+// "neon" read without needing an actual blur. Thinned again, 0.9 to 0.6,
+// and recoloured from a pale cyan to a deep, saturated navy blue - per
+// direct feedback ("thinner neon dark navy blue") after the fill itself
+// moved to the richer "Frozen Sapphire" palette below.
 export const MAP_FOCUS_BORDER_VISIBLE = true;
-export const MAP_FOCUS_BORDER_WIDTH = 0.9;
-export const MAP_FOCUS_BORDER_RGB = "95, 212, 255";
+export const MAP_FOCUS_BORDER_WIDTH = 0.6;
+export const MAP_FOCUS_BORDER_RGB = "30, 64, 255";
 
 // Selected-country paint: a colour wash across the entire cutout shape
 // (same clip path/transform as the image and rim-light above), not just
 // its edge - per explicit direction ("I want the entire country to be
-// painted over" when you click it). "Aurora Glass": a diagonal
-// iridescent gradient (deep navy through sapphire to violet) rather than
-// a flat colour - frosted glass lit from within. A gradient has none of
+// painted over" when you click it). "Aurora Glass", refined to "Frozen
+// Sapphire" (chosen from a follow-up icy-blue pitch, "I want to capture
+// the colour of their eyes" - White Walker eyes, Game of Thrones): a
+// five-stop diagonal gradient, vivid cyan through sapphire to a genuinely
+// dark corner, richer and more saturated than the first pass's washed-out
+// pale blues ("I need it much more richer"). A gradient has none of
 // feTurbulence's rasterization cost, so - unlike the papermache texture
 // this replaced - it needs no pattern/scale trick and can sit directly
-// on the scaled fill path. No scanline texture on top, by direct
-// request ("the faint scanlines must not be there") - the gradient
-// alone carries the material.
+// on the scaled fill path.
 export const MAP_FOCUS_FILL_VISIBLE = true;
 export const MAP_FOCUS_FILL_GRADIENT_STOPS: { offset: string; color: string }[] = [
-  { offset: "0%", color: "#0a1330" },
-  { offset: "45%", color: "#1c3a7a" },
-  { offset: "72%", color: "#3f6fc9" },
-  { offset: "100%", color: "#7a5fe0" },
+  { offset: "0%", color: "#3fd8ff" },
+  { offset: "22%", color: "#0fa0dc" },
+  { offset: "48%", color: "#0a68ac" },
+  { offset: "75%", color: "#0a3468" },
+  { offset: "100%", color: "#020815" },
 ];
 
 // Border edge crispness. buildFocusClipPath (dashboard.tsx) only needs to
