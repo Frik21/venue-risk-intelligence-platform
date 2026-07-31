@@ -415,14 +415,28 @@ function simplifyFocusClipRing(points: FocusClipPoint[], epsilon: number): Focus
   return left.slice(0, -1).concat(right);
 }
 
-function buildFocusClipPath(svgPath: string): string {
+// Map Aesthetics Engine: the simplification tolerance below was tuned in
+// world-space units, invisible at the ~1x zoom a large country (Russia,
+// Australia) needs to fill the Operational Focus Block. A small country
+// needing much more zoom (Cuba ~18x, Dominican Republic ~30x) magnifies
+// that exact same world-space error right along with everything else,
+// turning imperceptible simplification corners into visibly chunky,
+// low-poly coastline facets - reported directly as only some countries'
+// borders looking crisp on selection. Dividing the tolerance by the
+// country's own focus scale keeps the resulting on-SCREEN error roughly
+// constant instead of constant in world-space, so every country reads as
+// equally crisp regardless of how far it has to zoom in. Bounded by
+// FOCUS_SCALE_MAX (30) either way, so the finest this ever gets is
+// 0.15/30 - still well short of the raw, unsimplified point count.
+function buildFocusClipPath(svgPath: string, scale: number): string {
+  const epsilon = FOCUS_CLIP_SIMPLIFY_EPSILON / Math.max(scale, 1);
   const ringStrings = svgPath.match(/M[^M]*Z/g) ?? [];
   let cleaned = "";
   for (const ringString of ringStrings) {
     const points = parseFocusClipRingPoints(ringString);
     if (points.length < 3) continue;
     if (Math.abs(focusClipRingSignedArea(points)) < FOCUS_CLIP_MIN_RING_AREA) continue;
-    const simplified = simplifyFocusClipRing(points, FOCUS_CLIP_SIMPLIFY_EPSILON);
+    const simplified = simplifyFocusClipRing(points, epsilon);
     if (simplified.length < 3) continue;
     cleaned += `M ${simplified[0].x} ${simplified[0].y} `;
     for (let i = 1; i < simplified.length; i++) {
@@ -481,7 +495,7 @@ function OperationalCanvas() {
       };
     const cameraTarget = focusDefinition?.cameraTarget ?? { x: 500, y: 500 };
     const scale = focusDefinition?.defaultFocusScale ?? 1;
-    return { focusPoint, cameraTarget, scale, clipPath: buildFocusClipPath(renderedCountry.geometry) };
+    return { focusPoint, cameraTarget, scale, clipPath: buildFocusClipPath(renderedCountry.geometry, scale) };
   }, [renderedCountry]);
 
   useEffect(() => {
