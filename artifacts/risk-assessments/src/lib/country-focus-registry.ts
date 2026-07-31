@@ -101,22 +101,21 @@ function buildGenericFocusDefinition(country: CountryDefinition): CountryFocusDe
   return { ...country, focusPoint, cameraTarget, defaultFocusScale };
 }
 
-// --- Splitting the USA into independently selectable regions ----------
-// The USA's mainland, Alaska, and Hawaii are separated by whole oceans -
-// on the Operational Canvas, treating a single click anywhere in any of
-// the three as "select the United States" made the country feel like it
-// belonged to itself rather than to the operator. Per explicit direction,
-// each is now its own click target and its own focus target: selecting
-// the mainland shows the mainland; selecting Alaska shows Alaska;
-// selecting Hawaii shows Hawaii - each filling the Operational Focus
-// Block on its own, exactly like any ordinary country, rather than the
-// mainland-dominant-plus-two-small-insets layout this replaces. This is
+// --- Splitting a country into independently selectable regions --------
+// Some countries have territory separated from their mainland by whole
+// oceans - on the Operational Canvas, treating a single click anywhere in
+// any of them as "select the country" made it feel like the territory
+// belonged to itself rather than to the operator. Per explicit direction
+// (first for the USA's mainland/Alaska/Hawaii, later generalised for
+// France's French Guiana and Spain's Canary Islands), each such piece is
+// its own click target and its own focus target - filling the
+// Operational Focus Block on its own, exactly like any ordinary country -
+// rather than only reachable as part of a click on the whole. This is
 // still the only country-specific logic in this file - every other
-// country (Russia, France, Canada, all 234 others) is unaffected and
-// still selects/focuses as a single whole via buildGenericFocusDefinition
-// above. It only derives new region geometry from the USA's own already-
-// approved registry path - Operational Country Registry itself is never
-// touched.
+// country is unaffected and still selects/focuses as a single whole via
+// buildGenericFocusDefinition above. It only derives new region geometry
+// from a country's own already-approved registry path - the Operational
+// Country Registry itself is never touched.
 type RingPoint = { x: number; y: number };
 
 function parsePathRings(svgPath: string): RingPoint[][] {
@@ -184,21 +183,131 @@ function pathBoundingBox(svgPath: string): BoundingBox {
 }
 
 // Classification is purely geometric (ring centroid position in the same
-// 1000x1000 Operational Geometry space every country's own registry
-// path already lives in), derived directly from the USA's own stored
-// coastline data - not a hand-picked island list. Alaska (mainland plus
-// the full Aleutian chain, including the westernmost islands that wrap
-// past the antimeridian to render near x=1000) sits north of and far
-// from the CONUS mainland; Hawaii sits south and west of it. CONUS's own
-// bounding box is y:341.9-427.8 / x:122.7-283.1, which is why 335/430/115
-// cleanly separate the three groups with no overlap in this country's
-// actual data.
-function isUsaAlaskaRing(centroid: FocusPoint): boolean {
-  return centroid.y < 335 && (centroid.x < 115 || centroid.x > 900);
-}
-function isUsaHawaiiRing(centroid: FocusPoint): boolean {
-  return centroid.y > 430 && centroid.x < 115;
-}
+// 1000x1000 Operational Geometry space every country's own registry path
+// already lives in) - derived directly from each country's own stored
+// coastline data, not a hand-picked island list. Every cutoff below is a
+// real gap measured directly in that country's own ring centroids.
+type SplitRegionRule = {
+  id: string;
+  iso2: string;
+  iso3: string;
+  name: string;
+  isMember: (centroid: FocusPoint) => boolean;
+};
+
+// USA: mainland (CONUS, Puerto Rico, every other small feature close
+// enough to stay bundled with it) split from Alaska (mainland plus the
+// full Aleutian chain, including the westernmost islands that wrap past
+// the antimeridian to render near x=1000) and Hawaii (its own tight
+// island cluster, south and west of CONUS). CONUS's own bounding box is
+// y:341.9-427.8 / x:122.7-283.1, which is why 335/430/115 cleanly
+// separate the three groups with no overlap in this country's actual
+// data.
+const USA_ALASKA: SplitRegionRule = {
+  id: "usa-alaska",
+  iso2: "AK",
+  iso3: "ALK",
+  name: "Alaska",
+  isMember: (c) => c.y < 335 && (c.x < 115 || c.x > 900),
+};
+const USA_HAWAII: SplitRegionRule = {
+  id: "usa-hawaii",
+  iso2: "HI",
+  iso3: "HAW",
+  name: "Hawaii",
+  isMember: (c) => c.y > 430 && c.x < 115,
+};
+
+// France: mainland (Europe, Corsica, every other small feature close
+// enough to stay bundled with it) split from four overseas departments,
+// each its own real place with its own real ISO 3166-1 code (not a
+// synthetic one - unlike Alaska/Hawaii/the Canary Islands, none of these
+// are ambiguous about their own identity, simply not present as their
+// own entries in this registry, bundled into France's own multi-ring
+// path):
+//
+// - French Guiana, north coast of South America (y~489.2, x~321.3) - the
+//   only French ring anywhere near that position; a first pass at this
+//   split used y > 470 alone and accidentally also swept in the far more
+//   distant Réunion/Mayotte cluster below (both also > 470) into a
+//   single broken "French Guiana" region spanning two oceans - x < 400
+//   is what actually isolates it.
+// - Martinique and Guadeloupe, in the Antilles (Caribbean) - four small
+//   rings cluster together at x~298-300, y~454-459, distinguished from
+//   each other by area, not just position: the single largest ring here
+//   (area 0.720, y~458.8, the southernmost of the four) matches
+//   Martinique's real single-island shape and its real land area
+//   relative to Guadeloupe (~1,128 vs ~1,628 sq km); the other three
+//   rings combined (area 0.585+0.410+0.080=1.075, all at y~454.0-455.2,
+//   further north) match Guadeloupe's own real butterfly-shaped main
+//   island plus its small outlying islands (Les Saintes, Marie-Galante) -
+//   both the area ratio (~1.49 measured vs ~1.44 real) and the
+//   north/south ordering (Guadeloupe north of Martinique in reality)
+//   agree, but this one is inferred from shape/area rather than a
+//   labelled source, unlike every other split in this file.
+// - Mayotte and Réunion, in the Indian Ocean - two rings at (594.5,
+//   535.9) and (623.5,560.0), distinguished the same way: Réunion's real
+//   land area is roughly 6.7x Mayotte's, and the larger, more
+//   south-east ring here (area 1.875, at 623.5,560.0) is a near-exact
+//   match (measured ratio ~6.8x) for Réunion; the smaller, more
+//   north-west ring (area 0.275, at 594.5,535.9) matches Mayotte.
+const FRANCE_GUIANA: SplitRegionRule = {
+  id: "france-french-guiana",
+  iso2: "GF",
+  iso3: "GUF",
+  name: "French Guiana",
+  isMember: (c) => c.y > 470 && c.x < 400,
+};
+const FRANCE_MARTINIQUE: SplitRegionRule = {
+  id: "france-martinique",
+  iso2: "MQ",
+  iso3: "MTQ",
+  name: "Martinique",
+  isMember: (c) => c.y > 456 && c.y < 465 && c.x < 310,
+};
+const FRANCE_GUADELOUPE: SplitRegionRule = {
+  id: "france-guadeloupe",
+  iso2: "GP",
+  iso3: "GLP",
+  name: "Guadeloupe",
+  isMember: (c) => c.y > 452 && c.y <= 456 && c.x < 310,
+};
+const FRANCE_MAYOTTE: SplitRegionRule = {
+  id: "france-mayotte",
+  iso2: "YT",
+  iso3: "MYT",
+  name: "Mayotte",
+  isMember: (c) => c.y > 500 && c.x < 610,
+};
+const FRANCE_REUNION: SplitRegionRule = {
+  id: "france-reunion",
+  iso2: "RE",
+  iso3: "REU",
+  name: "Réunion",
+  isMember: (c) => c.y > 500 && c.x >= 610,
+};
+
+// Spain: mainland (Europe, the Balearic Islands, every other small
+// feature close enough to stay bundled with it) split from the Canary
+// Islands, off the coast of Morocco/Western Sahara in the Atlantic.
+// Every other Spain ring tops out at y=392.6 (mainland/Balearics); the
+// Canaries sit at y~415-419, a clean gap. Unlike French Guiana, the
+// Canary Islands have no distinct ISO 3166-1 code of their own (fully
+// part of Spain in that standard), so - like Alaska/Hawaii - they get a
+// synthetic, clearly-non-colliding one instead.
+const SPAIN_CANARY_ISLANDS: SplitRegionRule = {
+  id: "spain-canary-islands",
+  iso2: "IC",
+  iso3: "ICA",
+  name: "Canary Islands",
+  isMember: (c) => c.y > 400,
+};
+
+const COUNTRY_SPLITS: { iso3: string; regions: SplitRegionRule[] }[] = [
+  { iso3: "USA", regions: [USA_ALASKA, USA_HAWAII] },
+  { iso3: "FRA", regions: [FRANCE_GUIANA, FRANCE_MARTINIQUE, FRANCE_GUADELOUPE, FRANCE_MAYOTTE, FRANCE_REUNION] },
+  { iso3: "ESP", regions: [SPAIN_CANARY_ISLANDS] },
+];
 
 // Index 3.8 bug fix, still needed here: scaling to a region's naive
 // combined bounding box breaks for Alaska specifically - its ring set
@@ -258,72 +367,78 @@ function buildRegionFocusDefinition(base: CountryDefinition, rings: RingPoint[][
   };
 }
 
-// Splits the real USA registry entry into three independently selectable
-// CountryDefinition-shaped regions. Mainland keeps the real "USA"
-// identity (it is still, conceptually, the United States); Alaska and
-// Hawaii get their own synthetic identifiers (ALK/HAW - not real
-// ISO 3166 codes, chosen not to collide with any) since they aren't
-// countries in their own right, only separately-focusable regions of one.
-type UsaSplit = { mainRings: RingPoint[][]; alaskaRings: RingPoint[][]; hawaiiRings: RingPoint[][] };
+// Splits a real registry entry into independently selectable
+// CountryDefinition-shaped regions: everything not claimed by one of its
+// split rules stays together as the mainland region, keeping the
+// country's own real identity - it is still, conceptually, that country.
+// Each rule's own matched rings become their own new region, under
+// whichever identity the rule specifies (a real ISO 3166 code where one
+// exists for the territory, a synthetic non-colliding one where it
+// doesn't).
+type CountrySplitResult = {
+  mainRings: RingPoint[][];
+  regions: { rule: SplitRegionRule; rings: RingPoint[][] }[];
+};
 
-// Ring classification happens exactly once per the USA's own registry
-// entry (there is only one) - both the selectable regions below and
-// their focus definitions are derived from this single result, so the
-// two can never drift apart from each other.
-function classifyUsaRings(usa: CountryDefinition): UsaSplit {
-  const rings = parsePathRings(usa.svgPath);
-  const split: UsaSplit = { mainRings: [], alaskaRings: [], hawaiiRings: [] };
+// Ring classification happens exactly once per split country's own
+// registry entry - both the selectable regions below and their focus
+// definitions are derived from this single result, so the two can never
+// drift apart from each other.
+function classifyCountrySplit(base: CountryDefinition, regionRules: SplitRegionRule[]): CountrySplitResult {
+  const rings = parsePathRings(base.svgPath);
+  const mainRings: RingPoint[][] = [];
+  const regionRingsById = new Map<string, RingPoint[][]>(regionRules.map((rule) => [rule.id, []]));
   for (const ring of rings) {
     const centroid = ringCentroidAndArea(ring)?.centroid ?? null;
-    if (centroid && isUsaAlaskaRing(centroid)) {
-      split.alaskaRings.push(ring);
-    } else if (centroid && isUsaHawaiiRing(centroid)) {
-      split.hawaiiRings.push(ring);
+    const matchedRule = centroid ? regionRules.find((rule) => rule.isMember(centroid)) : undefined;
+    if (matchedRule) {
+      regionRingsById.get(matchedRule.id)!.push(ring);
     } else {
-      // Every ring not classified as Alaska or Hawaii - CONUS mainland,
-      // Puerto Rico, every other small real feature - stays together as
-      // the mainland region. Nothing is dropped.
-      split.mainRings.push(ring);
+      // Every ring not claimed by a split rule - the mainland, and every
+      // other small real feature close enough to it - stays together.
+      // Nothing is dropped.
+      mainRings.push(ring);
     }
   }
-  return split;
+  return { mainRings, regions: regionRules.map((rule) => ({ rule, rings: regionRingsById.get(rule.id)! })) };
 }
 
-// Alaska and Hawaii get their own synthetic identifiers (ALK/HAW - not
-// real ISO 3166 codes, chosen not to collide with any) since they aren't
-// countries in their own right, only separately-focusable regions of
-// one. Mainland keeps the real "USA" identity - it is still,
-// conceptually, the United States.
-function buildUsaRegion(base: CountryDefinition, rings: RingPoint[][]): CountryDefinition {
+function buildSplitRegionDefinition(base: CountryDefinition, rings: RingPoint[][]): CountryDefinition {
   const svgPath = ringsToPath(rings);
   return { ...base, svgPath, boundingBox: pathBoundingBox(svgPath) };
 }
 
-const USA_BASE = COUNTRY_REGISTRY.find((country) => country.iso3 === "USA");
-const USA_SPLIT = USA_BASE ? classifyUsaRings(USA_BASE) : null;
-const USA_ALASKA_BASE: CountryDefinition = { id: "usa-alaska", iso2: "AK", iso3: "ALK", name: "Alaska", svgPath: "", boundingBox: { minX: 0, minY: 0, maxX: 0, maxY: 0 } };
-const USA_HAWAII_BASE: CountryDefinition = { id: "usa-hawaii", iso2: "HI", iso3: "HAW", name: "Hawaii", svgPath: "", boundingBox: { minX: 0, minY: 0, maxX: 0, maxY: 0 } };
+function splitRuleBase(rule: SplitRegionRule): CountryDefinition {
+  return { id: rule.id, iso2: rule.iso2, iso3: rule.iso3, name: rule.name, svgPath: "", boundingBox: { minX: 0, minY: 0, maxX: 0, maxY: 0 } };
+}
 
-// The USA's own registry entry, replaced by its three split regions;
-// every other country passes through unchanged. This is what the
-// Operational Canvas's selection hit-zones render from, so Alaska and
-// Hawaii become their own clickable shapes on the map instead of only
-// reachable as part of a USA click.
+const COUNTRY_SPLIT_RESULTS = new Map<string, CountrySplitResult>();
+for (const { iso3, regions } of COUNTRY_SPLITS) {
+  const base = COUNTRY_REGISTRY.find((country) => country.iso3 === iso3);
+  if (base) COUNTRY_SPLIT_RESULTS.set(iso3, classifyCountrySplit(base, regions));
+}
+
+// A split country's own registry entry, replaced by its mainland plus
+// each split region; every other country passes through unchanged. This
+// is what the Operational Canvas's selection hit-zones render from, so
+// Alaska, Hawaii, French Guiana, and the Canary Islands become their own
+// clickable shapes on the map instead of only reachable as part of a
+// click on their parent country.
 export const OPERATIONAL_SELECTABLE_REGIONS: CountryDefinition[] = COUNTRY_REGISTRY.flatMap((country) => {
-  if (country.iso3 !== "USA" || !USA_SPLIT) return [country];
+  const split = COUNTRY_SPLIT_RESULTS.get(country.iso3);
+  if (!split) return [country];
   return [
-    buildUsaRegion(country, USA_SPLIT.mainRings),
-    buildUsaRegion(USA_ALASKA_BASE, USA_SPLIT.alaskaRings),
-    buildUsaRegion(USA_HAWAII_BASE, USA_SPLIT.hawaiiRings),
+    buildSplitRegionDefinition(country, split.mainRings),
+    ...split.regions.map(({ rule, rings }) => buildSplitRegionDefinition(splitRuleBase(rule), rings)),
   ];
 });
 
 export const COUNTRY_FOCUS_REGISTRY: CountryFocusDefinition[] = COUNTRY_REGISTRY.flatMap((country) => {
-  if (country.iso3 !== "USA" || !USA_SPLIT) return [buildGenericFocusDefinition(country)];
+  const split = COUNTRY_SPLIT_RESULTS.get(country.iso3);
+  if (!split) return [buildGenericFocusDefinition(country)];
   return [
-    buildRegionFocusDefinition(country, USA_SPLIT.mainRings),
-    buildRegionFocusDefinition(USA_ALASKA_BASE, USA_SPLIT.alaskaRings),
-    buildRegionFocusDefinition(USA_HAWAII_BASE, USA_SPLIT.hawaiiRings),
+    buildRegionFocusDefinition(country, split.mainRings),
+    ...split.regions.map(({ rule, rings }) => buildRegionFocusDefinition(splitRuleBase(rule), rings)),
   ];
 });
 
