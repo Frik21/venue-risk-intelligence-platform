@@ -5,16 +5,17 @@
 // cutout only - the rest of the app's UI (sign-in, brief, QA chrome) is
 // out of scope here and gets its own aesthetics pass later.
 //
-// This is infrastructure only: every value below currently reproduces
-// VenueGuard's existing look exactly (same grid visibility, same accent
-// colour, same flat ocean background, no border on the focus cutout).
-// Nothing renders differently yet - changing a value here is how the
-// actual aesthetic pass gets applied later, one deliberate step at a
-// time, rather than by hunting through dashboard.tsx/index.css.
+// Scaffolded as infrastructure with every value reproducing VenueGuard's
+// existing look exactly, then updated one deliberate step at a time as
+// the aesthetic pass proceeds, rather than by hunting through
+// dashboard.tsx/index.css. Grid visibility (Index 4.5) is the first
+// value actually changed from its original default.
 
-// Country Boundary Debug Mode's all-countries grid (Index 2.1). Unchanged
-// (still visible) - flip to false to hide it as part of the aesthetic pass.
-export const MAP_GRID_VISIBLE = true;
+// Country Boundary Debug Mode's all-countries grid (Index 2.1). Was a
+// verification aid for checking every country's outline against the base
+// map during registry/split work - never meant to ship visible. Now off
+// as the first item of the Layer 4 aesthetic pass.
+export const MAP_GRID_VISIBLE = false;
 
 // Shared accent colour, as an rgb() triplet so callers can vary opacity
 // per use (rgb(var(--x) / alpha)). Currently VenueGuard's existing gold
