@@ -1,11 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent } from "react";
+import type { CSSProperties, MouseEvent } from "react";
 import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import { clearSelection, selectCountry, subscribe, unsubscribe } from "@/lib/country-selection-engine";
 import type { ActiveCountry } from "@/lib/country-selection-engine";
 import { getCountryFocusDefinition, OPERATIONAL_SELECTABLE_REGIONS } from "@/lib/country-focus-registry";
 import type { FocusPoint, CameraTarget } from "@/lib/country-focus-registry";
+import {
+  MAP_GRID_VISIBLE,
+  MAP_OCEAN_CENTRE,
+  MAP_OCEAN_EDGE,
+  MAP_ACCENT_RGB,
+  MAP_FOCUS_BORDER_VISIBLE,
+  MAP_FOCUS_BORDER_WIDTH,
+} from "@/lib/map-aesthetics";
 
 // Background tone for the outer page wrapper (behind MapLayer).
 const OCEAN_COLOR = "#00081a";
@@ -179,8 +187,10 @@ const OPERATIONAL_GEOMETRY_FIT = "xMidYMid slice";
 // alignment against the approved base map can be visually verified.
 // Never affects production behaviour when false - the registry itself
 // stays loaded either way (it's used for selection/masking, not just
-// this debug view), only the outline rendering is gated.
-const SHOW_COUNTRY_BOUNDARIES = true;
+// this debug view), only the outline rendering is gated. Visibility now
+// owned by the Map Aesthetics Engine (map-aesthetics.ts) - the grid this
+// produces across all 235 countries was never meant to ship visible.
+const SHOW_COUNTRY_BOUNDARIES = MAP_GRID_VISIBLE;
 
 // Country Boundary QA Mode (Index 2.2) - a product verification tool, not
 // a development feature: lets a reviewer step through COUNTRY_REGISTRY
@@ -607,6 +617,18 @@ function OperationalCanvas() {
       aria-label="Operational Canvas"
       onMouseMove={SHOW_CANVAS_CALIBRATION ? handleCalibrationMove : undefined}
       onClick={handleCanvasClick}
+      style={
+        {
+          // Map Aesthetics Engine (map-aesthetics.ts): single source of
+          // truth for the canvas's palette, applied here as custom
+          // properties so .operational-canvas and every descendant that
+          // reads them (grid stroke, focus rim-light) stay in sync with
+          // one constant change instead of edits scattered across files.
+          "--map-ocean-centre": MAP_OCEAN_CENTRE,
+          "--map-ocean-edge": MAP_OCEAN_EDGE,
+          "--map-accent-rgb": MAP_ACCENT_RGB,
+        } as CSSProperties
+      }
     >
       {CANVAS_LAYERS.map((layer) => (
         <div
@@ -672,6 +694,25 @@ function OperationalCanvas() {
                   onClick={(event) => event.stopPropagation()}
                   style={getCountryFocusImageStyle(focusRender.focusPoint, focusRender.cameraTarget, focusRender.scale, focusEntered)}
                 />
+                {/* Map Aesthetics Engine: dormant until MAP_FOCUS_BORDER_VISIBLE
+                    is switched on (map-aesthetics.ts) - not rendered at all
+                    by default, matching Country Focus Engine's original "no
+                    border/outline/glow" design (Index 3.3). Ready to trace a
+                    rim-light on the exact cutout shape - same clip path and
+                    transform as the image above - so it moves and scales in
+                    perfect lockstep whenever it's turned on. */}
+                {MAP_FOCUS_BORDER_VISIBLE && (
+                  <path
+                    d={focusRender.clipPath || renderedCountry.geometry}
+                    className="country-focus-border-path"
+                    strokeWidth={MAP_FOCUS_BORDER_WIDTH}
+                    aria-hidden="true"
+                    style={{
+                      ...getCountryFocusImageStyle(focusRender.focusPoint, focusRender.cameraTarget, focusRender.scale, focusEntered),
+                      pointerEvents: "none",
+                    }}
+                  />
+                )}
               </svg>
             </>
           )}

@@ -170,13 +170,19 @@
   }
 }
 
+/* Map & Country Focus Aesthetics Engine - the Operational Canvas's own
+   palette lives as CSS custom properties, set inline on .operational-canvas
+   from the single source of truth in src/lib/map-aesthetics.ts (not
+   duplicated here) so changing one constant is the whole aesthetic pass.
+   The var() fallbacks below only matter if that inline set is ever
+   missing, and reproduce the same values the engine currently ships. */
 .operational-canvas {
   position: relative;
   width: 100%;
   height: 100vh;
   min-height: 100vh;
   overflow: hidden;
-  background: #0b0f14;
+  background: radial-gradient(ellipse at center, var(--map-ocean-centre, #0b0f14) 0%, var(--map-ocean-edge, #0b0f14) 100%);
   isolation: isolate;
 }
 
@@ -262,9 +268,25 @@
 
 .country-boundary-debug-path {
   fill: none;
-  stroke: rgba(255, 196, 87, 0.55);
+  stroke: rgb(var(--map-accent-rgb, 255, 196, 87) / 0.55);
   stroke-width: 0.5;
   vector-effect: non-scaling-stroke;
+}
+
+/* Map & Country Focus Aesthetics Engine: only rendered at all when
+   MAP_FOCUS_BORDER_VISIBLE is true (see dashboard.tsx) - VenueGuard's
+   Country Focus Engine (Index 3.3) was explicitly built with no border/
+   outline/glow, so this stays dormant infrastructure until that's a
+   deliberate aesthetic decision. When enabled: a thin rim-light traces
+   the focused country's exact cutout shape (same clip path and transform
+   as the image itself - see focusRender in dashboard.tsx). Non-scaling
+   stroke keeps the line a constant screen-space width from Russia down
+   to a scale(30) Dominican Republic. */
+.country-focus-border-path {
+  fill: none;
+  stroke: rgb(var(--map-accent-rgb, 255, 196, 87) / 0.6);
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
 }
 
 .breathing-markers-layer {
