@@ -206,8 +206,10 @@ const SHOW_COUNTRY_BOUNDARIES = MAP_GRID_VISIBLE;
 // a single coastline can be inspected without every other country's
 // outline cluttering the view. Registry data itself is never edited here
 // - if a country looks wrong, that's recorded as a separate review item
-// (see COUNTRY_ADJUSTMENTS below), never applied as a correction.
-const SHOW_COUNTRY_QA = true;
+// (see COUNTRY_ADJUSTMENTS below), never applied as a correction. Off by
+// default - a reviewer switches it on deliberately, it was never meant
+// to sit on top of the operational view by default.
+const SHOW_COUNTRY_QA = false;
 
 const QA_COUNTRIES = COUNTRY_REGISTRY;
 
