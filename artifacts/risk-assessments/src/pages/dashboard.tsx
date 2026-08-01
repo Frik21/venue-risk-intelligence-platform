@@ -17,6 +17,13 @@ import {
   MAP_FOCUS_FILL_VISIBLE,
   MAP_FOCUS_FILL_GRADIENT_STOPS,
   MAP_BORDER_FULL_DETAIL_MAX_POINTS,
+  SHOW_LAND_COLOUR_MASK,
+  MAP_LAND_MASK_RGB,
+  MAP_LAND_MASK_OPACITY,
+  MAP_COAST_RECOLOR_RGB,
+  MAP_BORDER_RECOLOR_RGB,
+  MAP_CITY_CORE_RECOLOR_RGB,
+  MAP_CITY_HALO_RECOLOR_RGB,
 } from "@/lib/map-aesthetics";
 
 // Background tone for the outer page wrapper (behind MapLayer).
@@ -328,10 +335,20 @@ function getCountryFocusWrapperStyle(entered: boolean) {
 
 // Index 3.4: background dim/blur uses the same direction-aware transition
 // pattern as the country image above - staggered+delayed on the way in,
-// a single uniform 450ms ease-out on the way back to the world map.
+// a single uniform 450ms ease-out on the way back to the world map. The
+// approved colour treatment's recolour filter (MAP_RECOLOR_FILTER_ID,
+// defined once below as an SVG <filter> and referenced by id - see that
+// definition for what it does and why) is layered into both states via
+// the same filter property, rather than a second element, so it's always
+// present and the existing dim/blur numbers stay untouched.
+const MAP_RECOLOR_FILTER_ID = "map-recolour-filter";
+const MAP_RECOLOR_FILTER_REF = `url(#${MAP_RECOLOR_FILTER_ID})`;
+
 function getBackgroundFocusStyle(entered: boolean) {
   return {
-    filter: entered ? "blur(10px) brightness(0.45)" : "blur(0px) brightness(1)",
+    filter: entered
+      ? `${MAP_RECOLOR_FILTER_REF} blur(10px) brightness(0.45)`
+      : `${MAP_RECOLOR_FILTER_REF} blur(0px) brightness(1)`,
     transition: entered
       ? `filter ${FOCUS_BACKGROUND_MS}ms ease-in-out ${FOCUS_BACKGROUND_DELAY_MS}ms`
       : `filter ${FOCUS_RETURN_MS}ms ease-out`,
@@ -687,6 +704,71 @@ function OperationalCanvas() {
         } as CSSProperties
       }
     >
+      {/* Approved Colour Treatment (map-aesthetics.ts) - recolours only
+          the base map image's own coastline/border/city-light pixels via
+          a luminance-band filter. Land/ocean are deliberately untouched
+          here: the image has no land/ocean colour signal to grade
+          (verified directly, see map-aesthetics.ts) - that's the separate
+          land-colour-mask layer below instead. Every table below is the
+          exact output of the same band math, run against the real image
+          in Python and confirmed visually before being ported here - not
+          hand-tuned in the browser. color-interpolation-filters="sRGB"
+          matters: SVG filters default to linearRGB, which would shift
+          every one of these numbers away from what was actually verified. */}
+      <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden="true">
+        <defs>
+          <filter id={MAP_RECOLOR_FILTER_ID} colorInterpolationFilters="sRGB">
+            <feColorMatrix
+              type="matrix"
+              values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.299 0.587 0.114 0 0"
+              result="lum"
+            />
+            <feComponentTransfer in="lum" result="borderMask">
+              <feFuncA
+                type="table"
+                tableValues="0.000 0.000 0.000 0.208 0.417 0.432 0.318 0.205 0.091 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000"
+              />
+            </feComponentTransfer>
+            <feFlood floodColor={`rgb(${MAP_BORDER_RECOLOR_RGB})`} result="borderColor" />
+            <feComposite in="borderColor" in2="borderMask" operator="in" result="borderLayer" />
+
+            <feComponentTransfer in="lum" result="coastMask">
+              <feFuncA
+                type="table"
+                tableValues="0.000 0.000 0.000 0.000 0.000 0.116 0.309 0.502 0.695 0.826 0.708 0.590 0.472 0.354 0.236 0.118 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000"
+              />
+            </feComponentTransfer>
+            <feFlood floodColor={`rgb(${MAP_COAST_RECOLOR_RGB})`} result="coastColor" />
+            <feComposite in="coastColor" in2="coastMask" operator="in" result="coastLayer" />
+
+            <feComponentTransfer in="lum" result="haloMask">
+              <feFuncA
+                type="table"
+                tableValues="0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.028 0.167 0.306 0.444 0.583 0.722 0.861 1.000 0.900 0.800 0.700 0.600 0.500 0.400 0.300 0.200 0.100 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000"
+              />
+            </feComponentTransfer>
+            <feFlood floodColor={`rgb(${MAP_CITY_HALO_RECOLOR_RGB})`} result="haloColor" />
+            <feComposite in="haloColor" in2="haloMask" operator="in" result="haloLayer" />
+
+            <feComponentTransfer in="lum" result="coreMask">
+              <feFuncA
+                type="table"
+                tableValues="0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.100 0.200 0.300 0.400 0.500 0.600 0.700 0.800 0.900 1.000 1.000 1.000 1.000 1.000 1.000 1.000 1.000 1.000 1.000 1.000 1.000 1.000 1.000 1.000"
+              />
+            </feComponentTransfer>
+            <feFlood floodColor={`rgb(${MAP_CITY_CORE_RECOLOR_RGB})`} result="coreColor" />
+            <feComposite in="coreColor" in2="coreMask" operator="in" result="coreLayer" />
+
+            <feMerge>
+              <feMergeNode in="SourceGraphic" />
+              <feMergeNode in="borderLayer" />
+              <feMergeNode in="coastLayer" />
+              <feMergeNode in="haloLayer" />
+              <feMergeNode in="coreLayer" />
+            </feMerge>
+          </filter>
+        </defs>
+      </svg>
       {CANVAS_LAYERS.map((layer) => (
         <div
           key={layer.id}
@@ -838,6 +920,30 @@ function OperationalCanvas() {
           )}
         </div>
       ))}
+
+      {/* Land colour mask (map-aesthetics.ts) - the approved exception to
+          "no new visual layer": the base map image has no land/ocean
+          colour signal for a filter to grade (verified directly), so
+          land colour comes from the same country vector geometry the app
+          already loads for hit-zones, rendered once as a flat, restrained
+          fill and nothing else - no stroke, no glow, no gradient, no
+          per-country colour, no animation. z-index ties it to
+          base-map-layer's own z-index (1); same-z-index siblings stack by
+          DOM order, and this sits later in the DOM, so it paints directly
+          above the base map image and below operational-layers (z-index
+          2) without touching CANVAS_LAYERS or any interactive element. */}
+      {SHOW_LAND_COLOUR_MASK && (
+        <svg
+          className="land-colour-mask"
+          viewBox={OPERATIONAL_GEOMETRY_VIEWBOX}
+          preserveAspectRatio={OPERATIONAL_GEOMETRY_FIT}
+          aria-hidden="true"
+        >
+          {OPERATIONAL_SELECTABLE_REGIONS.map((region) => (
+            <path key={region.id} d={region.svgPath} fill={`rgb(${MAP_LAND_MASK_RGB})`} fillOpacity={MAP_LAND_MASK_OPACITY} />
+          ))}
+        </svg>
+      )}
 
       {showDebugLayerNumbers && (
         <div className="debug-layer-badge-stack" aria-hidden="true">

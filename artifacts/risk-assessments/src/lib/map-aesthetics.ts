@@ -96,3 +96,34 @@ export const MAP_FOCUS_FILL_GRADIENT_STOPS: { offset: string; color: string }[] 
 // exactly the world's biggest countries, rendered at close to 1x zoom,
 // where that thinning was always imperceptible in the first place.
 export const MAP_BORDER_FULL_DETAIL_MAX_POINTS = 600;
+
+// Approved Colour Treatment (Index 4.x) - two independent pieces, per an
+// exact colour specification with hex targets, verified numerically
+// against the real image (Python/PIL, pixel-sampled) before either was
+// written into the app:
+//
+// 1. Land colour mask: the approved base map image (world-map-v17.png)
+//    does not contain a land/ocean colour signal to grade - verified
+//    directly by sampling deep-interior land points across seven
+//    continents (central USA, China, India, Sahara, Amazon, Siberia,
+//    Australian outback): every one of them is the same near-black navy
+//    as open ocean. There is nothing in the pixels to select "land" from
+//    with a filter. So land colour comes from the country vector
+//    geometry the app already loads for hit-zones (OPERATIONAL_SELECTABLE_REGIONS)
+//    - the exact same shapes, rendered once as a flat, restrained fill,
+//    nothing else. An approved exception to "no new visual layer",
+//    granted specifically because the alternative (a filter) cannot
+//    physically produce this requirement from this asset.
+// 2. A recolour filter for the base map image's own coastline/border/
+//    city-light pixels, which DO have a distinguishable luminance
+//    signature (verified via histogram) - a filter can select and
+//    recolour those without touching land/ocean, which stays exactly as
+//    it is today ("ocean remains the existing approved map background").
+export const SHOW_LAND_COLOUR_MASK = true;
+export const MAP_LAND_MASK_RGB = "38, 50, 64"; // #263240
+export const MAP_LAND_MASK_OPACITY = 0.58;
+
+export const MAP_COAST_RECOLOR_RGB = "91, 127, 163"; // #5B7FA3
+export const MAP_BORDER_RECOLOR_RGB = "64, 86, 111"; // #40566F
+export const MAP_CITY_CORE_RECOLOR_RGB = "255, 214, 122"; // #FFD67A
+export const MAP_CITY_HALO_RECOLOR_RGB = "217, 169, 78"; // #D9A94E

@@ -210,6 +210,22 @@
      world map. */
 }
 
+/* Land colour mask (map-aesthetics.ts, SHOW_LAND_COLOUR_MASK) - z-index
+   ties it to .base-map-layer's own z-index (1) deliberately; it's a later
+   DOM sibling at the same z-index, so it paints directly above the base
+   map image and still below .operational-layers (z-index 2), without a
+   fractional z-index or touching either layer's own stacking value.
+   Fill/opacity are set inline from map-aesthetics.ts, not here - this
+   only fixes position and keeps it out of hit-testing/animation. */
+.land-colour-mask {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
 .operational-layers {
   z-index: 2;
   pointer-events: auto;
