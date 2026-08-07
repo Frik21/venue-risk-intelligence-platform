@@ -28,11 +28,11 @@ const router: IRouter = Router();
 // Public Health stays a separate badge (per direct product direction),
 // fed only by CDC - not folded into the Risk Rating composite.
 //
-// Stateless - no database involved, live-fetched on every request, same
-// pattern as the OSINT weather check (osint.ts / lib/weather.ts). Each
-// underlying fetch is independently caught so one source failing (or
-// this session's own sandbox network policy blocking a domain, as
-// happened repeatedly during development) never breaks the others.
+// No database involved - the response itself is never persisted, only
+// held in a short-lived in-memory cache (below). Each underlying fetch
+// is independently caught so one source failing (or this session's own
+// sandbox network policy blocking a domain, as happened repeatedly
+// during development) never breaks the others.
 type RiskLevel = "unrated" | "low" | "elevated" | "critical" | "do_not_travel";
 
 const LEVEL_TO_RISK: Record<number, RiskLevel> = {
@@ -42,14 +42,19 @@ const LEVEL_TO_RISK: Record<number, RiskLevel> = {
   4: "do_not_travel",
 };
 
-router.get("/countries/:iso2/intelligence", async (req, res): Promise<void> => {
-  const iso2 = req.params.iso2;
-  const name = typeof req.query.name === "string" ? req.query.name.trim() : "";
-  if (!iso2 || !name) {
-    res.status(400).json({ error: "iso2 path param and name query param are both required" });
-    return;
-  }
+// The three external sources are real government/CDC servers, not
+// always fast, and every country selection was re-querying all three
+// from scratch - reported directly as slow. None of these change
+// minute-to-minute (a travel advisory or CDC notice is a standing
+// status, not a live feed), so a short in-memory cache trades a small,
+// honest amount of staleness for every repeat lookup of the same
+// country being instant instead of a multi-second round trip. Bounded
+// by the registry's own ~235 countries - no eviction needed beyond the
+// TTL check on read.
+const CACHE_TTL_MS = 15 * 60 * 1000;
+const cache = new Map<string, { expiresAt: number; body: unknown }>();
 
+async function buildCountryIntelligence(iso2: string, name: string) {
   const [usResult, ukResult, healthResult] = await Promise.allSettled([
     fetchTravelAdvisory(iso2, name),
     fetchUkTravelAdvisory(name),
@@ -75,7 +80,7 @@ router.get("/countries/:iso2/intelligence", async (req, res): Promise<void> => {
     maxLevel = Math.max(maxLevel, uk.level);
   }
 
-  res.json({
+  return {
     riskRating: {
       level: maxLevel > 0 ? LEVEL_TO_RISK[maxLevel] : ("unrated" as RiskLevel),
       drivers,
@@ -88,7 +93,27 @@ router.get("/countries/:iso2/intelligence", async (req, res): Promise<void> => {
       rating: deriveHealthRating(healthFindings),
       notices: healthFindings,
     },
-  });
+  };
+}
+
+router.get("/countries/:iso2/intelligence", async (req, res): Promise<void> => {
+  const iso2 = req.params.iso2;
+  const name = typeof req.query.name === "string" ? req.query.name.trim() : "";
+  if (!iso2 || !name) {
+    res.status(400).json({ error: "iso2 path param and name query param are both required" });
+    return;
+  }
+
+  const cacheKey = `${iso2}:${name}`;
+  const cached = cache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    res.json(cached.body);
+    return;
+  }
+
+  const body = await buildCountryIntelligence(iso2, name);
+  cache.set(cacheKey, { expiresAt: Date.now() + CACHE_TTL_MS, body });
+  res.json(body);
 });
 
 export default router;
