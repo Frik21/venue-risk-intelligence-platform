@@ -11,6 +11,7 @@ import riskMatrixRouter from "./risk-matrix";
 import dashboardRouter from "./dashboard";
 import usersRouter from "./users";
 import routesRouter from "./routes";
+import countryIntelligenceRouter from "./country-intelligence";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(alertsRouter);
 router.use(osintRouter);
 router.use(incidentsRouter);
 router.use(routesRouter);
+router.use(countryIntelligenceRouter);
 
 export default router;

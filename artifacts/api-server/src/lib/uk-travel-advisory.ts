@@ -36,11 +36,15 @@ export interface UkTravelAdvisoryFinding {
   sourceUrl: string;
 }
 
+// NFD-normalizes then strips all combining marks via the \p{Mn} Unicode
+// property escape (standard JS idiom for accent-stripping - avoids
+// hardcoding a combining-diacritics code point range), so an accented
+// name reduces to plain ASCII before hyphenation.
 function slugify(countryName: string): string {
   return countryName
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/\p{Mn}/gu, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
