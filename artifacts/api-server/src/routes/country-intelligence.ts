@@ -5,6 +5,25 @@ import { fetchHealthAdvisories, deriveHealthRating } from "../lib/health-advisor
 
 const router: IRouter = Router();
 
+// Our own registry carries a handful of countries in inverted
+// gazetteer-comma style ("Congo, Democratic Republic of the",
+// "Tanzania, United Republic of", "Palestine, State of") - a common
+// convention for alphabetised lists, but not how any of the three
+// external sources refer to a country. Reported directly ("countries
+// like the drc... just shows unrated") and confirmed concretely: US/UK/
+// CDC name-matching all silently failed for DRC until un-inverted to
+// "Democratic Republic of the Congo," at which point every source
+// matched correctly (UK: Level 4, CDC: 4 real Ebola/meningococcal
+// notices). Only 3 of 235 registry entries use this pattern - simple
+// "X, Y" -> "Y X" un-inversion, not a general name-normalisation engine.
+function normalizeCountryName(name: string): string {
+  const commaIndex = name.indexOf(",");
+  if (commaIndex === -1) return name;
+  const before = name.slice(0, commaIndex).trim();
+  const after = name.slice(commaIndex + 1).trim();
+  return `${after} ${before}`;
+}
+
 // Country Intelligence Engine - the composite Risk Rating combines the
 // US State Department and UK FCDO travel advisories (per direct product
 // direction: "a combination of the US and UK travel advisories... we
@@ -98,11 +117,12 @@ async function buildCountryIntelligence(iso2: string, name: string) {
 
 router.get("/countries/:iso2/intelligence", async (req, res): Promise<void> => {
   const iso2 = req.params.iso2;
-  const name = typeof req.query.name === "string" ? req.query.name.trim() : "";
-  if (!iso2 || !name) {
+  const rawName = typeof req.query.name === "string" ? req.query.name.trim() : "";
+  if (!iso2 || !rawName) {
     res.status(400).json({ error: "iso2 path param and name query param are both required" });
     return;
   }
+  const name = normalizeCountryName(rawName);
 
   const cacheKey = `${iso2}:${name}`;
   const cached = cache.get(cacheKey);
