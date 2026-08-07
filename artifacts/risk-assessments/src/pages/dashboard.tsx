@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
-import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, ClipboardList, X } from "lucide-react";
+import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, Bell, X } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
 import type { CityDefinition } from "@/lib/city-registry";
@@ -42,6 +42,61 @@ const OPERATIONAL_BRIEF = {
   summary:
     "Current operating conditions remain suitable for planned activities. Increased traffic, forecast weather, and recent local activity suggest additional planning before deployment.",
   advisories: ["Traffic congestion expected", "Weather may affect movement", "Public activity under review"],
+};
+
+type AlertSeverity = "critical" | "warning" | "info";
+
+interface OperationalAlert {
+  id: string;
+  severity: AlertSeverity;
+  title: string;
+  description: string;
+  location: string;
+  timestamp: string;
+}
+
+// Mock feed for the Alerts panel (OperationalCanvas) - distinct from the
+// daily Operational Brief: alerts are individual, timestamped events
+// rather than a single standing summary.
+const OPERATIONAL_ALERTS: OperationalAlert[] = [
+  {
+    id: "alert-1",
+    severity: "critical",
+    title: "Crowd density threshold exceeded",
+    description: "Entrance queue has surpassed planned capacity for the current time slot.",
+    location: "Cape Town",
+    timestamp: "4 min ago",
+  },
+  {
+    id: "alert-2",
+    severity: "warning",
+    title: "Severe weather advisory issued",
+    description: "Local authority has issued a wind advisory affecting outdoor operations.",
+    location: "Cape Town",
+    timestamp: "22 min ago",
+  },
+  {
+    id: "alert-3",
+    severity: "warning",
+    title: "Road closure near venue",
+    description: "A planned closure may affect arrival routes for staff and vendors.",
+    location: "Cape Town",
+    timestamp: "1 hr ago",
+  },
+  {
+    id: "alert-4",
+    severity: "info",
+    title: "Intelligence source refreshed",
+    description: "Local activity feeds have been updated with the latest reporting.",
+    location: "Cape Town",
+    timestamp: "2 hr ago",
+  },
+];
+
+const ALERT_SEVERITY_ICON: Record<AlertSeverity, typeof AlertTriangle> = {
+  critical: AlertTriangle,
+  warning: AlertCircle,
+  info: Info,
 };
 
 export default function Dashboard() {
@@ -547,6 +602,10 @@ function OperationalCanvas() {
   // Product Promise. Non-modal by design - no dimming overlay - so the
   // map stays the primary focus while the panel is open.
   const [briefPanelOpen, setBriefPanelOpen] = useState(false);
+  // Alerts panel - individual timestamped events, distinct from the
+  // standing Operational Brief. Slides from the opposite edge (right) so
+  // the two panels never compete for the same screen space.
+  const [alertsPanelOpen, setAlertsPanelOpen] = useState(false);
   // What's actually mounted/animating - lags behind activeCountry while a
   // return-to-world-map animation (Index 3.4) is playing, so the country
   // cutout and background dim/blur have something to transition FROM
@@ -592,6 +651,10 @@ function OperationalCanvas() {
   useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
+      if (alertsPanelOpen) {
+        setAlertsPanelOpen(false);
+        return;
+      }
       if (briefPanelOpen) {
         setBriefPanelOpen(false);
         return;
@@ -600,7 +663,7 @@ function OperationalCanvas() {
     }
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [briefPanelOpen]);
+  }, [briefPanelOpen, alertsPanelOpen]);
 
   // Two-phase mount so the CSS transition actually animates: paint the
   // "not entered" state first (opacity 0, no scale/shift), then flip to
@@ -1161,6 +1224,57 @@ function OperationalCanvas() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        className="alerts-panel-trigger"
+        onClick={(event) => {
+          event.stopPropagation();
+          setAlertsPanelOpen((open) => !open);
+        }}
+      >
+        <Bell className="w-4 h-4" />
+        Alerts
+        {OPERATIONAL_ALERTS.length > 0 && <span className="alerts-panel-trigger-badge">{OPERATIONAL_ALERTS.length}</span>}
+      </button>
+
+      <div
+        className={`alerts-panel ${alertsPanelOpen ? "alerts-panel-open" : ""}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="alerts-panel-header">
+          <div>
+            <p className="alerts-panel-eyebrow">Active Alerts</p>
+            <h2 className="alerts-panel-title">Events affecting your operations.</h2>
+          </div>
+          <button
+            type="button"
+            className="alerts-panel-close"
+            onClick={() => setAlertsPanelOpen(false)}
+            aria-label="Close Alerts"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="alerts-panel-list">
+          {OPERATIONAL_ALERTS.map((alert) => {
+            const SeverityIcon = ALERT_SEVERITY_ICON[alert.severity];
+            return (
+              <div key={alert.id} className={`alert-item alert-item-${alert.severity}`}>
+                <SeverityIcon className="w-4 h-4 alert-item-icon" />
+                <div className="alert-item-body">
+                  <p className="alert-item-title">{alert.title}</p>
+                  <p className="alert-item-description">{alert.description}</p>
+                  <p className="alert-item-meta">
+                    {alert.location} &middot; {alert.timestamp}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </section>

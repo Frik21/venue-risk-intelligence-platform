@@ -719,3 +719,165 @@
   font-size: 13px;
   color: rgba(255, 255, 255, 0.8);
 }
+
+/* Alerts panel - individual timestamped events, distinct from the
+   standing Operational Brief. Mirrors the Brief panel's non-modal
+   treatment (no dimming overlay) but slides from the right edge so the
+   two panels never compete for the same screen space. */
+.alerts-panel-trigger {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(11, 15, 20, 0.72);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  font-weight: 500;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.alerts-panel-trigger:hover {
+  background: rgba(11, 15, 20, 0.88);
+  border-color: rgba(252, 165, 165, 0.4);
+}
+
+.alerts-panel-trigger-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(248, 113, 113, 0.9);
+  color: #1a0a0a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.alerts-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 29;
+  width: min(360px, 88vw);
+  padding: 72px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  background: rgba(8, 11, 15, 0.92);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+  color: #fff;
+  transform: translateX(100%);
+  transition: transform 0.28s ease;
+  pointer-events: auto;
+}
+
+.alerts-panel-open {
+  transform: translateX(0);
+}
+
+.alerts-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.alerts-panel-eyebrow {
+  font-size: 12px;
+  color: rgba(252, 165, 165, 0.9);
+  margin: 0 0 4px;
+}
+
+.alerts-panel-title {
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.alerts-panel-close {
+  flex-shrink: 0;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+
+.alerts-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.alert-item {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-left-width: 3px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.alert-item-critical {
+  border-left-color: rgba(248, 113, 113, 0.9);
+}
+
+.alert-item-warning {
+  border-left-color: rgba(255, 196, 87, 0.9);
+}
+
+.alert-item-info {
+  border-left-color: rgba(125, 211, 252, 0.9);
+}
+
+.alert-item-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.alert-item-critical .alert-item-icon {
+  color: rgba(248, 113, 113, 0.95);
+}
+
+.alert-item-warning .alert-item-icon {
+  color: rgba(255, 196, 87, 0.95);
+}
+
+.alert-item-info .alert-item-icon {
+  color: rgba(125, 211, 252, 0.95);
+}
+
+.alert-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 3px;
+}
+
+.alert-item-description {
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0 0 6px;
+}
+
+.alert-item-meta {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  margin: 0;
+}
