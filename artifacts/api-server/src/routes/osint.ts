@@ -2,8 +2,18 @@ import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
 import { db, osintEventsTable, venuesTable, alertsTable } from "@workspace/db";
 import { z } from "zod";
+import { fetchWeatherFinding, weatherEventType, weatherAlertPriority } from "../lib/weather";
 
 const router: IRouter = Router();
+
+// A live weather check runs on every /venues/:id/osint fetch (below) -
+// conditions genuinely change, unlike the static templates. To avoid
+// inserting a fresh row on every page load while a storm is ongoing, a
+// pending weather-type row created within this window gets its summary
+// updated in place instead of duplicated. Once it's older than this (or
+// an analyst has already reviewed it), the next live finding starts a
+// new row.
+const WEATHER_REFRESH_WINDOW_MS = 3 * 60 * 60 * 1000;
 
 function formatOsint(row: typeof osintEventsTable.$inferSelect) {
   return {
@@ -55,12 +65,52 @@ router.get("/venues/:id/osint", async (req, res): Promise<void> => {
       lng: venue.lng ? venue.lng + (Math.random() - 0.5) * 0.01 : null,
       status: "pending" as const,
     }));
-    const inserted = await db.insert(osintEventsTable).values(toInsert).returning();
-    res.json(inserted.map(formatOsint));
-    return;
+    await db.insert(osintEventsTable).values(toInsert);
   }
 
-  res.json(existing.map(formatOsint));
+  // Live weather check - the one real (non-template) OSINT source so
+  // far. Failures here must never break the rest of the OSINT feed, so
+  // they're caught and logged rather than propagated.
+  if (venue.lat != null && venue.lng != null) {
+    try {
+      const finding = await fetchWeatherFinding(venue.lat, venue.lng);
+      if (finding) {
+        const eventType = weatherEventType(finding.severity);
+        const recentPendingWeather = existing.find(
+          (row) =>
+            row.eventType.startsWith("weather") &&
+            row.status === "pending" &&
+            Date.now() - row.createdAt.getTime() < WEATHER_REFRESH_WINDOW_MS,
+        );
+        if (recentPendingWeather) {
+          await db
+            .update(osintEventsTable)
+            .set({ eventType, summary: finding.summary, sourceUrl: finding.sourceUrl })
+            .where(eq(osintEventsTable.id, recentPendingWeather.id));
+        } else {
+          await db.insert(osintEventsTable).values({
+            venueId: id,
+            eventType,
+            summary: finding.summary,
+            sourceName: finding.sourceName,
+            sourceUrl: finding.sourceUrl,
+            lat: venue.lat,
+            lng: venue.lng,
+            status: "pending",
+          });
+        }
+      }
+    } catch (err) {
+      console.error(`Weather OSINT check failed for venue ${id}:`, err);
+    }
+  }
+
+  const finalRows = await db
+    .select()
+    .from(osintEventsTable)
+    .where(eq(osintEventsTable.venueId, id))
+    .orderBy(desc(osintEventsTable.createdAt));
+  res.json(finalRows.map(formatOsint));
 });
 
 router.patch("/osint/:id/review", async (req, res): Promise<void> => {
@@ -82,10 +132,16 @@ router.patch("/osint/:id/review", async (req, res): Promise<void> => {
 
   if (!row) { res.status(404).json({ error: "OSINT event not found" }); return; }
 
-  if (parsed.data.status === "accepted" && (row.eventType === "crime" || row.eventType === "protest" || row.eventType === "riot")) {
+  const promotableTypes = ["crime", "protest", "riot", "weather", "weather_high", "weather_critical"];
+  if (parsed.data.status === "accepted" && promotableTypes.includes(row.eventType)) {
+    const priority = row.eventType.startsWith("weather")
+      ? weatherAlertPriority(row.eventType)
+      : row.eventType === "riot"
+        ? "critical"
+        : "medium";
     await db.insert(alertsTable).values({
       venueId: row.venueId,
-      priority: row.eventType === "riot" ? "critical" : "medium",
+      priority,
       title: `OSINT Alert: ${row.eventType.replace(/_/g, " ")}`,
       summary: row.summary,
       status: "pending",

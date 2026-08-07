@@ -19,6 +19,9 @@ const EVENT_COLORS: Record<string, string> = {
   riot:         "text-red-800 bg-red-100 border-red-300",
   police_advisory: "text-blue-700 bg-blue-50 border-blue-200",
   political:    "text-purple-700 bg-purple-50 border-purple-200",
+  weather:         "text-sky-700 bg-sky-50 border-sky-200",
+  weather_high:    "text-amber-700 bg-amber-50 border-amber-200",
+  weather_critical: "text-red-800 bg-red-100 border-red-300",
   default:      "text-slate-600 bg-slate-50 border-slate-200",
 };
 
