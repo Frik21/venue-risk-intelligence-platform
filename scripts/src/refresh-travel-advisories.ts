@@ -15,7 +15,16 @@ const FEATURE_SERVICE_QUERY =
   "https://services6.arcgis.com/R6wlO6UHmSzqm9Vs/arcgis/rest/services/Travel_Advisory_Levels_viewOnlyVectors/FeatureServer/0/query" +
   "?where=1%3D1&outFields=NAME,LEVEL_,ADVDATE&returnGeometry=false&orderByFields=NAME&f=json";
 
-const OUTPUT_PATH = path.resolve(import.meta.dirname, "..", "..", "api-server", "src", "lib", "travel-advisory-data.ts");
+const OUTPUT_PATH = path.resolve(
+  import.meta.dirname,
+  "..",
+  "..",
+  "artifacts",
+  "api-server",
+  "src",
+  "lib",
+  "travel-advisory-data.ts",
+);
 
 interface RawFeature {
   attributes: { NAME: string; LEVEL_: number; ADVDATE: number | null };
