@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
-import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, Bell, Layers, LogOut, Search, X } from "lucide-react";
+import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, Bell, Layers, LogOut, Search, Globe, X } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
+import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
 import type { CityDefinition } from "@/lib/city-registry";
 import { clearSelection, selectCountry, subscribe, unsubscribe } from "@/lib/country-selection-engine";
@@ -232,17 +233,80 @@ export default function Dashboard() {
   );
 }
 
+type SearchResult =
+  | { type: "country"; name: string; iso3: string; region: CountryDefinition }
+  | { type: "city"; name: string; countryName: string; iso3: string; capital: boolean; region: CountryDefinition };
+
+const SEARCH_RESULT_LIMIT = 8;
+
+// Operational Search Index (Layer 6 follow-up) - selects through the same
+// Country Selection Engine every other consumer does (Index 3.0: "mouse
+// click today; search... later all select through this module"), so a
+// search result and a map click behave identically once selected. Built
+// once at module scope, not per keystroke/render - the underlying
+// registries never change at runtime.
+//
+// A city only becomes searchable if its iso3 (from the City Registry,
+// keyed by the ORIGINAL country's iso3) resolves to a real selectable
+// region. For a handful of split countries (Index 3.13/3.16 - France,
+// Spain, Russia, etc.) an overseas city's iso3 resolves to the mainland
+// region rather than its own split-out shape (the City Registry was
+// generated against the pre-split Country Registry) - searching it still
+// selects and zooms to the right country, just not that specific split
+// region. Acceptable for a v1 city-to-country jump; not a crash risk
+// either way; no dead entries either way.
+//
+// City-level (not just country-level) zoom is a known gap - it depends
+// on the capital-zoom step of the World -> Country -> Capital -> City
+// roadmap, deferred per direct product direction ("we should not do the
+// capital zoom" / "much later"). Selecting a city today jumps to its
+// country, same as clicking that country on the map.
+const SEARCH_INDEX: SearchResult[] = (() => {
+  const regionByIso3 = new Map(OPERATIONAL_SELECTABLE_REGIONS.map((region) => [region.iso3, region]));
+  const results: SearchResult[] = OPERATIONAL_SELECTABLE_REGIONS.map((region) => ({
+    type: "country",
+    name: region.name,
+    iso3: region.iso3,
+    region,
+  }));
+  for (const [iso3, cities] of Object.entries(CITY_REGISTRY)) {
+    const region = regionByIso3.get(iso3);
+    if (!region) continue;
+    for (const city of cities) {
+      results.push({ type: "city", name: city.name, countryName: region.name, iso3, capital: city.capital, region });
+    }
+  }
+  return results;
+})();
+
+function searchOperationalIndex(query: string): SearchResult[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  return SEARCH_INDEX.filter((result) => result.name.toLowerCase().includes(q))
+    .sort((a, b) => {
+      const aStarts = a.name.toLowerCase().startsWith(q) ? 0 : 1;
+      const bStarts = b.name.toLowerCase().startsWith(q) ? 0 : 1;
+      if (aStarts !== bStarts) return aStarts - bStarts;
+      return a.name.localeCompare(b.name);
+    })
+    .slice(0, SEARCH_RESULT_LIMIT);
+}
+
 // Persistent top bar for the Operations Centre - branding on the left,
 // operator identity + sign-out on the right. Takes up permanent screen
 // space (the canvas sits below it, not underneath it) rather than
 // floating over the map like the panel triggers, per direct product
 // direction.
 function TopBanner({ onSignOut }: { onSignOut: () => void }) {
-  // UI shell only - no search engine wired up yet (towns/cities lookup,
-  // per direct product direction, is a separate future piece). Local,
-  // controlled state so the input behaves correctly today without
-  // implying a search actually runs anywhere yet.
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchResults = useMemo(() => searchOperationalIndex(searchQuery), [searchQuery]);
+
+  function selectSearchResult(result: SearchResult) {
+    selectCountry(result.region);
+    setSearchQuery("");
+    setSearchOpen(false);
+  }
 
   return (
     <header className="top-banner">
@@ -253,15 +317,58 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
         <span className="top-banner-brand-context">Operations Centre</span>
       </div>
       <div className="top-banner-search-wrap">
-        <div className="top-banner-search">
+        <div
+          className="top-banner-search"
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node)) setSearchOpen(false);
+          }}
+        >
           <Search className="w-4 h-4 top-banner-search-icon" />
           <input
             type="text"
             className="top-banner-search-input"
             placeholder="Search towns, cities..."
             value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
+            onChange={(event) => {
+              setSearchQuery(event.target.value);
+              setSearchOpen(true);
+            }}
+            onFocus={() => setSearchOpen(true)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setSearchOpen(false);
+                event.currentTarget.blur();
+              } else if (event.key === "Enter" && searchResults.length > 0) {
+                selectSearchResult(searchResults[0]);
+              }
+            }}
           />
+          {searchOpen && searchQuery.trim() && (
+            <div className="top-banner-search-results">
+              {searchResults.length === 0 ? (
+                <div className="top-banner-search-empty">No matches for &quot;{searchQuery.trim()}&quot;</div>
+              ) : (
+                searchResults.map((result) => (
+                  <button
+                    key={`${result.type}-${result.iso3}-${result.name}`}
+                    type="button"
+                    className="top-banner-search-result"
+                    onClick={() => selectSearchResult(result)}
+                  >
+                    {result.type === "country" ? (
+                      <Globe className="w-4 h-4 top-banner-search-result-icon" />
+                    ) : (
+                      <MapPin className="w-4 h-4 top-banner-search-result-icon" />
+                    )}
+                    <span className="top-banner-search-result-name">{result.name}</span>
+                    <span className="top-banner-search-result-meta">
+                      {result.type === "country" ? "Country" : result.capital ? `${result.countryName} · Capital` : result.countryName}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
         </div>
       </div>
       <div className="top-banner-operator">
