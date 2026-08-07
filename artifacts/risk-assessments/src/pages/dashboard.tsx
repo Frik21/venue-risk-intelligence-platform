@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
-import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, Bell, Layers, LogOut, X } from "lucide-react";
+import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, Bell, Layers, LogOut, Search, X } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
 import type { CityDefinition } from "@/lib/city-registry";
@@ -238,6 +238,12 @@ export default function Dashboard() {
 // floating over the map like the panel triggers, per direct product
 // direction.
 function TopBanner({ onSignOut }: { onSignOut: () => void }) {
+  // UI shell only - no search engine wired up yet (towns/cities lookup,
+  // per direct product direction, is a separate future piece). Local,
+  // controlled state so the input behaves correctly today without
+  // implying a search actually runs anywhere yet.
+  const [searchQuery, setSearchQuery] = useState("");
+
   return (
     <header className="top-banner">
       <div className="top-banner-brand">
@@ -245,6 +251,18 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
         <span className="top-banner-brand-name">VenueGuard</span>
         <span className="top-banner-brand-divider" aria-hidden="true" />
         <span className="top-banner-brand-context">Operations Centre</span>
+      </div>
+      <div className="top-banner-search-wrap">
+        <div className="top-banner-search">
+          <Search className="w-4 h-4 top-banner-search-icon" />
+          <input
+            type="text"
+            className="top-banner-search-input"
+            placeholder="Search towns, cities..."
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+          />
+        </div>
       </div>
       <div className="top-banner-operator">
         <div className="top-banner-operator-avatar" aria-hidden="true">
