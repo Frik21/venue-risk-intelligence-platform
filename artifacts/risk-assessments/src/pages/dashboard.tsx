@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
-import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, Bell, X } from "lucide-react";
+import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, Bell, Layers, X } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
 import type { CityDefinition } from "@/lib/city-registry";
@@ -289,16 +289,19 @@ const OPERATIONAL_GEOMETRY_FIT = "xMidYMid slice";
 // alignment against the approved base map can be visually verified.
 // Never affects production behaviour when false - the registry itself
 // stays loaded either way (it's used for selection/masking, not just
-// this debug view), only the outline rendering is gated. Visibility now
-// owned by the Map Aesthetics Engine (map-aesthetics.ts) - the grid this
-// produces across all 235 countries was never meant to ship visible.
-const SHOW_COUNTRY_BOUNDARIES = MAP_GRID_VISIBLE;
+// this debug view), only the outline rendering is gated. Default
+// visibility owned by the Map Aesthetics Engine (map-aesthetics.ts) -
+// the grid this produces across all 235 countries was never meant to
+// ship visible by default - but the Operational Layers panel
+// (gridVisible, in OperationalCanvas) now lets an operator switch it on
+// for the current session without editing that file.
 
 // Country Boundary QA Mode (Index 2.2) - a product verification tool, not
 // a development feature: lets a reviewer step through COUNTRY_REGISTRY
 // one country at a time to visually confirm each boundary against the
-// approved base map. Separate from SHOW_COUNTRY_BOUNDARIES (Index 2.1,
-// which still draws every country at once) - this shows exactly one, so
+// approved base map. Separate from the Country Boundary Grid (Index 2.1,
+// gridVisible in OperationalCanvas, which still draws every country at
+// once) - this shows exactly one, so
 // a single coastline can be inspected without every other country's
 // outline cluttering the view. Registry data itself is never edited here
 // - if a country looks wrong, that's recorded as a separate review item
@@ -338,7 +341,8 @@ const SHOW_COUNTRY_FOCUS_CUTOUT = true;
 // a later, operationally-meaningful presence/office layer (discussed
 // directly, not yet built) reads as the more prominent one once it
 // exists, rather than competing with plain geography for attention.
-const SHOW_MAJOR_CITIES = true;
+// Default-on, but toggleable per session via the Operational Layers
+// panel (majorCitiesVisible, in OperationalCanvas).
 const MAJOR_CITY_DOT_RADIUS = 2.2;
 const MAJOR_CITY_LABEL_OFFSET = 4.5;
 const MAJOR_CITY_LABEL_MIN_SEPARATION_PX = 46;
@@ -629,6 +633,18 @@ function OperationalCanvas() {
   // standing Operational Brief. Slides from the opposite edge (right) so
   // the two panels never compete for the same screen space.
   const [alertsPanelOpen, setAlertsPanelOpen] = useState(false);
+  // Operational Layers panel - a legend/control panel for the canvas
+  // itself. Each toggle's starting value comes from the Map Aesthetics
+  // Engine's own default (map-aesthetics.ts) or this file's existing
+  // feature flags, but the toggle only ever changes this component's own
+  // live state for the current session - it never writes back to those
+  // defaults, so the file the operator edits directly still governs what
+  // a fresh session looks like.
+  const [layersPanelOpen, setLayersPanelOpen] = useState(false);
+  const [gridVisible, setGridVisible] = useState(MAP_GRID_VISIBLE);
+  const [majorCitiesVisible, setMajorCitiesVisible] = useState(true);
+  const [focusFillVisible, setFocusFillVisible] = useState(MAP_FOCUS_FILL_VISIBLE);
+  const [focusBorderVisible, setFocusBorderVisible] = useState(MAP_FOCUS_BORDER_VISIBLE);
   // What's actually mounted/animating - lags behind activeCountry while a
   // return-to-world-map animation (Index 3.4) is playing, so the country
   // cutout and background dim/blur have something to transition FROM
@@ -689,6 +705,10 @@ function OperationalCanvas() {
         setAlertsPanelOpen(false);
         return;
       }
+      if (layersPanelOpen) {
+        setLayersPanelOpen(false);
+        return;
+      }
       if (briefPanelOpen) {
         setBriefPanelOpen(false);
         return;
@@ -697,7 +717,7 @@ function OperationalCanvas() {
     }
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [briefPanelOpen, alertsPanelOpen]);
+  }, [briefPanelOpen, alertsPanelOpen, layersPanelOpen]);
 
   // Two-phase mount so the CSS transition actually animates: paint the
   // "not entered" state first (opacity 0, no scale/shift), then flip to
@@ -920,7 +940,7 @@ function OperationalCanvas() {
                       papermache texture this replaced, it needs no
                       pattern/scale trick and sits directly on the scaled
                       fill path below. */}
-                  {MAP_FOCUS_FILL_VISIBLE && (
+                  {focusFillVisible && (
                     <linearGradient id={`country-focus-aurora-${renderedCountry.iso3}`} x1="0" y1="0" x2="1" y2="1">
                       {MAP_FOCUS_FILL_GRADIENT_STOPS.map((stop) => (
                         <stop key={stop.offset} offset={stop.offset} stopColor={stop.color} />
@@ -946,7 +966,7 @@ function OperationalCanvas() {
                     ("I want the entire country to be painted over" on
                     click). Fully opaque - the map's city lights must not
                     show through. */}
-                {MAP_FOCUS_FILL_VISIBLE && (
+                {focusFillVisible && (
                   <path
                     d={focusRender.clipPath || renderedCountry.geometry}
                     className="country-focus-fill-path"
@@ -958,14 +978,16 @@ function OperationalCanvas() {
                     }}
                   />
                 )}
-                {/* Map Aesthetics Engine: dormant until MAP_FOCUS_BORDER_VISIBLE
-                    is switched on (map-aesthetics.ts) - not rendered at all
-                    by default, matching Country Focus Engine's original "no
+                {/* Map Aesthetics Engine: dormant until focusBorderVisible
+                    is switched on (default from MAP_FOCUS_BORDER_VISIBLE,
+                    map-aesthetics.ts; toggleable per session via the
+                    Operational Layers panel) - not rendered at all by
+                    default, matching Country Focus Engine's original "no
                     border/outline/glow" design (Index 3.3). Ready to trace a
                     rim-light on the exact cutout shape - same clip path and
                     transform as the image above - so it moves and scales in
                     perfect lockstep whenever it's turned on. */}
-                {MAP_FOCUS_BORDER_VISIBLE && (
+                {focusBorderVisible && (
                   <path
                     d={focusRender.clipPath || renderedCountry.geometry}
                     className="country-focus-border-path"
@@ -992,7 +1014,7 @@ function OperationalCanvas() {
                     Block - the same idea as vector-effect: non-scaling-
                     stroke on the rim-light border above, generalised to a
                     dot+text pair a transform (not a stroke) has to carry. */}
-                {SHOW_MAJOR_CITIES && CITY_REGISTRY[renderedCountry.iso3] && (
+                {majorCitiesVisible && CITY_REGISTRY[renderedCountry.iso3] && (
                   <g
                     style={{
                       ...getCountryFocusImageStyle(focusRender.focusPoint, focusRender.cameraTarget, focusRender.scale, focusEntered),
@@ -1016,7 +1038,7 @@ function OperationalCanvas() {
               </svg>
             </>
           )}
-          {layer.className === "country-intelligence-layer" && SHOW_COUNTRY_BOUNDARIES && (
+          {layer.className === "country-intelligence-layer" && gridVisible && (
             <svg
               className="country-boundary-debug-overlay"
               viewBox={OPERATIONAL_GEOMETRY_VIEWBOX}
@@ -1191,17 +1213,31 @@ function OperationalCanvas() {
         </div>
       )}
 
-      <button
-        type="button"
-        className="brief-panel-trigger"
-        onClick={(event) => {
-          event.stopPropagation();
-          setBriefPanelOpen((open) => !open);
-        }}
-      >
-        <ClipboardList className="w-4 h-4" />
-        Operational Brief
-      </button>
+      <div className="canvas-trigger-stack">
+        <button
+          type="button"
+          className="brief-panel-trigger"
+          onClick={(event) => {
+            event.stopPropagation();
+            setBriefPanelOpen((open) => !open);
+          }}
+        >
+          <ClipboardList className="w-4 h-4" />
+          Operational Brief
+        </button>
+
+        <button
+          type="button"
+          className="layers-panel-trigger"
+          onClick={(event) => {
+            event.stopPropagation();
+            setLayersPanelOpen((open) => !open);
+          }}
+        >
+          <Layers className="w-4 h-4" />
+          Layers
+        </button>
+      </div>
 
       <div
         className={`brief-panel ${briefPanelOpen ? "brief-panel-open" : ""}`}
@@ -1257,6 +1293,106 @@ function OperationalCanvas() {
                 {item}
               </div>
             ))}
+          </div>
+        </div>
+      </div>
+
+      <div
+        className={`layers-panel ${layersPanelOpen ? "layers-panel-open" : ""} ${
+          briefPanelOpen ? "layers-panel-shifted" : ""
+        }`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="layers-panel-header">
+          <div>
+            <p className="layers-panel-eyebrow">Operational Layers</p>
+            <h2 className="layers-panel-title">What&apos;s currently on the map.</h2>
+          </div>
+          <button
+            type="button"
+            className="layers-panel-close"
+            onClick={() => setLayersPanelOpen(false)}
+            aria-label="Close Operational Layers"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="layers-panel-list">
+          <div className="layer-row">
+            <div className="layer-row-text">
+              <p className="layer-row-label">Base Map</p>
+              <p className="layer-row-description">Night-lights satellite image. Always on.</p>
+            </div>
+            <span className="layer-row-fixed-tag">Fixed</span>
+          </div>
+
+          <div className="layer-row">
+            <div className="layer-row-text">
+              <p className="layer-row-label">Major Cities</p>
+              <p className="layer-row-description">Name and dot for each selected country&apos;s largest cities.</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={majorCitiesVisible}
+              aria-label="Toggle Major Cities layer"
+              className={`layer-toggle ${majorCitiesVisible ? "layer-toggle-on" : ""}`}
+              onClick={() => setMajorCitiesVisible((visible) => !visible)}
+            >
+              <span className="layer-toggle-thumb" />
+            </button>
+          </div>
+
+          <div className="layer-row">
+            <div className="layer-row-text">
+              <p className="layer-row-label">Country Focus Fill</p>
+              <p className="layer-row-description">Aurora Glass gradient painted over the selected country.</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={focusFillVisible}
+              aria-label="Toggle Country Focus Fill layer"
+              className={`layer-toggle ${focusFillVisible ? "layer-toggle-on" : ""}`}
+              onClick={() => setFocusFillVisible((visible) => !visible)}
+            >
+              <span className="layer-toggle-thumb" />
+            </button>
+          </div>
+
+          <div className="layer-row">
+            <div className="layer-row-text">
+              <p className="layer-row-label">Country Focus Border</p>
+              <p className="layer-row-description">Rim-light outline traced around the selected country.</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={focusBorderVisible}
+              aria-label="Toggle Country Focus Border layer"
+              className={`layer-toggle ${focusBorderVisible ? "layer-toggle-on" : ""}`}
+              onClick={() => setFocusBorderVisible((visible) => !visible)}
+            >
+              <span className="layer-toggle-thumb" />
+            </button>
+          </div>
+
+          <div className="layer-row">
+            <div className="layer-row-text">
+              <p className="layer-row-label">Country Boundary Grid</p>
+              <p className="layer-row-description">Thin outline across every country border on the base map.</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={gridVisible}
+              aria-label="Toggle Country Boundary Grid layer"
+              className={`layer-toggle ${gridVisible ? "layer-toggle-on" : ""}`}
+              onClick={() => setGridVisible((visible) => !visible)}
+            >
+              <span className="layer-toggle-thumb" />
+            </button>
           </div>
         </div>
       </div>

@@ -578,11 +578,18 @@
    the Operations Centre, on demand. Deliberately non-modal: no dimming
    overlay, no focus trap, and the trigger stays reachable at all times -
    the map remains the primary focus while the panel is open. */
-.brief-panel-trigger {
+.canvas-trigger-stack {
   position: absolute;
   top: 16px;
   left: 16px;
   z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.brief-panel-trigger,
+.layers-panel-trigger {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -603,6 +610,11 @@
   border-color: rgba(125, 211, 252, 0.4);
 }
 
+.layers-panel-trigger:hover {
+  background: rgba(11, 15, 20, 0.88);
+  border-color: rgba(148, 163, 184, 0.5);
+}
+
 .brief-panel {
   position: absolute;
   top: 0;
@@ -610,7 +622,7 @@
   bottom: 0;
   z-index: 29;
   width: min(360px, 88vw);
-  padding: 72px 24px 24px;
+  padding: 132px 24px 24px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -718,6 +730,148 @@
   background: rgba(255, 255, 255, 0.04);
   font-size: 13px;
   color: rgba(255, 255, 255, 0.8);
+}
+
+/* Operational Layers panel - a legend/control panel for the canvas
+   itself, docking to the same left edge as the Brief panel (its trigger
+   stacks directly below Brief's in .canvas-trigger-stack). Shifts right
+   by one panel-width when the Brief panel is also open, so the two sit
+   side by side instead of overlapping - same idea as the Country panel
+   shifting when Alerts is open. */
+.layers-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 29;
+  width: min(360px, 88vw);
+  padding: 132px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  background: rgba(8, 11, 15, 0.92);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+  color: #fff;
+  transform: translateX(-100%);
+  transition: transform 0.28s ease, left 0.28s ease;
+  pointer-events: auto;
+}
+
+.layers-panel-open {
+  transform: translateX(0);
+}
+
+.layers-panel-shifted {
+  left: min(360px, 88vw);
+}
+
+.layers-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.layers-panel-eyebrow {
+  font-size: 12px;
+  color: rgba(148, 163, 184, 0.9);
+  margin: 0 0 4px;
+}
+
+.layers-panel-title {
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.layers-panel-close {
+  flex-shrink: 0;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+
+.layers-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.layer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.layer-row-text {
+  min-width: 0;
+}
+
+.layer-row-label {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 2px;
+}
+
+.layer-row-description {
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.55);
+  margin: 0;
+}
+
+.layer-row-fixed-tag {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.layer-toggle {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 20px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.layer-toggle-on {
+  background: rgba(125, 211, 252, 0.5);
+  border-color: rgba(125, 211, 252, 0.7);
+}
+
+.layer-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+
+.layer-toggle-on .layer-toggle-thumb {
+  transform: translateX(16px);
 }
 
 /* Alerts panel - individual timestamped events, distinct from the
