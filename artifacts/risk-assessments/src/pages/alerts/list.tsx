@@ -1,12 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Alert, type AlertStatus } from "@/lib/api";
+import { api, type Alert, type AlertStatus, type Venue } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { useState } from "react";
-import { Bell, CheckCheck, EyeOff, ArrowUpRight } from "lucide-react";
+import { Bell, CheckCheck, EyeOff, ArrowUpRight, X, Search } from "lucide-react";
 import { getPriorityColor, timeAgo } from "@/lib/display-utils";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -17,6 +18,106 @@ const STATUS_CONFIG: Record<AlertStatus, { label: string; color: string }> = {
   dismissed: { label: "Dismissed", color: "text-slate-500 bg-slate-100 border-slate-200" },
   escalated: { label: "Escalated", color: "text-red-700 bg-red-50 border-red-200" },
 };
+
+// Search phrases are what the GDELT news-monitoring OSINT source (see
+// artifacts/api-server/src/lib/gdelt.ts, built next) actually queries
+// for, per venue - an operator picking specific phrases ("mass
+// shooting", "stabbing", a venue-specific term) is the noise filter
+// itself, not an afterthought bolted on top of it.
+function SearchPhrasesPanel() {
+  const [venueId, setVenueId] = useState<number | null>(null);
+  const [newPhrase, setNewPhrase] = useState("");
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: venues = [] } = useQuery<Venue[]>({ queryKey: ["venues"], queryFn: api.venues.list });
+
+  const { data: phrases = [], isLoading: phrasesLoading } = useQuery({
+    queryKey: ["search-phrases", venueId],
+    queryFn: () => api.searchPhrases.list(venueId as number),
+    enabled: venueId != null,
+  });
+
+  const addMutation = useMutation({
+    mutationFn: (phrase: string) => api.searchPhrases.create(venueId as number, phrase),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["search-phrases", venueId] });
+      setNewPhrase("");
+    },
+    onError: (err: Error) => toast({ title: "Couldn't add phrase", description: err.message, variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.searchPhrases.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["search-phrases", venueId] }),
+  });
+
+  const submitPhrase = () => {
+    const trimmed = newPhrase.trim();
+    if (trimmed.length < 2 || venueId == null) return;
+    addMutation.mutate(trimmed);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Search className="w-4 h-4 text-slate-400" /> Search Phrases
+        </CardTitle>
+        <p className="text-slate-500 text-xs mt-0.5">
+          Choose the phrases GDELT news monitoring watches for at each venue - e.g. "mass shooting", "stabbing", "bombing", or anything venue-specific.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <Select value={venueId != null ? String(venueId) : undefined} onValueChange={(v) => setVenueId(Number(v))}>
+          <SelectTrigger className="w-full sm:w-72"><SelectValue placeholder="Select a venue" /></SelectTrigger>
+          <SelectContent>
+            {venues.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
+        {venueId != null && (
+          <>
+            <div className="flex gap-2">
+              <Input
+                placeholder='e.g. "mass shooting"'
+                value={newPhrase}
+                onChange={(e) => setNewPhrase(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && submitPhrase()}
+                className="max-w-xs"
+              />
+              <Button size="sm" onClick={submitPhrase} disabled={addMutation.isPending || newPhrase.trim().length < 2}>
+                Add
+              </Button>
+            </div>
+
+            {phrasesLoading ? (
+              <Skeleton className="h-8 w-48" />
+            ) : phrases.length === 0 ? (
+              <p className="text-xs text-slate-400">No phrases yet - this venue isn't being monitored until you add at least one.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {phrases.map((p) => (
+                  <Badge key={p.id} variant="secondary" className="gap-1.5 pr-1.5">
+                    {p.phrase}
+                    <button
+                      type="button"
+                      onClick={() => deleteMutation.mutate(p.id)}
+                      className="text-slate-400 hover:text-slate-700"
+                      aria-label={`Remove "${p.phrase}"`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function AlertsList() {
   const [statusFilter, setStatusFilter] = useState<"all" | AlertStatus>("all");
@@ -61,6 +162,8 @@ export default function AlertsList() {
           </SelectContent>
         </Select>
       </div>
+
+      <SearchPhrasesPanel />
 
       {isLoading ? (
         <div className="space-y-3">{Array(5).fill(0).map((_, i) => <Skeleton key={i} className="h-20" />)}</div>

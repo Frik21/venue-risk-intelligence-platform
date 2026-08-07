@@ -12,6 +12,7 @@ import dashboardRouter from "./dashboard";
 import usersRouter from "./users";
 import routesRouter from "./routes";
 import countryIntelligenceRouter from "./country-intelligence";
+import searchPhrasesRouter from "./search-phrases";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(osintRouter);
 router.use(incidentsRouter);
 router.use(routesRouter);
 router.use(countryIntelligenceRouter);
+router.use(searchPhrasesRouter);
 
 export default router;
