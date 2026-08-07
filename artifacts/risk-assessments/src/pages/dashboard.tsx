@@ -1330,7 +1330,7 @@ function OperationalCanvas() {
 
       <div
         className={`layers-panel ${layersPanelOpen ? "layers-panel-open" : ""} ${
-          briefPanelOpen ? "layers-panel-shifted" : ""
+          layersPanelOpen && briefPanelOpen ? "layers-panel-shifted" : ""
         }`}
         onClick={(event) => event.stopPropagation()}
       >
@@ -1482,7 +1482,7 @@ function OperationalCanvas() {
       {renderedCountry && countryPanelData && (
         <div
           className={`country-panel ${focusEntered ? "country-panel-open" : ""} ${
-            alertsPanelOpen ? "country-panel-shifted" : ""
+            focusEntered && alertsPanelOpen ? "country-panel-shifted" : ""
           }`}
           onClick={(event) => event.stopPropagation()}
         >
