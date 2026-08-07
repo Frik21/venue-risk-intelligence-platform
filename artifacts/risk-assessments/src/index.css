@@ -885,33 +885,37 @@
 /* Country Intelligence panel - tied to Active Country selection rather
    than a manual trigger (mirrors the country focus visuals' own
    entered/exited timing via focusEntered), so it appears and dismisses
-   in lockstep with the selected country. Slides up from the bottom,
-   centered, so it never competes with the Brief (left) or Alerts
-   (right) panels for screen edge. */
+   in lockstep with the selected country. Docks to the right edge like
+   the Alerts panel (not centred over the map) so the selected country's
+   shape stays visible. Shifts left by one panel-width when the Alerts
+   panel is also open, so the two sit side by side instead of stacking. */
 .country-panel {
   position: absolute;
-  left: 50%;
-  bottom: 16px;
+  top: 0;
+  right: 0;
+  bottom: 0;
   z-index: 28;
-  width: min(640px, calc(100vw - 32px));
-  padding: 20px 24px;
+  width: min(360px, 88vw);
+  padding: 72px 24px 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow-y: auto;
   background: rgba(8, 11, 15, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(14px);
   color: #fff;
-  transform: translate(-50%, calc(100% + 16px));
-  opacity: 0;
-  transition: transform 0.28s ease, opacity 0.28s ease;
+  transform: translateX(100%);
+  transition: transform 0.28s ease, right 0.28s ease;
   pointer-events: auto;
 }
 
 .country-panel-open {
-  transform: translate(-50%, 0);
-  opacity: 1;
+  transform: translateX(0);
+}
+
+.country-panel-shifted {
+  right: min(360px, 88vw);
 }
 
 .country-panel-header {
@@ -928,8 +932,9 @@
 }
 
 .country-panel-title {
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 600;
+  line-height: 1.3;
   margin: 0;
 }
 
@@ -940,14 +945,8 @@
   letter-spacing: 0.04em;
 }
 
-.country-panel-header-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
 .country-panel-risk-badge {
+  align-self: flex-start;
   padding: 5px 10px;
   border-radius: 999px;
   font-size: 12px;
@@ -981,8 +980,8 @@
 }
 
 .country-panel-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 }
 
@@ -1014,15 +1013,15 @@
 
 .country-panel-advisories {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 8px;
 }
 
 .country-panel-advisory {
-  padding: 6px 10px;
+  padding: 10px 12px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.04);
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.75);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
 }

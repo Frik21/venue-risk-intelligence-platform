@@ -1314,7 +1314,9 @@ function OperationalCanvas() {
 
       {renderedCountry && countryPanelData && (
         <div
-          className={`country-panel ${focusEntered ? "country-panel-open" : ""}`}
+          className={`country-panel ${focusEntered ? "country-panel-open" : ""} ${
+            alertsPanelOpen ? "country-panel-shifted" : ""
+          }`}
           onClick={(event) => event.stopPropagation()}
         >
           <div className="country-panel-header">
@@ -1325,20 +1327,19 @@ function OperationalCanvas() {
                 {renderedCountry.iso2} &middot; {renderedCountry.iso3}
               </p>
             </div>
-            <div className="country-panel-header-right">
-              <span className={`country-panel-risk-badge country-panel-risk-${countryPanelData.riskLevel.toLowerCase()}`}>
-                {countryPanelData.riskLevel} Risk
-              </span>
-              <button
-                type="button"
-                className="country-panel-close"
-                onClick={() => clearSelection()}
-                aria-label="Close Country Intelligence"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+            <button
+              type="button"
+              className="country-panel-close"
+              onClick={() => clearSelection()}
+              aria-label="Close Country Intelligence"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
+
+          <span className={`country-panel-risk-badge country-panel-risk-${countryPanelData.riskLevel.toLowerCase()}`}>
+            {countryPanelData.riskLevel} Risk
+          </span>
 
           <div className="country-panel-stats">
             <div className="country-panel-stat">
