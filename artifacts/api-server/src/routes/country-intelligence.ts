@@ -1,6 +1,5 @@
 import { Router, type IRouter } from "express";
 import { fetchTravelAdvisory } from "../lib/travel-advisory";
-import { fetchUkTravelAdvisory } from "../lib/uk-travel-advisory";
 import { fetchHealthAdvisories, deriveHealthRating } from "../lib/health-advisory";
 
 const router: IRouter = Router();
@@ -24,21 +23,19 @@ function normalizeCountryName(name: string): string {
   return `${after} ${before}`;
 }
 
-// Country Intelligence Engine - the composite Risk Rating combines the
-// US State Department and UK FCDO travel advisories (per direct product
-// direction: "a combination of the US and UK travel advisories... we
-// create our own risk assessment"), taking the WORSE (higher) of the two
-// normalised 1-4 levels rather than averaging - a security-relevant
-// warning from either government is a real signal that shouldn't be
-// diluted by the other saying nothing.
+// Country Intelligence Engine - the Risk Rating is sourced from the US
+// State Department travel advisory only. An earlier version combined
+// this with the UK FCDO advisory, but that composite produced
+// inconsistent, hard-to-trust ratings in practice - scrapped per direct
+// product direction ("this is not working... lets only go with the US
+// government"), back to a single, simpler source.
 //
 // Deliberately transparent, not a black box: the response always
-// includes `drivers`, naming exactly which source(s) produced the
-// rating and their own stated level, so the panel can show "why" rather
-// than just a number (Product Constitution: "Within 30 seconds an
-// operator should understand... Why").
+// includes `drivers`, naming the source and its own stated level, so the
+// panel can show "why" rather than just a number (Product Constitution:
+// "Within 30 seconds an operator should understand... Why").
 //
-// If NEITHER source has data for a country (most of our 235 registry
+// If the US source has no data for a country (most of our 235 registry
 // entries - small territories, dependencies - genuinely have no
 // government travel advisory at all), the rating is "unrated" rather
 // than falling back to any kind of placeholder score - the entire point
@@ -74,39 +71,27 @@ const CACHE_TTL_MS = 15 * 60 * 1000;
 const cache = new Map<string, { expiresAt: number; body: unknown }>();
 
 async function buildCountryIntelligence(iso2: string, name: string) {
-  const [usResult, ukResult, healthResult] = await Promise.allSettled([
+  const [usResult, healthResult] = await Promise.allSettled([
     fetchTravelAdvisory(iso2, name),
-    fetchUkTravelAdvisory(name),
     fetchHealthAdvisories(name),
   ]);
 
   if (usResult.status === "rejected") console.error(`US travel advisory fetch failed for ${iso2}:`, usResult.reason);
-  if (ukResult.status === "rejected") console.error(`UK travel advisory fetch failed for ${name}:`, ukResult.reason);
   if (healthResult.status === "rejected") console.error(`CDC health advisory fetch failed for ${name}:`, healthResult.reason);
 
   const us = usResult.status === "fulfilled" ? usResult.value : null;
-  const uk = ukResult.status === "fulfilled" ? ukResult.value : null;
   const healthFindings = healthResult.status === "fulfilled" ? healthResult.value : [];
 
   const drivers: string[] = [];
-  let maxLevel = 0;
-  if (us) {
-    drivers.push(`US State Department: ${us.levelLabel}`);
-    maxLevel = Math.max(maxLevel, us.level);
-  }
-  if (uk) {
-    drivers.push(`UK FCDO: ${uk.summary.replace("UK FCDO Travel Advice - ", "")}`);
-    maxLevel = Math.max(maxLevel, uk.level);
-  }
+  if (us) drivers.push(`US State Department: ${us.levelLabel}`);
 
   return {
     riskRating: {
-      level: maxLevel > 0 ? LEVEL_TO_RISK[maxLevel] : ("unrated" as RiskLevel),
+      level: us ? LEVEL_TO_RISK[us.level] : ("unrated" as RiskLevel),
       drivers,
     },
     travelAdvisories: {
       us: us ? { level: us.level, label: us.levelLabel, summary: us.summary, sourceUrl: us.sourceUrl } : null,
-      uk: uk ? { level: uk.level, summary: uk.summary, sourceUrl: uk.sourceUrl } : null,
     },
     health: {
       rating: deriveHealthRating(healthFindings),

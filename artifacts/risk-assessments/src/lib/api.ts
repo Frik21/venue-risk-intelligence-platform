@@ -233,11 +233,11 @@ export const api = {
   },
 };
 
-// Country Intelligence Engine (Operational Canvas) - a composite Risk
-// Rating from the US State Department + UK FCDO travel advisories, plus
-// a separate Public Health badge from CDC. See
+// Country Intelligence Engine (Operational Canvas) - a Risk Rating from
+// the US State Department travel advisory, plus a separate Public
+// Health badge from CDC. See
 // artifacts/api-server/src/routes/country-intelligence.ts for the real
-// data sources and the composite formula.
+// data sources.
 export type CountryRiskLevel = "unrated" | "low" | "elevated" | "critical" | "do_not_travel";
 
 export interface CountryTravelAdvisory {
@@ -259,6 +259,6 @@ export interface CountryHealthNotice {
 
 export interface CountryIntelligence {
   riskRating: { level: CountryRiskLevel; drivers: string[] };
-  travelAdvisories: { us: CountryTravelAdvisory | null; uk: CountryTravelAdvisory | null };
+  travelAdvisories: { us: CountryTravelAdvisory | null };
   health: { rating: HealthRating; notices: CountryHealthNotice[] };
 }

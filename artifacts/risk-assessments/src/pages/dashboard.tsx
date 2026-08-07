@@ -104,10 +104,10 @@ const ALERT_SEVERITY_ICON: Record<AlertSeverity, typeof AlertTriangle> = {
 
 // Country Intelligence panel (OperationalCanvas) - the Risk Rating badge
 // and Public Health badge are real, live data now (Country Intelligence
-// Engine: US State Dept + UK FCDO travel advisories, composited; CDC
-// health notices, separate) - see api.countries.intelligence() and
+// Engine: US State Dept travel advisory; CDC health notices, separate)
+// - see api.countries.intelligence() and
 // artifacts/api-server/src/routes/country-intelligence.ts. Display
-// labels for the composite Risk Rating, per direct product direction.
+// labels for the Risk Rating, per direct product direction.
 const COUNTRY_RISK_LABELS: Record<CountryRiskLevel, string> = {
   unrated: "Unrated",
   low: "Low",
@@ -903,7 +903,7 @@ function OperationalCanvas() {
   }, [renderedCountry]);
 
   // Country Intelligence Engine - the real Risk Rating + Public Health
-  // data (US State Dept + UK FCDO + CDC, composited server-side; see
+  // data (US State Dept + CDC, server-side; see
   // api.countries.intelligence and country-intelligence.ts). Fetched
   // fresh on every country selection, not cached client-side - a guard
   // ref discards a response that resolves after the selection has
@@ -1845,35 +1845,21 @@ function OperationalCanvas() {
           <div className="country-panel-section">
             <h3 className="country-panel-section-title">Travel Advisories</h3>
             {countryIntelligenceLoading ? (
-              <p className="country-panel-section-empty">Checking US and UK government sources…</p>
-            ) : countryIntelligence?.travelAdvisories.us || countryIntelligence?.travelAdvisories.uk ? (
+              <p className="country-panel-section-empty">Checking US government sources…</p>
+            ) : countryIntelligence?.travelAdvisories.us ? (
               <div className="country-panel-advisories">
-                {countryIntelligence.travelAdvisories.us && (
-                  <a
-                    href={countryIntelligence.travelAdvisories.us.sourceUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="country-panel-advisory"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <span className="country-panel-advisory-source">US State Department</span>
-                    <span className="country-panel-advisory-text">
-                      {countryIntelligence.travelAdvisories.us.label ?? `Level ${countryIntelligence.travelAdvisories.us.level}`}
-                    </span>
-                  </a>
-                )}
-                {countryIntelligence.travelAdvisories.uk && (
-                  <a
-                    href={countryIntelligence.travelAdvisories.uk.sourceUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="country-panel-advisory"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <span className="country-panel-advisory-source">UK FCDO</span>
-                    <span className="country-panel-advisory-text">{countryIntelligence.travelAdvisories.uk.summary}</span>
-                  </a>
-                )}
+                <a
+                  href={countryIntelligence.travelAdvisories.us.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="country-panel-advisory"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <span className="country-panel-advisory-source">US State Department</span>
+                  <span className="country-panel-advisory-text">
+                    {countryIntelligence.travelAdvisories.us.label ?? `Level ${countryIntelligence.travelAdvisories.us.level}`}
+                  </span>
+                </a>
               </div>
             ) : (
               <p className="country-panel-section-empty">No government travel advisory on file for {renderedCountry.name}.</p>
