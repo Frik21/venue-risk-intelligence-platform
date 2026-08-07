@@ -30,6 +30,21 @@
 # simply gets no entry, the same graceful-degradation pattern
 # country-capitals.ts already uses, rather than failing.
 #
+# TODO (come back to this later): Natural Earth's populated-places
+# dataset caps out at 7,342 places worldwide - real coverage for capital
+# cities, major cities, and a reasonable spread of mid-size towns, but
+# NOT exhaustive down to every small town (confirmed directly: searching
+# "Stellenbosch," a real, well-known South African town, returns nothing
+# - it simply isn't one of Natural Earth's 7,342 points). If the product
+# ever needs genuinely exhaustive town-level search, this dataset is the
+# ceiling, not this generator's logic - the next step would be a larger
+# source (e.g. GeoNames, which has hundreds of thousands to millions of
+# named places) rather than tuning anything in this file further. Worth
+# noting: a source that much larger likely can't just be embedded as a
+# static TS array the way this one is (city-registry.ts is already 627KB
+# for 7,248 entries) - it would probably need a real search
+# API/backend/index instead of shipping the whole dataset to the browser.
+#
 # Reuses the exact Web Mercator projection formula from
 # generate-country-registry.py unchanged, so a city lands in the same
 # 1000x1000 Operational Geometry space as the country borders it sits

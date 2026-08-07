@@ -261,6 +261,15 @@ const SEARCH_RESULT_LIMIT = 8;
 // roadmap, deferred per direct product direction ("we should not do the
 // capital zoom" / "much later"). Selecting a city today jumps to its
 // country, same as clicking that country on the map.
+//
+// TODO (come back to this later): the City Registry itself is capped by
+// its source, not by anything in this file - Natural Earth's populated-
+// places dataset tops out at 7,342 places worldwide, real but not
+// exhaustive (e.g. Stellenbosch, a real town, isn't in it). See the TODO
+// in generate-city-registry.py for the fuller note - the short version
+// is a genuinely bigger database (e.g. GeoNames) is a separate, larger
+// piece of work, likely needing a real search backend rather than a
+// static array shipped to the browser the way SEARCH_INDEX is today.
 const SEARCH_INDEX: SearchResult[] = (() => {
   const regionByIso3 = new Map(OPERATIONAL_SELECTABLE_REGIONS.map((region) => [region.iso3, region]));
   const results: SearchResult[] = OPERATIONAL_SELECTABLE_REGIONS.map((region) => ({
