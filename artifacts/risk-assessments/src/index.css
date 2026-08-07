@@ -300,6 +300,26 @@
   pointer-events: none;
 }
 
+/* Major cities (Index 5.1) - reference data only, deliberately quiet: a
+   small solid dot and a plain label, no glow, no animation. Each dot+
+   label already carries its own inverse-scale transform in dashboard.tsx
+   so it stays a constant screen size at any country zoom - these rules
+   only set its size/colour at that already-normalised scale. */
+.major-city-dot {
+  fill: #eae7f0;
+  fill-opacity: 0.85;
+  pointer-events: none;
+}
+
+.major-city-label {
+  fill: #eae7f0;
+  fill-opacity: 0.85;
+  font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+  font-size: 7px;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+
 .breathing-markers-layer {
   z-index: 5;
   pointer-events: none;

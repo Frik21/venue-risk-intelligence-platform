@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
 import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
+import { CITY_REGISTRY } from "@/lib/city-registry";
 import { clearSelection, selectCountry, subscribe, unsubscribe } from "@/lib/country-selection-engine";
 import type { ActiveCountry } from "@/lib/country-selection-engine";
 import { getCountryFocusDefinition, OPERATIONAL_SELECTABLE_REGIONS } from "@/lib/country-focus-registry";
@@ -232,6 +233,19 @@ const SHOW_SELECTION_DEBUG = true;
 // the cutout (and its dim/blur background) again without touching the
 // registry or Country Selection, if a future regression needs it.
 const SHOW_COUNTRY_FOCUS_CUTOUT = true;
+
+// Major cities (Index 5.1) - the first piece of the World -> Country ->
+// Capital -> City navigation locked in PROJECT_CONTEXT.md, one step
+// ahead of an actual Capital-level zoom: just showing every focused
+// country's major cities (name + a small dot, from city-registry.ts) by
+// name, per direct product direction. Deliberately reference data only -
+// no glow, no animation, no click behaviour yet - kept visually quiet so
+// a later, operationally-meaningful presence/office layer (discussed
+// directly, not yet built) reads as the more prominent one once it
+// exists, rather than competing with plain geography for attention.
+const SHOW_MAJOR_CITIES = true;
+const MAJOR_CITY_DOT_RADIUS = 2.2;
+const MAJOR_CITY_LABEL_OFFSET = 4.5;
 
 // Operational Country Focus Engine (Index 3.3) - the country must feel
 // lifted from the world map and brought forward, not zoomed to like a
@@ -802,6 +816,42 @@ function OperationalCanvas() {
                       pointerEvents: "none",
                     }}
                   />
+                )}
+                {/* Major cities (Index 5.1) - reference data only (name +
+                    position, from city-registry.ts), not the future
+                    presence/office layer discussed with the product owner:
+                    that will carry the "we have people here" meaning (and
+                    the breathing-glow treatment PROJECT_CONTEXT.md already
+                    reserves for operational markers) once it exists, kept
+                    deliberately separate from this one rather than
+                    conflated into it. Each dot+label carries its own
+                    inverse-scale transform (translate to its real position
+                    at the outer group's scale, then scale by 1/scale) so
+                    it stays a constant screen size regardless of how far a
+                    given country has to zoom to fill the Operational Focus
+                    Block - the same idea as vector-effect: non-scaling-
+                    stroke on the rim-light border above, generalised to a
+                    dot+text pair a transform (not a stroke) has to carry. */}
+                {SHOW_MAJOR_CITIES && CITY_REGISTRY[renderedCountry.iso3] && (
+                  <g
+                    style={{
+                      ...getCountryFocusImageStyle(focusRender.focusPoint, focusRender.cameraTarget, focusRender.scale, focusEntered),
+                      pointerEvents: "none",
+                    }}
+                    aria-hidden="true"
+                  >
+                    {CITY_REGISTRY[renderedCountry.iso3].map((city) => (
+                      <g
+                        key={`${city.name}-${city.position[0]}-${city.position[1]}`}
+                        transform={`translate(${city.position[0]} ${city.position[1]}) scale(${1 / focusRender.scale})`}
+                      >
+                        <circle r={MAJOR_CITY_DOT_RADIUS} className="major-city-dot" />
+                        <text x={MAJOR_CITY_LABEL_OFFSET} y={0} className="major-city-label">
+                          {city.name}
+                        </text>
+                      </g>
+                    ))}
+                  </g>
                 )}
               </svg>
             </>

@@ -1,0 +1,12 @@
+City Registry generation report
+
+Source dataset: Natural Earth ne_10m_populated_places_simple.geojson (fetched live)
+Projection: identical to generate-country-registry.py (Web Mercator, seam 191.1deg,
+            clamped to +-85.05112877980659deg lat, 1000x1000 space)
+Cap per country: 6 (all recognised capitals + largest others by population)
+
+Countries in registry with at least one city: 215 / 235
+Total cities selected: 1008
+Countries with no matching city data (no entry, not an error): 20
+  AIA, ALA, ATF, BLM, ESH, GGY, HMD, IOT, JEY, MAF, MSR, NFK, NRU, PCN, PSE, SHN, SPM, SXM, VGB, WLF
+Output file: ../../src/lib/city-registry.ts (93359 bytes, 91.2 KB)
