@@ -314,7 +314,7 @@ const QA_COUNTRIES = COUNTRY_REGISTRY;
 // small fixed badge bottom-right on selection, purely to make the
 // already-working click -> Active Country update visible without opening
 // devtools. No border/fill/highlight is added to the country itself.
-const SHOW_SELECTION_DEBUG = true;
+const SHOW_SELECTION_DEBUG = false;
 
 // Country Focus Cutout Kill Switch (Index 3.8A, re-enabled Index 3.8
 // rebuild) - was flipped off after the pre-rebuild cutout renderer
