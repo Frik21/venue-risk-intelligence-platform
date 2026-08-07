@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
-import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-react";
+import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, ClipboardList, X } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
 import type { CityDefinition } from "@/lib/city-registry";
@@ -25,6 +25,24 @@ import {
 const OCEAN_COLOR = "#00081a";
 
 type Step = "login" | "preparing" | "brief" | "centre";
+
+// Single source of truth for the day's Operational Brief. Read by both
+// the mandatory pre-entry Brief screen (step === "brief", below) and the
+// in-Operations-Centre Brief panel (OperationalCanvas) so the two always
+// show the same content - the panel recalls the brief on demand, it does
+// not replace the mandatory gate (Product Constitution: "Every operator
+// begins with an Operational Brief before entering the Operations Centre").
+const OPERATIONAL_BRIEF = {
+  area: "Cape Town",
+  areaRadius: "Operational radius: 5 km",
+  condition: "Elevated",
+  conditionNote: "Additional awareness recommended.",
+  updated: "5 min ago",
+  updatedNote: "8 intelligence sources reviewed.",
+  summary:
+    "Current operating conditions remain suitable for planned activities. Increased traffic, forecast weather, and recent local activity suggest additional planning before deployment.",
+  advisories: ["Traffic congestion expected", "Weather may affect movement", "Public activity under review"],
+};
 
 export default function Dashboard() {
   const [step, setStep] = useState<Step>("login");
@@ -82,36 +100,34 @@ export default function Dashboard() {
             <div className="rounded-2xl bg-white/10 border border-white/10 p-5">
               <MapPin className="w-5 h-5 text-sky-300 mb-4" />
               <p className="text-sm text-slate-400">Current Area</p>
-              <p className="text-xl font-semibold">Cape Town</p>
-              <p className="text-sm text-slate-400 mt-1">Operational radius: 5 km</p>
+              <p className="text-xl font-semibold">{OPERATIONAL_BRIEF.area}</p>
+              <p className="text-sm text-slate-400 mt-1">{OPERATIONAL_BRIEF.areaRadius}</p>
             </div>
 
             <div className="rounded-2xl bg-white/10 border border-white/10 p-5">
               <ShieldCheck className="w-5 h-5 text-amber-300 mb-4" />
               <p className="text-sm text-slate-400">Current Operating Conditions</p>
-              <p className="text-xl font-semibold">Elevated</p>
-              <p className="text-sm text-slate-400 mt-1">Additional awareness recommended.</p>
+              <p className="text-xl font-semibold">{OPERATIONAL_BRIEF.condition}</p>
+              <p className="text-sm text-slate-400 mt-1">{OPERATIONAL_BRIEF.conditionNote}</p>
             </div>
 
             <div className="rounded-2xl bg-white/10 border border-white/10 p-5">
               <Clock className="w-5 h-5 text-sky-300 mb-4" />
               <p className="text-sm text-slate-400">Updated</p>
-              <p className="text-xl font-semibold">5 min ago</p>
-              <p className="text-sm text-slate-400 mt-1">8 intelligence sources reviewed.</p>
+              <p className="text-xl font-semibold">{OPERATIONAL_BRIEF.updated}</p>
+              <p className="text-sm text-slate-400 mt-1">{OPERATIONAL_BRIEF.updatedNote}</p>
             </div>
           </div>
 
           <div className="rounded-2xl bg-white/10 border border-white/10 p-6">
             <h2 className="text-xl font-semibold mb-3">Operations Summary</h2>
-            <p className="text-slate-300 leading-7">
-              Current operating conditions remain suitable for planned activities. Increased traffic, forecast weather, and recent local activity suggest additional planning before deployment.
-            </p>
+            <p className="text-slate-300 leading-7">{OPERATIONAL_BRIEF.summary}</p>
           </div>
 
           <div className="rounded-2xl bg-white/10 border border-white/10 p-6">
             <h2 className="text-xl font-semibold mb-4">Area Advisories</h2>
             <div className="grid md:grid-cols-3 gap-3">
-              {["Traffic congestion expected", "Weather may affect movement", "Public activity under review"].map((item) => (
+              {OPERATIONAL_BRIEF.advisories.map((item) => (
                 <div key={item} className="rounded-xl bg-slate-900/70 border border-white/10 p-4 text-sm text-slate-300">
                   <AlertCircle className="w-4 h-4 text-amber-300 mb-2" />
                   {item}
@@ -524,6 +540,13 @@ function OperationalCanvas() {
   const showDebugLayerNumbers = false;
   const [calibrationPoint, setCalibrationPoint] = useState<{ x: number; y: number } | null>(null);
   const [activeCountry, setActiveCountry] = useState<ActiveCountry | null>(null);
+  // Operational Brief panel - recalls the same Operational Brief content
+  // shown at the mandatory pre-entry gate, on demand, inside the
+  // Operations Centre. Additive only: the pre-entry gate (step === "brief"
+  // in Dashboard) still runs unchanged, per the Product Constitution's
+  // Product Promise. Non-modal by design - no dimming overlay - so the
+  // map stays the primary focus while the panel is open.
+  const [briefPanelOpen, setBriefPanelOpen] = useState(false);
   // What's actually mounted/animating - lags behind activeCountry while a
   // return-to-world-map animation (Index 3.4) is playing, so the country
   // cutout and background dim/blur have something to transition FROM
@@ -568,11 +591,16 @@ function OperationalCanvas() {
 
   useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") clearSelection();
+      if (event.key !== "Escape") return;
+      if (briefPanelOpen) {
+        setBriefPanelOpen(false);
+        return;
+      }
+      clearSelection();
     }
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, []);
+  }, [briefPanelOpen]);
 
   // Two-phase mount so the CSS transition actually animates: paint the
   // "not entered" state first (opacity 0, no scale/shift), then flip to
@@ -1065,6 +1093,76 @@ function OperationalCanvas() {
           Active Country: {activeCountry.name} / {activeCountry.iso3}
         </div>
       )}
+
+      <button
+        type="button"
+        className="brief-panel-trigger"
+        onClick={(event) => {
+          event.stopPropagation();
+          setBriefPanelOpen((open) => !open);
+        }}
+      >
+        <ClipboardList className="w-4 h-4" />
+        Operational Brief
+      </button>
+
+      <div
+        className={`brief-panel ${briefPanelOpen ? "brief-panel-open" : ""}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="brief-panel-header">
+          <div>
+            <p className="brief-panel-eyebrow">Today&apos;s Operational Brief</p>
+            <h2 className="brief-panel-title">Here&apos;s what&apos;s happening around you.</h2>
+          </div>
+          <button
+            type="button"
+            className="brief-panel-close"
+            onClick={() => setBriefPanelOpen(false)}
+            aria-label="Close Operational Brief"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="brief-panel-stats">
+          <div className="brief-panel-stat">
+            <MapPin className="w-4 h-4 text-sky-300" />
+            <p className="brief-panel-stat-label">Current Area</p>
+            <p className="brief-panel-stat-value">{OPERATIONAL_BRIEF.area}</p>
+            <p className="brief-panel-stat-note">{OPERATIONAL_BRIEF.areaRadius}</p>
+          </div>
+          <div className="brief-panel-stat">
+            <ShieldCheck className="w-4 h-4 text-amber-300" />
+            <p className="brief-panel-stat-label">Operating Conditions</p>
+            <p className="brief-panel-stat-value">{OPERATIONAL_BRIEF.condition}</p>
+            <p className="brief-panel-stat-note">{OPERATIONAL_BRIEF.conditionNote}</p>
+          </div>
+          <div className="brief-panel-stat">
+            <Clock className="w-4 h-4 text-sky-300" />
+            <p className="brief-panel-stat-label">Updated</p>
+            <p className="brief-panel-stat-value">{OPERATIONAL_BRIEF.updated}</p>
+            <p className="brief-panel-stat-note">{OPERATIONAL_BRIEF.updatedNote}</p>
+          </div>
+        </div>
+
+        <div className="brief-panel-section">
+          <h3>Operations Summary</h3>
+          <p>{OPERATIONAL_BRIEF.summary}</p>
+        </div>
+
+        <div className="brief-panel-section">
+          <h3>Area Advisories</h3>
+          <div className="brief-panel-advisories">
+            {OPERATIONAL_BRIEF.advisories.map((item) => (
+              <div key={item} className="brief-panel-advisory">
+                <AlertCircle className="w-4 h-4 text-amber-300" />
+                {item}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
