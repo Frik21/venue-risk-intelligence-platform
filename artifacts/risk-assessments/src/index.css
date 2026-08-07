@@ -1546,6 +1546,10 @@ a.country-panel-advisory:hover {
   color: rgba(255, 255, 255, 0.8);
 }
 
+.country-panel-advisory-date {
+  color: rgba(255, 255, 255, 0.45);
+}
+
 .country-panel-health-badge {
   padding: 3px 9px;
   border-radius: 999px;

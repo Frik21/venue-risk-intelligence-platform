@@ -234,8 +234,10 @@ export const api = {
 };
 
 // Country Intelligence Engine (Operational Canvas) - a Risk Rating from
-// the US State Department travel advisory, plus a separate Public
-// Health badge from CDC. See
+// the US State Department travel advisory (a periodically-refreshed
+// reference table, not a live fetch - no reliable live API exists for
+// this rating, see artifacts/api-server/src/lib/travel-advisory-data.ts),
+// plus a separate, live Public Health badge from CDC. See
 // artifacts/api-server/src/routes/country-intelligence.ts for the real
 // data sources.
 export type CountryRiskLevel = "unrated" | "low" | "elevated" | "critical" | "do_not_travel";
@@ -245,6 +247,7 @@ export interface CountryTravelAdvisory {
   label?: string;
   summary: string;
   sourceUrl: string;
+  advisoryDate: string | null;
 }
 
 export type HealthRating = "low" | "moderate" | "high" | "critical";

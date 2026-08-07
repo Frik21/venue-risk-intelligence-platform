@@ -7,14 +7,14 @@ const router: IRouter = Router();
 // Our own registry carries a handful of countries in inverted
 // gazetteer-comma style ("Congo, Democratic Republic of the",
 // "Tanzania, United Republic of", "Palestine, State of") - a common
-// convention for alphabetised lists, but not how any of the three
-// external sources refer to a country. Reported directly ("countries
-// like the drc... just shows unrated") and confirmed concretely: US/UK/
-// CDC name-matching all silently failed for DRC until un-inverted to
-// "Democratic Republic of the Congo," at which point every source
-// matched correctly (UK: Level 4, CDC: 4 real Ebola/meningococcal
-// notices). Only 3 of 235 registry entries use this pattern - simple
-// "X, Y" -> "Y X" un-inversion, not a general name-normalisation engine.
+// convention for alphabetised lists, but not how CDC or the US State
+// Department reference table (travel-advisory-data.ts) refer to a
+// country. Reported directly ("countries like the drc... just shows
+// unrated") and confirmed concretely: name-matching silently failed for
+// DRC until un-inverted to "Democratic Republic of the Congo," at which
+// point it matched correctly (4 real CDC Ebola/meningococcal notices).
+// Only 3 of 235 registry entries use this pattern - simple "X, Y" ->
+// "Y X" un-inversion, not a general name-normalisation engine.
 function normalizeCountryName(name: string): string {
   const commaIndex = name.indexOf(",");
   if (commaIndex === -1) return name;
@@ -45,10 +45,11 @@ function normalizeCountryName(name: string): string {
 // fed only by CDC - not folded into the Risk Rating composite.
 //
 // No database involved - the response itself is never persisted, only
-// held in a short-lived in-memory cache (below). Each underlying fetch
-// is independently caught so one source failing (or this session's own
-// sandbox network policy blocking a domain, as happened repeatedly
-// during development) never breaks the others.
+// held in a short-lived in-memory cache (below). The US lookup is now a
+// static reference table (travel-advisory-data.ts - no reliable live
+// State Department API exists, see that file), CDC is still a live
+// fetch; both go through Promise.allSettled so CDC failing never breaks
+// the US rating or vice versa.
 type RiskLevel = "unrated" | "low" | "elevated" | "critical" | "do_not_travel";
 
 const LEVEL_TO_RISK: Record<number, RiskLevel> = {
@@ -58,15 +59,14 @@ const LEVEL_TO_RISK: Record<number, RiskLevel> = {
   4: "do_not_travel",
 };
 
-// The three external sources are real government/CDC servers, not
-// always fast, and every country selection was re-querying all three
-// from scratch - reported directly as slow. None of these change
-// minute-to-minute (a travel advisory or CDC notice is a standing
-// status, not a live feed), so a short in-memory cache trades a small,
-// honest amount of staleness for every repeat lookup of the same
-// country being instant instead of a multi-second round trip. Bounded
-// by the registry's own ~235 countries - no eviction needed beyond the
-// TTL check on read.
+// CDC is a real government server, not always fast, and every country
+// selection was re-querying it from scratch - reported directly as
+// slow. A travel advisory or CDC notice is a standing status, not a
+// live feed, so a short in-memory cache trades a small, honest amount
+// of staleness for every repeat lookup of the same country being
+// instant instead of a multi-second round trip. Bounded by the
+// registry's own ~235 countries - no eviction needed beyond the TTL
+// check on read.
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const cache = new Map<string, { expiresAt: number; body: unknown }>();
 
@@ -83,7 +83,7 @@ async function buildCountryIntelligence(iso2: string, name: string) {
   const healthFindings = healthResult.status === "fulfilled" ? healthResult.value : [];
 
   const drivers: string[] = [];
-  if (us) drivers.push(`US State Department: ${us.levelLabel}`);
+  if (us) drivers.push(`US State Department: ${us.levelLabel}${us.advisoryDate ? ` (as of ${us.advisoryDate})` : ""}`);
 
   return {
     riskRating: {
@@ -91,7 +91,9 @@ async function buildCountryIntelligence(iso2: string, name: string) {
       drivers,
     },
     travelAdvisories: {
-      us: us ? { level: us.level, label: us.levelLabel, summary: us.summary, sourceUrl: us.sourceUrl } : null,
+      us: us
+        ? { level: us.level, label: us.levelLabel, summary: us.summary, sourceUrl: us.sourceUrl, advisoryDate: us.advisoryDate }
+        : null,
     },
     health: {
       rating: deriveHealthRating(healthFindings),

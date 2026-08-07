@@ -1858,6 +1858,9 @@ function OperationalCanvas() {
                   <span className="country-panel-advisory-source">US State Department</span>
                   <span className="country-panel-advisory-text">
                     {countryIntelligence.travelAdvisories.us.label ?? `Level ${countryIntelligence.travelAdvisories.us.level}`}
+                    {countryIntelligence.travelAdvisories.us.advisoryDate && (
+                      <span className="country-panel-advisory-date"> · as of {countryIntelligence.travelAdvisories.us.advisoryDate}</span>
+                    )}
                   </span>
                 </a>
               </div>

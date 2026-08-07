@@ -1,33 +1,22 @@
-// Country Intelligence Engine - Government Travel Advisories, sourced
-// from the U.S. State Department's public Bureau of Consular Affairs
-// API. Confirmed live and reachable directly (not guessed from docs):
-// https://cadataapi.state.gov/api/CountryTravelInformation/{code}
-// returns an array with one country's travel-information record.
+// Country Intelligence Engine - Government Travel Advisories, from the
+// US State Department only (per direct product direction: scrapped the
+// earlier US+UK composite, and confirmed there is no reliable live-fetch
+// path for the US rating either - see travel-advisory-data.ts for the
+// full story and the reference table itself).
 //
-// Verified directly against a real response: the top-level "TravelAdvisories"
-// list endpoint (no path segment) returns an empty array with no error -
-// unusable as a source, so per-country lookup is the only confirmed
-// working path.
-//
-// Critical, directly-confirmed gotcha: this API's own country "tag" codes
-// do NOT reliably match ISO 3166-1 alpha-2 - querying tag "ZA" returns
-// Zambia's record, not South Africa's (ISO's meaning for "ZA"). There is
-// no documented mapping table. Rather than build one blind, every
-// response is cross-checked against the country name our own registry
-// already has before any of it is trusted - a mismatch is treated as "no
-// data available," never as "close enough to show."
-//
-// The exact field carrying a structured Level 1-4 rating was not
-// confirmed against a real response (every field seen so far is long-
-// form HTML prose - road safety, health, entry requirements - not one
-// dedicated "level" field). Rather than guess a key name that might not
-// exist, every string value in the response is scanned for a "Level N"
-// phrase, the same way CDC's own feed embeds it directly in text rather
-// than a dedicated field (see health-advisory.ts). If it's genuinely not
-// present anywhere in the response, this correctly returns null instead
-// of fabricating a number - a wrong risk level is a worse failure than a
-// missing one.
-const STATE_DEPT_BASE = "https://cadataapi.state.gov/api/CountryTravelInformation";
+// Matching a country name to a row in that table isn't a plain string
+// equal - our own registry and the State Department's table each have
+// their own naming conventions (diacritics, "The X" articles, and a
+// handful of genuinely different names for the same country, e.g.
+// "Myanmar" vs "Burma"). This mirrors the same problem the old live
+// integration had (ISO codes not matching reliably) - solved the same
+// way: normalise first, then a small curated alias list for the
+// specific mismatches actually found in our ~235-country registry
+// (confirmed by inspecting country-registry.ts directly), never a
+// generic "strip any prefix" rule - that would collide distinct
+// countries (e.g. "Republic of the Congo" and "Democratic Republic of
+// the Congo" both losing their prefix down to "Congo").
+import { TRAVEL_ADVISORY_LEVELS, type TravelAdvisoryRow } from "./travel-advisory-data";
 
 export type TravelAdvisoryLevel = 1 | 2 | 3 | 4;
 
@@ -36,6 +25,7 @@ export interface TravelAdvisoryFinding {
   levelLabel: string;
   summary: string;
   sourceUrl: string;
+  advisoryDate: string | null;
 }
 
 const LEVEL_LABELS: Record<TravelAdvisoryLevel, string> = {
@@ -45,42 +35,74 @@ const LEVEL_LABELS: Record<TravelAdvisoryLevel, string> = {
   4: "Do Not Travel",
 };
 
-function namesLikelyMatch(a: string, b: string): boolean {
-  const na = a.trim().toLowerCase();
-  const nb = b.trim().toLowerCase();
-  if (!na || !nb) return false;
-  return na.includes(nb) || nb.includes(na);
+const SOURCE_URL = "https://travel.state.gov/content/travel/en/traveladvisories/traveladvisories.html";
+
+function normalize(name: string): string {
+  const stripped = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Mn}/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return stripped.startsWith("the ") ? stripped.slice(4) : stripped;
 }
 
-// Throws on a genuine fetch/HTTP failure. Returns null when the fetch
-// succeeds but the data isn't usable - country name mismatch (see above)
-// or no "Level N" phrase found anywhere in the response.
-export async function fetchTravelAdvisory(iso2: string, countryName: string): Promise<TravelAdvisoryFinding | null> {
-  const resp = await fetch(`${STATE_DEPT_BASE}/${encodeURIComponent(iso2)}`, { signal: AbortSignal.timeout(8000) });
-  if (!resp.ok) {
-    throw new Error(`State Department API returned HTTP ${resp.status}`);
-  }
-  const data: any = await resp.json();
-  const entry = Array.isArray(data) ? data[0] : undefined;
-  if (!entry) return null;
+// Registry name (normalised) -> table name (normalised), for the
+// specific mismatches confirmed present in country-registry.ts. Not a
+// general-purpose alias engine - just the handful this dataset actually
+// needs.
+const NAME_ALIASES: Record<string, string> = {
+  myanmar: "burma",
+  "holy see": "vatican city",
+  "russian federation": "russia",
+  "syrian arab republic": "syria",
+  czechia: "czech republic",
+  "lao people's democratic republic": "laos",
+  "viet nam": "vietnam",
+  congo: "republic of the congo",
+  "united republic of tanzania": "tanzania",
+};
 
-  const returnedName = String(entry.geopoliticalarea ?? "");
-  if (!namesLikelyMatch(returnedName, countryName)) return null;
+const byNormalizedName = new Map<string, TravelAdvisoryRow>();
+for (const row of TRAVEL_ADVISORY_LEVELS) {
+  byNormalizedName.set(normalize(row.name), row);
+}
 
-  let level: TravelAdvisoryLevel | null = null;
-  for (const value of Object.values(entry)) {
-    if (typeof value !== "string") continue;
-    const match = value.match(/\bLevel\s+([1-4])\b/i);
-    if (!match) continue;
-    const found = Number(match[1]) as TravelAdvisoryLevel;
-    if (level === null || found > level) level = found;
-  }
-  if (level === null) return null;
+function findRow(countryName: string): TravelAdvisoryRow | null {
+  const normalized = normalize(countryName);
+  const aliased = NAME_ALIASES[normalized] ?? normalized;
+  return byNormalizedName.get(aliased) ?? null;
+}
 
+function toFinding(row: TravelAdvisoryRow): TravelAdvisoryFinding {
+  const riskNote = row.higherRiskAreas ? " (contains areas with higher security risk)" : "";
+  const dateNote = row.advisoryDate ? ` as of ${row.advisoryDate}` : "";
   return {
-    level,
-    levelLabel: `Level ${level}: ${LEVEL_LABELS[level]}`,
-    summary: `U.S. State Department Travel Advisory - ${LEVEL_LABELS[level]}`,
-    sourceUrl: "https://travel.state.gov/content/travel/en/traveladvisories/traveladvisories.html",
+    level: row.level,
+    levelLabel: `Level ${row.level}: ${LEVEL_LABELS[row.level]}`,
+    summary: `U.S. State Department Travel Advisory - ${LEVEL_LABELS[row.level]}${riskNote}${dateNote}`,
+    sourceUrl: SOURCE_URL,
+    advisoryDate: row.advisoryDate,
   };
+}
+
+// State Dept doesn't publish a unified "Palestine" advisory - it rates
+// Gaza Strip and the West Bank separately. Our registry has a single
+// "Palestine, State of" entry, so this takes the worse (higher) of the
+// two rather than showing nothing for a real, current Level 4 area.
+function palestineFinding(): TravelAdvisoryFinding | null {
+  const gaza = byNormalizedName.get("gaza strip");
+  const westBank = byNormalizedName.get("west bank");
+  const worse = [gaza, westBank].filter((r): r is TravelAdvisoryRow => r != null).sort((a, b) => b.level - a.level)[0];
+  return worse ? toFinding(worse) : null;
+}
+
+// Kept async-shaped (no actual await) so this still fits alongside the
+// CDC fetch in a Promise.allSettled without changing that call site -
+// this was a live network call before and may be again if a reliable
+// path turns up later.
+export async function fetchTravelAdvisory(_iso2: string, countryName: string): Promise<TravelAdvisoryFinding | null> {
+  if (normalize(countryName) === "state of palestine") return palestineFinding();
+  const row = findRow(countryName);
+  return row ? toFinding(row) : null;
 }
