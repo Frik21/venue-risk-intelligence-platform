@@ -36,3 +36,7 @@ Report on completion:
 # VenueGuard Merge Policy
 
 Never merge directly into main unless explicitly instructed.
+
+# Notes & Follow-ups
+
+- **City/town database ceiling**: the search bar's city data (`city-registry.ts`) comes from Natural Earth's populated-places dataset, capped at 7,342 places worldwide - real cities and towns, but not exhaustive (e.g. Stellenbosch isn't in it). Come back to this later if we want a genuinely bigger database - likely means switching to a much larger source (e.g. GeoNames) and probably a real search backend instead of a static file shipped to the browser, since that kind of dataset is much bigger than what fits in a static array.
