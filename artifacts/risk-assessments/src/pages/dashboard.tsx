@@ -502,6 +502,24 @@ const SHOW_COUNTRY_FOCUS_CUTOUT = true;
 const MAJOR_CITY_DOT_RADIUS = 2.2;
 const MAJOR_CITY_LABEL_OFFSET = 4.5;
 const MAJOR_CITY_LABEL_MIN_SEPARATION_PX = 46;
+const MAJOR_CITY_DISPLAY_CAP = 6;
+
+// city-registry.ts (CITY_REGISTRY) now holds every place matching a known
+// country - no per-country cap - so the Operational Search Index
+// (dashboard.tsx's SEARCH_INDEX) can find real towns and smaller cities,
+// not just each country's handful of largest. The map's own Major Cities
+// layer must NOT follow that expansion: it stays a small, curated
+// placeholder set (capitals + largest others, capped here) exactly as it
+// looked before the database grew, per direct product direction - later,
+// only cities with a real "operational selection" (the presence/office
+// layer discussed but not yet built) will show on the map itself. This
+// is the one place that distinction is drawn: CITY_REGISTRY is the full
+// searchable database, this function's output is what the map displays.
+function getMajorCitiesForDisplay(cities: CityDefinition[]): CityDefinition[] {
+  const capitals = cities.filter((city) => city.capital);
+  const rest = [...cities].filter((city) => !city.capital).sort((a, b) => b.population - a.population);
+  return [...capitals, ...rest].slice(0, MAJOR_CITY_DISPLAY_CAP);
+}
 
 // Prevents city labels from overlapping each other, reported directly
 // ("some of the cities names are written over each other"). A real risk
@@ -1178,7 +1196,10 @@ function OperationalCanvas() {
                     }}
                     aria-hidden="true"
                   >
-                    {selectNonOverlappingCities(CITY_REGISTRY[renderedCountry.iso3], focusRender.scale).map((city) => (
+                    {selectNonOverlappingCities(
+                      getMajorCitiesForDisplay(CITY_REGISTRY[renderedCountry.iso3]),
+                      focusRender.scale,
+                    ).map((city) => (
                       <g
                         key={`${city.name}-${city.position[0]}-${city.position[1]}`}
                         transform={`translate(${city.position[0]} ${city.position[1]}) scale(${1 / focusRender.scale})`}

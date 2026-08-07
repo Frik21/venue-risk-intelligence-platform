@@ -10,15 +10,25 @@
 # keeps name, country, and capital-status too, since the Country Focus
 # "major cities" layer needs to label them, not just glow.
 #
-# Per country: every place Natural Earth marks as a national capital
-# (adm0cap == 1 - a small number of countries, South Africa among them,
-# have more than one recognised capital) plus the largest other places by
-# population, capped at MAX_CITIES_PER_COUNTRY total so a huge country
-# doesn't clutter its own focus view. A country with no populated places
-# in the source dataset (a handful of small/uninhabited territories -
-# Nauru and Western Sahara among them) simply gets no entry, the same
-# graceful-degradation pattern country-capitals.ts already uses, rather
-# than failing.
+# Every place in the source dataset that matches a known country goes in
+# - no per-country cap. An earlier version capped this at 6 per country
+# (MAX_CITIES_PER_COUNTRY) to keep the Country Focus map layer's dot/
+# label display uncluttered, but that cap also silently limited what the
+# Operational Search Index (dashboard.tsx) could find - searching a real,
+# named town or mid-size city with the misfortune of being the 7th+
+# largest in its own country returned nothing. Verified directly (see
+# generate-city-registry.py's own commit history) that "_simple" and the
+# full ne_10m_populated_places.geojson carry the identical 7,342 point
+# features - Natural Earth's "_simple" only drops attribute columns, not
+# places - so there was no fuller dataset to switch to; the cap was the
+# only real lever. Visual declutter on the map is handled downstream by
+# the label-collision system (selectNonOverlappingCities, dashboard.tsx)
+# regardless of how many candidates it's given, so removing the cap here
+# doesn't reintroduce the clutter problem it was originally added for. A
+# country with no populated places in the source dataset (a handful of
+# small/uninhabited territories - Nauru and Western Sahara among them)
+# simply gets no entry, the same graceful-degradation pattern
+# country-capitals.ts already uses, rather than failing.
 #
 # Reuses the exact Web Mercator projection formula from
 # generate-country-registry.py unchanged, so a city lands in the same
@@ -34,8 +44,6 @@ SRC_URL = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master
 COUNTRY_REGISTRY_PATH = "../../src/lib/country-registry.ts"
 OUT_TS_PATH = "../../src/lib/city-registry.ts"
 OUT_REPORT_PATH = "city-registry-report.txt"
-
-MAX_CITIES_PER_COUNTRY = 6
 
 SEAM = 191.1
 LEFT_EDGE = SEAM - 360
@@ -110,7 +118,6 @@ def main():
             reverse=True,
         )
         selected = capitals + rest
-        selected = selected[:MAX_CITIES_PER_COUNTRY]
         selected.sort(key=lambda p: p["population"], reverse=True)
         registry[iso3] = selected
 
@@ -122,14 +129,14 @@ def main():
         "// GENERATED FILE - do not edit by hand. Regenerate via",
         "// public/data/generate-city-registry.py.",
         "//",
-        "// Major-cities lookup for the Country Focus \"major cities\" layer -",
-        "// keyed by ISO 3166-1 alpha-3, matching CountryDefinition.iso3 in",
-        "// country-registry.ts. Per country: every Natural Earth-recognised",
-        "// national capital (a handful of countries have more than one) plus",
-        "// the largest other places by population, capped at "
-        + str(MAX_CITIES_PER_COUNTRY)
-        + " total. Position is",
-        "// pre-projected into the same 1000x1000 Operational Geometry space",
+        "// Major-cities lookup for the Country Focus \"major cities\" layer AND",
+        "// the Operational Search Index (dashboard.tsx) - keyed by ISO",
+        "// 3166-1 alpha-3, matching CountryDefinition.iso3 in",
+        "// country-registry.ts. Every place in the source dataset matching a",
+        "// known country is included, no per-country cap - the map layer's",
+        "// own visual density is handled downstream by its label-collision",
+        "// system (selectNonOverlappingCities), not by limiting this data.",
+        "// Position is pre-projected into the same 1000x1000 Operational Geometry space",
         "// as CountryDefinition.svgPath (identical Web Mercator projection,",
         "// see generate-country-registry.py) - a city's [x, y] lands inside",
         "// its own country's coastline, not a separate coordinate system. A",
@@ -173,7 +180,7 @@ def main():
         f"Source dataset: Natural Earth ne_10m_populated_places_simple.geojson (fetched live)",
         f"Projection: identical to generate-country-registry.py (Web Mercator, seam {SEAM}deg,",
         f"            clamped to +-{MERCATOR_LAT_LIMIT}deg lat, 1000x1000 space)",
-        f"Cap per country: {MAX_CITIES_PER_COUNTRY} (all recognised capitals + largest others by population)",
+        "Cap per country: none (every place in the source dataset matching a known country)",
         "",
         f"Countries in registry with at least one city: {countries_with_cities} / {len(known_iso3)}",
         f"Total cities selected: {total_cities}",
