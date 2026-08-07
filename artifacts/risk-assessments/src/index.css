@@ -170,6 +170,95 @@
   }
 }
 
+/* Top Banner - persistent bar above the Operations Centre. Takes up
+   permanent screen space (the canvas sits below it in a flex column,
+   see Dashboard's step === "centre" render) rather than floating over
+   the map like the panel triggers, per direct product direction. */
+.top-banner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 56px;
+  padding: 0 20px;
+  background: rgba(8, 11, 15, 0.96);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.top-banner-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.top-banner-brand-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #fff;
+}
+
+.top-banner-brand-divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.top-banner-brand-context {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.top-banner-operator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.top-banner-operator-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(125, 211, 252, 0.18);
+  color: rgba(125, 211, 252, 0.95);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.top-banner-operator-name {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.top-banner-sign-out {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.top-banner-sign-out:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
 /* Map & Country Focus Aesthetics Engine - the Operational Canvas's own
    palette lives as CSS custom properties, set inline on .operational-canvas
    from the single source of truth in src/lib/map-aesthetics.ts (not
@@ -179,8 +268,7 @@
 .operational-canvas {
   position: relative;
   width: 100%;
-  height: 100vh;
-  min-height: 100vh;
+  height: 100%;
   overflow: hidden;
   background: radial-gradient(ellipse at center, var(--map-ocean-centre, #0b0f14) 0%, var(--map-ocean-edge, #0b0f14) 100%);
   isolation: isolate;

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
-import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, Bell, Layers, X } from "lucide-react";
+import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, Bell, Layers, LogOut, X } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
 import type { CityDefinition } from "@/lib/city-registry";
@@ -223,9 +223,40 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden text-white" style={{ backgroundColor: OCEAN_COLOR }}>
-      <OperationalCanvas />
+    <div className="fixed inset-0 z-50 overflow-hidden text-white flex flex-col" style={{ backgroundColor: OCEAN_COLOR }}>
+      <TopBanner onSignOut={() => setStep("login")} />
+      <div className="flex-1 min-h-0 relative">
+        <OperationalCanvas />
+      </div>
     </div>
+  );
+}
+
+// Persistent top bar for the Operations Centre - branding on the left,
+// operator identity + sign-out on the right. Takes up permanent screen
+// space (the canvas sits below it, not underneath it) rather than
+// floating over the map like the panel triggers, per direct product
+// direction.
+function TopBanner({ onSignOut }: { onSignOut: () => void }) {
+  return (
+    <header className="top-banner">
+      <div className="top-banner-brand">
+        <ShieldCheck className="w-5 h-5 text-sky-300" />
+        <span className="top-banner-brand-name">VenueGuard</span>
+        <span className="top-banner-brand-divider" aria-hidden="true" />
+        <span className="top-banner-brand-context">Operations Centre</span>
+      </div>
+      <div className="top-banner-operator">
+        <div className="top-banner-operator-avatar" aria-hidden="true">
+          F
+        </div>
+        <span className="top-banner-operator-name">Frik</span>
+        <button type="button" className="top-banner-sign-out" onClick={onSignOut}>
+          <LogOut className="w-4 h-4" />
+          Sign Out
+        </button>
+      </div>
+    </header>
   );
 }
 
