@@ -3,6 +3,7 @@ import type { CSSProperties, MouseEvent } from "react";
 import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
+import type { CityDefinition } from "@/lib/city-registry";
 import { clearSelection, selectCountry, subscribe, unsubscribe } from "@/lib/country-selection-engine";
 import type { ActiveCountry } from "@/lib/country-selection-engine";
 import { getCountryFocusDefinition, OPERATIONAL_SELECTABLE_REGIONS } from "@/lib/country-focus-registry";
@@ -246,6 +247,40 @@ const SHOW_COUNTRY_FOCUS_CUTOUT = true;
 const SHOW_MAJOR_CITIES = true;
 const MAJOR_CITY_DOT_RADIUS = 2.2;
 const MAJOR_CITY_LABEL_OFFSET = 4.5;
+const MAJOR_CITY_LABEL_MIN_SEPARATION_PX = 46;
+
+// Prevents city labels from overlapping each other, reported directly
+// ("some of the cities names are written over each other"). A real risk
+// specifically because each label is deliberately a constant size on
+// screen (see the inverse-scale transform below) while city positions
+// still scale with the country's own zoom - two real, geographically
+// close cities (e.g. Lagos/Abuja-scale spacing, inside a huge country
+// barely zoomed in to fit the Operational Focus Block) can still land
+// close enough on screen to collide. Greedy placement in priority order
+// (capital first, then population): a city only renders if it lands
+// farther than the minimum separation from every already-placed city at
+// the CURRENT zoom - reusing the exact units-to-pixels conversion the
+// Calibration Tool's own getVisibleCanvasRange already established
+// (Math.max(viewportWidth, viewportHeight) / 1000), not inventing a
+// second one. Skipped cities are dropped entirely (dot and label both) -
+// a lone dot with no name would read as a bug, not a feature.
+function selectNonOverlappingCities(cities: CityDefinition[], focusScale: number): CityDefinition[] {
+  const pxPerUnit = (Math.max(window.innerWidth, window.innerHeight) / 1000) * focusScale;
+  const ordered = [...cities].sort((a, b) => {
+    if (a.capital !== b.capital) return a.capital ? -1 : 1;
+    return b.population - a.population;
+  });
+  const accepted: CityDefinition[] = [];
+  for (const city of ordered) {
+    const tooClose = accepted.some((placed) => {
+      const dx = (city.position[0] - placed.position[0]) * pxPerUnit;
+      const dy = (city.position[1] - placed.position[1]) * pxPerUnit;
+      return Math.sqrt(dx * dx + dy * dy) < MAJOR_CITY_LABEL_MIN_SEPARATION_PX;
+    });
+    if (!tooClose) accepted.push(city);
+  }
+  return accepted;
+}
 
 // Operational Country Focus Engine (Index 3.3) - the country must feel
 // lifted from the world map and brought forward, not zoomed to like a
@@ -840,7 +875,7 @@ function OperationalCanvas() {
                     }}
                     aria-hidden="true"
                   >
-                    {CITY_REGISTRY[renderedCountry.iso3].map((city) => (
+                    {selectNonOverlappingCities(CITY_REGISTRY[renderedCountry.iso3], focusRender.scale).map((city) => (
                       <g
                         key={`${city.name}-${city.position[0]}-${city.position[1]}`}
                         transform={`translate(${city.position[0]} ${city.position[1]}) scale(${1 / focusRender.scale})`}
