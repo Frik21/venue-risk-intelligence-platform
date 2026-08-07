@@ -27,9 +27,14 @@
 // direction) given no live path exists. `advisoryDate` is the real,
 // per-country date the State Department itself last updated that
 // country's advisory (from the feature's own ADVDATE field), shown in
-// the UI so this is never presented as more current than it is. To
-// refresh: re-run the query above and regenerate this file - there is
-// no automated schedule for this yet.
+// the UI so this is never presented as more current than it is.
+//
+// GENERATED FILE - do not hand-edit. Regenerate monthly (or as needed)
+// via:
+//   pnpm --filter @workspace/scripts run refresh-travel-advisories
+// (scripts/src/refresh-travel-advisories.ts). This particular copy was
+// transcribed by hand from the same query, before that script existed.
+// Last generated: 2026-08-07
 //
 // LEVEL_ encodes two things: the base 1-4 level, and (values >= 10)
 // whether the country "contains areas with higher security risk" (a
