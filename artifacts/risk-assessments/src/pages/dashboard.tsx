@@ -99,6 +99,29 @@ const ALERT_SEVERITY_ICON: Record<AlertSeverity, typeof AlertTriangle> = {
   info: Info,
 };
 
+// Country Intelligence panel (OperationalCanvas) - mock risk data, since
+// no real per-country risk feed exists yet. Deterministic per ISO3 (not
+// random) so a given country always shows the same level across visits,
+// rather than fabricating the appearance of live intelligence.
+const COUNTRY_RISK_LEVELS = ["Low", "Moderate", "Elevated"] as const;
+type CountryRiskLevel = (typeof COUNTRY_RISK_LEVELS)[number];
+
+const COUNTRY_RISK_ADVISORIES: Record<CountryRiskLevel, string[]> = {
+  Low: ["No active advisories", "Standard monitoring in effect"],
+  Moderate: ["Periodic monitoring recommended", "Review local advisories before deployment"],
+  Elevated: [
+    "Enhanced due-diligence recommended",
+    "Review local advisories before deployment",
+    "Coordinate with regional lead before travel",
+  ],
+};
+
+function getCountryRiskLevel(iso3: string): CountryRiskLevel {
+  let hash = 0;
+  for (let i = 0; i < iso3.length; i++) hash = (hash * 31 + iso3.charCodeAt(i)) >>> 0;
+  return COUNTRY_RISK_LEVELS[hash % COUNTRY_RISK_LEVELS.length];
+}
+
 export default function Dashboard() {
   const [step, setStep] = useState<Step>("login");
 
@@ -641,6 +664,17 @@ function OperationalCanvas() {
     const cameraTarget = focusDefinition?.cameraTarget ?? { x: 500, y: 500 };
     const scale = focusDefinition?.defaultFocusScale ?? 1;
     return { focusPoint, cameraTarget, scale, clipPath: buildFocusClipPath(renderedCountry.geometry, scale) };
+  }, [renderedCountry]);
+
+  // Country Intelligence panel content - real data (capital/city count)
+  // where the City Registry has it, mock risk data otherwise (see
+  // getCountryRiskLevel above).
+  const countryPanelData = useMemo(() => {
+    if (!renderedCountry) return null;
+    const cities = CITY_REGISTRY[renderedCountry.iso3] ?? [];
+    const capital = cities.find((city) => city.capital)?.name ?? null;
+    const riskLevel = getCountryRiskLevel(renderedCountry.iso3);
+    return { capital, cityCount: cities.length, riskLevel, advisories: COUNTRY_RISK_ADVISORIES[riskLevel] };
   }, [renderedCountry]);
 
   useEffect(() => {
@@ -1277,6 +1311,64 @@ function OperationalCanvas() {
           })}
         </div>
       </div>
+
+      {renderedCountry && countryPanelData && (
+        <div
+          className={`country-panel ${focusEntered ? "country-panel-open" : ""}`}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="country-panel-header">
+            <div>
+              <p className="country-panel-eyebrow">Country Intelligence</p>
+              <h2 className="country-panel-title">{renderedCountry.name}</h2>
+              <p className="country-panel-iso">
+                {renderedCountry.iso2} &middot; {renderedCountry.iso3}
+              </p>
+            </div>
+            <div className="country-panel-header-right">
+              <span className={`country-panel-risk-badge country-panel-risk-${countryPanelData.riskLevel.toLowerCase()}`}>
+                {countryPanelData.riskLevel} Risk
+              </span>
+              <button
+                type="button"
+                className="country-panel-close"
+                onClick={() => clearSelection()}
+                aria-label="Close Country Intelligence"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="country-panel-stats">
+            <div className="country-panel-stat">
+              <p className="country-panel-stat-label">Capital</p>
+              <p className="country-panel-stat-value">{countryPanelData.capital ?? "Not tracked"}</p>
+            </div>
+            <div className="country-panel-stat">
+              <p className="country-panel-stat-label">Cities Tracked</p>
+              <p className="country-panel-stat-value">{countryPanelData.cityCount}</p>
+            </div>
+            <div className="country-panel-stat">
+              <p className="country-panel-stat-label">Presence</p>
+              <p className="country-panel-stat-value">None recorded</p>
+            </div>
+          </div>
+
+          <p className="country-panel-summary">
+            No prior operational history recorded for {renderedCountry.name}. Baseline intelligence sources only
+            &mdash; monitoring initiated on selection.
+          </p>
+
+          <div className="country-panel-advisories">
+            {countryPanelData.advisories.map((item) => (
+              <div key={item} className="country-panel-advisory">
+                {item}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

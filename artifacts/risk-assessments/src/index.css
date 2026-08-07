@@ -881,3 +881,148 @@
   color: rgba(255, 255, 255, 0.45);
   margin: 0;
 }
+
+/* Country Intelligence panel - tied to Active Country selection rather
+   than a manual trigger (mirrors the country focus visuals' own
+   entered/exited timing via focusEntered), so it appears and dismisses
+   in lockstep with the selected country. Slides up from the bottom,
+   centered, so it never competes with the Brief (left) or Alerts
+   (right) panels for screen edge. */
+.country-panel {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  z-index: 28;
+  width: min(640px, calc(100vw - 32px));
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: rgba(8, 11, 15, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  backdrop-filter: blur(14px);
+  color: #fff;
+  transform: translate(-50%, calc(100% + 16px));
+  opacity: 0;
+  transition: transform 0.28s ease, opacity 0.28s ease;
+  pointer-events: auto;
+}
+
+.country-panel-open {
+  transform: translate(-50%, 0);
+  opacity: 1;
+}
+
+.country-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.country-panel-eyebrow {
+  font-size: 12px;
+  color: rgba(125, 211, 252, 0.9);
+  margin: 0 0 4px;
+}
+
+.country-panel-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.country-panel-iso {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 4px 0 0;
+  letter-spacing: 0.04em;
+}
+
+.country-panel-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.country-panel-risk-badge {
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.country-panel-risk-low {
+  background: rgba(74, 222, 128, 0.16);
+  color: rgba(134, 239, 172, 0.95);
+}
+
+.country-panel-risk-moderate {
+  background: rgba(255, 196, 87, 0.16);
+  color: rgba(255, 196, 87, 0.95);
+}
+
+.country-panel-risk-elevated {
+  background: rgba(248, 113, 113, 0.16);
+  color: rgba(248, 113, 113, 0.95);
+}
+
+.country-panel-close {
+  flex-shrink: 0;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+
+.country-panel-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.country-panel-stat {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.country-panel-stat-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0 0 2px;
+}
+
+.country-panel-stat-value {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.country-panel-summary {
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+}
+
+.country-panel-advisories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.country-panel-advisory {
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+}
