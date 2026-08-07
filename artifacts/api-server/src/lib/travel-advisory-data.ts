@@ -1,39 +1,27 @@
 // Country Intelligence Engine - US State Department Travel Advisory
 // reference table.
 //
-// The live State Department APIs turned out not to expose the actual
-// Level 1-4 rating anywhere (CountryTravelInformation has no such
-// field - confirmed directly on Afghanistan, a real Level 4 country;
-// TravelAdvisories/XMLTravelAdvisories return empty or error), and
+// The live State Department APIs don't expose the actual Level 1-4
+// rating anywhere reachable (CountryTravelInformation has no such
+// field; TravelAdvisories/XMLTravelAdvisories return empty or error;
 // travel.state.gov itself blocks all automated requests with
-// Cloudflare bot protection (a real HTTP 403, not a sandbox artifact -
-// confirmed via a direct user curl). So there is no reliable live-fetch
-// path for this rating.
+// Cloudflare bot protection). So this table is transcribed from the
+// State Department Bureau of Consular Affairs' own authoritative
+// ArcGIS feature service ("Travel Advisory Levels (View Layer - Read
+// Only)", id 85cf3abbe6ce41298b238cb661ba1ef8, description: "stewarded
+// exclusively by authoritative members of OCS [Office of Consular
+// Services]") - the same data that drives the official interactive
+// map. Reachable because it's hosted on public ArcGIS infrastructure,
+// not behind the .gov domain's bot protection.
 //
-// This table is transcribed directly from the State Department Bureau
-// of Consular Affairs' own authoritative ArcGIS feature service (item
-// "Travel Advisory Levels (View Layer - Read Only)", id
-// 85cf3abbe6ce41298b238cb661ba1ef8, description: "stewarded exclusively
-// by authoritative members of OCS [Office of Consular Services]") -
-// the same data that drives the official interactive map at
-// travel.state.gov/.../traveladvisories.html. Reachable because it's
-// hosted on public ArcGIS infrastructure (services6.arcgis.com), not
-// behind the .gov domain's bot protection. Pulled via:
-//   https://services6.arcgis.com/R6wlO6UHmSzqm9Vs/arcgis/rest/services/
-//   Travel_Advisory_Levels_viewOnlyVectors/FeatureServer/0/query
-//   ?where=1=1&outFields=NAME,LEVEL_,ADVDATE,URL&returnGeometry=false
-//
-// Real data, not live - a deliberate tradeoff (per direct product
-// direction) given no live path exists. `advisoryDate` is the real,
-// per-country date the State Department itself last updated that
-// country's advisory (from the feature's own ADVDATE field), shown in
+// Real data, not live - a deliberate tradeoff given no live path
+// exists. `advisoryDate` is the real, per-country date the State
+// Department itself last updated that country's advisory, shown in
 // the UI so this is never presented as more current than it is.
 //
-// GENERATED FILE - do not hand-edit. Regenerate monthly (or as needed)
-// via:
+// GENERATED FILE - do not hand-edit. Regenerate monthly (or as
+// needed) via:
 //   pnpm --filter @workspace/scripts run refresh-travel-advisories
-// (scripts/src/refresh-travel-advisories.ts). This particular copy was
-// transcribed by hand from the same query, before that script existed.
 // Last generated: 2026-08-07
 //
 // LEVEL_ encodes two things: the base 1-4 level, and (values >= 10)
@@ -42,10 +30,10 @@
 // areas) - divided out into `higherRiskAreas` below so callers get a
 // plain 1-4 level.
 //
-// Includes State Dept entries below the country level (Mexican states,
-// Gaza Strip, West Bank, etc.) as-is; lookups match by name against our
-// own registry, so these are simply never matched rather than filtered
-// out here.
+// Includes State Dept entries below the country level (Mexican
+// states, Gaza Strip, West Bank, etc.) as-is; lookups in
+// travel-advisory.ts match by name against our own registry, so
+// these are simply never matched rather than filtered out here.
 export interface TravelAdvisoryRow {
   name: string;
   level: 1 | 2 | 3 | 4;
