@@ -84,6 +84,22 @@ export default defineConfig({
     fs: {
       strict: true,
     },
+    // Every /api/* call this app makes (src/lib/api.ts's BASE = "/api")
+    // targets the same-origin api-server, which is only true in
+    // production (api-server serves this app's own build - see
+    // artifacts/api-server/src/app.ts). Running `vite dev` on its own
+    // has nothing at "/api" at all - proxy it to a separately-running
+    // api-server dev instance so backend-connected pages (Country
+    // Intelligence, Alerts, OSINT, Venues, ...) work under `pnpm run
+    // dev` too. Target port is configurable since api-server has no
+    // fixed default port of its own (requires PORT env var, same as
+    // this app) - set API_PROXY_TARGET to match wherever it's running.
+    proxy: {
+      "/api": {
+        target: process.env.API_PROXY_TARGET ?? "http://localhost:3001",
+        changeOrigin: true,
+      },
+    },
     ...(isCodespaces
       ? {
           hmr: {

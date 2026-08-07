@@ -227,4 +227,38 @@ export const api = {
     updateFinding: (routeId: number, findingId: number, data: { verified?: boolean; analystNotes?: string }) =>
       apiFetch<RouteFinding>(`/routes/${routeId}/findings/${findingId}`, { method: "PATCH", body: JSON.stringify(data) }),
   },
+  countries: {
+    intelligence: (iso2: string, name: string) =>
+      apiFetch<CountryIntelligence>(`/countries/${iso2}/intelligence?name=${encodeURIComponent(name)}`),
+  },
 };
+
+// Country Intelligence Engine (Operational Canvas) - a composite Risk
+// Rating from the US State Department + UK FCDO travel advisories, plus
+// a separate Public Health badge from CDC. See
+// artifacts/api-server/src/routes/country-intelligence.ts for the real
+// data sources and the composite formula.
+export type CountryRiskLevel = "unrated" | "low" | "elevated" | "critical" | "do_not_travel";
+
+export interface CountryTravelAdvisory {
+  level: 1 | 2 | 3 | 4;
+  label?: string;
+  summary: string;
+  sourceUrl: string;
+}
+
+export type HealthRating = "low" | "moderate" | "high" | "critical";
+
+export interface CountryHealthNotice {
+  level: 1 | 2 | 3 | 4;
+  title: string;
+  summary: string;
+  sourceUrl: string;
+  publishedAt: string | null;
+}
+
+export interface CountryIntelligence {
+  riskRating: { level: CountryRiskLevel; drivers: string[] };
+  travelAdvisories: { us: CountryTravelAdvisory | null; uk: CountryTravelAdvisory | null };
+  health: { rating: HealthRating; notices: CountryHealthNotice[] };
+}

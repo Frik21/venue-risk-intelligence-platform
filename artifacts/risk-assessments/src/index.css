@@ -1413,19 +1413,41 @@
   white-space: nowrap;
 }
 
+.country-panel-risk-unrated {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.country-panel-risk-loading {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.4);
+}
+
 .country-panel-risk-low {
   background: rgba(74, 222, 128, 0.16);
   color: rgba(134, 239, 172, 0.95);
 }
 
-.country-panel-risk-moderate {
+.country-panel-risk-elevated {
   background: rgba(255, 196, 87, 0.16);
   color: rgba(255, 196, 87, 0.95);
 }
 
-.country-panel-risk-elevated {
+.country-panel-risk-critical {
   background: rgba(248, 113, 113, 0.16);
   color: rgba(248, 113, 113, 0.95);
+}
+
+.country-panel-risk-do_not_travel {
+  background: rgba(248, 113, 113, 0.28);
+  color: #fff;
+}
+
+.country-panel-risk-drivers {
+  margin: -6px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .country-panel-close {
@@ -1463,10 +1485,29 @@
   margin: 0;
 }
 
-.country-panel-summary {
+.country-panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.country-panel-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.country-panel-section-title {
   font-size: 13px;
-  line-height: 1.6;
-  color: rgba(255, 255, 255, 0.7);
+  font-weight: 600;
+  margin: 0;
+}
+
+.country-panel-section-empty {
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.5);
   margin: 0;
 }
 
@@ -1477,10 +1518,57 @@
 }
 
 .country-panel-advisory {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   padding: 10px 12px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.04);
   font-size: 13px;
   color: rgba(255, 255, 255, 0.8);
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+a.country-panel-advisory:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(125, 211, 252, 0.35);
+}
+
+.country-panel-advisory-source {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(125, 211, 252, 0.85);
+}
+
+.country-panel-advisory-text {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.country-panel-health-badge {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.country-panel-health-low {
+  background: rgba(74, 222, 128, 0.16);
+  color: rgba(134, 239, 172, 0.95);
+}
+
+.country-panel-health-moderate {
+  background: rgba(255, 196, 87, 0.16);
+  color: rgba(255, 196, 87, 0.95);
+}
+
+.country-panel-health-high {
+  background: rgba(248, 113, 113, 0.16);
+  color: rgba(248, 113, 113, 0.95);
+}
+
+.country-panel-health-critical {
+  background: rgba(248, 113, 113, 0.28);
+  color: #fff;
 }

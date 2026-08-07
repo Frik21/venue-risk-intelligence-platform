@@ -21,6 +21,8 @@ import {
   MAP_FOCUS_FILL_GRADIENT_STOPS,
   MAP_BORDER_FULL_DETAIL_MAX_POINTS,
 } from "@/lib/map-aesthetics";
+import { api } from "@/lib/api";
+import type { CountryIntelligence, CountryRiskLevel, HealthRating } from "@/lib/api";
 
 // Background tone for the outer page wrapper (behind MapLayer).
 const OCEAN_COLOR = "#00081a";
@@ -100,28 +102,26 @@ const ALERT_SEVERITY_ICON: Record<AlertSeverity, typeof AlertTriangle> = {
   info: Info,
 };
 
-// Country Intelligence panel (OperationalCanvas) - mock risk data, since
-// no real per-country risk feed exists yet. Deterministic per ISO3 (not
-// random) so a given country always shows the same level across visits,
-// rather than fabricating the appearance of live intelligence.
-const COUNTRY_RISK_LEVELS = ["Low", "Moderate", "Elevated"] as const;
-type CountryRiskLevel = (typeof COUNTRY_RISK_LEVELS)[number];
-
-const COUNTRY_RISK_ADVISORIES: Record<CountryRiskLevel, string[]> = {
-  Low: ["No active advisories", "Standard monitoring in effect"],
-  Moderate: ["Periodic monitoring recommended", "Review local advisories before deployment"],
-  Elevated: [
-    "Enhanced due-diligence recommended",
-    "Review local advisories before deployment",
-    "Coordinate with regional lead before travel",
-  ],
+// Country Intelligence panel (OperationalCanvas) - the Risk Rating badge
+// and Public Health badge are real, live data now (Country Intelligence
+// Engine: US State Dept + UK FCDO travel advisories, composited; CDC
+// health notices, separate) - see api.countries.intelligence() and
+// artifacts/api-server/src/routes/country-intelligence.ts. Display
+// labels for the composite Risk Rating, per direct product direction.
+const COUNTRY_RISK_LABELS: Record<CountryRiskLevel, string> = {
+  unrated: "Unrated",
+  low: "Low",
+  elevated: "Elevated",
+  critical: "Critical",
+  do_not_travel: "Do Not Travel",
 };
 
-function getCountryRiskLevel(iso3: string): CountryRiskLevel {
-  let hash = 0;
-  for (let i = 0; i < iso3.length; i++) hash = (hash * 31 + iso3.charCodeAt(i)) >>> 0;
-  return COUNTRY_RISK_LEVELS[hash % COUNTRY_RISK_LEVELS.length];
-}
+const HEALTH_RATING_LABELS: Record<HealthRating, string> = {
+  low: "Low",
+  moderate: "Moderate",
+  high: "High",
+  critical: "Critical",
+};
 
 export default function Dashboard() {
   const [step, setStep] = useState<Step>("login");
@@ -893,15 +893,52 @@ function OperationalCanvas() {
     return { focusPoint, cameraTarget, scale, clipPath: buildFocusClipPath(renderedCountry.geometry, scale) };
   }, [renderedCountry]);
 
-  // Country Intelligence panel content - real data (capital/city count)
-  // where the City Registry has it, mock risk data otherwise (see
-  // getCountryRiskLevel above).
+  // Country Intelligence panel content - capital/city count from the
+  // City Registry (always available, no fetch needed).
   const countryPanelData = useMemo(() => {
     if (!renderedCountry) return null;
     const cities = CITY_REGISTRY[renderedCountry.iso3] ?? [];
     const capital = cities.find((city) => city.capital)?.name ?? null;
-    const riskLevel = getCountryRiskLevel(renderedCountry.iso3);
-    return { capital, cityCount: cities.length, riskLevel, advisories: COUNTRY_RISK_ADVISORIES[riskLevel] };
+    return { capital, cityCount: cities.length };
+  }, [renderedCountry]);
+
+  // Country Intelligence Engine - the real Risk Rating + Public Health
+  // data (US State Dept + UK FCDO + CDC, composited server-side; see
+  // api.countries.intelligence and country-intelligence.ts). Fetched
+  // fresh on every country selection, not cached client-side - a guard
+  // ref discards a response that resolves after the selection has
+  // already moved on to a different country, so a slow fetch for the
+  // previous country can never overwrite the current one's panel.
+  const [countryIntelligence, setCountryIntelligence] = useState<CountryIntelligence | null>(null);
+  const [countryIntelligenceLoading, setCountryIntelligenceLoading] = useState(false);
+  const countryIntelligenceRequestRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!renderedCountry) {
+      setCountryIntelligence(null);
+      setCountryIntelligenceLoading(false);
+      countryIntelligenceRequestRef.current = null;
+      return;
+    }
+    const requestKey = renderedCountry.iso3;
+    countryIntelligenceRequestRef.current = requestKey;
+    setCountryIntelligence(null);
+    setCountryIntelligenceLoading(true);
+    api.countries
+      .intelligence(renderedCountry.iso2, renderedCountry.name)
+      .then((data) => {
+        if (countryIntelligenceRequestRef.current !== requestKey) return;
+        setCountryIntelligence(data);
+      })
+      .catch((err) => {
+        if (countryIntelligenceRequestRef.current !== requestKey) return;
+        console.error("Country Intelligence fetch failed:", err);
+        setCountryIntelligence(null);
+      })
+      .finally(() => {
+        if (countryIntelligenceRequestRef.current !== requestKey) return;
+        setCountryIntelligenceLoading(false);
+      });
   }, [renderedCountry]);
 
   // In-panel city search - same idea as the top banner's Operational
@@ -1776,9 +1813,19 @@ function OperationalCanvas() {
             )}
           </div>
 
-          <span className={`country-panel-risk-badge country-panel-risk-${countryPanelData.riskLevel.toLowerCase()}`}>
-            {countryPanelData.riskLevel} Risk
+          <span
+            className={`country-panel-risk-badge ${
+              countryIntelligenceLoading
+                ? "country-panel-risk-loading"
+                : `country-panel-risk-${countryIntelligence?.riskRating.level ?? "unrated"}`
+            }`}
+          >
+            {countryIntelligenceLoading ? "Checking…" : COUNTRY_RISK_LABELS[countryIntelligence?.riskRating.level ?? "unrated"]}
           </span>
+
+          {!countryIntelligenceLoading && countryIntelligence && countryIntelligence.riskRating.drivers.length > 0 && (
+            <p className="country-panel-risk-drivers">Driven by {countryIntelligence.riskRating.drivers.join(" · ")}</p>
+          )}
 
           <div className="country-panel-stats">
             <div className="country-panel-stat">
@@ -1795,17 +1842,73 @@ function OperationalCanvas() {
             </div>
           </div>
 
-          <p className="country-panel-summary">
-            No prior operational history recorded for {renderedCountry.name}. Baseline intelligence sources only
-            &mdash; monitoring initiated on selection.
-          </p>
-
-          <div className="country-panel-advisories">
-            {countryPanelData.advisories.map((item) => (
-              <div key={item} className="country-panel-advisory">
-                {item}
+          <div className="country-panel-section">
+            <h3 className="country-panel-section-title">Travel Advisories</h3>
+            {countryIntelligenceLoading ? (
+              <p className="country-panel-section-empty">Checking US and UK government sources…</p>
+            ) : countryIntelligence?.travelAdvisories.us || countryIntelligence?.travelAdvisories.uk ? (
+              <div className="country-panel-advisories">
+                {countryIntelligence.travelAdvisories.us && (
+                  <a
+                    href={countryIntelligence.travelAdvisories.us.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="country-panel-advisory"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <span className="country-panel-advisory-source">US State Department</span>
+                    <span className="country-panel-advisory-text">
+                      {countryIntelligence.travelAdvisories.us.label ?? `Level ${countryIntelligence.travelAdvisories.us.level}`}
+                    </span>
+                  </a>
+                )}
+                {countryIntelligence.travelAdvisories.uk && (
+                  <a
+                    href={countryIntelligence.travelAdvisories.uk.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="country-panel-advisory"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <span className="country-panel-advisory-source">UK FCDO</span>
+                    <span className="country-panel-advisory-text">{countryIntelligence.travelAdvisories.uk.summary}</span>
+                  </a>
+                )}
               </div>
-            ))}
+            ) : (
+              <p className="country-panel-section-empty">No government travel advisory on file for {renderedCountry.name}.</p>
+            )}
+          </div>
+
+          <div className="country-panel-section">
+            <div className="country-panel-section-header">
+              <h3 className="country-panel-section-title">Public Health</h3>
+              {!countryIntelligenceLoading && countryIntelligence && (
+                <span className={`country-panel-health-badge country-panel-health-${countryIntelligence.health.rating}`}>
+                  {HEALTH_RATING_LABELS[countryIntelligence.health.rating]}
+                </span>
+              )}
+            </div>
+            {countryIntelligenceLoading ? (
+              <p className="country-panel-section-empty">Checking CDC travel health notices…</p>
+            ) : countryIntelligence && countryIntelligence.health.notices.length > 0 ? (
+              <div className="country-panel-advisories">
+                {countryIntelligence.health.notices.map((notice) => (
+                  <a
+                    key={notice.sourceUrl}
+                    href={notice.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="country-panel-advisory"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <span className="country-panel-advisory-text">{notice.title}</span>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="country-panel-section-empty">No active CDC travel health notices for {renderedCountry.name}.</p>
+            )}
           </div>
         </div>
       )}

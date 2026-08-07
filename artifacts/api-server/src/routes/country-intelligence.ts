@@ -33,13 +33,13 @@ const router: IRouter = Router();
 // underlying fetch is independently caught so one source failing (or
 // this session's own sandbox network policy blocking a domain, as
 // happened repeatedly during development) never breaks the others.
-type RiskLevel = "unrated" | "low" | "moderate" | "elevated" | "critical";
+type RiskLevel = "unrated" | "low" | "elevated" | "critical" | "do_not_travel";
 
 const LEVEL_TO_RISK: Record<number, RiskLevel> = {
   1: "low",
-  2: "moderate",
-  3: "elevated",
-  4: "critical",
+  2: "elevated",
+  3: "critical",
+  4: "do_not_travel",
 };
 
 router.get("/countries/:iso2/intelligence", async (req, res): Promise<void> => {
