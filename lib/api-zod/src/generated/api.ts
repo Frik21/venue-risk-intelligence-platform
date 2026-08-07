@@ -116,7 +116,7 @@ export const ListVenuesResponse = zod.array(ListVenuesResponseItem)
  */
 export const CreateVenueBody = zod.object({
   "name": zod.string(),
-  "venueType": zod.enum(['hotel', 'stadium', 'conference', 'embassy', 'airport', 'mall', 'government', 'restaurant', 'hospital', 'university', 'other']).optional(),
+  "venueType": zod.enum(['hotel', 'stadium', 'conference', 'embassy', 'airport', 'mall', 'government', 'restaurant', 'hospital', 'university', 'office', 'point_of_interest', 'area_of_operations', 'other']).optional(),
   "address": zod.string(),
   "city": zod.string(),
   "country": zod.string(),
