@@ -1302,6 +1302,108 @@
   letter-spacing: 0.04em;
 }
 
+/* In-panel city search - same treatment as the top banner's search bar,
+   scoped to the selected country's own cities only. */
+.country-panel-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.country-panel-search:focus-within {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(125, 211, 252, 0.4);
+}
+
+.country-panel-search-icon {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.country-panel-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+}
+
+.country-panel-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.country-panel-search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: rgba(11, 15, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.country-panel-search-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.country-panel-search-result:hover,
+.country-panel-search-result:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.country-panel-search-result-icon {
+  flex-shrink: 0;
+  color: rgba(125, 211, 252, 0.85);
+}
+
+.country-panel-search-result-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.country-panel-search-result-meta {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.country-panel-search-empty {
+  padding: 10px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+}
+
 .country-panel-risk-badge {
   align-self: flex-start;
   padding: 5px 10px;

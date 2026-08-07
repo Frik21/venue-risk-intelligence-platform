@@ -904,6 +904,46 @@ function OperationalCanvas() {
     return { capital, cityCount: cities.length, riskLevel, advisories: COUNTRY_RISK_ADVISORIES[riskLevel] };
   }, [renderedCountry]);
 
+  // In-panel city search - same idea as the top banner's Operational
+  // Search Index, but scoped to only the selected country's own City
+  // Registry entries rather than the whole world. Selecting a result
+  // highlights it on the map exactly like the banner search does
+  // (ActiveCountry.highlightedCity), re-selecting the same country with
+  // that city attached.
+  const [citySearchQuery, setCitySearchQuery] = useState("");
+  const [citySearchOpen, setCitySearchOpen] = useState(false);
+  const countryCitySearchResults = useMemo(() => {
+    const q = citySearchQuery.trim().toLowerCase();
+    if (!q || !renderedCountry) return [];
+    const cities = CITY_REGISTRY[renderedCountry.iso3] ?? [];
+    return cities
+      .filter((city) => city.name.toLowerCase().includes(q))
+      .sort((a, b) => {
+        const aStarts = a.name.toLowerCase().startsWith(q) ? 0 : 1;
+        const bStarts = b.name.toLowerCase().startsWith(q) ? 0 : 1;
+        if (aStarts !== bStarts) return aStarts - bStarts;
+        return a.name.localeCompare(b.name);
+      })
+      .slice(0, SEARCH_RESULT_LIMIT);
+  }, [renderedCountry, citySearchQuery]);
+
+  function selectCountryPanelCity(city: CityDefinition) {
+    if (!renderedCountry) return;
+    const region = OPERATIONAL_SELECTABLE_REGIONS.find((r) => r.iso3 === renderedCountry.iso3);
+    if (!region) return;
+    selectCountry(region, city);
+    setCitySearchQuery("");
+    setCitySearchOpen(false);
+  }
+
+  // Reset the in-panel search whenever the selected country itself
+  // changes, so a stale query/dropdown from the previous country never
+  // carries over.
+  useEffect(() => {
+    setCitySearchQuery("");
+    setCitySearchOpen(false);
+  }, [renderedCountry?.iso3]);
+
   useEffect(() => {
     subscribe(setActiveCountry);
     return () => unsubscribe(setActiveCountry);
@@ -1686,6 +1726,54 @@ function OperationalCanvas() {
             >
               <X className="w-4 h-4" />
             </button>
+          </div>
+
+          <div
+            className="country-panel-search"
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node)) setCitySearchOpen(false);
+            }}
+          >
+            <Search className="w-4 h-4 country-panel-search-icon" />
+            <input
+              type="text"
+              className="country-panel-search-input"
+              placeholder={`Search cities in ${renderedCountry.name}...`}
+              value={citySearchQuery}
+              onChange={(event) => {
+                setCitySearchQuery(event.target.value);
+                setCitySearchOpen(true);
+              }}
+              onFocus={() => setCitySearchOpen(true)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setCitySearchOpen(false);
+                  event.currentTarget.blur();
+                } else if (event.key === "Enter" && countryCitySearchResults.length > 0) {
+                  selectCountryPanelCity(countryCitySearchResults[0]);
+                }
+              }}
+            />
+            {citySearchOpen && citySearchQuery.trim() && (
+              <div className="country-panel-search-results">
+                {countryCitySearchResults.length === 0 ? (
+                  <div className="country-panel-search-empty">No matches for &quot;{citySearchQuery.trim()}&quot;</div>
+                ) : (
+                  countryCitySearchResults.map((city) => (
+                    <button
+                      key={`${city.name}-${city.position[0]}-${city.position[1]}`}
+                      type="button"
+                      className="country-panel-search-result"
+                      onClick={() => selectCountryPanelCity(city)}
+                    >
+                      <MapPin className="w-4 h-4 country-panel-search-result-icon" />
+                      <span className="country-panel-search-result-name">{city.name}</span>
+                      {city.capital && <span className="country-panel-search-result-meta">Capital</span>}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
           </div>
 
           <span className={`country-panel-risk-badge country-panel-risk-${countryPanelData.riskLevel.toLowerCase()}`}>
