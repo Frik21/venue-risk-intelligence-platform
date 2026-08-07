@@ -7,6 +7,7 @@
 // DOM or the Operational Canvas, so selecting a country never causes a
 // visual change by itself.
 import type { CountryDefinition } from "./country-registry";
+import type { CityDefinition } from "./city-registry";
 
 export type ActiveCountry = {
   iso2: string;
@@ -18,6 +19,14 @@ export type ActiveCountry = {
   // Focus Engine/Camera Engine to populate. Always undefined today.
   focusPoint?: { x: number; y: number };
   cameraTarget?: { x: number; y: number; zoom?: number };
+  // Set only when selection originates from a city/town search result
+  // (Operational Search Index, dashboard.tsx) - the specific place to
+  // show on the map alongside the country's curated Major Cities set,
+  // even if it wouldn't otherwise make that curated list. Undefined for
+  // an ordinary map click. Cleared for free whenever a new country is
+  // selected or the selection is cleared, since ActiveCountry is always
+  // replaced or nulled wholesale, never patched in place.
+  highlightedCity?: CityDefinition;
 };
 
 type SelectionListener = (country: ActiveCountry | null) => void;
@@ -25,18 +34,19 @@ type SelectionListener = (country: ActiveCountry | null) => void;
 let activeCountry: ActiveCountry | null = null;
 const listeners = new Set<SelectionListener>();
 
-function toActiveCountry(country: CountryDefinition): ActiveCountry {
+function toActiveCountry(country: CountryDefinition, highlightedCity?: CityDefinition): ActiveCountry {
   return {
     iso2: country.iso2,
     iso3: country.iso3,
     name: country.name,
     geometry: country.svgPath,
     boundingBox: country.boundingBox,
+    highlightedCity,
   };
 }
 
-export function selectCountry(country: CountryDefinition): void {
-  activeCountry = toActiveCountry(country);
+export function selectCountry(country: CountryDefinition, highlightedCity?: CityDefinition): void {
+  activeCountry = toActiveCountry(country, highlightedCity);
   console.log("Operational Country Selected");
   console.log("ISO2:", activeCountry.iso2);
   console.log("ISO3:", activeCountry.iso3);

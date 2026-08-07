@@ -235,7 +235,7 @@ export default function Dashboard() {
 
 type SearchResult =
   | { type: "country"; name: string; iso3: string; region: CountryDefinition }
-  | { type: "city"; name: string; countryName: string; iso3: string; capital: boolean; region: CountryDefinition };
+  | { type: "city"; name: string; countryName: string; iso3: string; capital: boolean; region: CountryDefinition; city: CityDefinition };
 
 const SEARCH_RESULT_LIMIT = 8;
 
@@ -282,7 +282,7 @@ const SEARCH_INDEX: SearchResult[] = (() => {
     const region = regionByIso3.get(iso3);
     if (!region) continue;
     for (const city of cities) {
-      results.push({ type: "city", name: city.name, countryName: region.name, iso3, capital: city.capital, region });
+      results.push({ type: "city", name: city.name, countryName: region.name, iso3, capital: city.capital, region, city });
     }
   }
   return results;
@@ -312,7 +312,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
   const searchResults = useMemo(() => searchOperationalIndex(searchQuery), [searchQuery]);
 
   function selectSearchResult(result: SearchResult) {
-    selectCountry(result.region);
+    selectCountry(result.region, result.type === "city" ? result.city : undefined);
     setSearchQuery("");
     setSearchOpen(false);
   }
@@ -524,10 +524,25 @@ const MAJOR_CITY_DISPLAY_CAP = 6;
 // layer discussed but not yet built) will show on the map itself. This
 // is the one place that distinction is drawn: CITY_REGISTRY is the full
 // searchable database, this function's output is what the map displays.
-function getMajorCitiesForDisplay(cities: CityDefinition[]): CityDefinition[] {
+//
+// `highlightedCity` (ActiveCountry.highlightedCity, set only when the
+// current selection came from searching a city/town, not a plain map
+// click) is guaranteed a spot even if it wouldn't otherwise make the cap
+// - per direct product direction, searching a town should show it on the
+// map "like the current major cities are shown," not just select its
+// country silently.
+function getMajorCitiesForDisplay(cities: CityDefinition[], highlightedCity?: CityDefinition): CityDefinition[] {
   const capitals = cities.filter((city) => city.capital);
   const rest = [...cities].filter((city) => !city.capital).sort((a, b) => b.population - a.population);
-  return [...capitals, ...rest].slice(0, MAJOR_CITY_DISPLAY_CAP);
+  const curated = [...capitals, ...rest].slice(0, MAJOR_CITY_DISPLAY_CAP);
+  if (highlightedCity && !curated.some((city) => isSameCity(city, highlightedCity))) {
+    return [highlightedCity, ...curated];
+  }
+  return curated;
+}
+
+function isSameCity(a: CityDefinition, b: CityDefinition): boolean {
+  return a.name === b.name && a.position[0] === b.position[0] && a.position[1] === b.position[1];
 }
 
 // Prevents city labels from overlapping each other, reported directly
@@ -545,9 +560,22 @@ function getMajorCitiesForDisplay(cities: CityDefinition[]): CityDefinition[] {
 // (Math.max(viewportWidth, viewportHeight) / 1000), not inventing a
 // second one. Skipped cities are dropped entirely (dot and label both) -
 // a lone dot with no name would read as a bug, not a feature.
-function selectNonOverlappingCities(cities: CityDefinition[], focusScale: number): CityDefinition[] {
+//
+// `highlightedCity`, when given, is placed first regardless of capital/
+// population - since it's always evaluated against an empty `accepted`
+// array, it's never rejected by the collision check, guaranteeing a
+// searched-for town actually shows up rather than being silently dropped
+// because a bigger, closer curated city got there first.
+function selectNonOverlappingCities(
+  cities: CityDefinition[],
+  focusScale: number,
+  highlightedCity?: CityDefinition,
+): CityDefinition[] {
   const pxPerUnit = (Math.max(window.innerWidth, window.innerHeight) / 1000) * focusScale;
   const ordered = [...cities].sort((a, b) => {
+    const aIsHighlighted = highlightedCity && isSameCity(a, highlightedCity) ? 0 : 1;
+    const bIsHighlighted = highlightedCity && isSameCity(b, highlightedCity) ? 0 : 1;
+    if (aIsHighlighted !== bIsHighlighted) return aIsHighlighted - bIsHighlighted;
     if (a.capital !== b.capital) return a.capital ? -1 : 1;
     return b.population - a.population;
   });
@@ -1206,8 +1234,9 @@ function OperationalCanvas() {
                     aria-hidden="true"
                   >
                     {selectNonOverlappingCities(
-                      getMajorCitiesForDisplay(CITY_REGISTRY[renderedCountry.iso3]),
+                      getMajorCitiesForDisplay(CITY_REGISTRY[renderedCountry.iso3], renderedCountry.highlightedCity),
                       focusRender.scale,
+                      renderedCountry.highlightedCity,
                     ).map((city) => (
                       <g
                         key={`${city.name}-${city.position[0]}-${city.position[1]}`}
