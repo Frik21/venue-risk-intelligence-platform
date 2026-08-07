@@ -42,8 +42,34 @@ const LEVEL_TO_RATING: Record<HealthAdvisoryLevel, HealthRating> = {
   4: "critical",
 };
 
+// RSS is XML, so non-ASCII characters in titles/descriptions (accented
+// place names especially - "Haut-Uélé" showed up as "Haut-U&#233;l&#233;"
+// in a real notice) are entity-encoded. Only a small named-entity set is
+// needed for RSS's own reserved characters; everything else CDC uses is
+// numeric (decimal or hex).
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+};
+
+function decodeEntities(input: string): string {
+  return input.replace(/&(#x[0-9a-fA-F]+|#[0-9]+|[a-zA-Z]+);/g, (match, entity: string) => {
+    if (entity[0] === "#") {
+      const isHex = entity[1] === "x" || entity[1] === "X";
+      const code = isHex ? parseInt(entity.slice(2), 16) : parseInt(entity.slice(1), 10);
+      return Number.isNaN(code) ? match : String.fromCodePoint(code);
+    }
+    return NAMED_ENTITIES[entity] ?? match;
+  });
+}
+
 function stripHtml(input: string): string {
-  return input.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+  const withoutTags = input.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+  return decodeEntities(withoutTags);
 }
 
 // Throws on a genuine fetch/HTTP failure. An empty array is a real,
