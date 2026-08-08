@@ -187,11 +187,80 @@
 }
 
 .top-banner-brand {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
   min-width: 0;
+}
+
+.top-banner-brand-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: none;
+  background: transparent;
+  padding: 6px 4px;
+  margin: -6px -4px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.top-banner-brand-trigger:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.top-banner-brand-chevron {
+  color: rgba(255, 255, 255, 0.4);
+  transition: transform 0.15s ease;
+}
+
+.top-banner-brand-chevron-open {
+  transform: rotate(180deg);
+}
+
+.top-banner-brand-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 200px;
+  padding: 6px;
+  background: rgba(11, 15, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.top-banner-brand-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.top-banner-brand-menu-item:hover,
+.top-banner-brand-menu-item:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.top-banner-brand-menu-item svg {
+  color: rgba(125, 211, 252, 0.85);
+  flex-shrink: 0;
 }
 
 .top-banner-brand-name {
@@ -778,46 +847,10 @@
 }
 
 /* Operational Brief panel - recalls the mandatory pre-entry Brief inside
-   the Operations Centre, on demand. Deliberately non-modal: no dimming
-   overlay, no focus trap, and the trigger stays reachable at all times -
-   the map remains the primary focus while the panel is open. */
-.canvas-trigger-stack {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 30;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.brief-panel-trigger,
-.layers-panel-trigger {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 10px;
-  background: rgba(11, 15, 20, 0.72);
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 13px;
-  font-weight: 500;
-  backdrop-filter: blur(8px);
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.brief-panel-trigger:hover {
-  background: rgba(11, 15, 20, 0.88);
-  border-color: rgba(125, 211, 252, 0.4);
-}
-
-.layers-panel-trigger:hover {
-  background: rgba(11, 15, 20, 0.88);
-  border-color: rgba(148, 163, 184, 0.5);
-}
-
+   the Operations Centre, on demand (opened via the VenueGuard brand
+   menu in TopBanner). Deliberately non-modal: no dimming overlay, no
+   focus trap - the map remains the primary focus while the panel is
+   open. */
 .brief-panel {
   position: absolute;
   top: 0;
@@ -825,7 +858,7 @@
   bottom: 0;
   z-index: 29;
   width: min(360px, 88vw);
-  padding: 132px 24px 24px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -936,11 +969,11 @@
 }
 
 /* Operational Layers panel - a legend/control panel for the canvas
-   itself, docking to the same left edge as the Brief panel (its trigger
-   stacks directly below Brief's in .canvas-trigger-stack). Shifts right
-   by one panel-width when the Brief panel is also open, so the two sit
-   side by side instead of overlapping - same idea as the Country panel
-   shifting when Alerts is open. */
+   itself, docking to the same left edge as the Brief panel (both opened
+   via the VenueGuard brand menu in TopBanner). Shifts right by one
+   panel-width when the Brief panel is also open, so the two sit side by
+   side instead of overlapping - same idea as the Country panel shifting
+   when Alerts is open. */
 .layers-panel {
   position: absolute;
   top: 0;
@@ -948,7 +981,7 @@
   bottom: 0;
   z-index: 29;
   width: min(360px, 88vw);
-  padding: 132px 24px 24px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;

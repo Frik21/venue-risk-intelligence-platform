@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
-import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, Bell, Layers, LogOut, Search, Globe, X } from "lucide-react";
+import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, Bell, Layers, LogOut, Search, Globe, X, ChevronDown } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -306,9 +306,20 @@ function searchOperationalIndex(query: string): SearchResult[] {
 // space (the canvas sits below it, not underneath it) rather than
 // floating over the map like the panel triggers, per direct product
 // direction.
+// Dispatched by the VenueGuard brand menu (TopBanner) and picked up by
+// OperationalCanvas - the two components are siblings under Dashboard,
+// not parent/child, and the Brief/Layers panel state already lives
+// deep inside OperationalCanvas's own click-outside-to-close logic.
+// Reusing the same cross-component pattern layout.tsx already uses
+// (venueguard-show-shell) instead of lifting that state up and prop-
+// drilling it through both components.
+const OPEN_BRIEF_PANEL_EVENT = "venueguard-open-brief-panel";
+const OPEN_LAYERS_PANEL_EVENT = "venueguard-open-layers-panel";
+
 function TopBanner({ onSignOut }: { onSignOut: () => void }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [brandMenuOpen, setBrandMenuOpen] = useState(false);
   const searchResults = useMemo(() => searchOperationalIndex(searchQuery), [searchQuery]);
 
   function selectSearchResult(result: SearchResult) {
@@ -319,11 +330,51 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
 
   return (
     <header className="top-banner">
-      <div className="top-banner-brand">
-        <ShieldCheck className="w-5 h-5 text-sky-300" />
-        <span className="top-banner-brand-name">VenueGuard</span>
-        <span className="top-banner-brand-divider" aria-hidden="true" />
-        <span className="top-banner-brand-context">Operations Centre</span>
+      <div
+        className="top-banner-brand"
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node)) setBrandMenuOpen(false);
+        }}
+      >
+        <button
+          type="button"
+          className="top-banner-brand-trigger"
+          onClick={() => setBrandMenuOpen((open) => !open)}
+          aria-expanded={brandMenuOpen}
+        >
+          <ShieldCheck className="w-5 h-5 text-sky-300" />
+          <span className="top-banner-brand-name">VenueGuard</span>
+          <span className="top-banner-brand-divider" aria-hidden="true" />
+          <span className="top-banner-brand-context">Operations Centre</span>
+          <ChevronDown className={`w-3.5 h-3.5 top-banner-brand-chevron ${brandMenuOpen ? "top-banner-brand-chevron-open" : ""}`} />
+        </button>
+
+        {brandMenuOpen && (
+          <div className="top-banner-brand-menu">
+            <button
+              type="button"
+              className="top-banner-brand-menu-item"
+              onClick={() => {
+                window.dispatchEvent(new Event(OPEN_BRIEF_PANEL_EVENT));
+                setBrandMenuOpen(false);
+              }}
+            >
+              <ClipboardList className="w-4 h-4" />
+              Operational Brief
+            </button>
+            <button
+              type="button"
+              className="top-banner-brand-menu-item"
+              onClick={() => {
+                window.dispatchEvent(new Event(OPEN_LAYERS_PANEL_EVENT));
+                setBrandMenuOpen(false);
+              }}
+            >
+              <Layers className="w-4 h-4" />
+              Layers
+            </button>
+          </div>
+        )}
       </div>
       <div className="top-banner-search-wrap">
         <div
@@ -986,6 +1037,23 @@ function OperationalCanvas() {
     return () => unsubscribe(setActiveCountry);
   }, []);
 
+  // Operational Brief and Layers are now opened from the VenueGuard
+  // brand menu in TopBanner - see OPEN_BRIEF_PANEL_EVENT/
+  // OPEN_LAYERS_PANEL_EVENT above. TopBanner and OperationalCanvas are
+  // siblings, not parent/child, so this state can't be reached by props
+  // without lifting it (and the click-outside-to-close logic below)
+  // out of this component entirely.
+  useEffect(() => {
+    const openBrief = () => setBriefPanelOpen(true);
+    const openLayers = () => setLayersPanelOpen(true);
+    window.addEventListener(OPEN_BRIEF_PANEL_EVENT, openBrief);
+    window.addEventListener(OPEN_LAYERS_PANEL_EVENT, openLayers);
+    return () => {
+      window.removeEventListener(OPEN_BRIEF_PANEL_EVENT, openBrief);
+      window.removeEventListener(OPEN_LAYERS_PANEL_EVENT, openLayers);
+    };
+  }, []);
+
   useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
@@ -1504,32 +1572,6 @@ function OperationalCanvas() {
           Active Country: {activeCountry.name} / {activeCountry.iso3}
         </div>
       )}
-
-      <div className="canvas-trigger-stack">
-        <button
-          type="button"
-          className="brief-panel-trigger"
-          onClick={(event) => {
-            event.stopPropagation();
-            setBriefPanelOpen((open) => !open);
-          }}
-        >
-          <ClipboardList className="w-4 h-4" />
-          Operational Brief
-        </button>
-
-        <button
-          type="button"
-          className="layers-panel-trigger"
-          onClick={(event) => {
-            event.stopPropagation();
-            setLayersPanelOpen((open) => !open);
-          }}
-        >
-          <Layers className="w-4 h-4" />
-          Layers
-        </button>
-      </div>
 
       <div
         className={`brief-panel ${briefPanelOpen ? "brief-panel-open" : ""}`}
