@@ -368,10 +368,12 @@ const REOPEN_BRAND_MENU_EVENT = "venueguard-reopen-brand-menu";
 // Every field below is just a label with a comment box next to it that
 // the CPO writes into directly (per direct product direction) - no
 // nested sub-lists. The editable fields are kept separate from
-// VenueRiskAssessment (the API type) since Location/Venue,
-// Date/Time/Operator/Timezone and Assessment Status/Operational Plan
-// are all derived/read-only, not part of the saved form payload.
+// VenueRiskAssessment (the API type) since Date/Time/Operator/Timezone
+// and Assessment Status/Operational Plan are all derived/read-only,
+// not part of the saved form payload. Location, unlike those, is typed
+// in by the operator rather than derived from the venue record.
 type AssessmentFormState = {
+  location: string;
   currentOperatingConditions: string;
   areaAdvisories: string;
   checkpoints: string;
@@ -383,6 +385,7 @@ type AssessmentFormState = {
 };
 
 const ASSESSMENT_TEXT_FIELDS: { key: keyof AssessmentFormState; label: string }[] = [
+  { key: "location", label: "Location / Venue" },
   { key: "currentOperatingConditions", label: "Current Operating Conditions" },
   { key: "areaAdvisories", label: "Area Advisories" },
   { key: "checkpoints", label: "Assessment Questions / Checkpoints" },
@@ -394,7 +397,6 @@ const ASSESSMENT_TEXT_FIELDS: { key: keyof AssessmentFormState; label: string }[
 ];
 
 function VenueRiskAssessmentForm({
-  venueName,
   task,
   assessment,
   form,
@@ -408,7 +410,6 @@ function VenueRiskAssessmentForm({
   onSave,
   onSubmit,
 }: {
-  venueName: string;
   task: Task | null;
   assessment: VenueRiskAssessment | null;
   form: AssessmentFormState | null;
@@ -435,10 +436,6 @@ function VenueRiskAssessmentForm({
       ) : (
         <div className="venue-assessment-form">
           <div className="venue-assessment-meta">
-            <div className="venue-assessment-meta-row">
-              <span className="venue-assessment-meta-label">Location / Venue</span>
-              <span className="venue-assessment-meta-value">{venueName}</span>
-            </div>
             <div className="venue-assessment-meta-row">
               <span className="venue-assessment-meta-label">Date</span>
               <span className="venue-assessment-meta-value">{new Date(assessment.createdAt).toLocaleDateString()}</span>
@@ -1378,6 +1375,7 @@ function OperationalCanvas() {
       operatorId: MOCK_TASK_ID,
       operatorName: "Demo Operator",
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      location: "",
       currentOperatingConditions: "",
       areaAdvisories: "",
       checkpoints: "",
@@ -1418,6 +1416,7 @@ function OperationalCanvas() {
       const assessment = mockAssessment(assessingTaskId, assessingVenueId, venueName);
       setCurrentAssessment(assessment);
       setAssessmentForm({
+        location: assessment.location,
         currentOperatingConditions: assessment.currentOperatingConditions,
         areaAdvisories: assessment.areaAdvisories,
         checkpoints: assessment.checkpoints,
@@ -1437,6 +1436,7 @@ function OperationalCanvas() {
       .then((assessment) => {
         setCurrentAssessment(assessment);
         setAssessmentForm({
+          location: assessment.location,
           currentOperatingConditions: assessment.currentOperatingConditions,
           areaAdvisories: assessment.areaAdvisories,
           checkpoints: assessment.checkpoints,
@@ -2662,7 +2662,6 @@ function OperationalCanvas() {
           </>
         ) : (
           <VenueRiskAssessmentForm
-            venueName={riskAssessmentVenues.find((v) => v.venueId === assessingVenueId)?.venueName ?? "Venue"}
             task={displayedTasks.find((t) => t.id === assessingTaskId) ?? null}
             assessment={currentAssessment}
             form={assessmentForm}

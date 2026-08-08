@@ -108,6 +108,7 @@ export interface VenueRiskAssessment {
   operatorId: number;
   operatorName: string | null;
   timezone: string | null;
+  location: string;
   currentOperatingConditions: string;
   areaAdvisories: string;
   checkpoints: string;
@@ -287,6 +288,7 @@ export const api = {
       data: Partial<
         Pick<
           VenueRiskAssessment,
+          | "location"
           | "currentOperatingConditions"
           | "areaAdvisories"
           | "checkpoints"

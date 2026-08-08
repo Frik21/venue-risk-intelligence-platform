@@ -18,6 +18,7 @@ function formatAssessment(
     operatorId: row.operatorId,
     operatorName: operatorName ?? null,
     timezone: row.timezone,
+    location: row.location,
     currentOperatingConditions: row.currentOperatingConditions,
     areaAdvisories: row.areaAdvisories,
     checkpoints: row.checkpoints,
@@ -36,7 +37,7 @@ function formatAssessment(
 // A venue risk assessment exists implicitly the moment a CPO opens it for
 // a given (task, venue) pair - lazily created on first fetch, same
 // pattern as GET /tasks/:taskId/plan. Operator/date/time/timezone are
-// captured automatically here rather than typed in by the CPO.
+// captured automatically here; Location is typed in by the CPO.
 router.get("/tasks/:taskId/venues/:venueId/risk-assessment", async (req, res): Promise<void> => {
   const taskId = Number(req.params.taskId);
   const venueId = Number(req.params.venueId);
@@ -66,6 +67,7 @@ router.get("/tasks/:taskId/venues/:venueId/risk-assessment", async (req, res): P
 });
 
 const AssessmentUpdateSchema = z.object({
+  location: z.string().max(2000).optional(),
   currentOperatingConditions: z.string().max(2000).optional(),
   areaAdvisories: z.string().max(2000).optional(),
   checkpoints: z.string().max(2000).optional(),

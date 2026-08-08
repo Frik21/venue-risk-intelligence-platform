@@ -25,6 +25,10 @@ export const venueRiskAssessmentsTable = pgTable(
     // "Date, Time, Operator, Timezone - automatic" in the product
     // spec) - createdAt covers date/time, this covers timezone.
     timezone: text("timezone"),
+    // Location / Venue - unlike Date/Time/Operator/Timezone, this is
+    // typed in by the operator, not derived from the venue record (per
+    // direct product direction).
+    location: text("location").notNull().default(""),
     currentOperatingConditions: text("current_operating_conditions").notNull().default(""),
     areaAdvisories: text("area_advisories").notNull().default(""),
     checkpoints: text("checkpoints").notNull().default(""),
