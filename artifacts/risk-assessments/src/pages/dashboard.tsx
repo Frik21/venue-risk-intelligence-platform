@@ -2272,7 +2272,7 @@ function OperationalCanvas() {
                   value={addVenueSelection ?? ""}
                   onChange={(event) => setAddVenueSelection(Number(event.target.value))}
                 >
-                  <option value="" disabled>Select a venue…</option>
+                  <option value="" disabled>Select Task</option>
                   {addableVenues.map((v) => (
                     <option key={v.id} value={v.id}>{v.name}</option>
                   ))}
