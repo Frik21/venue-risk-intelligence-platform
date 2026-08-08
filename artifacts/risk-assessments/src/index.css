@@ -1049,6 +1049,63 @@
   color: rgba(125, 211, 252, 1);
 }
 
+.risk-assessments-venues-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.risk-assessments-add-venue-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+
+.risk-assessments-add-venue-btn:hover {
+  background: rgba(125, 211, 252, 0.16);
+  border-color: rgba(125, 211, 252, 0.4);
+}
+
+.risk-assessments-add-venue {
+  display: flex;
+  gap: 8px;
+}
+
+.risk-assessments-add-venue select {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 13px;
+}
+
+.risk-assessments-add-venue button {
+  padding: 6px 12px;
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  border-radius: 6px;
+  background: rgba(74, 222, 128, 0.14);
+  color: rgba(187, 247, 208, 0.95);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.risk-assessments-add-venue button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .tasks-panel-header {
   display: flex;
   align-items: flex-start;

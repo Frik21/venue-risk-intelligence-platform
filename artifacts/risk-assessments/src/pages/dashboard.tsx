@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
-import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, Globe, X, ChevronDown, ChevronRight, ListChecks, MessageSquare, Check, Building2 } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, Globe, X, ChevronDown, ChevronRight, ListChecks, MessageSquare, Check, Building2, Plus } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -22,7 +22,7 @@ import {
   MAP_BORDER_FULL_DETAIL_MAX_POINTS,
 } from "@/lib/map-aesthetics";
 import { api } from "@/lib/api";
-import type { CountryIntelligence, CountryRiskLevel, HealthRating, User, Task, TaskStatus, Plan } from "@/lib/api";
+import type { CountryIntelligence, CountryRiskLevel, HealthRating, User, Task, TaskStatus, Plan, Venue } from "@/lib/api";
 
 // Background tone for the outer page wrapper (behind MapLayer).
 const OCEAN_COLOR = "#00081a";
@@ -1101,6 +1101,54 @@ function OperationalCanvas() {
     }
   }
 
+  // Risk Assessments > Venues starts from venues tied to a task this CPO
+  // has actually accepted - not every venue in the system, and not
+  // venues from pending/declined tasks. A CPO can also manually connect
+  // additional venues to their current task via the "+" button (e.g. a
+  // multi-venue operation) - manualVenueIds, demo/local-only like the
+  // rest of Risk Assessments/Task Acceptance so far. Both lists are
+  // deduped and merged for display.
+  const acceptedVenues = useMemo(() => {
+    const seen = new Map<number, string>();
+    for (const task of displayedTasks) {
+      if (taskAcceptance[task.id] !== "accepted") continue;
+      if (!seen.has(task.venueId)) seen.set(task.venueId, task.venueName ?? "Unnamed venue");
+    }
+    return Array.from(seen, ([venueId, venueName]) => ({ venueId, venueName }));
+  }, [displayedTasks, taskAcceptance]);
+
+  const [allVenues, setAllVenues] = useState<Venue[]>([]);
+  const [manualVenueIds, setManualVenueIds] = useState<number[]>([]);
+  const [addVenueOpen, setAddVenueOpen] = useState(false);
+  const [addVenueSelection, setAddVenueSelection] = useState<number | null>(null);
+
+  useEffect(() => {
+    api.venues.list().then(setAllVenues).catch((err) => console.error("Failed to load venues:", err));
+  }, []);
+
+  const riskAssessmentVenues = useMemo(() => {
+    const seen = new Map<number, string>();
+    for (const v of acceptedVenues) seen.set(v.venueId, v.venueName);
+    for (const id of manualVenueIds) {
+      if (seen.has(id)) continue;
+      const venue = allVenues.find((v) => v.id === id);
+      seen.set(id, venue?.name ?? "Unnamed venue");
+    }
+    return Array.from(seen, ([venueId, venueName]) => ({ venueId, venueName }));
+  }, [acceptedVenues, manualVenueIds, allVenues]);
+
+  const addableVenues = useMemo(
+    () => allVenues.filter((v) => !riskAssessmentVenues.some((rv) => rv.venueId === v.id)),
+    [allVenues, riskAssessmentVenues],
+  );
+
+  function addManualVenue() {
+    if (addVenueSelection == null) return;
+    setManualVenueIds((prev) => [...prev, addVenueSelection]);
+    setAddVenueSelection(null);
+    setAddVenueOpen(false);
+  }
+
   const [planningTaskId, setPlanningTaskId] = useState<number | null>(null);
   const [taskPlans, setTaskPlans] = useState<Record<number, Plan>>({});
   const [planLoadingTaskId, setPlanLoadingTaskId] = useState<number | null>(null);
@@ -1331,6 +1379,8 @@ function OperationalCanvas() {
     const openRiskAssessments = () => {
       setActivePanel("risk-assessments");
       setRiskAssessmentsView("root");
+      setAddVenueOpen(false);
+      setAddVenueSelection(null);
     };
     const openLayers = () => setActivePanel("layers");
     window.addEventListener(OPEN_BRIEF_PANEL_EVENT, openBrief);
@@ -2137,14 +2187,56 @@ function OperationalCanvas() {
           </div>
         ) : (
           <>
-            <button
-              type="button"
-              className="risk-assessments-back"
-              onClick={() => setRiskAssessmentsView("root")}
-            >
-              <ArrowLeft className="w-3.5 h-3.5" /> Back to Risk Assessments
-            </button>
-            <p className="tasks-panel-empty">Nothing here yet.</p>
+            <div className="risk-assessments-venues-header">
+              <button
+                type="button"
+                className="risk-assessments-back"
+                onClick={() => {
+                  setRiskAssessmentsView("root");
+                  setAddVenueOpen(false);
+                  setAddVenueSelection(null);
+                }}
+              >
+                <ArrowLeft className="w-3.5 h-3.5" /> Back to Risk Assessments
+              </button>
+              <button
+                type="button"
+                className="risk-assessments-add-venue-btn"
+                onClick={() => setAddVenueOpen((open) => !open)}
+                aria-label="Add venue"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
+
+            {addVenueOpen && (
+              <div className="risk-assessments-add-venue">
+                <select
+                  value={addVenueSelection ?? ""}
+                  onChange={(event) => setAddVenueSelection(Number(event.target.value))}
+                >
+                  <option value="" disabled>Select a venue…</option>
+                  {addableVenues.map((v) => (
+                    <option key={v.id} value={v.id}>{v.name}</option>
+                  ))}
+                </select>
+                <button type="button" onClick={addManualVenue} disabled={addVenueSelection == null}>
+                  Add
+                </button>
+              </div>
+            )}
+
+            {riskAssessmentVenues.length === 0 ? (
+              <p className="tasks-panel-empty">No venues yet - accept a task or add one with the + button.</p>
+            ) : (
+              <div className="tasks-panel-list">
+                {riskAssessmentVenues.map((venue) => (
+                  <div key={venue.venueId} className="task-row">
+                    <p className="task-row-title">{venue.venueName}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>
