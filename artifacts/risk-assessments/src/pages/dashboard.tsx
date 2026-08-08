@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
-import { ArrowRight, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, Globe, X, ChevronDown, ListChecks, MessageSquare, Check } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, Globe, X, ChevronDown, ChevronRight, ListChecks, MessageSquare, Check, Building2 } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -984,6 +984,16 @@ function OperationalCanvas() {
   const riskAssessmentsPanelOpen = activePanel === "risk-assessments";
   const layersPanelOpen = activePanel === "layers";
 
+  // Risk Assessments has its own sub-navigation ("Venues," step 1 of a
+  // bigger project, per direct product direction) - a view switch inside
+  // this one panel rather than a separate sliding panel, deliberately:
+  // the earlier nested-panel design for Task Planning caused a real bug
+  // (panels layering on top of each other), and the fix was making the
+  // VenueGuard panels mutually exclusive. Nesting a nav level *inside*
+  // one panel's own content sidesteps that whole class of bug instead of
+  // reintroducing it. Resets to "root" whenever the panel is (re)opened.
+  const [riskAssessmentsView, setRiskAssessmentsView] = useState<"root" | "venues">("root");
+
   const [alertsPanelOpen, setAlertsPanelOpen] = useState(false);
 
   const DEMO_INSTRUCTIONS = [
@@ -1318,7 +1328,10 @@ function OperationalCanvas() {
     const openCommunications = () => setActivePanel("communications");
     const openTasks = () => setActivePanel("tasks");
     const openTaskPlanning = () => setActivePanel("task-planning");
-    const openRiskAssessments = () => setActivePanel("risk-assessments");
+    const openRiskAssessments = () => {
+      setActivePanel("risk-assessments");
+      setRiskAssessmentsView("root");
+    };
     const openLayers = () => setActivePanel("layers");
     window.addEventListener(OPEN_BRIEF_PANEL_EVENT, openBrief);
     window.addEventListener(OPEN_COMMUNICATIONS_PANEL_EVENT, openCommunications);
@@ -2098,7 +2111,7 @@ function OperationalCanvas() {
         <div className="tasks-panel-header">
           <div>
             <p className="tasks-panel-eyebrow">Risk Assessments</p>
-            <h2 className="tasks-panel-title">Risk Assessments</h2>
+            <h2 className="tasks-panel-title">{riskAssessmentsView === "venues" ? "Venues" : "Risk Assessments"}</h2>
           </div>
           <button
             type="button"
@@ -2110,7 +2123,30 @@ function OperationalCanvas() {
           </button>
         </div>
 
-        <p className="tasks-panel-empty">Nothing here yet.</p>
+        {riskAssessmentsView === "root" ? (
+          <div className="tasks-panel-list">
+            <button
+              type="button"
+              className="risk-assessments-nav-item"
+              onClick={() => setRiskAssessmentsView("venues")}
+            >
+              <Building2 className="w-4 h-4" />
+              Venues
+              <ChevronRight className="w-4 h-4 risk-assessments-nav-item-chevron" />
+            </button>
+          </div>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="risk-assessments-back"
+              onClick={() => setRiskAssessmentsView("root")}
+            >
+              <ArrowLeft className="w-3.5 h-3.5" /> Back to Risk Assessments
+            </button>
+            <p className="tasks-panel-empty">Nothing here yet.</p>
+          </>
+        )}
       </div>
 
       <div

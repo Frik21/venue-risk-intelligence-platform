@@ -1001,6 +1001,54 @@
   transform: translateX(0);
 }
 
+/* Risk Assessments sub-navigation ("Venues," step 1 of a bigger
+   project) - a view switch inside this one panel, not a separate
+   sliding panel (see the comment on riskAssessmentsView in
+   dashboard.tsx for why). */
+.risk-assessments-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.risk-assessments-nav-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(125, 211, 252, 0.4);
+}
+
+.risk-assessments-nav-item-chevron {
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.risk-assessments-back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(125, 211, 252, 0.85);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.risk-assessments-back:hover {
+  color: rgba(125, 211, 252, 1);
+}
+
 .tasks-panel-header {
   display: flex;
   align-items: flex-start;
