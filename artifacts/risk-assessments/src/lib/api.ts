@@ -72,6 +72,26 @@ export interface Task {
   updatedAt: string;
 }
 
+// Operational Planning (Planner, Step 1: the pre-op readiness
+// checklist) - one Plan per Task, going deeper than the task's own
+// title. The checklist is a fixed, ordered list defined server-side
+// (artifacts/api-server/src/lib/plan-checklist.ts), not user-managed.
+export interface PlanChecklistEntry {
+  key: string;
+  label: string;
+  checked: boolean;
+}
+
+export interface Plan {
+  id: number;
+  taskId: number;
+  checklist: PlanChecklistEntry[];
+  checkedCount: number;
+  totalCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AssessmentSummary {
   id: number; venueId: number | null; venueName: string | null; venueCity: string | null;
   title: string; description: string | null; status: AssessmentStatus; version: number;
@@ -220,6 +240,11 @@ export const api = {
       apiFetch<Task>("/tasks", { method: "POST", body: JSON.stringify(data) }),
     updateStatus: (id: number, data: { status: TaskStatus; completionNote?: string }) =>
       apiFetch<Task>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  },
+  plans: {
+    forTask: (taskId: number) => apiFetch<Plan>(`/tasks/${taskId}/plan`),
+    setChecklistItem: (planId: number, key: string, checked: boolean) =>
+      apiFetch<Plan>(`/plans/${planId}/checklist`, { method: "PATCH", body: JSON.stringify({ key, checked }) }),
   },
   assessments: {
     list: () => apiFetch<AssessmentSummary[]>("/assessments"),

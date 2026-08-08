@@ -14,6 +14,7 @@ import routesRouter from "./routes";
 import countryIntelligenceRouter from "./country-intelligence";
 import searchPhrasesRouter from "./search-phrases";
 import tasksRouter from "./tasks";
+import plansRouter from "./plans";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(routesRouter);
 router.use(countryIntelligenceRouter);
 router.use(searchPhrasesRouter);
 router.use(tasksRouter);
+router.use(plansRouter);
 
 export default router;

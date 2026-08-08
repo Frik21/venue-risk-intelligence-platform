@@ -1138,6 +1138,63 @@
   color: rgba(187, 247, 208, 0.95);
 }
 
+/* Operational Plan checklist (Planner, Step 1) - collapsed under each
+   task, expanded on demand. */
+.task-row-plan-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 0 0;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.task-row-plan-toggle:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.task-row-plan-chevron {
+  margin-left: auto;
+  transition: transform 0.15s ease;
+}
+
+.task-row-plan-chevron-open {
+  transform: rotate(180deg);
+}
+
+.task-row-plan {
+  margin-top: 8px;
+}
+
+.task-plan-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.task-plan-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+}
+
+.task-plan-checklist-item input[type="checkbox"] {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  accent-color: rgba(74, 222, 128, 0.9);
+}
+
 /* Operational Layers panel - a legend/control panel for the canvas
    itself, docking to the same left edge as Brief/Tasks (all three
    opened via the VenueGuard brand menu). Shifts right by one panel-
