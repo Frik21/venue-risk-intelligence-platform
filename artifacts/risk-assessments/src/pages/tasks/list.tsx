@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
-import { ListChecks, Plus } from "lucide-react";
+import { ListChecks, Plus, ClipboardCheck } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -176,6 +176,17 @@ export default function TasksList() {
                         {task.assignedToName && `Assigned to ${task.assignedToName}`}
                         {task.assignedByName && ` by ${task.assignedByName}`}
                       </p>
+                      {task.planSubmittedAt ? (
+                        <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
+                          <ClipboardCheck className="w-3 h-3" />
+                          Plan submitted {new Date(task.planSubmittedAt).toLocaleString()}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-slate-400 flex items-center gap-1 mt-1">
+                          <ClipboardCheck className="w-3 h-3" />
+                          Plan not submitted yet
+                        </p>
+                      )}
                     </div>
                     <Select value={task.status} onValueChange={(v) => statusMutation.mutate({ id: task.id, status: v as TaskStatus })}>
                       <SelectTrigger className="w-40 shrink-0"><SelectValue /></SelectTrigger>

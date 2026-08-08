@@ -17,6 +17,11 @@ export const plansTable = pgTable("plans", {
   id: serial("id").primaryKey(),
   taskId: integer("task_id").notNull().unique().references(() => tasksTable.id, { onDelete: "cascade" }),
   checklist: jsonb("checklist").notNull().default({}),
+  // Set when the CPO submits the checklist to their Manager (see
+  // POST /plans/:id/submit) - null means not yet submitted. Submitting
+  // again (e.g. after the checklist changes) just updates this
+  // timestamp; there's no separate "unsubmitted" action.
+  submittedAt: timestamp("submitted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

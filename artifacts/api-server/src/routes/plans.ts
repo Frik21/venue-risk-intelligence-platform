@@ -19,6 +19,7 @@ function formatPlan(row: typeof plansTable.$inferSelect) {
     checklist,
     checkedCount: checklist.filter((c) => c.checked).length,
     totalCount: checklist.length,
+    submittedAt: row.submittedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -70,6 +71,25 @@ router.patch("/plans/:id/checklist", async (req, res): Promise<void> => {
     .set({ checklist: nextChecklist })
     .where(eq(plansTable.id, id))
     .returning();
+
+  res.json(formatPlan(updated));
+});
+
+// Submitting doesn't require every item checked - a CPO may need to
+// submit a partially-complete checklist (e.g. to flag what's still
+// outstanding), and gatekeeping that wasn't asked for. Re-submitting
+// just moves the timestamp forward; there's no separate "unsubmit."
+router.post("/plans/:id/submit", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [updated] = await db
+    .update(plansTable)
+    .set({ submittedAt: new Date() })
+    .where(eq(plansTable.id, id))
+    .returning();
+
+  if (!updated) { res.status(404).json({ error: "Plan not found" }); return; }
 
   res.json(formatPlan(updated));
 });

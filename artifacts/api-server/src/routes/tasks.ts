@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
-import { db, tasksTable, venuesTable, usersTable } from "@workspace/db";
+import { db, tasksTable, venuesTable, usersTable, plansTable } from "@workspace/db";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -10,6 +10,7 @@ function formatTask(
   venueName?: string | null,
   assignedToName?: string | null,
   assignedByName?: string | null,
+  planSubmittedAt?: string | null,
 ) {
   return {
     id: row.id,
@@ -23,6 +24,10 @@ function formatTask(
     dueDate: row.dueDate?.toISOString() ?? null,
     status: row.status as "not_completed" | "in_progress" | "completed",
     completionNote: row.completionNote ?? null,
+    // Whether this task's Operational Plan checklist has been submitted
+    // to the Manager (see POST /plans/:id/submit) - null if never
+    // submitted, or no Plan exists yet at all.
+    planSubmittedAt: planSubmittedAt ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -37,13 +42,18 @@ router.get("/tasks", async (req, res): Promise<void> => {
 
   const venues = await db.select({ id: venuesTable.id, name: venuesTable.name }).from(venuesTable);
   const users = await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable);
+  const plans = await db.select({ taskId: plansTable.taskId, submittedAt: plansTable.submittedAt }).from(plansTable);
 
   const venueMap: Record<number, string> = {};
   for (const v of venues) venueMap[v.id] = v.name;
   const userMap: Record<number, string> = {};
   for (const u of users) userMap[u.id] = u.name;
+  const planSubmittedMap: Record<number, string | null> = {};
+  for (const p of plans) planSubmittedMap[p.taskId] = p.submittedAt?.toISOString() ?? null;
 
-  res.json(rows.map((r) => formatTask(r, venueMap[r.venueId], userMap[r.assignedTo], userMap[r.assignedBy])));
+  res.json(
+    rows.map((r) => formatTask(r, venueMap[r.venueId], userMap[r.assignedTo], userMap[r.assignedBy], planSubmittedMap[r.id])),
+  );
 });
 
 const TaskInputSchema = z.object({

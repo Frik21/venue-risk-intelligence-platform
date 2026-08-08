@@ -1163,6 +1163,41 @@
   accent-color: rgba(74, 222, 128, 0.9);
 }
 
+.task-plan-submit {
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.task-plan-submit-btn {
+  width: 100%;
+  padding: 10px 16px;
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  border-radius: 10px;
+  background: rgba(74, 222, 128, 0.14);
+  color: rgba(187, 247, 208, 0.95);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.task-plan-submit-btn:hover:not(:disabled) {
+  background: rgba(74, 222, 128, 0.22);
+}
+
+.task-plan-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.task-plan-submit-status {
+  margin-top: 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+}
+
 /* Task Planning panel - a real sibling of Brief/Tasks/Layers, reached
    directly from the VenueGuard menu (not nested inside Tasks). Has its
    own task selector since it isn't opened from a specific task row.

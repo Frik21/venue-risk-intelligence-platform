@@ -68,6 +68,7 @@ export interface Task {
   dueDate: string | null;
   status: TaskStatus;
   completionNote: string | null;
+  planSubmittedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -88,6 +89,7 @@ export interface Plan {
   checklist: PlanChecklistEntry[];
   checkedCount: number;
   totalCount: number;
+  submittedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -245,6 +247,7 @@ export const api = {
     forTask: (taskId: number) => apiFetch<Plan>(`/tasks/${taskId}/plan`),
     setChecklistItem: (planId: number, key: string, checked: boolean) =>
       apiFetch<Plan>(`/plans/${planId}/checklist`, { method: "PATCH", body: JSON.stringify({ key, checked }) }),
+    submit: (planId: number) => apiFetch<Plan>(`/plans/${planId}/submit`, { method: "POST" }),
   },
   assessments: {
     list: () => apiFetch<AssessmentSummary[]>("/assessments"),

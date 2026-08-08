@@ -1040,6 +1040,7 @@ function OperationalCanvas() {
     dueDate: null,
     status: "not_completed",
     completionNote: null,
+    planSubmittedAt: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -1066,6 +1067,7 @@ function OperationalCanvas() {
       checklist: MOCK_CHECKLIST_ITEMS.map((item) => ({ ...item, checked: false })),
       checkedCount: 0,
       totalCount: MOCK_CHECKLIST_ITEMS.length,
+      submittedAt: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -1101,6 +1103,26 @@ function OperationalCanvas() {
       console.error(`Failed to update checklist item "${key}" on plan ${planId}:`, err);
       api.plans.forTask(taskId).then((plan) => setTaskPlans((prev) => ({ ...prev, [taskId]: plan }))).catch(() => {});
     });
+  }
+
+  const [submittingPlanTaskId, setSubmittingPlanTaskId] = useState<number | null>(null);
+
+  function submitPlan(taskId: number, planId: number) {
+    if (taskId === MOCK_TASK_ID) {
+      // Local-only, same as the rest of MOCK_TASK - nothing real to send.
+      setTaskPlans((prev) => {
+        const plan = prev[taskId];
+        if (!plan) return prev;
+        return { ...prev, [taskId]: { ...plan, submittedAt: new Date().toISOString() } };
+      });
+      return;
+    }
+    setSubmittingPlanTaskId(taskId);
+    api.plans
+      .submit(planId)
+      .then((plan) => setTaskPlans((prev) => ({ ...prev, [taskId]: plan })))
+      .catch((err) => console.error(`Failed to submit plan ${planId}:`, err))
+      .finally(() => setSubmittingPlanTaskId(null));
   }
 
   const [gridVisible, setGridVisible] = useState(MAP_GRID_VISIBLE);
@@ -1928,20 +1950,42 @@ function OperationalCanvas() {
         ) : planLoadingTaskId === planningTaskId ? (
           <p className="tasks-panel-empty">Loading…</p>
         ) : taskPlans[planningTaskId] ? (
-          <div className="task-plan-checklist">
-            {taskPlans[planningTaskId].checklist.map((item) => (
-              <label key={item.key} className="task-plan-checklist-item">
-                <input
-                  type="checkbox"
-                  checked={item.checked}
-                  onChange={(event) =>
-                    toggleChecklistItem(planningTaskId, taskPlans[planningTaskId].id, item.key, event.target.checked)
-                  }
-                />
-                {item.label}
-              </label>
-            ))}
-          </div>
+          <>
+            <div className="task-plan-checklist">
+              {taskPlans[planningTaskId].checklist.map((item) => (
+                <label key={item.key} className="task-plan-checklist-item">
+                  <input
+                    type="checkbox"
+                    checked={item.checked}
+                    onChange={(event) =>
+                      toggleChecklistItem(planningTaskId, taskPlans[planningTaskId].id, item.key, event.target.checked)
+                    }
+                  />
+                  {item.label}
+                </label>
+              ))}
+            </div>
+
+            <div className="task-plan-submit">
+              <button
+                type="button"
+                className="task-plan-submit-btn"
+                onClick={() => submitPlan(planningTaskId, taskPlans[planningTaskId].id)}
+                disabled={submittingPlanTaskId === planningTaskId}
+              >
+                {submittingPlanTaskId === planningTaskId
+                  ? "Submitting…"
+                  : taskPlans[planningTaskId].submittedAt
+                    ? "Re-submit to Manager"
+                    : "Submit to Manager"}
+              </button>
+              {taskPlans[planningTaskId].submittedAt && (
+                <p className="task-plan-submit-status">
+                  Submitted {new Date(taskPlans[planningTaskId].submittedAt as string).toLocaleString()}
+                </p>
+              )}
+            </div>
+          </>
         ) : (
           <p className="tasks-panel-empty">Couldn&apos;t load plan.</p>
         )}
