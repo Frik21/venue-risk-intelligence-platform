@@ -1138,8 +1138,10 @@
   color: rgba(187, 247, 208, 0.95);
 }
 
-/* Operational Plan checklist (Planner, Step 1) - collapsed under each
-   task, expanded on demand. */
+/* Task Planning (Planner, Step 1) - a button on each task row that
+   opens the dedicated task-checklist-panel below, rather than an inline
+   expand - a real slide-out panel, one level deeper than the Tasks
+   panel it's opened from. */
 .task-row-plan-toggle {
   display: flex;
   align-items: center;
@@ -1158,19 +1160,6 @@
 
 .task-row-plan-toggle:hover {
   color: rgba(255, 255, 255, 0.8);
-}
-
-.task-row-plan-chevron {
-  margin-left: auto;
-  transition: transform 0.15s ease;
-}
-
-.task-row-plan-chevron-open {
-  transform: rotate(180deg);
-}
-
-.task-row-plan {
-  margin-top: 8px;
 }
 
 .task-plan-checklist {
@@ -1193,6 +1182,37 @@
   width: 14px;
   height: 14px;
   accent-color: rgba(74, 222, 128, 0.9);
+}
+
+/* Task Planning panel itself - docks to the same left edge as
+   Brief/Tasks, shifted right by however many of those are open (it's
+   only ever opened from within the Tasks panel, so tasksPanelOpen is
+   always true while this is open, but the shift math stays generic).
+   Reuses .tasks-panel-header/eyebrow/title/close/empty for the header -
+   same visual language as the panel it was opened from. */
+.task-checklist-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 29;
+  width: min(360px, 88vw);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  background: rgba(8, 11, 15, 0.92);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+  color: #fff;
+  transform: translateX(-100%);
+  transition: transform 0.28s ease, left 0.28s ease;
+  pointer-events: auto;
+}
+
+.task-checklist-panel-open {
+  transform: translateX(0);
 }
 
 /* Operational Layers panel - a legend/control panel for the canvas

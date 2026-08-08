@@ -129,6 +129,28 @@ const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   completed: "Completed",
 };
 
+// Mirrors artifacts/api-server/src/lib/plan-checklist.ts (PLAN_CHECKLIST_ITEMS)
+// - only needed here to build MOCK_TASK's local-only demo checklist, since
+// this frontend package can't import a backend module directly. The real
+// checklist for any real task always comes from the API, never this list.
+const MOCK_CHECKLIST_ITEMS = [
+  { key: "vehicle_inspection_completed", label: "Vehicle inspection completed" },
+  { key: "primary_route_confirmed", label: "Primary route confirmed" },
+  { key: "alternative_route_confirmed", label: "Alternative route confirmed" },
+  { key: "operational_route_mapped", label: "Operational Route mapped" },
+  { key: "closest_hospitals_identified", label: "Closest hospitals identified" },
+  { key: "closest_police_stations_identified", label: "Closest police stations identified" },
+  { key: "fuel_points_identified", label: "Fuel / refuelling points identified" },
+  { key: "communications_checked", label: "Communications checked" },
+  { key: "personnel_confirmed", label: "Personnel / team confirmed" },
+  { key: "equipment_requirements_checked", label: "Equipment requirements checked" },
+  { key: "operating_conditions_reviewed", label: "Current Operating Conditions reviewed" },
+  { key: "area_advisories_reviewed", label: "Area Advisories reviewed" },
+  { key: "venue_assessment_reviewed", label: "Destination / venue assessment reviewed" },
+  { key: "contingency_arrangements_confirmed", label: "Emergency / contingency arrangements confirmed" },
+  { key: "final_briefing_completed", label: "Final operational briefing completed" },
+];
+
 export default function Dashboard() {
   const [step, setStep] = useState<Step>("login");
 
@@ -965,20 +987,58 @@ function OperationalCanvas() {
     });
   }
 
-  // Operational Plan checklist (Planner, Step 1) - collapsed by default
-  // per task, fetched (and lazily created server-side) on first expand
-  // rather than loading all plans up front for every task in the list.
-  const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
+  // Task Checklist (Planner, Step 1) - a dedicated slide-out panel, one
+  // level deeper than the Tasks panel: click a task there, this panel
+  // slides out over it with that task's 15-item pre-op checklist.
+  //
+  // A real CPO/Manager/Task setup takes several steps (create users,
+  // assign a task) before there's anything real to click into - MOCK_TASK
+  // is a clearly-labelled, client-only demo task shown only when no real
+  // tasks exist yet, so the panel itself can be tested/seen immediately.
+  // Its checklist state lives only in this component (never hits the
+  // API, since task id -1 doesn't exist server-side) and resets on
+  // reload - it disappears entirely the moment a real task exists.
+  const MOCK_TASK_ID = -1;
+  const MOCK_TASK: Task = {
+    id: MOCK_TASK_ID,
+    venueId: -1,
+    venueName: "Example Venue (Demo)",
+    assignedTo: -1,
+    assignedToName: null,
+    assignedBy: -1,
+    assignedByName: "Demo Manager",
+    title: "Demo Task - Complete assessment for venue X",
+    dueDate: null,
+    status: "not_completed",
+    completionNote: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  const displayedTasks = cpoTasks.length > 0 ? cpoTasks : [MOCK_TASK];
+
+  const [checklistTaskId, setChecklistTaskId] = useState<number | null>(null);
   const [taskPlans, setTaskPlans] = useState<Record<number, Plan>>({});
   const [planLoadingTaskId, setPlanLoadingTaskId] = useState<number | null>(null);
 
-  function toggleTaskExpand(taskId: number) {
-    if (expandedTaskId === taskId) {
-      setExpandedTaskId(null);
+  function mockPlan(): Plan {
+    return {
+      id: MOCK_TASK_ID,
+      taskId: MOCK_TASK_ID,
+      checklist: MOCK_CHECKLIST_ITEMS.map((item) => ({ ...item, checked: false })),
+      checkedCount: 0,
+      totalCount: MOCK_CHECKLIST_ITEMS.length,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  function openChecklist(taskId: number) {
+    setChecklistTaskId(taskId);
+    if (taskPlans[taskId]) return;
+    if (taskId === MOCK_TASK_ID) {
+      setTaskPlans((prev) => ({ ...prev, [taskId]: mockPlan() }));
       return;
     }
-    setExpandedTaskId(taskId);
-    if (taskPlans[taskId]) return;
     setPlanLoadingTaskId(taskId);
     api.plans
       .forTask(taskId)
@@ -994,6 +1054,7 @@ function OperationalCanvas() {
       const checklist = plan.checklist.map((c) => (c.key === key ? { ...c, checked } : c));
       return { ...prev, [taskId]: { ...plan, checklist, checkedCount: checklist.filter((c) => c.checked).length } };
     });
+    if (taskId === MOCK_TASK_ID) return; // local-only, nothing to persist
     api.plans.setChecklistItem(planId, key, checked).catch((err) => {
       console.error(`Failed to update checklist item "${key}" on plan ${planId}:`, err);
       api.plans.forTask(taskId).then((plan) => setTaskPlans((prev) => ({ ...prev, [taskId]: plan }))).catch(() => {});
@@ -1165,6 +1226,10 @@ function OperationalCanvas() {
         setLayersPanelOpen(false);
         return;
       }
+      if (checklistTaskId != null) {
+        setChecklistTaskId(null);
+        return;
+      }
       if (tasksPanelOpen) {
         setTasksPanelOpen(false);
         return;
@@ -1177,7 +1242,7 @@ function OperationalCanvas() {
     }
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [briefPanelOpen, alertsPanelOpen, tasksPanelOpen, layersPanelOpen]);
+  }, [briefPanelOpen, alertsPanelOpen, tasksPanelOpen, checklistTaskId, layersPanelOpen]);
 
   // Two-phase mount so the CSS transition actually animates: paint the
   // "not entered" state first (opacity 0, no scale/shift), then flip to
@@ -1770,15 +1835,17 @@ function OperationalCanvas() {
           </div>
         )}
 
-        {cpoUsers.length === 0 ? (
-          <p className="tasks-panel-empty">No CPO users exist yet - add one from Admin &gt; Users to assign tasks.</p>
-        ) : cpoTasksLoading ? (
+        {cpoUsers.length === 0 && (
+          <p className="tasks-panel-empty">
+            No CPO users exist yet - add one from Admin &gt; Users to assign real tasks. Showing a demo task below for now.
+          </p>
+        )}
+
+        {cpoTasksLoading ? (
           <p className="tasks-panel-empty">Loading tasks…</p>
-        ) : cpoTasks.length === 0 ? (
-          <p className="tasks-panel-empty">No tasks assigned.</p>
         ) : (
           <div className="tasks-panel-list">
-            {cpoTasks.map((task) => (
+            {displayedTasks.map((task) => (
               <div key={task.id} className="task-row">
                 <div className="task-row-header">
                   <p className="task-row-title">{task.title}</p>
@@ -1799,41 +1866,10 @@ function OperationalCanvas() {
                   ))}
                 </div>
 
-                <button
-                  type="button"
-                  className="task-row-plan-toggle"
-                  onClick={() => toggleTaskExpand(task.id)}
-                  aria-expanded={expandedTaskId === task.id}
-                >
+                <button type="button" className="task-row-plan-toggle" onClick={() => openChecklist(task.id)}>
                   <ListChecks className="w-3.5 h-3.5" />
-                  {taskPlans[task.id] ? `Plan (${taskPlans[task.id].checkedCount}/${taskPlans[task.id].totalCount})` : "Plan"}
-                  <ChevronDown className={`w-3.5 h-3.5 task-row-plan-chevron ${expandedTaskId === task.id ? "task-row-plan-chevron-open" : ""}`} />
+                  {taskPlans[task.id] ? `Task Planning (${taskPlans[task.id].checkedCount}/${taskPlans[task.id].totalCount})` : "Task Planning"}
                 </button>
-
-                {expandedTaskId === task.id && (
-                  <div className="task-row-plan">
-                    {planLoadingTaskId === task.id ? (
-                      <p className="tasks-panel-empty">Loading plan…</p>
-                    ) : taskPlans[task.id] ? (
-                      <div className="task-plan-checklist">
-                        {taskPlans[task.id].checklist.map((item) => (
-                          <label key={item.key} className="task-plan-checklist-item">
-                            <input
-                              type="checkbox"
-                              checked={item.checked}
-                              onChange={(event) =>
-                                toggleChecklistItem(task.id, taskPlans[task.id].id, item.key, event.target.checked)
-                              }
-                            />
-                            {item.label}
-                          </label>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="tasks-panel-empty">Couldn&apos;t load plan.</p>
-                    )}
-                  </div>
-                )}
               </div>
             ))}
           </div>
@@ -1841,10 +1877,62 @@ function OperationalCanvas() {
       </div>
 
       <div
+        className={`task-checklist-panel ${checklistTaskId != null ? "task-checklist-panel-open" : ""}`}
+        style={
+          briefPanelOpen || tasksPanelOpen
+            ? { left: `calc(${(briefPanelOpen ? 1 : 0) + (tasksPanelOpen ? 1 : 0)} * min(360px, 88vw))` }
+            : undefined
+        }
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="tasks-panel-header">
+          <div>
+            <p className="tasks-panel-eyebrow">Task Planning</p>
+            <h2 className="tasks-panel-title">
+              {checklistTaskId != null ? displayedTasks.find((t) => t.id === checklistTaskId)?.title ?? "" : ""}
+            </h2>
+          </div>
+          <button
+            type="button"
+            className="tasks-panel-close"
+            onClick={() => setChecklistTaskId(null)}
+            aria-label="Close Task Planning"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {checklistTaskId != null && (
+          planLoadingTaskId === checklistTaskId ? (
+            <p className="tasks-panel-empty">Loading…</p>
+          ) : taskPlans[checklistTaskId] ? (
+            <div className="task-plan-checklist">
+              {taskPlans[checklistTaskId].checklist.map((item) => (
+                <label key={item.key} className="task-plan-checklist-item">
+                  <input
+                    type="checkbox"
+                    checked={item.checked}
+                    onChange={(event) =>
+                      toggleChecklistItem(checklistTaskId, taskPlans[checklistTaskId].id, item.key, event.target.checked)
+                    }
+                  />
+                  {item.label}
+                </label>
+              ))}
+            </div>
+          ) : (
+            <p className="tasks-panel-empty">Couldn&apos;t load plan.</p>
+          )
+        )}
+      </div>
+
+      <div
         className={`layers-panel ${layersPanelOpen ? "layers-panel-open" : ""}`}
         style={
-          layersPanelOpen && (briefPanelOpen || tasksPanelOpen)
-            ? { left: `calc(${(briefPanelOpen ? 1 : 0) + (tasksPanelOpen ? 1 : 0)} * min(360px, 88vw))` }
+          layersPanelOpen && (briefPanelOpen || tasksPanelOpen || checklistTaskId != null)
+            ? {
+                left: `calc(${(briefPanelOpen ? 1 : 0) + (tasksPanelOpen ? 1 : 0) + (checklistTaskId != null ? 1 : 0)} * min(360px, 88vw))`,
+              }
             : undefined
         }
         onClick={(event) => event.stopPropagation()}
