@@ -1,20 +1,15 @@
 import { Router, type IRouter } from "express";
-import { and, eq } from "drizzle-orm";
-import { db, venueRiskAssessmentsTable, tasksTable, venuesTable, usersTable } from "@workspace/db";
+import { eq, max } from "drizzle-orm";
+import { db, venueRiskAssessmentsTable, tasksTable, usersTable } from "@workspace/db";
 import { z } from "zod";
 
 const router: IRouter = Router();
 
-function formatAssessment(
-  row: typeof venueRiskAssessmentsTable.$inferSelect,
-  venueName?: string | null,
-  operatorName?: string | null,
-) {
+function formatAssessment(row: typeof venueRiskAssessmentsTable.$inferSelect, operatorName?: string | null) {
   return {
     id: row.id,
     taskId: row.taskId,
-    venueId: row.venueId,
-    venueName: venueName ?? null,
+    slotIndex: row.slotIndex,
     operatorId: row.operatorId,
     operatorName: operatorName ?? null,
     timezone: row.timezone,
@@ -34,36 +29,63 @@ function formatAssessment(
   };
 }
 
-// A venue risk assessment exists implicitly the moment a CPO opens it for
-// a given (task, venue) pair - lazily created on first fetch, same
-// pattern as GET /tasks/:taskId/plan. Operator/date/time/timezone are
-// captured automatically here; Location is typed in by the CPO.
-router.get("/tasks/:taskId/venues/:venueId/risk-assessment", async (req, res): Promise<void> => {
+async function withOperatorName(row: typeof venueRiskAssessmentsTable.$inferSelect) {
+  const [operator] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, row.operatorId));
+  return formatAssessment(row, operator?.name);
+}
+
+// All the risk assessment slots for a task, ordered 1, 2, 3...
+router.get("/tasks/:taskId/risk-assessments", async (req, res): Promise<void> => {
   const taskId = Number(req.params.taskId);
-  const venueId = Number(req.params.venueId);
-  if (isNaN(taskId) || isNaN(venueId)) { res.status(400).json({ error: "Invalid id" }); return; }
+  if (isNaN(taskId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const rows = await db
+    .select()
+    .from(venueRiskAssessmentsTable)
+    .where(eq(venueRiskAssessmentsTable.taskId, taskId))
+    .orderBy(venueRiskAssessmentsTable.slotIndex);
+
+  const operators = await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable);
+  const operatorMap: Record<number, string> = {};
+  for (const o of operators) operatorMap[o.id] = o.name;
+
+  res.json(rows.map((r) => formatAssessment(r, operatorMap[r.operatorId])));
+});
+
+// Adds another assessment slot to a task - lets a CPO cover several
+// physical locations under one task without a real venue record
+// existing for each one (Location is typed in by the CPO on the
+// assessment itself).
+router.post("/tasks/:taskId/risk-assessments", async (req, res): Promise<void> => {
+  const taskId = Number(req.params.taskId);
+  if (isNaN(taskId)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const [task] = await db.select().from(tasksTable).where(eq(tasksTable.id, taskId));
   if (!task) { res.status(404).json({ error: "Task not found" }); return; }
 
-  const [venue] = await db.select({ name: venuesTable.name }).from(venuesTable).where(eq(venuesTable.id, venueId));
-  if (!venue) { res.status(404).json({ error: "Venue not found" }); return; }
-
-  let [assessment] = await db
-    .select()
+  const [{ highest }] = await db
+    .select({ highest: max(venueRiskAssessmentsTable.slotIndex) })
     .from(venueRiskAssessmentsTable)
-    .where(and(eq(venueRiskAssessmentsTable.taskId, taskId), eq(venueRiskAssessmentsTable.venueId, venueId)));
+    .where(eq(venueRiskAssessmentsTable.taskId, taskId));
+  const nextSlot = (highest ?? 0) + 1;
 
-  if (!assessment) {
-    const timezone = typeof req.query.timezone === "string" ? req.query.timezone : null;
-    [assessment] = await db
-      .insert(venueRiskAssessmentsTable)
-      .values({ taskId, venueId, operatorId: task.assignedTo, timezone })
-      .returning();
-  }
+  const timezone = typeof req.body?.timezone === "string" ? req.body.timezone : null;
+  const [assessment] = await db
+    .insert(venueRiskAssessmentsTable)
+    .values({ taskId, slotIndex: nextSlot, operatorId: task.assignedTo, timezone })
+    .returning();
 
-  const [operator] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, assessment.operatorId));
-  res.json(formatAssessment(assessment, venue.name, operator?.name));
+  res.status(201).json(await withOperatorName(assessment));
+});
+
+router.get("/risk-assessments/:id", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [assessment] = await db.select().from(venueRiskAssessmentsTable).where(eq(venueRiskAssessmentsTable.id, id));
+  if (!assessment) { res.status(404).json({ error: "Risk assessment not found" }); return; }
+
+  res.json(await withOperatorName(assessment));
 });
 
 const AssessmentUpdateSchema = z.object({
@@ -93,9 +115,7 @@ router.patch("/risk-assessments/:id", async (req, res): Promise<void> => {
 
   if (!updated) { res.status(404).json({ error: "Risk assessment not found" }); return; }
 
-  const [venue] = await db.select({ name: venuesTable.name }).from(venuesTable).where(eq(venuesTable.id, updated.venueId));
-  const [operator] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, updated.operatorId));
-  res.json(formatAssessment(updated, venue?.name, operator?.name));
+  res.json(await withOperatorName(updated));
 });
 
 // Submitting doesn't require every field filled in - same "no
@@ -112,9 +132,7 @@ router.post("/risk-assessments/:id/submit", async (req, res): Promise<void> => {
 
   if (!updated) { res.status(404).json({ error: "Risk assessment not found" }); return; }
 
-  const [venue] = await db.select({ name: venuesTable.name }).from(venuesTable).where(eq(venuesTable.id, updated.venueId));
-  const [operator] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, updated.operatorId));
-  res.json(formatAssessment(updated, venue?.name, operator?.name));
+  res.json(await withOperatorName(updated));
 });
 
 export default router;

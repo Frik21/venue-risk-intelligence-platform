@@ -94,17 +94,18 @@ export interface Plan {
   updatedAt: string;
 }
 
-// The CPO's in-field venue risk assessment (Risk Assessments > Venues >
-// a venue, after its task is selected) - one per (task, venue) pair.
-// Distinct from AssessmentSummary/AssessmentDetail below, which is the
-// separate, formal Manager/Analyst-facing Assessments feature. Every
-// field is a single free-text comment box (per direct product
-// direction), not a nested sub-list.
+// The CPO's in-field risk assessment (Risk Assessments > Venues > a
+// task) - a task can have several of these (slotIndex 1, 2, 3...), so
+// it isn't tied to a real venue record; the CPO types the actual
+// location into the Location field on each one. Distinct from
+// AssessmentSummary/AssessmentDetail below, which is the separate,
+// formal Manager/Analyst-facing Assessments feature. Every field is a
+// single free-text comment box (per direct product direction), not a
+// nested sub-list.
 export interface VenueRiskAssessment {
   id: number;
   taskId: number;
-  venueId: number;
-  venueName: string | null;
+  slotIndex: number;
   operatorId: number;
   operatorName: string | null;
   timezone: string | null;
@@ -279,10 +280,13 @@ export const api = {
     submit: (planId: number) => apiFetch<Plan>(`/plans/${planId}/submit`, { method: "POST" }),
   },
   venueRiskAssessments: {
-    forVenue: (taskId: number, venueId: number, timezone?: string) =>
-      apiFetch<VenueRiskAssessment>(
-        `/tasks/${taskId}/venues/${venueId}/risk-assessment${timezone ? `?timezone=${encodeURIComponent(timezone)}` : ""}`,
-      ),
+    list: (taskId: number) => apiFetch<VenueRiskAssessment[]>(`/tasks/${taskId}/risk-assessments`),
+    create: (taskId: number, timezone?: string) =>
+      apiFetch<VenueRiskAssessment>(`/tasks/${taskId}/risk-assessments`, {
+        method: "POST",
+        body: JSON.stringify({ timezone }),
+      }),
+    get: (id: number) => apiFetch<VenueRiskAssessment>(`/risk-assessments/${id}`),
     update: (
       id: number,
       data: Partial<

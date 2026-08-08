@@ -30,7 +30,6 @@ import type {
   Task,
   TaskStatus,
   Plan,
-  Venue,
   VenueRiskAssessment,
 } from "@/lib/api";
 
@@ -1267,97 +1266,75 @@ function OperationalCanvas() {
     window.dispatchEvent(new Event(REOPEN_BRAND_MENU_EVENT));
   }
 
-  // Risk Assessments > Venues starts from venues tied to a task this CPO
-  // has actually accepted - not every venue in the system, and not
-  // venues from pending/declined tasks. A CPO can also manually connect
-  // additional venues to their current task via the "+" button (e.g. a
-  // multi-venue operation) - manualVenueIds, demo/local-only like the
-  // rest of Risk Assessments/Task Acceptance so far. Both lists are
-  // deduped and merged for display.
-  const acceptedVenues = useMemo(() => {
-    const seen = new Map<number, string>();
-    for (const task of displayedTasks) {
-      if (taskAcceptance[task.id] !== "accepted") continue;
-      if (!seen.has(task.venueId)) seen.set(task.venueId, task.venueName ?? "Unnamed venue");
-    }
-    return Array.from(seen, ([venueId, venueName]) => ({ venueId, venueName }));
-  }, [displayedTasks, taskAcceptance]);
-
-  const [allVenues, setAllVenues] = useState<Venue[]>([]);
-  // A task can cover multiple venues (e.g. recce venues X, Y and Z for
-  // the same operation), so each manually-added venue is linked to
-  // whichever task the CPO picked for it - the same task can be picked
-  // again for a different venue, any number of times, until the task's
-  // own status is "completed" (see linkableTasks below).
-  const [manualVenueLinks, setManualVenueLinks] = useState<{ venueId: number; taskId: number }[]>([]);
-  const [addVenueOpen, setAddVenueOpen] = useState(false);
-  const [addTaskSelection, setAddTaskSelection] = useState<number | null>(null);
-  const [addVenueSelection, setAddVenueSelection] = useState<number | null>(null);
-
-  useEffect(() => {
-    api.venues.list().then(setAllVenues).catch((err) => console.error("Failed to load venues:", err));
-  }, []);
-
-  const riskAssessmentVenues = useMemo(() => {
-    const seen = new Map<number, string>();
-    for (const v of acceptedVenues) seen.set(v.venueId, v.venueName);
-    for (const link of manualVenueLinks) {
-      if (seen.has(link.venueId)) continue;
-      const venue = allVenues.find((v) => v.id === link.venueId);
-      seen.set(link.venueId, venue?.name ?? "Unnamed venue");
-    }
-    return Array.from(seen, ([venueId, venueName]) => ({ venueId, venueName }));
-  }, [acceptedVenues, manualVenueLinks, allVenues]);
-
-  const addableVenues = useMemo(
-    () => allVenues.filter((v) => !riskAssessmentVenues.some((rv) => rv.venueId === v.id)),
-    [allVenues, riskAssessmentVenues],
-  );
-
-  // Deliberately not filtered by "already used for a venue" - the same
-  // task should stay pickable for as many venues as it needs, only
-  // dropping out once it's completed.
-  const linkableTasks = useMemo(
-    () => displayedTasks.filter((t) => taskAcceptance[t.id] === "accepted" && t.status !== "completed"),
+  // Risk Assessments > Venues starts from tasks this CPO has actually
+  // accepted - not every task, and not pending/declined ones. Each
+  // accepted task gets its own row (labelled with its assigned venue),
+  // expandable to show its Task detail plus a list of Risk Assessment
+  // slots - a task can have several (e.g. recce venues X, Y and Z for
+  // the same operation), added on demand via "Add Another Assessment"
+  // rather than requiring a matching real venue record for each one
+  // (the CPO types the actual location into each assessment itself).
+  const acceptedTasksList = useMemo(
+    () => displayedTasks.filter((t) => taskAcceptance[t.id] === "accepted"),
     [displayedTasks, taskAcceptance],
   );
 
-  function venueTasksFor(venueId: number): Task[] {
-    const autoTasks = displayedTasks.filter((t) => t.venueId === venueId && taskAcceptance[t.id] === "accepted");
-    const link = manualVenueLinks.find((l) => l.venueId === venueId);
-    const linkedTask = link ? displayedTasks.find((t) => t.id === link.taskId) : undefined;
-    if (linkedTask && !autoTasks.some((t) => t.id === linkedTask.id)) return [...autoTasks, linkedTask];
-    return autoTasks;
-  }
-
-  function addManualVenue() {
-    if (addVenueSelection == null || addTaskSelection == null) return;
-    setManualVenueLinks((prev) => [...prev, { venueId: addVenueSelection, taskId: addTaskSelection }]);
-    setAddTaskSelection(null);
-    setAddVenueSelection(null);
-    setAddVenueOpen(false);
-  }
-
-  // Each venue in the list can be expanded to reveal the task it's
-  // connected to - demo/local-only for now, same as the rest of Risk
-  // Assessments > Venues so far.
+  // Each accepted task can be expanded to reveal its detail and Risk
+  // Assessment slots - demo/local-only expand state, same as the rest
+  // of Risk Assessments > Venues so far.
   const [expandedVenueIds, setExpandedVenueIds] = useState<Set<number>>(new Set());
 
-  function toggleVenueExpanded(venueId: number) {
+  const [taskAssessments, setTaskAssessments] = useState<Record<number, VenueRiskAssessment[]>>({});
+  const [taskAssessmentsLoading, setTaskAssessmentsLoading] = useState<Record<number, boolean>>({});
+  const [creatingAssessmentTaskId, setCreatingAssessmentTaskId] = useState<number | null>(null);
+
+  function ensureTaskAssessmentsLoaded(taskId: number) {
+    if (taskAssessments[taskId] || taskAssessmentsLoading[taskId]) return;
+    if (taskId === MOCK_TASK_ID) {
+      setTaskAssessments((prev) => ({ ...prev, [taskId]: [] }));
+      return;
+    }
+    setTaskAssessmentsLoading((prev) => ({ ...prev, [taskId]: true }));
+    api.venueRiskAssessments
+      .list(taskId)
+      .then((slots) => setTaskAssessments((prev) => ({ ...prev, [taskId]: slots })))
+      .catch((err) => console.error(`Failed to load risk assessments for task ${taskId}:`, err))
+      .finally(() => setTaskAssessmentsLoading((prev) => ({ ...prev, [taskId]: false })));
+  }
+
+  function toggleVenueExpanded(taskId: number) {
     setExpandedVenueIds((prev) => {
       const next = new Set(prev);
-      if (next.has(venueId)) next.delete(venueId);
-      else next.add(venueId);
+      if (next.has(taskId)) next.delete(taskId);
+      else {
+        next.add(taskId);
+        ensureTaskAssessmentsLoaded(taskId);
+      }
       return next;
     });
   }
 
+  function addAssessmentSlot(taskId: number) {
+    if (taskId === MOCK_TASK_ID) {
+      setTaskAssessments((prev) => {
+        const existing = prev[taskId] ?? [];
+        return { ...prev, [taskId]: [...existing, mockAssessment(taskId, existing.length + 1)] };
+      });
+      return;
+    }
+    setCreatingAssessmentTaskId(taskId);
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    api.venueRiskAssessments
+      .create(taskId, timezone)
+      .then((assessment) => setTaskAssessments((prev) => ({ ...prev, [taskId]: [...(prev[taskId] ?? []), assessment] })))
+      .catch((err) => console.error(`Failed to add a risk assessment for task ${taskId}:`, err))
+      .finally(() => setCreatingAssessmentTaskId(null));
+  }
+
   // Venue Risk Assessment - the CPO's in-field checklist, filled in
-  // after selecting a venue's task. One per (task, venue) pair, real
-  // backend (unlike most of Risk Assessments > Venues so far). Only
-  // reachable for venues that have a connected task, since the
-  // assessment is keyed on that task.
-  const [assessingVenueId, setAssessingVenueId] = useState<number | null>(null);
+  // after picking a specific assessment slot under a task, real backend
+  // (unlike most of Risk Assessments > Venues so far).
+  const [assessingAssessmentId, setAssessingAssessmentId] = useState<number | null>(null);
   const [assessingTaskId, setAssessingTaskId] = useState<number | null>(null);
   const [currentAssessment, setCurrentAssessment] = useState<VenueRiskAssessment | null>(null);
   const [assessmentForm, setAssessmentForm] = useState<AssessmentFormState | null>(null);
@@ -1370,15 +1347,15 @@ function OperationalCanvas() {
   const [savingAssessment, setSavingAssessment] = useState(false);
   const [submittingAssessment, setSubmittingAssessment] = useState(false);
 
-  function openVenueAssessment(venueId: number, taskId: number) {
-    setAssessingVenueId(venueId);
+  function openVenueAssessment(taskId: number, assessmentId: number) {
     setAssessingTaskId(taskId);
+    setAssessingAssessmentId(assessmentId);
     setRiskAssessmentsView("assessment");
   }
 
   function backToVenuesFromAssessment() {
     setRiskAssessmentsView("venues");
-    setAssessingVenueId(null);
+    setAssessingAssessmentId(null);
     setAssessingTaskId(null);
     setCurrentAssessment(null);
     setAssessmentForm(null);
@@ -1387,14 +1364,15 @@ function OperationalCanvas() {
   }
 
   // Same reasoning as MOCK_TASK/mockPlan - the demo task's id doesn't
-  // exist server-side, so it gets a local-only assessment instead of a
-  // real API call.
-  function mockAssessment(taskId: number, venueId: number, venueName: string): VenueRiskAssessment {
+  // exist server-side, so each of its assessment slots is local-only
+  // instead of a real API call. Uses a distinct negative id per slot
+  // (never a real id, which is always positive) so slots can still be
+  // opened/told apart individually.
+  function mockAssessment(taskId: number, slotIndex: number): VenueRiskAssessment {
     return {
-      id: MOCK_TASK_ID,
+      id: -slotIndex,
       taskId,
-      venueId,
-      venueName,
+      slotIndex,
       operatorId: MOCK_TASK_ID,
       operatorName: "Demo Operator",
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -1428,54 +1406,61 @@ function OperationalCanvas() {
     return err.message || fallback;
   }
 
+  function formToState(assessment: VenueRiskAssessment): AssessmentFormState {
+    return {
+      location: assessment.location,
+      currentOperatingConditions: assessment.currentOperatingConditions,
+      areaAdvisories: assessment.areaAdvisories,
+      checkpoints: assessment.checkpoints,
+      observedHazards: assessment.observedHazards,
+      existingControls: assessment.existingControls,
+      recommendedActions: assessment.recommendedActions,
+      operatorNotes: assessment.operatorNotes,
+      attachments: assessment.attachments,
+    };
+  }
+
+  // Keeps the cached slot list (taskAssessments) in sync whenever the
+  // open assessment changes, so re-expanding a task's row shows
+  // up-to-date data without a re-fetch.
+  function applyAssessmentUpdate(updated: VenueRiskAssessment) {
+    setCurrentAssessment(updated);
+    setTaskAssessments((prev) => ({
+      ...prev,
+      [updated.taskId]: (prev[updated.taskId] ?? []).map((a) => (a.id === updated.id ? updated : a)),
+    }));
+  }
+
   useEffect(() => {
-    if (riskAssessmentsView !== "assessment" || assessingTaskId == null || assessingVenueId == null) return;
+    if (riskAssessmentsView !== "assessment" || assessingTaskId == null || assessingAssessmentId == null) return;
     setAssessmentError(null);
     setAssessmentActionError(null);
     setAssessmentLoading(false);
 
     if (assessingTaskId === MOCK_TASK_ID) {
-      const venueName = riskAssessmentVenues.find((v) => v.venueId === assessingVenueId)?.venueName ?? "Venue";
-      const assessment = mockAssessment(assessingTaskId, assessingVenueId, venueName);
+      const assessment = taskAssessments[assessingTaskId]?.find((a) => a.id === assessingAssessmentId);
+      if (!assessment) {
+        setAssessmentError("Couldn't find this risk assessment.");
+        return;
+      }
       setCurrentAssessment(assessment);
-      setAssessmentForm({
-        location: assessment.location,
-        currentOperatingConditions: assessment.currentOperatingConditions,
-        areaAdvisories: assessment.areaAdvisories,
-        checkpoints: assessment.checkpoints,
-        observedHazards: assessment.observedHazards,
-        existingControls: assessment.existingControls,
-        recommendedActions: assessment.recommendedActions,
-        operatorNotes: assessment.operatorNotes,
-        attachments: assessment.attachments,
-      });
+      setAssessmentForm(formToState(assessment));
       return;
     }
 
     setAssessmentLoading(true);
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     api.venueRiskAssessments
-      .forVenue(assessingTaskId, assessingVenueId, timezone)
+      .get(assessingAssessmentId)
       .then((assessment) => {
         setCurrentAssessment(assessment);
-        setAssessmentForm({
-          location: assessment.location,
-          currentOperatingConditions: assessment.currentOperatingConditions,
-          areaAdvisories: assessment.areaAdvisories,
-          checkpoints: assessment.checkpoints,
-          observedHazards: assessment.observedHazards,
-          existingControls: assessment.existingControls,
-          recommendedActions: assessment.recommendedActions,
-          operatorNotes: assessment.operatorNotes,
-          attachments: assessment.attachments,
-        });
+        setAssessmentForm(formToState(assessment));
       })
       .catch((err) => {
         console.error("Failed to load risk assessment:", err);
         setAssessmentError(friendlyErrorMessage(err, "Couldn't load this risk assessment."));
       })
       .finally(() => setAssessmentLoading(false));
-  }, [riskAssessmentsView, assessingTaskId, assessingVenueId]);
+  }, [riskAssessmentsView, assessingTaskId, assessingAssessmentId]);
 
   function updateAssessmentField<K extends keyof AssessmentFormState>(key: K, value: AssessmentFormState[K]) {
     setAssessmentForm((form) => (form ? { ...form, [key]: value } : form));
@@ -1485,14 +1470,14 @@ function OperationalCanvas() {
     if (!currentAssessment || !assessmentForm) return;
     if (currentAssessment.taskId === MOCK_TASK_ID) {
       // Local-only, same as the rest of MOCK_TASK - nothing real to send.
-      setCurrentAssessment((prev) => (prev ? { ...prev, ...assessmentForm, updatedAt: new Date().toISOString() } : prev));
+      applyAssessmentUpdate({ ...currentAssessment, ...assessmentForm, updatedAt: new Date().toISOString() });
       return;
     }
     setSavingAssessment(true);
     setAssessmentActionError(null);
     api.venueRiskAssessments
       .update(currentAssessment.id, assessmentForm)
-      .then(setCurrentAssessment)
+      .then(applyAssessmentUpdate)
       .catch((err) => {
         console.error("Failed to save risk assessment:", err);
         setAssessmentActionError(friendlyErrorMessage(err, "Couldn't save this risk assessment."));
@@ -1503,14 +1488,14 @@ function OperationalCanvas() {
   function submitAssessment() {
     if (!currentAssessment) return;
     if (currentAssessment.taskId === MOCK_TASK_ID) {
-      setCurrentAssessment((prev) => (prev ? { ...prev, status: "submitted", submittedAt: new Date().toISOString() } : prev));
+      applyAssessmentUpdate({ ...currentAssessment, status: "submitted", submittedAt: new Date().toISOString() });
       return;
     }
     setSubmittingAssessment(true);
     setAssessmentActionError(null);
     api.venueRiskAssessments
       .submit(currentAssessment.id)
-      .then(setCurrentAssessment)
+      .then(applyAssessmentUpdate)
       .catch((err) => {
         console.error("Failed to submit risk assessment:", err);
         setAssessmentActionError(friendlyErrorMessage(err, "Couldn't submit this risk assessment."));
@@ -1748,11 +1733,8 @@ function OperationalCanvas() {
     const openRiskAssessments = () => {
       setActivePanel("risk-assessments");
       setRiskAssessmentsView("root");
-      setAddVenueOpen(false);
-      setAddTaskSelection(null);
-      setAddVenueSelection(null);
       setExpandedVenueIds(new Set());
-      setAssessingVenueId(null);
+      setAssessingAssessmentId(null);
       setAssessingTaskId(null);
       setCurrentAssessment(null);
       setAssessmentForm(null);
@@ -2590,73 +2572,31 @@ function OperationalCanvas() {
           </div>
         ) : riskAssessmentsView === "venues" ? (
           <>
-            <div className="risk-assessments-venues-header">
-              <button
-                type="button"
-                className="venueguard-panel-back"
-                onClick={() => {
-                  setRiskAssessmentsView("root");
-                  setAddVenueOpen(false);
-                  setAddTaskSelection(null);
-                  setAddVenueSelection(null);
-                }}
-              >
-                <ArrowLeft className="w-3.5 h-3.5" /> Back to Risk Assessments
-              </button>
-              <button
-                type="button"
-                className="risk-assessments-add-venue-btn"
-                onClick={() => setAddVenueOpen((open) => !open)}
-                aria-label="Add venue"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
+            <button
+              type="button"
+              className="venueguard-panel-back"
+              onClick={() => setRiskAssessmentsView("root")}
+            >
+              <ArrowLeft className="w-3.5 h-3.5" /> Back to Risk Assessments
+            </button>
 
-            {addVenueOpen && (
-              <div className="risk-assessments-add-venue">
-                <select
-                  value={addTaskSelection ?? ""}
-                  onChange={(event) => setAddTaskSelection(Number(event.target.value))}
-                >
-                  <option value="" disabled>Select Task</option>
-                  {linkableTasks.map((t) => (
-                    <option key={t.id} value={t.id}>{t.title}</option>
-                  ))}
-                </select>
-                <div className="risk-assessments-add-venue-row">
-                  <select
-                    value={addVenueSelection ?? ""}
-                    onChange={(event) => setAddVenueSelection(Number(event.target.value))}
-                  >
-                    <option value="" disabled>Select Venue</option>
-                    {addableVenues.map((v) => (
-                      <option key={v.id} value={v.id}>{v.name}</option>
-                    ))}
-                  </select>
-                  <button type="button" onClick={addManualVenue} disabled={addTaskSelection == null || addVenueSelection == null}>
-                    Add
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {riskAssessmentVenues.length === 0 ? (
-              <p className="tasks-panel-empty">No venues yet - accept a task or add one with the + button.</p>
+            {acceptedTasksList.length === 0 ? (
+              <p className="tasks-panel-empty">No venues yet - accept a task to get started.</p>
             ) : (
               <div className="tasks-panel-list">
-                {riskAssessmentVenues.map((venue) => {
-                  const venueTasks = venueTasksFor(venue.venueId);
-                  const isExpanded = expandedVenueIds.has(venue.venueId);
+                {acceptedTasksList.map((task) => {
+                  const isExpanded = expandedVenueIds.has(task.id);
+                  const slots = taskAssessments[task.id] ?? [];
+                  const slotsLoading = taskAssessmentsLoading[task.id];
                   return (
-                    <div key={venue.venueId} className="risk-assessments-venue-group">
+                    <div key={task.id} className="risk-assessments-venue-group">
                       <button
                         type="button"
                         className="risk-assessments-nav-item"
-                        onClick={() => toggleVenueExpanded(venue.venueId)}
+                        onClick={() => toggleVenueExpanded(task.id)}
                       >
                         <Building2 className="w-4 h-4" />
-                        {venue.venueName}
+                        {task.venueName ?? task.title}
                         {isExpanded ? (
                           <ChevronDown className="w-4 h-4 risk-assessments-nav-item-chevron" />
                         ) : (
@@ -2664,29 +2604,54 @@ function OperationalCanvas() {
                         )}
                       </button>
                       {isExpanded && (
-                        <div className="risk-assessments-venue-detail">
-                          <p className="risk-assessments-venue-detail-label">
-                            <ClipboardList className="w-3.5 h-3.5" /> Task
-                          </p>
-                          {venueTasks.length === 0 ? (
-                            <p className="tasks-panel-empty">No task selected for this venue yet.</p>
-                          ) : (
-                            venueTasks.map((t) => (
-                              <p key={t.id} className="task-row-title">{t.title}</p>
-                            ))
+                        <>
+                          <div className="risk-assessments-venue-detail">
+                            <p className="risk-assessments-venue-detail-label">
+                              <ClipboardList className="w-3.5 h-3.5" /> Task
+                            </p>
+                            <p className="task-row-title">{task.title}</p>
+                          </div>
+
+                          <div className="risk-assessments-venue-detail">
+                            <p className="risk-assessments-venue-detail-label">
+                              <ClipboardCheck className="w-3.5 h-3.5" /> Risk Assessments
+                            </p>
+                            {slotsLoading ? (
+                              <p className="tasks-panel-empty">Loading…</p>
+                            ) : slots.length === 0 ? (
+                              <p className="tasks-panel-empty">No assessments yet.</p>
+                            ) : (
+                              slots.map((slot, index) => (
+                                <button
+                                  key={slot.id}
+                                  type="button"
+                                  className="risk-assessments-nav-item"
+                                  onClick={() => openVenueAssessment(task.id, slot.id)}
+                                >
+                                  <ClipboardCheck className="w-4 h-4" />
+                                  {slot.location.trim() || `Assessment ${index + 1}`}
+                                  <ChevronRight className="w-4 h-4 risk-assessments-nav-item-chevron" />
+                                </button>
+                              ))
+                            )}
+                          </div>
+
+                          {task.status !== "completed" && (
+                            <button
+                              type="button"
+                              className="venue-assessment-add-btn"
+                              onClick={() => addAssessmentSlot(task.id)}
+                              disabled={creatingAssessmentTaskId === task.id}
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              {creatingAssessmentTaskId === task.id
+                                ? "Adding…"
+                                : slots.length === 0
+                                  ? "Add Assessment"
+                                  : "Add Another Assessment"}
+                            </button>
                           )}
-                        </div>
-                      )}
-                      {isExpanded && venueTasks.length > 0 && (
-                        <button
-                          type="button"
-                          className="risk-assessments-nav-item"
-                          onClick={() => openVenueAssessment(venue.venueId, venueTasks[0].id)}
-                        >
-                          <ClipboardCheck className="w-4 h-4" />
-                          Risk Assessment
-                          <ChevronRight className="w-4 h-4 risk-assessments-nav-item-chevron" />
-                        </button>
+                        </>
                       )}
                     </div>
                   );

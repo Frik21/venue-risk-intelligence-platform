@@ -2,32 +2,33 @@ import { pgTable, serial, integer, text, timestamp, unique } from "drizzle-orm/p
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { tasksTable } from "./tasks";
-import { venuesTable } from "./venues";
 import { usersTable } from "./users";
 
-// The CPO's in-field venue risk assessment - filled in from the
-// Operational Canvas (Risk Assessments > Venues > a venue), after a
-// task's venue has been selected. Distinct from the existing formal
-// assessments/risk-matrix/versioning system (schema/assessments.ts,
-// the Manager/Analyst-facing "Assessments" nav item) - this is a
-// lighter, CPO-facing checklist per (task, venue) pair, not a
-// versioned/approved document. Every field below is a single free-text
+// The CPO's in-field risk assessment - filled in from the Operational
+// Canvas (Risk Assessments > Venues > a task). Distinct from the
+// existing formal assessments/risk-matrix/versioning system
+// (schema/assessments.ts, the Manager/Analyst-facing "Assessments" nav
+// item) - this is a lighter, CPO-facing checklist, not a
+// versioned/approved document. Every field is a single free-text
 // comment box the CPO writes into directly (per direct product
-// direction) - no nested sub-lists.
+// direction), including Location - so a task doesn't need a matching
+// real venue record to get another assessment: a task can cover
+// several physical locations (slotIndex 1, 2, 3...), each its own
+// assessment, with the CPO typing the actual location into each one.
 export const venueRiskAssessmentsTable = pgTable(
   "venue_risk_assessments",
   {
     id: serial("id").primaryKey(),
     taskId: integer("task_id").notNull().references(() => tasksTable.id, { onDelete: "cascade" }),
-    venueId: integer("venue_id").notNull().references(() => venuesTable.id, { onDelete: "cascade" }),
+    // 1, 2, 3... per task - lets a CPO add another assessment for the
+    // same task (e.g. a second/third venue) without a real venue
+    // record existing for it.
+    slotIndex: integer("slot_index").notNull().default(1),
     operatorId: integer("operator_id").notNull().references(() => usersTable.id),
     // Captured automatically when the assessment is created (see
     // "Date, Time, Operator, Timezone - automatic" in the product
     // spec) - createdAt covers date/time, this covers timezone.
     timezone: text("timezone"),
-    // Location / Venue - unlike Date/Time/Operator/Timezone, this is
-    // typed in by the operator, not derived from the venue record (per
-    // direct product direction).
     location: text("location").notNull().default(""),
     currentOperatingConditions: text("current_operating_conditions").notNull().default(""),
     areaAdvisories: text("area_advisories").notNull().default(""),
@@ -43,7 +44,7 @@ export const venueRiskAssessmentsTable = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   },
   (table) => ({
-    taskVenueUnique: unique().on(table.taskId, table.venueId),
+    taskSlotUnique: unique().on(table.taskId, table.slotIndex),
   }),
 );
 
