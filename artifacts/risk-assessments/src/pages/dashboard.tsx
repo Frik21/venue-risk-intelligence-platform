@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
-import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, Globe, X, ChevronDown, ListChecks } from "lucide-react";
+import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, Globe, X, ChevronDown, ListChecks, MessageSquare } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -342,6 +342,7 @@ function searchOperationalIndex(query: string): SearchResult[] {
 // (venueguard-show-shell) instead of lifting that state up and prop-
 // drilling it through both components.
 const OPEN_BRIEF_PANEL_EVENT = "venueguard-open-brief-panel";
+const OPEN_COMMUNICATIONS_PANEL_EVENT = "venueguard-open-communications-panel";
 const OPEN_TASKS_PANEL_EVENT = "venueguard-open-tasks-panel";
 const OPEN_TASK_PLANNING_PANEL_EVENT = "venueguard-open-task-planning-panel";
 const OPEN_LAYERS_PANEL_EVENT = "venueguard-open-layers-panel";
@@ -391,6 +392,17 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
             >
               <ClipboardList className="w-4 h-4" />
               Operational Brief
+            </button>
+            <button
+              type="button"
+              className="top-banner-brand-menu-item"
+              onClick={() => {
+                window.dispatchEvent(new Event(OPEN_COMMUNICATIONS_PANEL_EVENT));
+                setBrandMenuOpen(false);
+              }}
+            >
+              <MessageSquare className="w-4 h-4" />
+              Communications
             </button>
             <button
               type="button"
@@ -956,6 +968,21 @@ function OperationalCanvas() {
   // a fresh session looks like.
   const [layersPanelOpen, setLayersPanelOpen] = useState(false);
 
+  // Communications panel - one-way instructions/updates from a Manager
+  // to the CPO on the ground (per direct product direction - distinct
+  // from Task Assignment below: this is "tell the CPO something right
+  // now," not "assign structured work"). No backend yet - demo content
+  // only, same as MOCK_TASK further down, until this is built for real.
+  const [communicationsPanelOpen, setCommunicationsPanelOpen] = useState(false);
+  const DEMO_INSTRUCTIONS = [
+    {
+      id: 1,
+      from: "Demo Manager",
+      message: "Principal delayed 30 minutes - hold at current position until further notice.",
+      sentAt: "Today, 08:42",
+    },
+  ];
+
   // Tasks panel - Task Assignment (per direct product direction: a
   // Manager assigns a CPO a specific piece of structured work already
   // in the platform, e.g. "complete the assessment for venue X", tied
@@ -1222,24 +1249,28 @@ function OperationalCanvas() {
     return () => unsubscribe(setActiveCountry);
   }, []);
 
-  // Operational Brief, Tasks, Task Planning, and Layers are now opened
-  // from the VenueGuard brand menu in TopBanner - see
-  // OPEN_BRIEF_PANEL_EVENT/OPEN_TASKS_PANEL_EVENT/
-  // OPEN_TASK_PLANNING_PANEL_EVENT/OPEN_LAYERS_PANEL_EVENT above.
-  // TopBanner and OperationalCanvas are siblings, not parent/child, so
-  // this state can't be reached by props without lifting it (and the
-  // click-outside-to-close logic below) out of this component entirely.
+  // Operational Brief, Communications, Tasks, Task Planning, and Layers
+  // are now opened from the VenueGuard brand menu in TopBanner - see
+  // OPEN_BRIEF_PANEL_EVENT/OPEN_COMMUNICATIONS_PANEL_EVENT/
+  // OPEN_TASKS_PANEL_EVENT/OPEN_TASK_PLANNING_PANEL_EVENT/
+  // OPEN_LAYERS_PANEL_EVENT above. TopBanner and OperationalCanvas are
+  // siblings, not parent/child, so this state can't be reached by props
+  // without lifting it (and the click-outside-to-close logic below) out
+  // of this component entirely.
   useEffect(() => {
     const openBrief = () => setBriefPanelOpen(true);
+    const openCommunications = () => setCommunicationsPanelOpen(true);
     const openTasks = () => setTasksPanelOpen(true);
     const openTaskPlanning = () => setTaskPlanningPanelOpen(true);
     const openLayers = () => setLayersPanelOpen(true);
     window.addEventListener(OPEN_BRIEF_PANEL_EVENT, openBrief);
+    window.addEventListener(OPEN_COMMUNICATIONS_PANEL_EVENT, openCommunications);
     window.addEventListener(OPEN_TASKS_PANEL_EVENT, openTasks);
     window.addEventListener(OPEN_TASK_PLANNING_PANEL_EVENT, openTaskPlanning);
     window.addEventListener(OPEN_LAYERS_PANEL_EVENT, openLayers);
     return () => {
       window.removeEventListener(OPEN_BRIEF_PANEL_EVENT, openBrief);
+      window.removeEventListener(OPEN_COMMUNICATIONS_PANEL_EVENT, openCommunications);
       window.removeEventListener(OPEN_TASKS_PANEL_EVENT, openTasks);
       window.removeEventListener(OPEN_TASK_PLANNING_PANEL_EVENT, openTaskPlanning);
       window.removeEventListener(OPEN_LAYERS_PANEL_EVENT, openLayers);
@@ -1265,6 +1296,10 @@ function OperationalCanvas() {
         setTasksPanelOpen(false);
         return;
       }
+      if (communicationsPanelOpen) {
+        setCommunicationsPanelOpen(false);
+        return;
+      }
       if (briefPanelOpen) {
         setBriefPanelOpen(false);
         return;
@@ -1273,7 +1308,7 @@ function OperationalCanvas() {
     }
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [briefPanelOpen, alertsPanelOpen, tasksPanelOpen, taskPlanningPanelOpen, layersPanelOpen]);
+  }, [briefPanelOpen, alertsPanelOpen, communicationsPanelOpen, tasksPanelOpen, taskPlanningPanelOpen, layersPanelOpen]);
 
   // Two-phase mount so the CSS transition actually animates: paint the
   // "not entered" state first (opacity 0, no scale/shift), then flip to
@@ -1415,6 +1450,19 @@ function OperationalCanvas() {
     if (SHOW_CANVAS_CALIBRATION && calibrationPoint) {
       console.log("Operational Canvas calibration point:", calibrationPoint);
     }
+  }
+
+  // Brief/Communications/Tasks/Task Planning/Layers all dock to the
+  // same left edge and shift right by one panel-width for each other
+  // panel open before them, in this fixed order - computed generically
+  // here rather than hand-writing every combination per panel (which is
+  // exactly how the panel-closing bug happened: an inline calc() that
+  // forgot one of the panels). Layers is deliberately last, since it's
+  // opened least often relative to the others.
+  const PANEL_STACK_ORDER = [briefPanelOpen, communicationsPanelOpen, tasksPanelOpen, taskPlanningPanelOpen];
+  function panelShiftStyle(index: number): CSSProperties | undefined {
+    const openBefore = PANEL_STACK_ORDER.slice(0, index).filter(Boolean).length;
+    return openBefore > 0 ? { left: `calc(${openBefore} * min(360px, 88vw))` } : undefined;
   }
 
   return (
@@ -1832,14 +1880,44 @@ function OperationalCanvas() {
       </div>
 
       <div
-        className={`tasks-panel ${tasksPanelOpen ? "tasks-panel-open" : ""}`}
-        style={briefPanelOpen ? { left: "min(360px, 88vw)" } : undefined}
+        className={`communications-panel ${communicationsPanelOpen ? "communications-panel-open" : ""}`}
+        style={panelShiftStyle(1)}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="tasks-panel-header">
           <div>
-            <p className="tasks-panel-eyebrow">Task Assignment</p>
-            <h2 className="tasks-panel-title">What your Manager needs from you.</h2>
+            <p className="tasks-panel-eyebrow">Communications</p>
+            <h2 className="tasks-panel-title">Instructions from your Manager.</h2>
+          </div>
+          <button
+            type="button"
+            className="tasks-panel-close"
+            onClick={() => setCommunicationsPanelOpen(false)}
+            aria-label="Close Communications"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="tasks-panel-list">
+          {DEMO_INSTRUCTIONS.map((instruction) => (
+            <div key={instruction.id} className="task-row">
+              <p className="task-row-title">{instruction.message}</p>
+              <p className="task-row-assigned-by">{instruction.from} · {instruction.sentAt}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div
+        className={`tasks-panel ${tasksPanelOpen ? "tasks-panel-open" : ""}`}
+        style={panelShiftStyle(2)}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="tasks-panel-header">
+          <div>
+            <p className="tasks-panel-eyebrow">Tasks</p>
+            <h2 className="tasks-panel-title">Tasks</h2>
           </div>
           <button
             type="button"
@@ -1851,64 +1929,12 @@ function OperationalCanvas() {
           </button>
         </div>
 
-        {cpoUsers.length > 1 && (
-          <div className="tasks-panel-viewing-as">
-            <label htmlFor="tasks-viewing-as">Viewing as</label>
-            <select
-              id="tasks-viewing-as"
-              value={viewingAsCpoId ?? ""}
-              onChange={(event) => setViewingAsCpoId(Number(event.target.value))}
-            >
-              {cpoUsers.map((u) => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {cpoUsers.length === 0 && (
-          <p className="tasks-panel-empty">
-            No CPO users exist yet - add one from Admin &gt; Users to assign real tasks. Showing a demo task below for now.
-          </p>
-        )}
-
-        {cpoTasksLoading ? (
-          <p className="tasks-panel-empty">Loading tasks…</p>
-        ) : (
-          <div className="tasks-panel-list">
-            {displayedTasks.map((task) => (
-              <div key={task.id} className="task-row">
-                <div className="task-row-header">
-                  <p className="task-row-title">{task.title}</p>
-                  {task.dueDate && <span className="task-row-due">Due {new Date(task.dueDate).toLocaleDateString()}</span>}
-                </div>
-                {task.venueName && <p className="task-row-venue">{task.venueName}</p>}
-                {task.assignedByName && <p className="task-row-assigned-by">Assigned by {task.assignedByName}</p>}
-                <div className="task-row-status">
-                  {(["not_completed", "in_progress", "completed"] as const).map((status) => (
-                    <button
-                      key={status}
-                      type="button"
-                      className={`task-status-btn task-status-${status} ${task.status === status ? "task-status-active" : ""}`}
-                      onClick={() => updateTaskStatus(task.id, status)}
-                    >
-                      {TASK_STATUS_LABELS[status]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <p className="tasks-panel-empty">Nothing here yet.</p>
       </div>
 
       <div
         className={`task-planning-panel ${taskPlanningPanelOpen ? "task-planning-panel-open" : ""}`}
-        style={
-          briefPanelOpen || tasksPanelOpen
-            ? { left: `calc(${(briefPanelOpen ? 1 : 0) + (tasksPanelOpen ? 1 : 0)} * min(360px, 88vw))` }
-            : undefined
-        }
+        style={panelShiftStyle(3)}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="tasks-panel-header">
@@ -1967,13 +1993,7 @@ function OperationalCanvas() {
 
       <div
         className={`layers-panel ${layersPanelOpen ? "layers-panel-open" : ""}`}
-        style={
-          layersPanelOpen && (briefPanelOpen || tasksPanelOpen || taskPlanningPanelOpen)
-            ? {
-                left: `calc(${(briefPanelOpen ? 1 : 0) + (tasksPanelOpen ? 1 : 0) + (taskPlanningPanelOpen ? 1 : 0)} * min(360px, 88vw))`,
-              }
-            : undefined
-        }
+        style={panelShiftStyle(4)}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="layers-panel-header">

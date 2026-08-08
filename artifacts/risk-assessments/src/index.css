@@ -968,13 +968,14 @@
   color: rgba(255, 255, 255, 0.8);
 }
 
-/* Task Assignment panel - what a Manager needs this CPO to do, tied to
-   a venue, with a 3-state status the CPO sets that feeds back to the
-   Manager. Docks to the same left edge as Brief/Layers (all three
-   opened via the VenueGuard brand menu), shifting right by one panel-
-   width when Brief is also open - same shift math Layers already uses,
-   just computed inline in JSX now that there are three panels instead
-   of two. */
+/* Communications panel - one-way instructions from a Manager to this
+   CPO (demo content only for now). Tasks panel - currently emptied out
+   per direct product direction, pending a real redesign of what
+   belongs there once it isn't Task Assignment anymore. Both dock to the
+   same left edge as Brief/Task Planning/Layers (all five opened via the
+   VenueGuard brand menu), shift computed generically by panelShiftStyle
+   in JSX rather than hand-written per panel. */
+.communications-panel,
 .tasks-panel {
   position: absolute;
   top: 0;
@@ -996,6 +997,7 @@
   pointer-events: auto;
 }
 
+.communications-panel-open,
 .tasks-panel-open {
   transform: translateX(0);
 }
