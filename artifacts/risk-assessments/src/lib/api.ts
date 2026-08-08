@@ -94,6 +94,42 @@ export interface Plan {
   updatedAt: string;
 }
 
+// The CPO's in-field venue risk assessment (Risk Assessments > Venues >
+// a venue, after its task is selected) - one per (task, venue) pair.
+// Distinct from AssessmentSummary/AssessmentDetail below, which is the
+// separate, formal Manager/Analyst-facing Assessments feature.
+export interface VenueRiskAssessmentCheckpoint {
+  question: string;
+  answer: string;
+}
+
+export interface VenueRiskAssessmentAttachment {
+  label: string;
+  url: string;
+}
+
+export interface VenueRiskAssessment {
+  id: number;
+  taskId: number;
+  venueId: number;
+  venueName: string | null;
+  operatorId: number;
+  operatorName: string | null;
+  timezone: string | null;
+  currentOperatingConditions: string;
+  areaAdvisories: string;
+  checkpoints: VenueRiskAssessmentCheckpoint[];
+  observedHazards: string;
+  existingControls: string;
+  recommendedActions: string;
+  operatorNotes: string;
+  attachments: VenueRiskAssessmentAttachment[];
+  status: "draft" | "submitted";
+  submittedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AssessmentSummary {
   id: number; venueId: number | null; venueName: string | null; venueCity: string | null;
   title: string; description: string | null; status: AssessmentStatus; version: number;
@@ -248,6 +284,29 @@ export const api = {
     setChecklistItem: (planId: number, key: string, checked: boolean) =>
       apiFetch<Plan>(`/plans/${planId}/checklist`, { method: "PATCH", body: JSON.stringify({ key, checked }) }),
     submit: (planId: number) => apiFetch<Plan>(`/plans/${planId}/submit`, { method: "POST" }),
+  },
+  venueRiskAssessments: {
+    forVenue: (taskId: number, venueId: number, timezone?: string) =>
+      apiFetch<VenueRiskAssessment>(
+        `/tasks/${taskId}/venues/${venueId}/risk-assessment${timezone ? `?timezone=${encodeURIComponent(timezone)}` : ""}`,
+      ),
+    update: (
+      id: number,
+      data: Partial<
+        Pick<
+          VenueRiskAssessment,
+          | "currentOperatingConditions"
+          | "areaAdvisories"
+          | "checkpoints"
+          | "observedHazards"
+          | "existingControls"
+          | "recommendedActions"
+          | "operatorNotes"
+          | "attachments"
+        >
+      >,
+    ) => apiFetch<VenueRiskAssessment>(`/risk-assessments/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    submit: (id: number) => apiFetch<VenueRiskAssessment>(`/risk-assessments/${id}/submit`, { method: "POST" }),
   },
   assessments: {
     list: () => apiFetch<AssessmentSummary[]>("/assessments"),

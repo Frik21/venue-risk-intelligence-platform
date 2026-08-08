@@ -1135,6 +1135,174 @@
   color: rgba(255, 255, 255, 0.45);
 }
 
+/* Venue Risk Assessment - the CPO's in-field checklist, one per
+   (task, venue) pair (see VenueRiskAssessmentForm in dashboard.tsx). */
+.venue-assessment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.venue-assessment-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.venue-assessment-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.venue-assessment-meta-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.venue-assessment-meta-value {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  text-align: right;
+}
+
+.venue-assessment-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.venue-assessment-field textarea,
+.venue-assessment-checkpoint-row input,
+.venue-assessment-attachment-row input {
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.venue-assessment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.venue-assessment-checkpoint-row,
+.venue-assessment-attachment-row {
+  display: flex;
+  gap: 6px;
+}
+
+.venue-assessment-checkpoint-row input,
+.venue-assessment-attachment-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.venue-assessment-checkpoint-row button,
+.venue-assessment-attachment-row button {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+
+.venue-assessment-checkpoint-row button:hover,
+.venue-assessment-attachment-row button:hover {
+  background: rgba(252, 165, 165, 0.16);
+  border-color: rgba(252, 165, 165, 0.4);
+  color: rgba(252, 165, 165, 0.95);
+}
+
+.venue-assessment-add-btn {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid rgba(125, 211, 252, 0.3);
+  border-radius: 8px;
+  background: rgba(125, 211, 252, 0.1);
+  color: rgba(125, 211, 252, 0.9);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+}
+
+.venue-assessment-add-btn:hover {
+  background: rgba(125, 211, 252, 0.18);
+}
+
+.venue-assessment-status {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.venue-assessment-status-draft {
+  background: rgba(251, 191, 36, 0.16);
+  color: rgba(253, 224, 71, 0.95);
+}
+
+.venue-assessment-status-submitted {
+  background: rgba(74, 222, 128, 0.16);
+  color: rgba(187, 247, 208, 0.95);
+}
+
+.venue-assessment-save-btn {
+  width: 100%;
+  padding: 10px 16px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.venue-assessment-save-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.venue-assessment-save-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .tasks-panel-header {
   display: flex;
   align-items: flex-start;
