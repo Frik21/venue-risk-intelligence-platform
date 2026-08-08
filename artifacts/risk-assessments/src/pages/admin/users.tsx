@@ -8,27 +8,28 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
-import { Users, Plus, ShieldCheck, Eye, Edit3, Shield } from "lucide-react";
+import { Users, Plus, ShieldCheck, Shield, MapPin } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
+// Admin: VenueGuard's own owner/operator (this SaaS's platform admin).
+// Manager: a subscribed client, oversees CPOs and assigns them tasks.
+// CPO: the field operator - the Operational Canvas is their page.
 const ROLE_COLORS = {
-  admin:    "text-red-700 bg-red-50 border-red-200",
-  analyst:  "text-blue-700 bg-blue-50 border-blue-200",
-  reviewer: "text-purple-700 bg-purple-50 border-purple-200",
-  viewer:   "text-slate-600 bg-slate-100 border-slate-200",
+  admin:   "text-red-700 bg-red-50 border-red-200",
+  manager: "text-purple-700 bg-purple-50 border-purple-200",
+  cpo:     "text-blue-700 bg-blue-50 border-blue-200",
 };
 
 const ROLE_ICONS = {
-  admin:    Shield,
-  analyst:  Edit3,
-  reviewer: ShieldCheck,
-  viewer:   Eye,
+  admin:   Shield,
+  manager: ShieldCheck,
+  cpo:     MapPin,
 };
 
 function NewUserDialog({ onClose }: { onClose: () => void }) {
-  const [form, setForm] = useState({ name: "", email: "", role: "analyst" as any });
+  const [form, setForm] = useState({ name: "", email: "", role: "cpo" as any });
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -61,10 +62,9 @@ function NewUserDialog({ onClose }: { onClose: () => void }) {
           <Select value={form.role} onValueChange={v => set("role", v)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="admin">Admin — Full access</SelectItem>
-              <SelectItem value="analyst">Analyst — Create and edit assessments</SelectItem>
-              <SelectItem value="reviewer">Reviewer — Approve assessments</SelectItem>
-              <SelectItem value="viewer">Viewer — Read only</SelectItem>
+              <SelectItem value="admin">Admin — VenueGuard platform owner</SelectItem>
+              <SelectItem value="manager">Manager — Assigns and oversees CPOs</SelectItem>
+              <SelectItem value="cpo">CPO — Field operator</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -102,8 +102,8 @@ export default function UsersPage() {
       </div>
 
       {/* Role explanation */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {(["admin", "analyst", "reviewer", "viewer"] as const).map((role) => {
+      <div className="grid grid-cols-3 gap-3">
+        {(["admin", "manager", "cpo"] as const).map((role) => {
           const Icon = ROLE_ICONS[role];
           const count = users.filter(u => u.role === role).length;
           return (
@@ -134,7 +134,7 @@ export default function UsersPage() {
         <Card>
           <div className="divide-y divide-slate-100">
             {users.map((user) => {
-              const Icon = ROLE_ICONS[user.role] ?? Eye;
+              const Icon = ROLE_ICONS[user.role] ?? Shield;
               return (
                 <div key={user.id} className="px-5 py-4 flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shrink-0">

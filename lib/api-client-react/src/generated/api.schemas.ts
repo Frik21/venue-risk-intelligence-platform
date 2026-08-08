@@ -104,9 +104,8 @@ export type UserRole = typeof UserRole[keyof typeof UserRole];
 
 export const UserRole = {
   admin: 'admin',
-  analyst: 'analyst',
-  reviewer: 'reviewer',
-  viewer: 'viewer',
+  manager: 'manager',
+  cpo: 'cpo',
 } as const;
 
 export interface User {
@@ -125,9 +124,8 @@ export type UserInputRole = typeof UserInputRole[keyof typeof UserInputRole];
 
 export const UserInputRole = {
   admin: 'admin',
-  analyst: 'analyst',
-  reviewer: 'reviewer',
-  viewer: 'viewer',
+  manager: 'manager',
+  cpo: 'cpo',
 } as const;
 
 export interface UserInput {
