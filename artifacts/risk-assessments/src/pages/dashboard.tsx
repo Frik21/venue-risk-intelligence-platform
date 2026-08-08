@@ -1232,6 +1232,7 @@ function OperationalCanvas() {
       }
       if (tasksPanelOpen) {
         setTasksPanelOpen(false);
+        setChecklistTaskId(null);
         return;
       }
       if (briefPanelOpen) {
@@ -1813,7 +1814,10 @@ function OperationalCanvas() {
           <button
             type="button"
             className="tasks-panel-close"
-            onClick={() => setTasksPanelOpen(false)}
+            onClick={() => {
+              setTasksPanelOpen(false);
+              setChecklistTaskId(null);
+            }}
             aria-label="Close Tasks"
           >
             <X className="w-4 h-4" />
@@ -1877,7 +1881,7 @@ function OperationalCanvas() {
       </div>
 
       <div
-        className={`task-checklist-panel ${checklistTaskId != null ? "task-checklist-panel-open" : ""}`}
+        className={`task-checklist-panel ${checklistTaskId != null && tasksPanelOpen ? "task-checklist-panel-open" : ""}`}
         style={
           briefPanelOpen || tasksPanelOpen
             ? { left: `calc(${(briefPanelOpen ? 1 : 0) + (tasksPanelOpen ? 1 : 0)} * min(360px, 88vw))` }
