@@ -1284,8 +1284,14 @@ function OperationalCanvas() {
   }, [displayedTasks, taskAcceptance]);
 
   const [allVenues, setAllVenues] = useState<Venue[]>([]);
-  const [manualVenueIds, setManualVenueIds] = useState<number[]>([]);
+  // A task can cover multiple venues (e.g. recce venues X, Y and Z for
+  // the same operation), so each manually-added venue is linked to
+  // whichever task the CPO picked for it - the same task can be picked
+  // again for a different venue, any number of times, until the task's
+  // own status is "completed" (see linkableTasks below).
+  const [manualVenueLinks, setManualVenueLinks] = useState<{ venueId: number; taskId: number }[]>([]);
   const [addVenueOpen, setAddVenueOpen] = useState(false);
+  const [addTaskSelection, setAddTaskSelection] = useState<number | null>(null);
   const [addVenueSelection, setAddVenueSelection] = useState<number | null>(null);
 
   useEffect(() => {
@@ -1295,22 +1301,39 @@ function OperationalCanvas() {
   const riskAssessmentVenues = useMemo(() => {
     const seen = new Map<number, string>();
     for (const v of acceptedVenues) seen.set(v.venueId, v.venueName);
-    for (const id of manualVenueIds) {
-      if (seen.has(id)) continue;
-      const venue = allVenues.find((v) => v.id === id);
-      seen.set(id, venue?.name ?? "Unnamed venue");
+    for (const link of manualVenueLinks) {
+      if (seen.has(link.venueId)) continue;
+      const venue = allVenues.find((v) => v.id === link.venueId);
+      seen.set(link.venueId, venue?.name ?? "Unnamed venue");
     }
     return Array.from(seen, ([venueId, venueName]) => ({ venueId, venueName }));
-  }, [acceptedVenues, manualVenueIds, allVenues]);
+  }, [acceptedVenues, manualVenueLinks, allVenues]);
 
   const addableVenues = useMemo(
     () => allVenues.filter((v) => !riskAssessmentVenues.some((rv) => rv.venueId === v.id)),
     [allVenues, riskAssessmentVenues],
   );
 
+  // Deliberately not filtered by "already used for a venue" - the same
+  // task should stay pickable for as many venues as it needs, only
+  // dropping out once it's completed.
+  const linkableTasks = useMemo(
+    () => displayedTasks.filter((t) => taskAcceptance[t.id] === "accepted" && t.status !== "completed"),
+    [displayedTasks, taskAcceptance],
+  );
+
+  function venueTasksFor(venueId: number): Task[] {
+    const autoTasks = displayedTasks.filter((t) => t.venueId === venueId && taskAcceptance[t.id] === "accepted");
+    const link = manualVenueLinks.find((l) => l.venueId === venueId);
+    const linkedTask = link ? displayedTasks.find((t) => t.id === link.taskId) : undefined;
+    if (linkedTask && !autoTasks.some((t) => t.id === linkedTask.id)) return [...autoTasks, linkedTask];
+    return autoTasks;
+  }
+
   function addManualVenue() {
-    if (addVenueSelection == null) return;
-    setManualVenueIds((prev) => [...prev, addVenueSelection]);
+    if (addVenueSelection == null || addTaskSelection == null) return;
+    setManualVenueLinks((prev) => [...prev, { venueId: addVenueSelection, taskId: addTaskSelection }]);
+    setAddTaskSelection(null);
     setAddVenueSelection(null);
     setAddVenueOpen(false);
   }
@@ -1726,6 +1749,7 @@ function OperationalCanvas() {
       setActivePanel("risk-assessments");
       setRiskAssessmentsView("root");
       setAddVenueOpen(false);
+      setAddTaskSelection(null);
       setAddVenueSelection(null);
       setExpandedVenueIds(new Set());
       setAssessingVenueId(null);
@@ -2573,6 +2597,7 @@ function OperationalCanvas() {
                 onClick={() => {
                   setRiskAssessmentsView("root");
                   setAddVenueOpen(false);
+                  setAddTaskSelection(null);
                   setAddVenueSelection(null);
                 }}
               >
@@ -2591,17 +2616,28 @@ function OperationalCanvas() {
             {addVenueOpen && (
               <div className="risk-assessments-add-venue">
                 <select
-                  value={addVenueSelection ?? ""}
-                  onChange={(event) => setAddVenueSelection(Number(event.target.value))}
+                  value={addTaskSelection ?? ""}
+                  onChange={(event) => setAddTaskSelection(Number(event.target.value))}
                 >
                   <option value="" disabled>Select Task</option>
-                  {addableVenues.map((v) => (
-                    <option key={v.id} value={v.id}>{v.name}</option>
+                  {linkableTasks.map((t) => (
+                    <option key={t.id} value={t.id}>{t.title}</option>
                   ))}
                 </select>
-                <button type="button" onClick={addManualVenue} disabled={addVenueSelection == null}>
-                  Add
-                </button>
+                <div className="risk-assessments-add-venue-row">
+                  <select
+                    value={addVenueSelection ?? ""}
+                    onChange={(event) => setAddVenueSelection(Number(event.target.value))}
+                  >
+                    <option value="" disabled>Select Venue</option>
+                    {addableVenues.map((v) => (
+                      <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={addManualVenue} disabled={addTaskSelection == null || addVenueSelection == null}>
+                    Add
+                  </button>
+                </div>
               </div>
             )}
 
@@ -2610,9 +2646,7 @@ function OperationalCanvas() {
             ) : (
               <div className="tasks-panel-list">
                 {riskAssessmentVenues.map((venue) => {
-                  const venueTasks = displayedTasks.filter(
-                    (t) => t.venueId === venue.venueId && taskAcceptance[t.id] === "accepted",
-                  );
+                  const venueTasks = venueTasksFor(venue.venueId);
                   const isExpanded = expandedVenueIds.has(venue.venueId);
                   return (
                     <div key={venue.venueId} className="risk-assessments-venue-group">
