@@ -32,8 +32,6 @@ import type {
   Plan,
   Venue,
   VenueRiskAssessment,
-  VenueRiskAssessmentCheckpoint,
-  VenueRiskAssessmentAttachment,
 } from "@/lib/api";
 
 // Background tone for the outer page wrapper (behind MapLayer).
@@ -367,20 +365,33 @@ const REOPEN_BRAND_MENU_EVENT = "venueguard-reopen-brand-menu";
 
 // Venue Risk Assessment - the CPO's in-field checklist for a specific
 // (task, venue) pair, reached from Risk Assessments > Venues > a venue.
-// The editable fields, kept separate from VenueRiskAssessment (the API
-// type) since Location/Venue, Date/Time/Operator/Timezone and
-// Assessment Status/Operational Plan are all derived/read-only, not
-// part of the saved form payload.
+// Every field below is just a label with a comment box next to it that
+// the CPO writes into directly (per direct product direction) - no
+// nested sub-lists. The editable fields are kept separate from
+// VenueRiskAssessment (the API type) since Location/Venue,
+// Date/Time/Operator/Timezone and Assessment Status/Operational Plan
+// are all derived/read-only, not part of the saved form payload.
 type AssessmentFormState = {
   currentOperatingConditions: string;
   areaAdvisories: string;
-  checkpoints: VenueRiskAssessmentCheckpoint[];
+  checkpoints: string;
   observedHazards: string;
   existingControls: string;
   recommendedActions: string;
   operatorNotes: string;
-  attachments: VenueRiskAssessmentAttachment[];
+  attachments: string;
 };
+
+const ASSESSMENT_TEXT_FIELDS: { key: keyof AssessmentFormState; label: string }[] = [
+  { key: "currentOperatingConditions", label: "Current Operating Conditions" },
+  { key: "areaAdvisories", label: "Area Advisories" },
+  { key: "checkpoints", label: "Assessment Questions / Checkpoints" },
+  { key: "observedHazards", label: "Observed Hazards / Concerns" },
+  { key: "existingControls", label: "Existing Controls" },
+  { key: "recommendedActions", label: "Recommended Actions" },
+  { key: "operatorNotes", label: "Operator Notes" },
+  { key: "attachments", label: "Photos / Video / Attachments" },
+];
 
 function VenueRiskAssessmentForm({
   venueName,
@@ -388,16 +399,11 @@ function VenueRiskAssessmentForm({
   assessment,
   form,
   loading,
+  error,
   saving,
   submitting,
   onBack,
   onFieldChange,
-  onCheckpointChange,
-  onAddCheckpoint,
-  onRemoveCheckpoint,
-  onAttachmentChange,
-  onAddAttachment,
-  onRemoveAttachment,
   onSave,
   onSubmit,
 }: {
@@ -406,16 +412,11 @@ function VenueRiskAssessmentForm({
   assessment: VenueRiskAssessment | null;
   form: AssessmentFormState | null;
   loading: boolean;
+  error: string | null;
   saving: boolean;
   submitting: boolean;
   onBack: () => void;
   onFieldChange: <K extends keyof AssessmentFormState>(key: K, value: AssessmentFormState[K]) => void;
-  onCheckpointChange: (index: number, field: keyof VenueRiskAssessmentCheckpoint, value: string) => void;
-  onAddCheckpoint: () => void;
-  onRemoveCheckpoint: (index: number) => void;
-  onAttachmentChange: (index: number, field: keyof VenueRiskAssessmentAttachment, value: string) => void;
-  onAddAttachment: () => void;
-  onRemoveAttachment: (index: number) => void;
   onSave: () => void;
   onSubmit: () => void;
 }) {
@@ -425,8 +426,10 @@ function VenueRiskAssessmentForm({
         <ArrowLeft className="w-3.5 h-3.5" /> Back to Venues
       </button>
 
-      {loading || !form || !assessment ? (
+      {loading ? (
         <p className="tasks-panel-empty">Loading…</p>
+      ) : error || !form || !assessment ? (
+        <p className="tasks-panel-empty">{error ?? "Couldn't load this risk assessment."}</p>
       ) : (
         <div className="venue-assessment-form">
           <div className="venue-assessment-meta">
@@ -452,115 +455,12 @@ function VenueRiskAssessmentForm({
             </div>
           </div>
 
-          <label className="venue-assessment-field">
-            <span>Current Operating Conditions</span>
-            <textarea
-              value={form.currentOperatingConditions}
-              onChange={(event) => onFieldChange("currentOperatingConditions", event.target.value)}
-              rows={3}
-            />
-          </label>
-
-          <label className="venue-assessment-field">
-            <span>Area Advisories</span>
-            <textarea
-              value={form.areaAdvisories}
-              onChange={(event) => onFieldChange("areaAdvisories", event.target.value)}
-              rows={3}
-            />
-          </label>
-
-          <div className="venue-assessment-field">
-            <span>Assessment Questions / Checkpoints</span>
-            <div className="venue-assessment-list">
-              {form.checkpoints.map((checkpoint, index) => (
-                <div key={index} className="venue-assessment-checkpoint-row">
-                  <input
-                    type="text"
-                    placeholder="Question"
-                    value={checkpoint.question}
-                    onChange={(event) => onCheckpointChange(index, "question", event.target.value)}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Answer"
-                    value={checkpoint.answer}
-                    onChange={(event) => onCheckpointChange(index, "answer", event.target.value)}
-                  />
-                  <button type="button" onClick={() => onRemoveCheckpoint(index)} aria-label="Remove checkpoint">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <button type="button" className="venue-assessment-add-btn" onClick={onAddCheckpoint}>
-              <Plus className="w-3.5 h-3.5" /> Add checkpoint
-            </button>
-          </div>
-
-          <label className="venue-assessment-field">
-            <span>Observed Hazards / Concerns</span>
-            <textarea
-              value={form.observedHazards}
-              onChange={(event) => onFieldChange("observedHazards", event.target.value)}
-              rows={3}
-            />
-          </label>
-
-          <label className="venue-assessment-field">
-            <span>Existing Controls</span>
-            <textarea
-              value={form.existingControls}
-              onChange={(event) => onFieldChange("existingControls", event.target.value)}
-              rows={3}
-            />
-          </label>
-
-          <label className="venue-assessment-field">
-            <span>Recommended Actions</span>
-            <textarea
-              value={form.recommendedActions}
-              onChange={(event) => onFieldChange("recommendedActions", event.target.value)}
-              rows={3}
-            />
-          </label>
-
-          <label className="venue-assessment-field">
-            <span>Operator Notes</span>
-            <textarea
-              value={form.operatorNotes}
-              onChange={(event) => onFieldChange("operatorNotes", event.target.value)}
-              rows={3}
-            />
-          </label>
-
-          <div className="venue-assessment-field">
-            <span>Photos / Video / Attachments</span>
-            <div className="venue-assessment-list">
-              {form.attachments.map((attachment, index) => (
-                <div key={index} className="venue-assessment-attachment-row">
-                  <input
-                    type="text"
-                    placeholder="Label"
-                    value={attachment.label}
-                    onChange={(event) => onAttachmentChange(index, "label", event.target.value)}
-                  />
-                  <input
-                    type="text"
-                    placeholder="URL"
-                    value={attachment.url}
-                    onChange={(event) => onAttachmentChange(index, "url", event.target.value)}
-                  />
-                  <button type="button" onClick={() => onRemoveAttachment(index)} aria-label="Remove attachment">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <button type="button" className="venue-assessment-add-btn" onClick={onAddAttachment}>
-              <Plus className="w-3.5 h-3.5" /> Add attachment
-            </button>
-          </div>
+          {ASSESSMENT_TEXT_FIELDS.map(({ key, label }) => (
+            <label key={key} className="venue-assessment-field">
+              <span>{label}</span>
+              <textarea value={form[key]} onChange={(event) => onFieldChange(key, event.target.value)} rows={3} />
+            </label>
+          ))}
 
           <div className="venue-assessment-meta">
             <div className="venue-assessment-meta-row">
@@ -1439,6 +1339,7 @@ function OperationalCanvas() {
   const [currentAssessment, setCurrentAssessment] = useState<VenueRiskAssessment | null>(null);
   const [assessmentForm, setAssessmentForm] = useState<AssessmentFormState | null>(null);
   const [assessmentLoading, setAssessmentLoading] = useState(false);
+  const [assessmentError, setAssessmentError] = useState<string | null>(null);
   const [savingAssessment, setSavingAssessment] = useState(false);
   const [submittingAssessment, setSubmittingAssessment] = useState(false);
 
@@ -1454,11 +1355,13 @@ function OperationalCanvas() {
     setAssessingTaskId(null);
     setCurrentAssessment(null);
     setAssessmentForm(null);
+    setAssessmentError(null);
   }
 
   useEffect(() => {
     if (riskAssessmentsView !== "assessment" || assessingTaskId == null || assessingVenueId == null) return;
     setAssessmentLoading(true);
+    setAssessmentError(null);
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     api.venueRiskAssessments
       .forVenue(assessingTaskId, assessingVenueId, timezone)
@@ -1475,44 +1378,15 @@ function OperationalCanvas() {
           attachments: assessment.attachments,
         });
       })
-      .catch((err) => console.error("Failed to load risk assessment:", err))
+      .catch((err) => {
+        console.error("Failed to load risk assessment:", err);
+        setAssessmentError(err instanceof Error ? err.message : "Failed to load risk assessment.");
+      })
       .finally(() => setAssessmentLoading(false));
   }, [riskAssessmentsView, assessingTaskId, assessingVenueId]);
 
   function updateAssessmentField<K extends keyof AssessmentFormState>(key: K, value: AssessmentFormState[K]) {
     setAssessmentForm((form) => (form ? { ...form, [key]: value } : form));
-  }
-
-  function updateCheckpoint(index: number, field: keyof VenueRiskAssessmentCheckpoint, value: string) {
-    setAssessmentForm((form) =>
-      form
-        ? { ...form, checkpoints: form.checkpoints.map((c, i) => (i === index ? { ...c, [field]: value } : c)) }
-        : form,
-    );
-  }
-
-  function addCheckpoint() {
-    setAssessmentForm((form) => (form ? { ...form, checkpoints: [...form.checkpoints, { question: "", answer: "" }] } : form));
-  }
-
-  function removeCheckpoint(index: number) {
-    setAssessmentForm((form) => (form ? { ...form, checkpoints: form.checkpoints.filter((_, i) => i !== index) } : form));
-  }
-
-  function updateAttachment(index: number, field: keyof VenueRiskAssessmentAttachment, value: string) {
-    setAssessmentForm((form) =>
-      form
-        ? { ...form, attachments: form.attachments.map((a, i) => (i === index ? { ...a, [field]: value } : a)) }
-        : form,
-    );
-  }
-
-  function addAttachment() {
-    setAssessmentForm((form) => (form ? { ...form, attachments: [...form.attachments, { label: "", url: "" }] } : form));
-  }
-
-  function removeAttachment(index: number) {
-    setAssessmentForm((form) => (form ? { ...form, attachments: form.attachments.filter((_, i) => i !== index) } : form));
   }
 
   function saveAssessment() {
@@ -2707,16 +2581,11 @@ function OperationalCanvas() {
             assessment={currentAssessment}
             form={assessmentForm}
             loading={assessmentLoading}
+            error={assessmentError}
             saving={savingAssessment}
             submitting={submittingAssessment}
             onBack={backToVenuesFromAssessment}
             onFieldChange={updateAssessmentField}
-            onCheckpointChange={updateCheckpoint}
-            onAddCheckpoint={addCheckpoint}
-            onRemoveCheckpoint={removeCheckpoint}
-            onAttachmentChange={updateAttachment}
-            onAddAttachment={addAttachment}
-            onRemoveAttachment={removeAttachment}
             onSave={saveAssessment}
             onSubmit={submitAssessment}
           />

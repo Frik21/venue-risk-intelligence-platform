@@ -97,17 +97,9 @@ export interface Plan {
 // The CPO's in-field venue risk assessment (Risk Assessments > Venues >
 // a venue, after its task is selected) - one per (task, venue) pair.
 // Distinct from AssessmentSummary/AssessmentDetail below, which is the
-// separate, formal Manager/Analyst-facing Assessments feature.
-export interface VenueRiskAssessmentCheckpoint {
-  question: string;
-  answer: string;
-}
-
-export interface VenueRiskAssessmentAttachment {
-  label: string;
-  url: string;
-}
-
+// separate, formal Manager/Analyst-facing Assessments feature. Every
+// field is a single free-text comment box (per direct product
+// direction), not a nested sub-list.
 export interface VenueRiskAssessment {
   id: number;
   taskId: number;
@@ -118,12 +110,12 @@ export interface VenueRiskAssessment {
   timezone: string | null;
   currentOperatingConditions: string;
   areaAdvisories: string;
-  checkpoints: VenueRiskAssessmentCheckpoint[];
+  checkpoints: string;
   observedHazards: string;
   existingControls: string;
   recommendedActions: string;
   operatorNotes: string;
-  attachments: VenueRiskAssessmentAttachment[];
+  attachments: string;
   status: "draft" | "submitted";
   submittedAt: string | null;
   createdAt: string;

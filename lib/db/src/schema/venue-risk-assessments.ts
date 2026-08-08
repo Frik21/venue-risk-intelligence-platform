@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, jsonb, timestamp, unique } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { tasksTable } from "./tasks";
@@ -11,7 +11,9 @@ import { usersTable } from "./users";
 // assessments/risk-matrix/versioning system (schema/assessments.ts,
 // the Manager/Analyst-facing "Assessments" nav item) - this is a
 // lighter, CPO-facing checklist per (task, venue) pair, not a
-// versioned/approved document.
+// versioned/approved document. Every field below is a single free-text
+// comment box the CPO writes into directly (per direct product
+// direction) - no nested sub-lists.
 export const venueRiskAssessmentsTable = pgTable(
   "venue_risk_assessments",
   {
@@ -25,18 +27,12 @@ export const venueRiskAssessmentsTable = pgTable(
     timezone: text("timezone"),
     currentOperatingConditions: text("current_operating_conditions").notNull().default(""),
     areaAdvisories: text("area_advisories").notNull().default(""),
-    // Freeform Q&A checkpoints - { question: string, answer: string }[].
-    // Not a fixed master list like the Task Planning checklist, since
-    // checkpoints vary per venue; the CPO adds/removes rows.
-    checkpoints: jsonb("checkpoints").notNull().default([]),
+    checkpoints: text("checkpoints").notNull().default(""),
     observedHazards: text("observed_hazards").notNull().default(""),
     existingControls: text("existing_controls").notNull().default(""),
     recommendedActions: text("recommended_actions").notNull().default(""),
     operatorNotes: text("operator_notes").notNull().default(""),
-    // { label: string, url: string }[] - links for now (e.g. photos
-    // uploaded elsewhere and pasted in); real file upload/storage is a
-    // separate, later piece of work.
-    attachments: jsonb("attachments").notNull().default([]),
+    attachments: text("attachments").notNull().default(""),
     status: text("status").notNull().default("draft"),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

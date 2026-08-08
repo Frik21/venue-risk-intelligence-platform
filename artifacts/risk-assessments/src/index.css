@@ -1185,9 +1185,7 @@
   color: rgba(255, 255, 255, 0.45);
 }
 
-.venue-assessment-field textarea,
-.venue-assessment-checkpoint-row input,
-.venue-assessment-attachment-row input {
+.venue-assessment-field textarea {
   padding: 8px 10px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
@@ -1199,66 +1197,6 @@
   letter-spacing: normal;
   font-family: inherit;
   resize: vertical;
-}
-
-.venue-assessment-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.venue-assessment-checkpoint-row,
-.venue-assessment-attachment-row {
-  display: flex;
-  gap: 6px;
-}
-
-.venue-assessment-checkpoint-row input,
-.venue-assessment-attachment-row input {
-  flex: 1;
-  min-width: 0;
-}
-
-.venue-assessment-checkpoint-row button,
-.venue-assessment-attachment-row button {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
-}
-
-.venue-assessment-checkpoint-row button:hover,
-.venue-assessment-attachment-row button:hover {
-  background: rgba(252, 165, 165, 0.16);
-  border-color: rgba(252, 165, 165, 0.4);
-  color: rgba(252, 165, 165, 0.95);
-}
-
-.venue-assessment-add-btn {
-  align-self: flex-start;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border: 1px solid rgba(125, 211, 252, 0.3);
-  border-radius: 8px;
-  background: rgba(125, 211, 252, 0.1);
-  color: rgba(125, 211, 252, 0.9);
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: none;
-  letter-spacing: normal;
-  cursor: pointer;
-}
-
-.venue-assessment-add-btn:hover {
-  background: rgba(125, 211, 252, 0.18);
 }
 
 .venue-assessment-status {

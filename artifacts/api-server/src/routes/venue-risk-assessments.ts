@@ -5,9 +5,6 @@ import { z } from "zod";
 
 const router: IRouter = Router();
 
-type Checkpoint = { question: string; answer: string };
-type Attachment = { label: string; url: string };
-
 function formatAssessment(
   row: typeof venueRiskAssessmentsTable.$inferSelect,
   venueName?: string | null,
@@ -23,12 +20,12 @@ function formatAssessment(
     timezone: row.timezone,
     currentOperatingConditions: row.currentOperatingConditions,
     areaAdvisories: row.areaAdvisories,
-    checkpoints: (row.checkpoints as Checkpoint[]) ?? [],
+    checkpoints: row.checkpoints,
     observedHazards: row.observedHazards,
     existingControls: row.existingControls,
     recommendedActions: row.recommendedActions,
     operatorNotes: row.operatorNotes,
-    attachments: (row.attachments as Attachment[]) ?? [],
+    attachments: row.attachments,
     status: row.status as "draft" | "submitted",
     submittedAt: row.submittedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
@@ -68,18 +65,15 @@ router.get("/tasks/:taskId/venues/:venueId/risk-assessment", async (req, res): P
   res.json(formatAssessment(assessment, venue.name, operator?.name));
 });
 
-const CheckpointSchema = z.object({ question: z.string(), answer: z.string() });
-const AttachmentSchema = z.object({ label: z.string(), url: z.string() });
-
 const AssessmentUpdateSchema = z.object({
   currentOperatingConditions: z.string().max(2000).optional(),
   areaAdvisories: z.string().max(2000).optional(),
-  checkpoints: z.array(CheckpointSchema).optional(),
+  checkpoints: z.string().max(2000).optional(),
   observedHazards: z.string().max(2000).optional(),
   existingControls: z.string().max(2000).optional(),
   recommendedActions: z.string().max(2000).optional(),
   operatorNotes: z.string().max(2000).optional(),
-  attachments: z.array(AttachmentSchema).optional(),
+  attachments: z.string().max(2000).optional(),
 });
 
 router.patch("/risk-assessments/:id", async (req, res): Promise<void> => {
