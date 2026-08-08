@@ -981,6 +981,21 @@ function OperationalCanvas() {
       sentAt: "Today, 08:42",
     },
   ];
+  // Instructions received via Communications also surface in the Alerts
+  // panel - a Manager instruction is exactly the kind of thing an
+  // operator shouldn't have to go looking for in a separate panel to
+  // notice. Mapped to OperationalAlert's shape so it renders through
+  // the same list as everything else there, listed first (most
+  // recent/relevant).
+  const instructionAlerts: OperationalAlert[] = DEMO_INSTRUCTIONS.map((instruction) => ({
+    id: `instruction-${instruction.id}`,
+    severity: "info",
+    title: "Instruction from your Manager",
+    description: instruction.message,
+    location: instruction.from,
+    timestamp: instruction.sentAt,
+  }));
+  const combinedAlerts = [...instructionAlerts, ...OPERATIONAL_ALERTS];
   const [cpoUsers, setCpoUsers] = useState<User[]>([]);
   const [viewingAsCpoId, setViewingAsCpoId] = useState<number | null>(null);
   const [cpoTasks, setCpoTasks] = useState<Task[]>([]);
@@ -2167,7 +2182,7 @@ function OperationalCanvas() {
       >
         <Bell className="w-4 h-4" />
         Alerts
-        {OPERATIONAL_ALERTS.length > 0 && <span className="alerts-panel-trigger-badge">{OPERATIONAL_ALERTS.length}</span>}
+        {combinedAlerts.length > 0 && <span className="alerts-panel-trigger-badge">{combinedAlerts.length}</span>}
       </button>
 
       <div
@@ -2190,7 +2205,7 @@ function OperationalCanvas() {
         </div>
 
         <div className="alerts-panel-list">
-          {OPERATIONAL_ALERTS.map((alert) => {
+          {combinedAlerts.map((alert) => {
             const SeverityIcon = ALERT_SEVERITY_ICON[alert.severity];
             return (
               <div key={alert.id} className={`alert-item alert-item-${alert.severity}`}>
