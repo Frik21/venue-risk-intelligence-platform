@@ -1453,10 +1453,20 @@ function OperationalCanvas() {
   // hit-zones below, and the focused country's own clipped image) stops
   // propagation on click, so this canvas-level handler only ever fires for
   // clicks that didn't land on anything - i.e. genuinely "outside" any
-  // country, focused or not.
+  // country, focused or not. Every VenueGuard panel (Brief/Communications/
+  // Tasks/Task Planning/Layers) and the Alerts panel also stop
+  // propagation on their own click, so a click landing here is also
+  // genuinely "outside" whichever of those is open - close it the same
+  // way Escape already does.
   function handleCanvasClick() {
     if (activeCountry) {
       clearSelection();
+    }
+    if (activePanel != null) {
+      setActivePanel(null);
+    }
+    if (alertsPanelOpen) {
+      setAlertsPanelOpen(false);
     }
     if (SHOW_CANVAS_CALIBRATION && calibrationPoint) {
       console.log("Operational Canvas calibration point:", calibrationPoint);
