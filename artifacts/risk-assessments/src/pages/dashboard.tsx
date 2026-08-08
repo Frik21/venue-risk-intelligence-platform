@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
-import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, Globe, X, ChevronDown, ListChecks, MessageSquare } from "lucide-react";
+import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, Globe, X, ChevronDown, ListChecks, MessageSquare, Check } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -1046,6 +1046,23 @@ function OperationalCanvas() {
   };
   const displayedTasks = useMemo(() => (cpoTasks.length > 0 ? cpoTasks : [MOCK_TASK]), [cpoTasks]);
 
+  // Task acceptance - the CPO's first response to an assigned task,
+  // before working through its checklist. Demo/local-only for now (per
+  // direct product direction), same as Communications - not persisted
+  // to the task itself. Accepting a task is what "connects" it to Task
+  // Planning: it becomes the selected task there, and the CPO is taken
+  // straight to its checklist.
+  type TaskAcceptanceStatus = "pending" | "accepted" | "declined";
+  const [taskAcceptance, setTaskAcceptance] = useState<Record<number, TaskAcceptanceStatus>>({});
+
+  function respondToTask(taskId: number, response: "accepted" | "declined") {
+    setTaskAcceptance((prev) => ({ ...prev, [taskId]: response }));
+    if (response === "accepted") {
+      setPlanningTaskId(taskId);
+      setActivePanel("task-planning");
+    }
+  }
+
   const [planningTaskId, setPlanningTaskId] = useState<number | null>(null);
   const [taskPlans, setTaskPlans] = useState<Record<number, Plan>>({});
   const [planLoadingTaskId, setPlanLoadingTaskId] = useState<number | null>(null);
@@ -1908,7 +1925,48 @@ function OperationalCanvas() {
           </button>
         </div>
 
-        <p className="tasks-panel-empty">Nothing here yet.</p>
+        {cpoTasksLoading ? (
+          <p className="tasks-panel-empty">Loading tasks…</p>
+        ) : (
+          <div className="tasks-panel-list">
+            {displayedTasks.map((task) => {
+              const response = taskAcceptance[task.id] ?? "pending";
+              return (
+                <div key={task.id} className="task-row">
+                  <div className="task-row-header">
+                    <p className="task-row-title">{task.title}</p>
+                    {task.dueDate && <span className="task-row-due">Due {new Date(task.dueDate).toLocaleDateString()}</span>}
+                  </div>
+                  {task.venueName && <p className="task-row-venue">{task.venueName}</p>}
+                  {task.assignedByName && <p className="task-row-assigned-by">Assigned by {task.assignedByName}</p>}
+
+                  {response === "pending" ? (
+                    <div className="task-row-response">
+                      <button
+                        type="button"
+                        className="task-response-btn task-response-accept"
+                        onClick={() => respondToTask(task.id, "accepted")}
+                      >
+                        <Check className="w-3.5 h-3.5" /> Accept
+                      </button>
+                      <button
+                        type="button"
+                        className="task-response-btn task-response-decline"
+                        onClick={() => respondToTask(task.id, "declined")}
+                      >
+                        <X className="w-3.5 h-3.5" /> Decline
+                      </button>
+                    </div>
+                  ) : (
+                    <p className={`task-row-response-status task-row-response-status-${response}`}>
+                      {response === "accepted" ? "Accepted - see Task Planning" : "Declined"}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div

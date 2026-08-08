@@ -1140,6 +1140,62 @@
   color: rgba(187, 247, 208, 0.95);
 }
 
+/* Task acceptance (Tasks panel) - a CPO's first response to an
+   assigned task, before Task Planning. Demo/local-only for now. */
+.task-row-response {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.task-response-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.task-response-accept {
+  color: rgba(187, 247, 208, 0.95);
+}
+
+.task-response-accept:hover {
+  background: rgba(74, 222, 128, 0.16);
+  border-color: rgba(74, 222, 128, 0.4);
+}
+
+.task-response-decline {
+  color: rgba(254, 202, 202, 0.95);
+}
+
+.task-response-decline:hover {
+  background: rgba(248, 113, 113, 0.16);
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.task-row-response-status {
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.task-row-response-status-accepted {
+  color: rgba(134, 239, 172, 0.95);
+}
+
+.task-row-response-status-declined {
+  color: rgba(252, 165, 165, 0.95);
+}
+
 /* Task Planning (Planner, Step 1) - the pre-op readiness checklist. */
 .task-plan-checklist {
   display: flex;
