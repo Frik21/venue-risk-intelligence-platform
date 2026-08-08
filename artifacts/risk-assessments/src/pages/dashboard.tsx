@@ -400,6 +400,7 @@ function VenueRiskAssessmentForm({
   form,
   loading,
   error,
+  actionError,
   saving,
   submitting,
   onBack,
@@ -413,6 +414,7 @@ function VenueRiskAssessmentForm({
   form: AssessmentFormState | null;
   loading: boolean;
   error: string | null;
+  actionError: string | null;
   saving: boolean;
   submitting: boolean;
   onBack: () => void;
@@ -478,6 +480,7 @@ function VenueRiskAssessmentForm({
           </div>
 
           <div className="task-plan-submit">
+            {actionError && <p className="venue-assessment-action-error">{actionError}</p>}
             <button type="button" className="venue-assessment-save-btn" onClick={onSave} disabled={saving}>
               {saving ? "Saving…" : "Save Draft"}
             </button>
@@ -1339,7 +1342,11 @@ function OperationalCanvas() {
   const [currentAssessment, setCurrentAssessment] = useState<VenueRiskAssessment | null>(null);
   const [assessmentForm, setAssessmentForm] = useState<AssessmentFormState | null>(null);
   const [assessmentLoading, setAssessmentLoading] = useState(false);
+  // Blocks the form entirely (couldn't load the assessment in the first
+  // place) - distinct from assessmentActionError, which is a save/submit
+  // failure on an already-loaded form and shouldn't hide it.
   const [assessmentError, setAssessmentError] = useState<string | null>(null);
+  const [assessmentActionError, setAssessmentActionError] = useState<string | null>(null);
   const [savingAssessment, setSavingAssessment] = useState(false);
   const [submittingAssessment, setSubmittingAssessment] = useState(false);
 
@@ -1356,12 +1363,74 @@ function OperationalCanvas() {
     setCurrentAssessment(null);
     setAssessmentForm(null);
     setAssessmentError(null);
+    setAssessmentActionError(null);
+  }
+
+  // Same reasoning as MOCK_TASK/mockPlan - the demo task's id doesn't
+  // exist server-side, so it gets a local-only assessment instead of a
+  // real API call.
+  function mockAssessment(taskId: number, venueId: number, venueName: string): VenueRiskAssessment {
+    return {
+      id: MOCK_TASK_ID,
+      taskId,
+      venueId,
+      venueName,
+      operatorId: MOCK_TASK_ID,
+      operatorName: "Demo Operator",
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      currentOperatingConditions: "",
+      areaAdvisories: "",
+      checkpoints: "",
+      observedHazards: "",
+      existingControls: "",
+      recommendedActions: "",
+      operatorNotes: "",
+      attachments: "",
+      status: "draft",
+      submittedAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  // A failed fetch's message is the raw API response body (see
+  // apiFetch), which for a JSON error looks like {"error":"..."} - try
+  // to pull out just the message so the CPO sees plain text, not JSON.
+  function friendlyErrorMessage(err: unknown, fallback: string): string {
+    if (!(err instanceof Error)) return fallback;
+    try {
+      const parsed = JSON.parse(err.message);
+      if (typeof parsed?.error === "string") return parsed.error;
+    } catch {
+      // Not JSON - fall through to using the raw message.
+    }
+    return err.message || fallback;
   }
 
   useEffect(() => {
     if (riskAssessmentsView !== "assessment" || assessingTaskId == null || assessingVenueId == null) return;
-    setAssessmentLoading(true);
     setAssessmentError(null);
+    setAssessmentActionError(null);
+    setAssessmentLoading(false);
+
+    if (assessingTaskId === MOCK_TASK_ID) {
+      const venueName = riskAssessmentVenues.find((v) => v.venueId === assessingVenueId)?.venueName ?? "Venue";
+      const assessment = mockAssessment(assessingTaskId, assessingVenueId, venueName);
+      setCurrentAssessment(assessment);
+      setAssessmentForm({
+        currentOperatingConditions: assessment.currentOperatingConditions,
+        areaAdvisories: assessment.areaAdvisories,
+        checkpoints: assessment.checkpoints,
+        observedHazards: assessment.observedHazards,
+        existingControls: assessment.existingControls,
+        recommendedActions: assessment.recommendedActions,
+        operatorNotes: assessment.operatorNotes,
+        attachments: assessment.attachments,
+      });
+      return;
+    }
+
+    setAssessmentLoading(true);
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     api.venueRiskAssessments
       .forVenue(assessingTaskId, assessingVenueId, timezone)
@@ -1380,7 +1449,7 @@ function OperationalCanvas() {
       })
       .catch((err) => {
         console.error("Failed to load risk assessment:", err);
-        setAssessmentError(err instanceof Error ? err.message : "Failed to load risk assessment.");
+        setAssessmentError(friendlyErrorMessage(err, "Couldn't load this risk assessment."));
       })
       .finally(() => setAssessmentLoading(false));
   }, [riskAssessmentsView, assessingTaskId, assessingVenueId]);
@@ -1391,21 +1460,38 @@ function OperationalCanvas() {
 
   function saveAssessment() {
     if (!currentAssessment || !assessmentForm) return;
+    if (currentAssessment.taskId === MOCK_TASK_ID) {
+      // Local-only, same as the rest of MOCK_TASK - nothing real to send.
+      setCurrentAssessment((prev) => (prev ? { ...prev, ...assessmentForm, updatedAt: new Date().toISOString() } : prev));
+      return;
+    }
     setSavingAssessment(true);
+    setAssessmentActionError(null);
     api.venueRiskAssessments
       .update(currentAssessment.id, assessmentForm)
       .then(setCurrentAssessment)
-      .catch((err) => console.error("Failed to save risk assessment:", err))
+      .catch((err) => {
+        console.error("Failed to save risk assessment:", err);
+        setAssessmentActionError(friendlyErrorMessage(err, "Couldn't save this risk assessment."));
+      })
       .finally(() => setSavingAssessment(false));
   }
 
   function submitAssessment() {
     if (!currentAssessment) return;
+    if (currentAssessment.taskId === MOCK_TASK_ID) {
+      setCurrentAssessment((prev) => (prev ? { ...prev, status: "submitted", submittedAt: new Date().toISOString() } : prev));
+      return;
+    }
     setSubmittingAssessment(true);
+    setAssessmentActionError(null);
     api.venueRiskAssessments
       .submit(currentAssessment.id)
       .then(setCurrentAssessment)
-      .catch((err) => console.error("Failed to submit risk assessment:", err))
+      .catch((err) => {
+        console.error("Failed to submit risk assessment:", err);
+        setAssessmentActionError(friendlyErrorMessage(err, "Couldn't submit this risk assessment."));
+      })
       .finally(() => setSubmittingAssessment(false));
   }
 
@@ -2582,6 +2668,7 @@ function OperationalCanvas() {
             form={assessmentForm}
             loading={assessmentLoading}
             error={assessmentError}
+            actionError={assessmentActionError}
             saving={savingAssessment}
             submitting={submittingAssessment}
             onBack={backToVenuesFromAssessment}
