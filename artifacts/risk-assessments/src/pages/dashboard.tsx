@@ -948,32 +948,31 @@ function OperationalCanvas() {
   const showDebugLayerNumbers = false;
   const [calibrationPoint, setCalibrationPoint] = useState<{ x: number; y: number } | null>(null);
   const [activeCountry, setActiveCountry] = useState<ActiveCountry | null>(null);
-  // Operational Brief panel - recalls the same Operational Brief content
-  // shown at the mandatory pre-entry gate, on demand, inside the
-  // Operations Centre. Additive only: the pre-entry gate (step === "brief"
-  // in Dashboard) still runs unchanged, per the Product Constitution's
-  // Product Promise. Non-modal by design - no dimming overlay - so the
-  // map stays the primary focus while the panel is open.
-  const [briefPanelOpen, setBriefPanelOpen] = useState(false);
-  // Alerts panel - individual timestamped events, distinct from the
-  // standing Operational Brief. Slides from the opposite edge (right) so
-  // the two panels never compete for the same screen space.
-  const [alertsPanelOpen, setAlertsPanelOpen] = useState(false);
-  // Operational Layers panel - a legend/control panel for the canvas
-  // itself. Each toggle's starting value comes from the Map Aesthetics
-  // Engine's own default (map-aesthetics.ts) or this file's existing
-  // feature flags, but the toggle only ever changes this component's own
-  // live state for the current session - it never writes back to those
-  // defaults, so the file the operator edits directly still governs what
-  // a fresh session looks like.
-  const [layersPanelOpen, setLayersPanelOpen] = useState(false);
 
-  // Communications panel - one-way instructions/updates from a Manager
-  // to the CPO on the ground (per direct product direction - distinct
-  // from Task Assignment below: this is "tell the CPO something right
-  // now," not "assign structured work"). No backend yet - demo content
-  // only, same as MOCK_TASK further down, until this is built for real.
-  const [communicationsPanelOpen, setCommunicationsPanelOpen] = useState(false);
+  // The five VenueGuard-menu panels (Operational Brief, Communications,
+  // Tasks, Task Planning, Layers) are mutually exclusive - only one open
+  // at a time. They previously each had their own boolean and stacked
+  // side-by-side with a computed left-shift, but that let a panel opened
+  // out of "natural" order (e.g. Layers first) sit unshifted underneath
+  // whatever opened after it, which - being later in the DOM at the same
+  // z-index - always painted on top and made it look like every menu
+  // item opened Layers. A single "which panel is open" state removes
+  // that whole bug class: there's nothing to shift, since at most one of
+  // these is ever visible.
+  //
+  // Alerts (the bell icon, top-right) is a separate, older panel - not
+  // part of the VenueGuard menu, slides from the opposite edge, and can
+  // coexist with any of these five.
+  type VenueGuardPanel = "brief" | "communications" | "tasks" | "task-planning" | "layers" | null;
+  const [activePanel, setActivePanel] = useState<VenueGuardPanel>(null);
+  const briefPanelOpen = activePanel === "brief";
+  const communicationsPanelOpen = activePanel === "communications";
+  const tasksPanelOpen = activePanel === "tasks";
+  const taskPlanningPanelOpen = activePanel === "task-planning";
+  const layersPanelOpen = activePanel === "layers";
+
+  const [alertsPanelOpen, setAlertsPanelOpen] = useState(false);
+
   const DEMO_INSTRUCTIONS = [
     {
       id: 1,
@@ -982,16 +981,6 @@ function OperationalCanvas() {
       sentAt: "Today, 08:42",
     },
   ];
-
-  // Tasks panel - Task Assignment (per direct product direction: a
-  // Manager assigns a CPO a specific piece of structured work already
-  // in the platform, e.g. "complete the assessment for venue X", tied
-  // to a venue; the CPO moves it through a 3-state status that feeds
-  // back to the Manager). No real auth/session exists yet, so this
-  // page can't know "which CPO is logged in" - a "Viewing as" picker
-  // stands in for that until real login exists, same honesty-over-
-  // guessing approach used throughout this build.
-  const [tasksPanelOpen, setTasksPanelOpen] = useState(false);
   const [cpoUsers, setCpoUsers] = useState<User[]>([]);
   const [viewingAsCpoId, setViewingAsCpoId] = useState<number | null>(null);
   const [cpoTasks, setCpoTasks] = useState<Task[]>([]);
@@ -1056,7 +1045,6 @@ function OperationalCanvas() {
   };
   const displayedTasks = useMemo(() => (cpoTasks.length > 0 ? cpoTasks : [MOCK_TASK]), [cpoTasks]);
 
-  const [taskPlanningPanelOpen, setTaskPlanningPanelOpen] = useState(false);
   const [planningTaskId, setPlanningTaskId] = useState<number | null>(null);
   const [taskPlans, setTaskPlans] = useState<Record<number, Plan>>({});
   const [planLoadingTaskId, setPlanLoadingTaskId] = useState<number | null>(null);
@@ -1258,11 +1246,11 @@ function OperationalCanvas() {
   // without lifting it (and the click-outside-to-close logic below) out
   // of this component entirely.
   useEffect(() => {
-    const openBrief = () => setBriefPanelOpen(true);
-    const openCommunications = () => setCommunicationsPanelOpen(true);
-    const openTasks = () => setTasksPanelOpen(true);
-    const openTaskPlanning = () => setTaskPlanningPanelOpen(true);
-    const openLayers = () => setLayersPanelOpen(true);
+    const openBrief = () => setActivePanel("brief");
+    const openCommunications = () => setActivePanel("communications");
+    const openTasks = () => setActivePanel("tasks");
+    const openTaskPlanning = () => setActivePanel("task-planning");
+    const openLayers = () => setActivePanel("layers");
     window.addEventListener(OPEN_BRIEF_PANEL_EVENT, openBrief);
     window.addEventListener(OPEN_COMMUNICATIONS_PANEL_EVENT, openCommunications);
     window.addEventListener(OPEN_TASKS_PANEL_EVENT, openTasks);
@@ -1284,31 +1272,15 @@ function OperationalCanvas() {
         setAlertsPanelOpen(false);
         return;
       }
-      if (layersPanelOpen) {
-        setLayersPanelOpen(false);
-        return;
-      }
-      if (taskPlanningPanelOpen) {
-        setTaskPlanningPanelOpen(false);
-        return;
-      }
-      if (tasksPanelOpen) {
-        setTasksPanelOpen(false);
-        return;
-      }
-      if (communicationsPanelOpen) {
-        setCommunicationsPanelOpen(false);
-        return;
-      }
-      if (briefPanelOpen) {
-        setBriefPanelOpen(false);
+      if (activePanel != null) {
+        setActivePanel(null);
         return;
       }
       clearSelection();
     }
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [briefPanelOpen, alertsPanelOpen, communicationsPanelOpen, tasksPanelOpen, taskPlanningPanelOpen, layersPanelOpen]);
+  }, [activePanel, alertsPanelOpen]);
 
   // Two-phase mount so the CSS transition actually animates: paint the
   // "not entered" state first (opacity 0, no scale/shift), then flip to
@@ -1450,19 +1422,6 @@ function OperationalCanvas() {
     if (SHOW_CANVAS_CALIBRATION && calibrationPoint) {
       console.log("Operational Canvas calibration point:", calibrationPoint);
     }
-  }
-
-  // Brief/Communications/Tasks/Task Planning/Layers all dock to the
-  // same left edge and shift right by one panel-width for each other
-  // panel open before them, in this fixed order - computed generically
-  // here rather than hand-writing every combination per panel (which is
-  // exactly how the panel-closing bug happened: an inline calc() that
-  // forgot one of the panels). Layers is deliberately last, since it's
-  // opened least often relative to the others.
-  const PANEL_STACK_ORDER = [briefPanelOpen, communicationsPanelOpen, tasksPanelOpen, taskPlanningPanelOpen];
-  function panelShiftStyle(index: number): CSSProperties | undefined {
-    const openBefore = PANEL_STACK_ORDER.slice(0, index).filter(Boolean).length;
-    return openBefore > 0 ? { left: `calc(${openBefore} * min(360px, 88vw))` } : undefined;
   }
 
   return (
@@ -1833,7 +1792,7 @@ function OperationalCanvas() {
           <button
             type="button"
             className="brief-panel-close"
-            onClick={() => setBriefPanelOpen(false)}
+            onClick={() => setActivePanel(null)}
             aria-label="Close Operational Brief"
           >
             <X className="w-4 h-4" />
@@ -1881,7 +1840,6 @@ function OperationalCanvas() {
 
       <div
         className={`communications-panel ${communicationsPanelOpen ? "communications-panel-open" : ""}`}
-        style={panelShiftStyle(1)}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="tasks-panel-header">
@@ -1892,7 +1850,7 @@ function OperationalCanvas() {
           <button
             type="button"
             className="tasks-panel-close"
-            onClick={() => setCommunicationsPanelOpen(false)}
+            onClick={() => setActivePanel(null)}
             aria-label="Close Communications"
           >
             <X className="w-4 h-4" />
@@ -1911,7 +1869,6 @@ function OperationalCanvas() {
 
       <div
         className={`tasks-panel ${tasksPanelOpen ? "tasks-panel-open" : ""}`}
-        style={panelShiftStyle(2)}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="tasks-panel-header">
@@ -1922,7 +1879,7 @@ function OperationalCanvas() {
           <button
             type="button"
             className="tasks-panel-close"
-            onClick={() => setTasksPanelOpen(false)}
+            onClick={() => setActivePanel(null)}
             aria-label="Close Tasks"
           >
             <X className="w-4 h-4" />
@@ -1934,7 +1891,6 @@ function OperationalCanvas() {
 
       <div
         className={`task-planning-panel ${taskPlanningPanelOpen ? "task-planning-panel-open" : ""}`}
-        style={panelShiftStyle(3)}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="tasks-panel-header">
@@ -1945,7 +1901,7 @@ function OperationalCanvas() {
           <button
             type="button"
             className="tasks-panel-close"
-            onClick={() => setTaskPlanningPanelOpen(false)}
+            onClick={() => setActivePanel(null)}
             aria-label="Close Task Planning"
           >
             <X className="w-4 h-4" />
@@ -1993,7 +1949,6 @@ function OperationalCanvas() {
 
       <div
         className={`layers-panel ${layersPanelOpen ? "layers-panel-open" : ""}`}
-        style={panelShiftStyle(4)}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="layers-panel-header">
@@ -2004,7 +1959,7 @@ function OperationalCanvas() {
           <button
             type="button"
             className="layers-panel-close"
-            onClick={() => setLayersPanelOpen(false)}
+            onClick={() => setActivePanel(null)}
             aria-label="Close Operational Layers"
           >
             <X className="w-4 h-4" />
