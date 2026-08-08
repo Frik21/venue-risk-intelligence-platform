@@ -1138,30 +1138,7 @@
   color: rgba(187, 247, 208, 0.95);
 }
 
-/* Task Planning (Planner, Step 1) - a button on each task row that
-   opens the dedicated task-checklist-panel below, rather than an inline
-   expand - a real slide-out panel, one level deeper than the Tasks
-   panel it's opened from. */
-.task-row-plan-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  margin-top: 8px;
-  padding: 6px 0 0;
-  border: none;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: transparent;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.task-row-plan-toggle:hover {
-  color: rgba(255, 255, 255, 0.8);
-}
-
+/* Task Planning (Planner, Step 1) - the pre-op readiness checklist. */
 .task-plan-checklist {
   display: flex;
   flex-direction: column;
@@ -1184,13 +1161,14 @@
   accent-color: rgba(74, 222, 128, 0.9);
 }
 
-/* Task Planning panel itself - docks to the same left edge as
-   Brief/Tasks, shifted right by however many of those are open (it's
-   only ever opened from within the Tasks panel, so tasksPanelOpen is
-   always true while this is open, but the shift math stays generic).
-   Reuses .tasks-panel-header/eyebrow/title/close/empty for the header -
-   same visual language as the panel it was opened from. */
-.task-checklist-panel {
+/* Task Planning panel - a real sibling of Brief/Tasks/Layers, reached
+   directly from the VenueGuard menu (not nested inside Tasks). Has its
+   own task selector since it isn't opened from a specific task row.
+   Docks to the same left edge, shifted right by however many of
+   Brief/Tasks are open. Reuses .tasks-panel-header/eyebrow/title/close/
+   empty/viewing-as for the header and task selector - same visual
+   language as the Tasks panel. */
+.task-planning-panel {
   position: absolute;
   top: 0;
   left: 0;
@@ -1211,7 +1189,7 @@
   pointer-events: auto;
 }
 
-.task-checklist-panel-open {
+.task-planning-panel-open {
   transform: translateX(0);
 }
 

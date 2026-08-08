@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
-import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, Bell, Layers, LogOut, Search, Globe, X, ChevronDown, ListChecks } from "lucide-react";
+import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, Globe, X, ChevronDown, ListChecks } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -343,6 +343,7 @@ function searchOperationalIndex(query: string): SearchResult[] {
 // drilling it through both components.
 const OPEN_BRIEF_PANEL_EVENT = "venueguard-open-brief-panel";
 const OPEN_TASKS_PANEL_EVENT = "venueguard-open-tasks-panel";
+const OPEN_TASK_PLANNING_PANEL_EVENT = "venueguard-open-task-planning-panel";
 const OPEN_LAYERS_PANEL_EVENT = "venueguard-open-layers-panel";
 
 function TopBanner({ onSignOut }: { onSignOut: () => void }) {
@@ -401,6 +402,17 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
             >
               <ListChecks className="w-4 h-4" />
               Tasks
+            </button>
+            <button
+              type="button"
+              className="top-banner-brand-menu-item"
+              onClick={() => {
+                window.dispatchEvent(new Event(OPEN_TASK_PLANNING_PANEL_EVENT));
+                setBrandMenuOpen(false);
+              }}
+            >
+              <ClipboardCheck className="w-4 h-4" />
+              Task Planning
             </button>
             <button
               type="button"
@@ -987,12 +999,13 @@ function OperationalCanvas() {
     });
   }
 
-  // Task Checklist (Planner, Step 1) - a dedicated slide-out panel, one
-  // level deeper than the Tasks panel: click a task there, this panel
-  // slides out over it with that task's 15-item pre-op checklist.
+  // Task Planning (Planner, Step 1) - a real sibling panel reached
+  // directly from the VenueGuard menu (Operational Brief, Tasks, Task
+  // Planning, Layers), not nested inside Tasks. It has its own task
+  // selector, since it isn't opened from a specific task row.
   //
   // A real CPO/Manager/Task setup takes several steps (create users,
-  // assign a task) before there's anything real to click into - MOCK_TASK
+  // assign a task) before there's anything real to select - MOCK_TASK
   // is a clearly-labelled, client-only demo task shown only when no real
   // tasks exist yet, so the panel itself can be tested/seen immediately.
   // Its checklist state lives only in this component (never hits the
@@ -1014,11 +1027,22 @@ function OperationalCanvas() {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
-  const displayedTasks = cpoTasks.length > 0 ? cpoTasks : [MOCK_TASK];
+  const displayedTasks = useMemo(() => (cpoTasks.length > 0 ? cpoTasks : [MOCK_TASK]), [cpoTasks]);
 
-  const [checklistTaskId, setChecklistTaskId] = useState<number | null>(null);
+  const [taskPlanningPanelOpen, setTaskPlanningPanelOpen] = useState(false);
+  const [planningTaskId, setPlanningTaskId] = useState<number | null>(null);
   const [taskPlans, setTaskPlans] = useState<Record<number, Plan>>({});
   const [planLoadingTaskId, setPlanLoadingTaskId] = useState<number | null>(null);
+
+  // Default (and re-default, e.g. once real tasks replace the mock one)
+  // the selected task to the first available whenever the current
+  // selection isn't in the list anymore.
+  useEffect(() => {
+    if (displayedTasks.length === 0) return;
+    if (!displayedTasks.some((t) => t.id === planningTaskId)) {
+      setPlanningTaskId(displayedTasks[0].id);
+    }
+  }, [displayedTasks, planningTaskId]);
 
   function mockPlan(): Plan {
     return {
@@ -1032,20 +1056,23 @@ function OperationalCanvas() {
     };
   }
 
-  function openChecklist(taskId: number) {
-    setChecklistTaskId(taskId);
-    if (taskPlans[taskId]) return;
-    if (taskId === MOCK_TASK_ID) {
-      setTaskPlans((prev) => ({ ...prev, [taskId]: mockPlan() }));
+  // Deliberately keyed only on planningTaskId, not taskPlans - this
+  // fetches once per task selection and caches the result; taskPlans
+  // itself is only ever updated as a side effect (here and in
+  // toggleChecklistItem), never a trigger to re-fetch.
+  useEffect(() => {
+    if (planningTaskId == null || taskPlans[planningTaskId]) return;
+    if (planningTaskId === MOCK_TASK_ID) {
+      setTaskPlans((prev) => ({ ...prev, [planningTaskId]: mockPlan() }));
       return;
     }
-    setPlanLoadingTaskId(taskId);
+    setPlanLoadingTaskId(planningTaskId);
     api.plans
-      .forTask(taskId)
-      .then((plan) => setTaskPlans((prev) => ({ ...prev, [taskId]: plan })))
-      .catch((err) => console.error(`Failed to load plan for task ${taskId}:`, err))
+      .forTask(planningTaskId)
+      .then((plan) => setTaskPlans((prev) => ({ ...prev, [planningTaskId]: plan })))
+      .catch((err) => console.error(`Failed to load plan for task ${planningTaskId}:`, err))
       .finally(() => setPlanLoadingTaskId(null));
-  }
+  }, [planningTaskId]);
 
   function toggleChecklistItem(taskId: number, planId: number, key: string, checked: boolean) {
     setTaskPlans((prev) => {
@@ -1195,22 +1222,26 @@ function OperationalCanvas() {
     return () => unsubscribe(setActiveCountry);
   }, []);
 
-  // Operational Brief, Tasks, and Layers are now opened from the
-  // VenueGuard brand menu in TopBanner - see OPEN_BRIEF_PANEL_EVENT/
-  // OPEN_TASKS_PANEL_EVENT/OPEN_LAYERS_PANEL_EVENT above. TopBanner and
-  // OperationalCanvas are siblings, not parent/child, so this state
-  // can't be reached by props without lifting it (and the click-
-  // outside-to-close logic below) out of this component entirely.
+  // Operational Brief, Tasks, Task Planning, and Layers are now opened
+  // from the VenueGuard brand menu in TopBanner - see
+  // OPEN_BRIEF_PANEL_EVENT/OPEN_TASKS_PANEL_EVENT/
+  // OPEN_TASK_PLANNING_PANEL_EVENT/OPEN_LAYERS_PANEL_EVENT above.
+  // TopBanner and OperationalCanvas are siblings, not parent/child, so
+  // this state can't be reached by props without lifting it (and the
+  // click-outside-to-close logic below) out of this component entirely.
   useEffect(() => {
     const openBrief = () => setBriefPanelOpen(true);
     const openTasks = () => setTasksPanelOpen(true);
+    const openTaskPlanning = () => setTaskPlanningPanelOpen(true);
     const openLayers = () => setLayersPanelOpen(true);
     window.addEventListener(OPEN_BRIEF_PANEL_EVENT, openBrief);
     window.addEventListener(OPEN_TASKS_PANEL_EVENT, openTasks);
+    window.addEventListener(OPEN_TASK_PLANNING_PANEL_EVENT, openTaskPlanning);
     window.addEventListener(OPEN_LAYERS_PANEL_EVENT, openLayers);
     return () => {
       window.removeEventListener(OPEN_BRIEF_PANEL_EVENT, openBrief);
       window.removeEventListener(OPEN_TASKS_PANEL_EVENT, openTasks);
+      window.removeEventListener(OPEN_TASK_PLANNING_PANEL_EVENT, openTaskPlanning);
       window.removeEventListener(OPEN_LAYERS_PANEL_EVENT, openLayers);
     };
   }, []);
@@ -1226,13 +1257,12 @@ function OperationalCanvas() {
         setLayersPanelOpen(false);
         return;
       }
-      if (checklistTaskId != null) {
-        setChecklistTaskId(null);
+      if (taskPlanningPanelOpen) {
+        setTaskPlanningPanelOpen(false);
         return;
       }
       if (tasksPanelOpen) {
         setTasksPanelOpen(false);
-        setChecklistTaskId(null);
         return;
       }
       if (briefPanelOpen) {
@@ -1243,7 +1273,7 @@ function OperationalCanvas() {
     }
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [briefPanelOpen, alertsPanelOpen, tasksPanelOpen, checklistTaskId, layersPanelOpen]);
+  }, [briefPanelOpen, alertsPanelOpen, tasksPanelOpen, taskPlanningPanelOpen, layersPanelOpen]);
 
   // Two-phase mount so the CSS transition actually animates: paint the
   // "not entered" state first (opacity 0, no scale/shift), then flip to
@@ -1814,10 +1844,7 @@ function OperationalCanvas() {
           <button
             type="button"
             className="tasks-panel-close"
-            onClick={() => {
-              setTasksPanelOpen(false);
-              setChecklistTaskId(null);
-            }}
+            onClick={() => setTasksPanelOpen(false)}
             aria-label="Close Tasks"
           >
             <X className="w-4 h-4" />
@@ -1869,11 +1896,6 @@ function OperationalCanvas() {
                     </button>
                   ))}
                 </div>
-
-                <button type="button" className="task-row-plan-toggle" onClick={() => openChecklist(task.id)}>
-                  <ListChecks className="w-3.5 h-3.5" />
-                  {taskPlans[task.id] ? `Task Planning (${taskPlans[task.id].checkedCount}/${taskPlans[task.id].totalCount})` : "Task Planning"}
-                </button>
               </div>
             ))}
           </div>
@@ -1881,7 +1903,7 @@ function OperationalCanvas() {
       </div>
 
       <div
-        className={`task-checklist-panel ${checklistTaskId != null && tasksPanelOpen ? "task-checklist-panel-open" : ""}`}
+        className={`task-planning-panel ${taskPlanningPanelOpen ? "task-planning-panel-open" : ""}`}
         style={
           briefPanelOpen || tasksPanelOpen
             ? { left: `calc(${(briefPanelOpen ? 1 : 0) + (tasksPanelOpen ? 1 : 0)} * min(360px, 88vw))` }
@@ -1892,50 +1914,63 @@ function OperationalCanvas() {
         <div className="tasks-panel-header">
           <div>
             <p className="tasks-panel-eyebrow">Task Planning</p>
-            <h2 className="tasks-panel-title">
-              {checklistTaskId != null ? displayedTasks.find((t) => t.id === checklistTaskId)?.title ?? "" : ""}
-            </h2>
+            <h2 className="tasks-panel-title">Pre-op readiness checklist</h2>
           </div>
           <button
             type="button"
             className="tasks-panel-close"
-            onClick={() => setChecklistTaskId(null)}
+            onClick={() => setTaskPlanningPanelOpen(false)}
             aria-label="Close Task Planning"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {checklistTaskId != null && (
-          planLoadingTaskId === checklistTaskId ? (
-            <p className="tasks-panel-empty">Loading…</p>
-          ) : taskPlans[checklistTaskId] ? (
-            <div className="task-plan-checklist">
-              {taskPlans[checklistTaskId].checklist.map((item) => (
-                <label key={item.key} className="task-plan-checklist-item">
-                  <input
-                    type="checkbox"
-                    checked={item.checked}
-                    onChange={(event) =>
-                      toggleChecklistItem(checklistTaskId, taskPlans[checklistTaskId].id, item.key, event.target.checked)
-                    }
-                  />
-                  {item.label}
-                </label>
+        {displayedTasks.length > 1 && (
+          <div className="tasks-panel-viewing-as">
+            <label htmlFor="task-planning-select">Task</label>
+            <select
+              id="task-planning-select"
+              value={planningTaskId ?? ""}
+              onChange={(event) => setPlanningTaskId(Number(event.target.value))}
+            >
+              {displayedTasks.map((t) => (
+                <option key={t.id} value={t.id}>{t.title}</option>
               ))}
-            </div>
-          ) : (
-            <p className="tasks-panel-empty">Couldn&apos;t load plan.</p>
-          )
+            </select>
+          </div>
+        )}
+
+        {planningTaskId == null ? (
+          <p className="tasks-panel-empty">No tasks to plan yet.</p>
+        ) : planLoadingTaskId === planningTaskId ? (
+          <p className="tasks-panel-empty">Loading…</p>
+        ) : taskPlans[planningTaskId] ? (
+          <div className="task-plan-checklist">
+            {taskPlans[planningTaskId].checklist.map((item) => (
+              <label key={item.key} className="task-plan-checklist-item">
+                <input
+                  type="checkbox"
+                  checked={item.checked}
+                  onChange={(event) =>
+                    toggleChecklistItem(planningTaskId, taskPlans[planningTaskId].id, item.key, event.target.checked)
+                  }
+                />
+                {item.label}
+              </label>
+            ))}
+          </div>
+        ) : (
+          <p className="tasks-panel-empty">Couldn&apos;t load plan.</p>
         )}
       </div>
 
       <div
         className={`layers-panel ${layersPanelOpen ? "layers-panel-open" : ""}`}
         style={
-          layersPanelOpen && (briefPanelOpen || tasksPanelOpen || checklistTaskId != null)
+          layersPanelOpen && (briefPanelOpen || tasksPanelOpen || taskPlanningPanelOpen)
             ? {
-                left: `calc(${(briefPanelOpen ? 1 : 0) + (tasksPanelOpen ? 1 : 0) + (checklistTaskId != null ? 1 : 0)} * min(360px, 88vw))`,
+                left: `calc(${(briefPanelOpen ? 1 : 0) + (tasksPanelOpen ? 1 : 0) + (taskPlanningPanelOpen ? 1 : 0)} * min(360px, 88vw))`,
               }
             : undefined
         }
