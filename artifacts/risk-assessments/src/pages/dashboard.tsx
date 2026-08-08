@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
-import { ArrowRight, MapPin, ShieldCheck, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, Globe, X, ChevronDown, ListChecks, MessageSquare, Check } from "lucide-react";
+import { ArrowRight, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, Globe, X, ChevronDown, ListChecks, MessageSquare, Check } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -345,6 +345,7 @@ const OPEN_BRIEF_PANEL_EVENT = "venueguard-open-brief-panel";
 const OPEN_COMMUNICATIONS_PANEL_EVENT = "venueguard-open-communications-panel";
 const OPEN_TASKS_PANEL_EVENT = "venueguard-open-tasks-panel";
 const OPEN_TASK_PLANNING_PANEL_EVENT = "venueguard-open-task-planning-panel";
+const OPEN_RISK_ASSESSMENTS_PANEL_EVENT = "venueguard-open-risk-assessments-panel";
 const OPEN_LAYERS_PANEL_EVENT = "venueguard-open-layers-panel";
 
 function TopBanner({ onSignOut }: { onSignOut: () => void }) {
@@ -425,6 +426,17 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
             >
               <ClipboardCheck className="w-4 h-4" />
               Task Planning
+            </button>
+            <button
+              type="button"
+              className="top-banner-brand-menu-item"
+              onClick={() => {
+                window.dispatchEvent(new Event(OPEN_RISK_ASSESSMENTS_PANEL_EVENT));
+                setBrandMenuOpen(false);
+              }}
+            >
+              <ShieldAlert className="w-4 h-4" />
+              Risk Assessments
             </button>
             <button
               type="button"
@@ -962,13 +974,14 @@ function OperationalCanvas() {
   //
   // Alerts (the bell icon, top-right) is a separate, older panel - not
   // part of the VenueGuard menu, slides from the opposite edge, and can
-  // coexist with any of these five.
-  type VenueGuardPanel = "brief" | "communications" | "tasks" | "task-planning" | "layers" | null;
+  // coexist with any of these six.
+  type VenueGuardPanel = "brief" | "communications" | "tasks" | "task-planning" | "risk-assessments" | "layers" | null;
   const [activePanel, setActivePanel] = useState<VenueGuardPanel>(null);
   const briefPanelOpen = activePanel === "brief";
   const communicationsPanelOpen = activePanel === "communications";
   const tasksPanelOpen = activePanel === "tasks";
   const taskPlanningPanelOpen = activePanel === "task-planning";
+  const riskAssessmentsPanelOpen = activePanel === "risk-assessments";
   const layersPanelOpen = activePanel === "layers";
 
   const [alertsPanelOpen, setAlertsPanelOpen] = useState(false);
@@ -1291,10 +1304,11 @@ function OperationalCanvas() {
     return () => unsubscribe(setActiveCountry);
   }, []);
 
-  // Operational Brief, Communications, Tasks, Task Planning, and Layers
-  // are now opened from the VenueGuard brand menu in TopBanner - see
-  // OPEN_BRIEF_PANEL_EVENT/OPEN_COMMUNICATIONS_PANEL_EVENT/
-  // OPEN_TASKS_PANEL_EVENT/OPEN_TASK_PLANNING_PANEL_EVENT/
+  // Operational Brief, Communications, Tasks, Task Planning, Risk
+  // Assessments, and Layers are now opened from the VenueGuard brand
+  // menu in TopBanner - see OPEN_BRIEF_PANEL_EVENT/
+  // OPEN_COMMUNICATIONS_PANEL_EVENT/OPEN_TASKS_PANEL_EVENT/
+  // OPEN_TASK_PLANNING_PANEL_EVENT/OPEN_RISK_ASSESSMENTS_PANEL_EVENT/
   // OPEN_LAYERS_PANEL_EVENT above. TopBanner and OperationalCanvas are
   // siblings, not parent/child, so this state can't be reached by props
   // without lifting it (and the click-outside-to-close logic below) out
@@ -1304,17 +1318,20 @@ function OperationalCanvas() {
     const openCommunications = () => setActivePanel("communications");
     const openTasks = () => setActivePanel("tasks");
     const openTaskPlanning = () => setActivePanel("task-planning");
+    const openRiskAssessments = () => setActivePanel("risk-assessments");
     const openLayers = () => setActivePanel("layers");
     window.addEventListener(OPEN_BRIEF_PANEL_EVENT, openBrief);
     window.addEventListener(OPEN_COMMUNICATIONS_PANEL_EVENT, openCommunications);
     window.addEventListener(OPEN_TASKS_PANEL_EVENT, openTasks);
     window.addEventListener(OPEN_TASK_PLANNING_PANEL_EVENT, openTaskPlanning);
+    window.addEventListener(OPEN_RISK_ASSESSMENTS_PANEL_EVENT, openRiskAssessments);
     window.addEventListener(OPEN_LAYERS_PANEL_EVENT, openLayers);
     return () => {
       window.removeEventListener(OPEN_BRIEF_PANEL_EVENT, openBrief);
       window.removeEventListener(OPEN_COMMUNICATIONS_PANEL_EVENT, openCommunications);
       window.removeEventListener(OPEN_TASKS_PANEL_EVENT, openTasks);
       window.removeEventListener(OPEN_TASK_PLANNING_PANEL_EVENT, openTaskPlanning);
+      window.removeEventListener(OPEN_RISK_ASSESSMENTS_PANEL_EVENT, openRiskAssessments);
       window.removeEventListener(OPEN_LAYERS_PANEL_EVENT, openLayers);
     };
   }, []);
@@ -2072,6 +2089,28 @@ function OperationalCanvas() {
         ) : (
           <p className="tasks-panel-empty">Couldn&apos;t load plan.</p>
         )}
+      </div>
+
+      <div
+        className={`risk-assessments-panel ${riskAssessmentsPanelOpen ? "risk-assessments-panel-open" : ""}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="tasks-panel-header">
+          <div>
+            <p className="tasks-panel-eyebrow">Risk Assessments</p>
+            <h2 className="tasks-panel-title">Risk Assessments</h2>
+          </div>
+          <button
+            type="button"
+            className="tasks-panel-close"
+            onClick={() => setActivePanel(null)}
+            aria-label="Close Risk Assessments"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <p className="tasks-panel-empty">Nothing here yet.</p>
       </div>
 
       <div

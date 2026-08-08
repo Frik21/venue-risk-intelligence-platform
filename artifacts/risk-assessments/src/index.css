@@ -968,15 +968,13 @@
   color: rgba(255, 255, 255, 0.8);
 }
 
-/* Communications panel - one-way instructions from a Manager to this
-   CPO (demo content only for now). Tasks panel - currently emptied out
-   per direct product direction, pending a real redesign of what
-   belongs there once it isn't Task Assignment anymore. Both dock to the
-   same left edge as Brief/Task Planning/Layers (all five opened via the
-   VenueGuard brand menu), shift computed generically by panelShiftStyle
-   in JSX rather than hand-written per panel. */
+/* Communications (instructions from a Manager), Tasks (accept/decline),
+   and Risk Assessments (empty for now) panels - all part of the
+   VenueGuard menu's six mutually-exclusive panels (see activePanel in
+   dashboard.tsx), sharing this base layout. */
 .communications-panel,
-.tasks-panel {
+.tasks-panel,
+.risk-assessments-panel {
   position: absolute;
   top: 0;
   left: 0;
@@ -993,12 +991,13 @@
   backdrop-filter: blur(14px);
   color: #fff;
   transform: translateX(-100%);
-  transition: transform 0.28s ease, left 0.28s ease;
+  transition: transform 0.28s ease;
   pointer-events: auto;
 }
 
 .communications-panel-open,
-.tasks-panel-open {
+.tasks-panel-open,
+.risk-assessments-panel-open {
   transform: translateX(0);
 }
 
