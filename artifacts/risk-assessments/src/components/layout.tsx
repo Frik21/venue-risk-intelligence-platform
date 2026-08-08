@@ -10,6 +10,7 @@ import {
   FileText,
   Users,
   Radio,
+  ListChecks,
   ChevronDown,
   ShieldAlert,
   Search,
@@ -40,6 +41,7 @@ const navGroups = [
     items: [
       { href: "/alerts", label: "Alert Queue", icon: Bell },
       { href: "/osint", label: "OSINT", icon: Radio },
+      { href: "/tasks", label: "Tasks", icon: ListChecks },
     ],
   },
   {

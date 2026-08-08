@@ -50,6 +50,28 @@ export interface SearchPhrase {
   createdAt: string;
 }
 
+export type TaskStatus = "not_completed" | "in_progress" | "completed";
+
+// Task Assignment - a Manager assigns a CPO a specific piece of
+// structured work already in the platform, tied to a venue. The CPO
+// moves it through TaskStatus; that status is what feeds back to the
+// Manager. Not a general worklist or two-way chat.
+export interface Task {
+  id: number;
+  venueId: number;
+  venueName: string | null;
+  assignedTo: number;
+  assignedToName: string | null;
+  assignedBy: number;
+  assignedByName: string | null;
+  title: string;
+  dueDate: string | null;
+  status: TaskStatus;
+  completionNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AssessmentSummary {
   id: number; venueId: number | null; venueName: string | null; venueCity: string | null;
   title: string; description: string | null; status: AssessmentStatus; version: number;
@@ -191,6 +213,13 @@ export const api = {
     create: (venueId: number, phrase: string) =>
       apiFetch<SearchPhrase>(`/venues/${venueId}/search-phrases`, { method: "POST", body: JSON.stringify({ phrase }) }),
     delete: (id: number) => apiFetch<void>(`/search-phrases/${id}`, { method: "DELETE" }),
+  },
+  tasks: {
+    list: (assignedTo?: number) => apiFetch<Task[]>(`/tasks${assignedTo != null ? `?assignedTo=${assignedTo}` : ""}`),
+    create: (data: { venueId: number; assignedTo: number; assignedBy: number; title: string; dueDate?: string }) =>
+      apiFetch<Task>("/tasks", { method: "POST", body: JSON.stringify(data) }),
+    updateStatus: (id: number, data: { status: TaskStatus; completionNote?: string }) =>
+      apiFetch<Task>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   },
   assessments: {
     list: () => apiFetch<AssessmentSummary[]>("/assessments"),

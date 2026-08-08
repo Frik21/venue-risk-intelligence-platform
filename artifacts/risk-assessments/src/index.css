@@ -968,12 +968,183 @@
   color: rgba(255, 255, 255, 0.8);
 }
 
+/* Task Assignment panel - what a Manager needs this CPO to do, tied to
+   a venue, with a 3-state status the CPO sets that feeds back to the
+   Manager. Docks to the same left edge as Brief/Layers (all three
+   opened via the VenueGuard brand menu), shifting right by one panel-
+   width when Brief is also open - same shift math Layers already uses,
+   just computed inline in JSX now that there are three panels instead
+   of two. */
+.tasks-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 29;
+  width: min(360px, 88vw);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  background: rgba(8, 11, 15, 0.92);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+  color: #fff;
+  transform: translateX(-100%);
+  transition: transform 0.28s ease, left 0.28s ease;
+  pointer-events: auto;
+}
+
+.tasks-panel-open {
+  transform: translateX(0);
+}
+
+.tasks-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tasks-panel-eyebrow {
+  font-size: 12px;
+  color: rgba(134, 239, 172, 0.9);
+  margin: 0 0 4px;
+}
+
+.tasks-panel-title {
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.tasks-panel-close {
+  flex-shrink: 0;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+
+.tasks-panel-viewing-as {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.tasks-panel-viewing-as select {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 13px;
+}
+
+.tasks-panel-empty {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.tasks-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-row {
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.task-row-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.task-row-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.task-row-due {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.task-row-venue {
+  font-size: 12px;
+  color: rgba(125, 211, 252, 0.85);
+  margin: 4px 0 0;
+}
+
+.task-row-assigned-by {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  margin: 2px 0 0;
+}
+
+.task-row-status {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.task-status-btn {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.task-status-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.task-status-not_completed.task-status-active {
+  background: rgba(248, 113, 113, 0.16);
+  border-color: rgba(248, 113, 113, 0.4);
+  color: rgba(254, 202, 202, 0.95);
+}
+
+.task-status-in_progress.task-status-active {
+  background: rgba(250, 204, 21, 0.16);
+  border-color: rgba(250, 204, 21, 0.4);
+  color: rgba(254, 240, 138, 0.95);
+}
+
+.task-status-completed.task-status-active {
+  background: rgba(74, 222, 128, 0.16);
+  border-color: rgba(74, 222, 128, 0.4);
+  color: rgba(187, 247, 208, 0.95);
+}
+
 /* Operational Layers panel - a legend/control panel for the canvas
-   itself, docking to the same left edge as the Brief panel (both opened
-   via the VenueGuard brand menu in TopBanner). Shifts right by one
-   panel-width when the Brief panel is also open, so the two sit side by
-   side instead of overlapping - same idea as the Country panel shifting
-   when Alerts is open. */
+   itself, docking to the same left edge as Brief/Tasks (all three
+   opened via the VenueGuard brand menu). Shifts right by one panel-
+   width for each of Brief/Tasks that's also open (computed inline in
+   JSX, since the offset now depends on two other panels, not one), so
+   they sit side by side instead of overlapping - same idea as the
+   Country panel shifting when Alerts is open. */
 .layers-panel {
   position: absolute;
   top: 0;
@@ -997,10 +1168,6 @@
 
 .layers-panel-open {
   transform: translateX(0);
-}
-
-.layers-panel-shifted {
-  left: min(360px, 88vw);
 }
 
 .layers-panel-header {

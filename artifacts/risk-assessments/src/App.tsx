@@ -19,6 +19,7 @@ import VenueDetail from "@/pages/venues/detail";
 import IncidentsList from "@/pages/incidents/list";
 import AlertsList from "@/pages/alerts/list";
 import OsintList from "@/pages/osint/list";
+import TasksList from "@/pages/tasks/list";
 import EvidencePage from "@/pages/evidence/list";
 import MapsPage from "@/pages/maps/index";
 import ReportsPage from "@/pages/reports/index";
@@ -57,6 +58,7 @@ function Router() {
         {/* Monitoring */}
         <Route path="/alerts" component={AlertsList} />
         <Route path="/osint" component={OsintList} />
+        <Route path="/tasks" component={TasksList} />
 
         {/* Repository */}
         <Route path="/evidence" component={EvidencePage} />
