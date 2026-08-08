@@ -1169,6 +1169,20 @@ function OperationalCanvas() {
     setAddVenueOpen(false);
   }
 
+  // Each venue in the list can be expanded to reveal the task it's
+  // connected to - demo/local-only for now, same as the rest of Risk
+  // Assessments > Venues so far.
+  const [expandedVenueIds, setExpandedVenueIds] = useState<Set<number>>(new Set());
+
+  function toggleVenueExpanded(venueId: number) {
+    setExpandedVenueIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(venueId)) next.delete(venueId);
+      else next.add(venueId);
+      return next;
+    });
+  }
+
   const [planningTaskId, setPlanningTaskId] = useState<number | null>(null);
   const [taskPlans, setTaskPlans] = useState<Record<number, Plan>>({});
   const [planLoadingTaskId, setPlanLoadingTaskId] = useState<number | null>(null);
@@ -1401,6 +1415,7 @@ function OperationalCanvas() {
       setRiskAssessmentsView("root");
       setAddVenueOpen(false);
       setAddVenueSelection(null);
+      setExpandedVenueIds(new Set());
     };
     const openLayers = () => setActivePanel("layers");
     window.addEventListener(OPEN_BRIEF_PANEL_EVENT, openBrief);
@@ -2272,11 +2287,43 @@ function OperationalCanvas() {
               <p className="tasks-panel-empty">No venues yet - accept a task or add one with the + button.</p>
             ) : (
               <div className="tasks-panel-list">
-                {riskAssessmentVenues.map((venue) => (
-                  <div key={venue.venueId} className="task-row">
-                    <p className="task-row-title">{venue.venueName}</p>
-                  </div>
-                ))}
+                {riskAssessmentVenues.map((venue) => {
+                  const venueTasks = displayedTasks.filter(
+                    (t) => t.venueId === venue.venueId && taskAcceptance[t.id] === "accepted",
+                  );
+                  const isExpanded = expandedVenueIds.has(venue.venueId);
+                  return (
+                    <div key={venue.venueId} className="risk-assessments-venue-group">
+                      <button
+                        type="button"
+                        className="risk-assessments-nav-item"
+                        onClick={() => toggleVenueExpanded(venue.venueId)}
+                      >
+                        <Building2 className="w-4 h-4" />
+                        {venue.venueName}
+                        {isExpanded ? (
+                          <ChevronDown className="w-4 h-4 risk-assessments-nav-item-chevron" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 risk-assessments-nav-item-chevron" />
+                        )}
+                      </button>
+                      {isExpanded && (
+                        <div className="risk-assessments-venue-detail">
+                          <p className="risk-assessments-venue-detail-label">
+                            <ClipboardList className="w-3.5 h-3.5" /> Task
+                          </p>
+                          {venueTasks.length === 0 ? (
+                            <p className="tasks-panel-empty">No task selected for this venue yet.</p>
+                          ) : (
+                            venueTasks.map((t) => (
+                              <p key={t.id} className="task-row-title">{t.title}</p>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </>
