@@ -347,11 +347,22 @@ const OPEN_TASKS_PANEL_EVENT = "venueguard-open-tasks-panel";
 const OPEN_TASK_PLANNING_PANEL_EVENT = "venueguard-open-task-planning-panel";
 const OPEN_RISK_ASSESSMENTS_PANEL_EVENT = "venueguard-open-risk-assessments-panel";
 const OPEN_LAYERS_PANEL_EVENT = "venueguard-open-layers-panel";
+// Dispatched by each panel's "Back to Menu" button (OperationalCanvas)
+// and picked up by TopBanner, for the same cross-sibling reason as the
+// OPEN_*_PANEL_EVENT constants above - reopens the brand dropdown after
+// the panel that triggered it closes itself.
+const REOPEN_BRAND_MENU_EVENT = "venueguard-reopen-brand-menu";
 
 function TopBanner({ onSignOut }: { onSignOut: () => void }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const reopenMenu = () => setBrandMenuOpen(true);
+    window.addEventListener(REOPEN_BRAND_MENU_EVENT, reopenMenu);
+    return () => window.removeEventListener(REOPEN_BRAND_MENU_EVENT, reopenMenu);
+  }, []);
   const searchResults = useMemo(() => searchOperationalIndex(searchQuery), [searchQuery]);
 
   function selectSearchResult(result: SearchResult) {
@@ -1099,6 +1110,15 @@ function OperationalCanvas() {
       setPlanningTaskId(taskId);
       setActivePanel("task-planning");
     }
+  }
+
+  // Closes whichever panel is open and reopens the VenueGuard dropdown,
+  // so switching panels is one motion instead of close-then-reclick-
+  // VenueGuard. Same cross-sibling-component pattern as the
+  // OPEN_*_PANEL_EVENT constants (TopBanner owns brandMenuOpen).
+  function backToMenu() {
+    setActivePanel(null);
+    window.dispatchEvent(new Event(REOPEN_BRAND_MENU_EVENT));
   }
 
   // Risk Assessments > Venues starts from venues tied to a task this CPO
@@ -1943,6 +1963,10 @@ function OperationalCanvas() {
           </button>
         </div>
 
+        <button type="button" className="venueguard-panel-back" onClick={backToMenu}>
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to Menu
+        </button>
+
         <div className="brief-panel-stats">
           <div className="brief-panel-stat">
             <MapPin className="w-4 h-4 text-sky-300" />
@@ -2001,6 +2025,10 @@ function OperationalCanvas() {
           </button>
         </div>
 
+        <button type="button" className="venueguard-panel-back" onClick={backToMenu}>
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to Menu
+        </button>
+
         <div className="tasks-panel-list">
           {DEMO_INSTRUCTIONS.map((instruction) => (
             <div key={instruction.id} className="task-row">
@@ -2029,6 +2057,10 @@ function OperationalCanvas() {
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        <button type="button" className="venueguard-panel-back" onClick={backToMenu}>
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to Menu
+        </button>
 
         {cpoTasksLoading ? (
           <p className="tasks-panel-empty">Loading tasks…</p>
@@ -2092,6 +2124,10 @@ function OperationalCanvas() {
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        <button type="button" className="venueguard-panel-back" onClick={backToMenu}>
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to Menu
+        </button>
 
         {displayedTasks.length > 1 && (
           <div className="tasks-panel-viewing-as">
@@ -2173,6 +2209,12 @@ function OperationalCanvas() {
           </button>
         </div>
 
+        {riskAssessmentsView === "root" && (
+          <button type="button" className="venueguard-panel-back" onClick={backToMenu}>
+            <ArrowLeft className="w-3.5 h-3.5" /> Back to Menu
+          </button>
+        )}
+
         {riskAssessmentsView === "root" ? (
           <div className="tasks-panel-list">
             <button
@@ -2190,7 +2232,7 @@ function OperationalCanvas() {
             <div className="risk-assessments-venues-header">
               <button
                 type="button"
-                className="risk-assessments-back"
+                className="venueguard-panel-back"
                 onClick={() => {
                   setRiskAssessmentsView("root");
                   setAddVenueOpen(false);
@@ -2259,6 +2301,10 @@ function OperationalCanvas() {
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        <button type="button" className="venueguard-panel-back" onClick={backToMenu}>
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to Menu
+        </button>
 
         <div className="layers-panel-list">
           <div className="layer-row">

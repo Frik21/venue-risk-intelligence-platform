@@ -1031,7 +1031,7 @@
   color: rgba(255, 255, 255, 0.4);
 }
 
-.risk-assessments-back {
+.venueguard-panel-back {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1045,7 +1045,7 @@
   cursor: pointer;
 }
 
-.risk-assessments-back:hover {
+.venueguard-panel-back:hover {
   color: rgba(125, 211, 252, 1);
 }
 
