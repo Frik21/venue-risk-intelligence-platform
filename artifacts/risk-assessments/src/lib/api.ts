@@ -230,6 +230,7 @@ export interface TaskRoute {
 export interface TimesheetEntry {
   id: number;
   userId: number;
+  userName: string | null;
   taskId: number | null;
   taskTitle: string | null;
   date: string;
@@ -237,6 +238,9 @@ export interface TimesheetEntry {
   dayHours: number;
   nightHours: number;
   notes: string;
+  approved: boolean;
+  approvedBy: number | null;
+  approvedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -531,8 +535,11 @@ export const api = {
   },
   timesheet: {
     list: (userId: number) => apiFetch<TimesheetEntry[]>(`/users/${userId}/timesheet`),
+    listForTask: (taskId: number) => apiFetch<TimesheetEntry[]>(`/tasks/${taskId}/timesheet-entries`),
     upsert: (userId: number, data: { taskId: number; date: string; dayHours: number; nightHours: number; notes?: string }) =>
       apiFetch<TimesheetEntry>(`/users/${userId}/timesheet`, { method: "POST", body: JSON.stringify(data) }),
+    approve: (id: number, approvedBy: number) =>
+      apiFetch<TimesheetEntry>(`/timesheet/${id}/approve`, { method: "POST", body: JSON.stringify({ approvedBy }) }),
     delete: (id: number) => apiFetch<void>(`/timesheet/${id}`, { method: "DELETE" }),
   },
   settings: {

@@ -1005,6 +1005,9 @@ function TimesheetCalendar({
                 >
                   <span className="timesheet-day-entry-task">{entry.taskTitle ?? "Unknown task"}</span>
                   <span className="timesheet-day-entry-hours">{entry.dayHours}d + {entry.nightHours}n</span>
+                  <span className={`timesheet-day-entry-status ${entry.approved ? "timesheet-day-entry-status-approved" : ""}`}>
+                    {entry.approved ? "Added to costing" : "Pending review"}
+                  </span>
                 </button>
               ))}
               <button type="button" className="timesheet-day-entry timesheet-day-entry-add" onClick={onStartAdd}>

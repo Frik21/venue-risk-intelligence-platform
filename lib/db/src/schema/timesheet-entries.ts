@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, real, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, real, text, timestamp, unique, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -19,6 +19,14 @@ import { tasksTable } from "./tasks";
 // nullable for pre-existing rows logged before this existed; new
 // entries always set it (the CPO picks which task the hours were
 // for).
+//
+// approved gates whether an entry counts toward Personnel Costs - the
+// CPO logs their own hours, but a Manager has to review and approve
+// them (from the Tasks page) before they're added to the costing, per
+// direct product direction. Editing an already-approved entry resets
+// approved back to false (see the upsert logic in routes/timesheet.ts)
+// so a correction always gets re-reviewed rather than silently staying
+// approved with different numbers.
 export const timesheetEntriesTable = pgTable(
   "timesheet_entries",
   {
@@ -30,6 +38,9 @@ export const timesheetEntriesTable = pgTable(
     dayHours: real("day_hours").notNull().default(0),
     nightHours: real("night_hours").notNull().default(0),
     notes: text("notes").notNull().default(""),
+    approved: boolean("approved").notNull().default(false),
+    approvedBy: integer("approved_by").references(() => usersTable.id, { onDelete: "set null" }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   },

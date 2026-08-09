@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Task, type TaskStatus, type TaskPriority, type Venue, type User } from "@/lib/api";
+import { api, type Task, type TaskStatus, type TaskPriority, type Venue, type User, type TimesheetEntry } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,7 +12,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
-import { ListChecks, Plus, ClipboardCheck, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign } from "lucide-react";
+import { ListChecks, Plus, ClipboardCheck, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -178,10 +178,63 @@ function EditTaskDialog({ task, venues, users, onClose }: { task: Task; venues: 
   );
 }
 
+// Hours logged by this task's assigned CPO(s) - the CPO logs their
+// own hours from Timesheet, but they don't count toward Personnel
+// Costs until a Manager approves them here, per direct product
+// direction ("the manager... collect[s] the hours... and add[s] it to
+// the costs"). Fetched only while expanded.
+function TaskHoursPanel({ taskId, currentManagerId }: { taskId: number; currentManagerId: number | undefined }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: entries = [], isLoading } = useQuery<TimesheetEntry[]>({
+    queryKey: ["task-timesheet", taskId],
+    queryFn: () => api.timesheet.listForTask(taskId),
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: (id: number) => api.timesheet.approve(id, currentManagerId!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["task-timesheet", taskId] });
+      qc.invalidateQueries({ queryKey: ["personnel-costs"] });
+      toast({ title: "Hours added to costing" });
+    },
+  });
+
+  if (isLoading) return <Skeleton className="h-16 mt-2" />;
+  if (entries.length === 0) return <p className="text-xs text-slate-400 mt-2">No hours logged against this task yet.</p>;
+
+  return (
+    <div className="mt-2 space-y-1.5 border-t border-slate-100 pt-2">
+      {entries.map((entry) => (
+        <div key={entry.id} className="flex items-center justify-between gap-2 text-xs">
+          <div className="min-w-0">
+            <span className="font-medium text-slate-700">{entry.userName ?? "Unknown"}</span>
+            <span className="text-slate-400"> · {formatDate(entry.date)} · {entry.dayHours}d + {entry.nightHours}n</span>
+          </div>
+          {entry.approved ? (
+            <span className="flex items-center gap-1 text-green-600 shrink-0"><Check className="w-3 h-3" /> Added to costing</span>
+          ) : (
+            <Button
+              size="sm"
+              className="h-6 px-2 text-[11px] shrink-0"
+              onClick={() => approveMutation.mutate(entry.id)}
+              disabled={approveMutation.isPending || currentManagerId == null}
+            >
+              Add to Costing
+            </Button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function TasksList() {
   const [showNew, setShowNew] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [expandedHoursTaskId, setExpandedHoursTaskId] = useState<number | null>(null);
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -192,6 +245,10 @@ export default function TasksList() {
   const { data: venues = [] } = useQuery<Venue[]>({ queryKey: ["venues"], queryFn: api.venues.list });
   const { data: users = [] } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list });
   const cpos = users.filter((u) => u.role === "cpo");
+  // No real login/session in this app - same "default to the first
+  // manager/admin found" convention used elsewhere (e.g. Profile
+  // resolution on the CPO side).
+  const currentManagerId = users.find((u) => u.role === "manager" || u.role === "admin")?.id;
 
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: TaskStatus }) => api.tasks.updateStatus(id, { status }),
@@ -328,6 +385,18 @@ export default function TasksList() {
                           <ClipboardCheck className="w-3 h-3" />
                           Plan not submitted yet
                         </p>
+                      )}
+
+                      <button
+                        onClick={() => setExpandedHoursTaskId((id) => (id === task.id ? null : task.id))}
+                        className="flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1.5"
+                      >
+                        <Clock className="w-3 h-3" />
+                        Hours logged
+                        {expandedHoursTaskId === task.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                      </button>
+                      {expandedHoursTaskId === task.id && (
+                        <TaskHoursPanel taskId={task.id} currentManagerId={currentManagerId} />
                       )}
                     </div>
                     <Select value={task.status} onValueChange={(v) => statusMutation.mutate({ id: task.id, status: v as TaskStatus })}>
