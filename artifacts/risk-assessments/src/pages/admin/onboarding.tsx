@@ -101,6 +101,10 @@ function DocumentUploadForm({ onboardingId, onAdded }: { onboardingId: number; o
         {uploading || mutation.isPending ? "Uploading..." : "Choose File"}
         <input type="file" className="hidden" onChange={handleFile} disabled={uploading || mutation.isPending} />
       </label>
+      {/* Placeholder - not wired up yet, per direct product direction. */}
+      <button type="button" className="h-8 px-3 flex items-center rounded-md border border-slate-200 text-xs font-medium hover:bg-slate-50">
+        Assign Operational Access
+      </button>
     </div>
   );
 }
