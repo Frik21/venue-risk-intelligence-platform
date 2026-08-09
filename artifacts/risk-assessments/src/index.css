@@ -2083,6 +2083,18 @@ a.country-panel-advisory:hover {
    its look entirely from the caller's className. */
 .location-search {
   position: relative;
+  /* Fills the available width both as a flex item (e.g. next to the
+     top banner's search icon) and in normal block flow (e.g. under a
+     form label) - without this, a flex row parent lets it shrink to
+     the placeholder text's intrinsic width instead of stretching. */
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+.location-search-input {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .location-search-results {
