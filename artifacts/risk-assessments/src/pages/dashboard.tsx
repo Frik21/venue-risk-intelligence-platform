@@ -425,6 +425,18 @@ const REOPEN_BRAND_MENU_EVENT = "venueguard-reopen-brand-menu";
 // the top banner close an open VenueGuard panel, matching what
 // clicking the canvas itself already does (see handleCanvasClick).
 const CLOSE_VENUEGUARD_PANELS_EVENT = "venueguard-close-panels";
+// The Alerts trigger now lives in the persistent top banner (left of
+// the operator/Profile area) instead of floating over the canvas, but
+// its state (alertsPanelOpen) and the alert list itself
+// (combinedAlerts, built from data local to OperationalCanvas) still
+// live there - same cross-sibling split as the panel events above,
+// just in both directions: TOGGLE_ALERTS_PANEL_EVENT (TopBanner ->
+// OperationalCanvas) opens/closes it, ALERTS_COUNT_EVENT
+// (OperationalCanvas -> TopBanner, a CustomEvent<number>) keeps the
+// badge on the button in sync without lifting the whole alerts feed
+// up to Dashboard.
+const TOGGLE_ALERTS_PANEL_EVENT = "venueguard-toggle-alerts-panel";
+const ALERTS_COUNT_EVENT = "venueguard-alerts-count";
 
 // Venue Risk Assessment - the CPO's in-field checklist for a specific
 // (task, venue) pair, reached from Risk Assessments > Venues > a venue.
@@ -790,11 +802,20 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
   const [operatorMenuOpen, setOperatorMenuOpen] = useState(false);
+  // Mirrors OperationalCanvas's combinedAlerts.length - see
+  // ALERTS_COUNT_EVENT above for why this is a mirrored count rather
+  // than the real list.
+  const [alertsCount, setAlertsCount] = useState(0);
 
   useEffect(() => {
     const reopenMenu = () => setBrandMenuOpen(true);
+    const updateAlertsCount = (event: Event) => setAlertsCount((event as CustomEvent<number>).detail);
     window.addEventListener(REOPEN_BRAND_MENU_EVENT, reopenMenu);
-    return () => window.removeEventListener(REOPEN_BRAND_MENU_EVENT, reopenMenu);
+    window.addEventListener(ALERTS_COUNT_EVENT, updateAlertsCount);
+    return () => {
+      window.removeEventListener(REOPEN_BRAND_MENU_EVENT, reopenMenu);
+      window.removeEventListener(ALERTS_COUNT_EVENT, updateAlertsCount);
+    };
   }, []);
 
   // Matches a live search result back to a selectable country by ISO
@@ -955,6 +976,18 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
           />
         </div>
       </div>
+      <button
+        type="button"
+        className="top-banner-alerts-trigger"
+        onClick={(event) => {
+          event.stopPropagation();
+          window.dispatchEvent(new Event(TOGGLE_ALERTS_PANEL_EVENT));
+        }}
+      >
+        <Bell className="w-4 h-4" />
+        Alerts
+        {alertsCount > 0 && <span className="top-banner-alerts-trigger-badge">{alertsCount}</span>}
+      </button>
       <div
         className="top-banner-operator"
         onClick={(event) => event.stopPropagation()}
@@ -2362,6 +2395,18 @@ function OperationalCanvas({
       setActivePanel(null);
       setAlertsPanelOpen(false);
     };
+    // The Alerts trigger button itself now lives in TopBanner (see
+    // TOGGLE_ALERTS_PANEL_EVENT above) - setActivePanel uses the
+    // functional form here (not the profilePanelOpen variable) since
+    // this closure is only created once on mount and would otherwise
+    // never see a later Profile-open state.
+    const toggleAlerts = () => {
+      setAlertsPanelOpen((open) => {
+        const next = !open;
+        if (next) setActivePanel((current) => (current === "profile" ? null : current));
+        return next;
+      });
+    };
     window.addEventListener(OPEN_BRIEF_PANEL_EVENT, openBrief);
     window.addEventListener(OPEN_COMMUNICATIONS_PANEL_EVENT, openCommunications);
     window.addEventListener(OPEN_TASKS_PANEL_EVENT, openTasks);
@@ -2372,6 +2417,7 @@ function OperationalCanvas({
     window.addEventListener(OPEN_LAYERS_PANEL_EVENT, openLayers);
     window.addEventListener(OPEN_PROFILE_PANEL_EVENT, openProfile);
     window.addEventListener(CLOSE_VENUEGUARD_PANELS_EVENT, closePanelsFromTopBanner);
+    window.addEventListener(TOGGLE_ALERTS_PANEL_EVENT, toggleAlerts);
     return () => {
       window.removeEventListener(OPEN_BRIEF_PANEL_EVENT, openBrief);
       window.removeEventListener(OPEN_COMMUNICATIONS_PANEL_EVENT, openCommunications);
@@ -2383,8 +2429,16 @@ function OperationalCanvas({
       window.removeEventListener(OPEN_LAYERS_PANEL_EVENT, openLayers);
       window.removeEventListener(OPEN_PROFILE_PANEL_EVENT, openProfile);
       window.removeEventListener(CLOSE_VENUEGUARD_PANELS_EVENT, closePanelsFromTopBanner);
+      window.removeEventListener(TOGGLE_ALERTS_PANEL_EVENT, toggleAlerts);
     };
   }, []);
+
+  // Mirrors combinedAlerts.length out to TopBanner (a sibling that
+  // can't see this list directly) so its Alerts button can show an
+  // accurate badge - see ALERTS_COUNT_EVENT above.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(ALERTS_COUNT_EVENT, { detail: combinedAlerts.length }));
+  }, [combinedAlerts.length]);
 
   useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
@@ -3581,26 +3635,6 @@ function OperationalCanvas({
           </div>
         </div>
       </div>
-
-      <button
-        type="button"
-        className="alerts-panel-trigger"
-        onClick={(event) => {
-          event.stopPropagation();
-          setAlertsPanelOpen((open) => {
-            const next = !open;
-            // Alerts and Profile both dock on the right edge - opening
-            // one closes the other so they don't render on top of each
-            // other (see openProfile above for the reverse direction).
-            if (next && profilePanelOpen) setActivePanel(null);
-            return next;
-          });
-        }}
-      >
-        <Bell className="w-4 h-4" />
-        Alerts
-        {combinedAlerts.length > 0 && <span className="alerts-panel-trigger-badge">{combinedAlerts.length}</span>}
-      </button>
 
       <div
         className={`alerts-panel ${alertsPanelOpen ? "alerts-panel-open" : ""}`}

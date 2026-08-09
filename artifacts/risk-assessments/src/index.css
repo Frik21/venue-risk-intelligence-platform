@@ -333,6 +333,47 @@
   color: rgba(255, 255, 255, 0.4);
 }
 
+/* Alerts trigger - lives in the persistent top banner, left of the
+   operator/Profile area, rather than floating over the canvas (see
+   TOGGLE_ALERTS_PANEL_EVENT/ALERTS_COUNT_EVENT in dashboard.tsx for
+   how it stays in sync with alertsPanelOpen/combinedAlerts, both of
+   which still live in OperationalCanvas). */
+.top-banner-alerts-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-right: 16px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.top-banner-alerts-trigger:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(252, 165, 165, 0.4);
+}
+
+.top-banner-alerts-trigger-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(248, 113, 113, 0.9);
+  color: #1a0a0a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .top-banner-operator {
   position: relative;
   display: flex;
@@ -1852,45 +1893,6 @@
    standing Operational Brief. Mirrors the Brief panel's non-modal
    treatment (no dimming overlay) but slides from the right edge so the
    two panels never compete for the same screen space. */
-.alerts-panel-trigger {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 10px;
-  background: rgba(11, 15, 20, 0.72);
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 13px;
-  font-weight: 500;
-  backdrop-filter: blur(8px);
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.alerts-panel-trigger:hover {
-  background: rgba(11, 15, 20, 0.88);
-  border-color: rgba(252, 165, 165, 0.4);
-}
-
-.alerts-panel-trigger-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: rgba(248, 113, 113, 0.9);
-  color: #1a0a0a;
-  font-size: 11px;
-  font-weight: 700;
-}
-
 .alerts-panel {
   position: absolute;
   top: 0;
@@ -1898,7 +1900,7 @@
   bottom: 0;
   z-index: 29;
   width: min(360px, 88vw);
-  padding: 72px 24px 24px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
