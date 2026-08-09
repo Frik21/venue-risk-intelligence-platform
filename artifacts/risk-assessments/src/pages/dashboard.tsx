@@ -36,6 +36,7 @@ import type {
   Alert,
   AlertPriority,
   WeatherFinding,
+  TrafficCondition,
 } from "@/lib/api";
 import { LocationSearch, resolveCurrentLocation } from "@/components/location-search";
 import type { LocationSearchResult } from "@/components/location-search";
@@ -86,14 +87,6 @@ interface OperationalAlert {
 // daily Operational Brief: alerts are individual, timestamped events
 // rather than a single standing summary.
 const OPERATIONAL_ALERTS: OperationalAlert[] = [
-  {
-    id: "alert-3",
-    severity: "warning",
-    title: "Road closure near venue",
-    description: "A planned closure may affect arrival routes for staff and vendors.",
-    location: "Cape Town",
-    timestamp: "1 hr ago",
-  },
   {
     id: "alert-4",
     severity: "info",
@@ -184,6 +177,11 @@ export default function Dashboard() {
   // (and needs to not exist at all when there's nothing notable, per
   // direct product direction - see weatherAlert in OperationalCanvas).
   const [weatherFinding, setWeatherFinding] = useState<WeatherFinding | null>(null);
+  // Same reasoning as weatherFinding above, for "Road closure near
+  // venue" - briefTraffic only keeps display strings, the Alerts panel
+  // needs the raw severity to know whether there's an actual closure
+  // (see roadClosureAlert in OperationalCanvas).
+  const [trafficCondition, setTrafficCondition] = useState<TrafficCondition | null>(null);
 
   async function useMyLocationForBrief() {
     setLocatingBrief(true);
@@ -220,6 +218,7 @@ export default function Dashboard() {
                 }
               : { traffic: "No traffic data", trafficNote: "No road segment data available for this location." },
           );
+          setTrafficCondition(condition);
         } catch (err) {
           console.error("Failed to check traffic for the Brief:", err);
           setBriefTraffic({ traffic: "Traffic unavailable", trafficNote: "Couldn't reach the traffic service." });
@@ -367,6 +366,7 @@ export default function Dashboard() {
           briefCondition={briefCondition}
           briefTraffic={briefTraffic}
           weatherFinding={weatherFinding}
+          trafficCondition={trafficCondition}
           onUseMyLocationForBrief={useMyLocationForBrief}
           locatingBrief={locatingBrief}
         />
@@ -1400,6 +1400,7 @@ function OperationalCanvas({
   briefCondition,
   briefTraffic,
   weatherFinding,
+  trafficCondition,
   onUseMyLocationForBrief,
   locatingBrief,
 }: {
@@ -1407,6 +1408,7 @@ function OperationalCanvas({
   briefCondition: { condition: string; conditionNote: string };
   briefTraffic: { traffic: string; trafficNote: string };
   weatherFinding: WeatherFinding | null;
+  trafficCondition: TrafficCondition | null;
   onUseMyLocationForBrief: () => void;
   locatingBrief: boolean;
 }) {
@@ -1642,14 +1644,39 @@ function OperationalCanvas({
       }
     : null;
 
+  // "Road closure near venue" - real, driven by the same traffic
+  // engine as the Operational Brief (fetchTrafficCondition on the
+  // backend, via trafficCondition above). Only exists when TomTom
+  // actually reports a closure (severity "closed") at the CPO's
+  // current location - ordinary congestion belongs in the Brief's
+  // Traffic tile, not here, same "no finding, no alert" reasoning as
+  // weatherAlert.
+  const roadClosureAlert: OperationalAlert | null =
+    trafficCondition?.severity === "closed"
+      ? {
+          id: "alert-traffic-closure",
+          severity: "warning",
+          title: "Road closure near venue",
+          description: trafficCondition.label,
+          location: briefArea.area,
+          timestamp: "Live",
+        }
+      : null;
+
   // Dismiss/Mark Reviewed for entries with no backing Alert record
-  // (instructionAlerts, weatherAlert, the OPERATIONAL_ALERTS demo feed) -
-  // there's nothing to PATCH, so the action just hides/flags it locally,
-  // same "local-only" convention as MOCK_TASK elsewhere in this file.
+  // (instructionAlerts, weatherAlert, roadClosureAlert, the
+  // OPERATIONAL_ALERTS demo feed) - there's nothing to PATCH, so the
+  // action just hides/flags it locally, same "local-only" convention
+  // as MOCK_TASK elsewhere in this file.
   const [locallyDismissedAlertIds, setLocallyDismissedAlertIds] = useState<Set<string>>(new Set());
   const [locallyReviewedAlertIds, setLocallyReviewedAlertIds] = useState<Set<string>>(new Set());
 
-  const combinedAlerts = [...instructionAlerts, ...(weatherAlert ? [weatherAlert] : []), ...feedAlerts]
+  const combinedAlerts = [
+    ...instructionAlerts,
+    ...(weatherAlert ? [weatherAlert] : []),
+    ...(roadClosureAlert ? [roadClosureAlert] : []),
+    ...feedAlerts,
+  ]
     .filter((alert) => !locallyDismissedAlertIds.has(alert.id))
     .map((alert) => ({ ...alert, reviewed: alert.reviewed || locallyReviewedAlertIds.has(alert.id) }));
 
