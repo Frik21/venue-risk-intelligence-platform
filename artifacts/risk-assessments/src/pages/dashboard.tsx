@@ -33,6 +33,7 @@ import type {
   VenueRiskAssessment,
   Alert,
   AlertPriority,
+  WeatherSeverity,
 } from "@/lib/api";
 import { LocationSearch, resolveCurrentLocation } from "@/components/location-search";
 import type { LocationSearchResult } from "@/components/location-search";
@@ -60,6 +61,15 @@ const OPERATIONAL_BRIEF = {
   summary:
     "Current operating conditions remain suitable for planned activities. Increased traffic, forecast weather, and recent local activity suggest additional planning before deployment.",
   advisories: ["Traffic congestion expected", "Weather may affect movement", "Public activity under review"],
+};
+
+// Labels for the Brief's "Current Operating Conditions" tile when fed a
+// real weather finding (see useMyLocationForBrief) - moderate maps to
+// the same "Elevated" wording the demo content already uses.
+const WEATHER_SEVERITY_LABELS: Record<WeatherSeverity, string> = {
+  moderate: "Elevated",
+  high: "High",
+  critical: "Critical",
 };
 
 type AlertSeverity = "critical" | "warning" | "info";
@@ -169,13 +179,17 @@ const MOCK_CHECKLIST_ITEMS = [
 export default function Dashboard() {
   const [step, setStep] = useState<Step>("login");
 
-  // Current Area starts as the demo default and can be overridden with
-  // the operator's real position - shared between the mandatory
-  // pre-entry Brief screen and the in-canvas Brief panel (passed down to
-  // OperationalCanvas), same "single source of truth" as OPERATIONAL_BRIEF
-  // itself. Only Current Area is real; Operating Conditions/summary/
-  // advisories stay the demo content for now.
+  // Current Area and Operating Conditions start as the demo defaults and
+  // can be overridden with the operator's real position/weather -
+  // shared between the mandatory pre-entry Brief screen and the
+  // in-canvas Brief panel (passed down to OperationalCanvas), same
+  // "single source of truth" as OPERATIONAL_BRIEF itself. The summary
+  // and advisories stay the demo content for now.
   const [briefArea, setBriefArea] = useState({ area: OPERATIONAL_BRIEF.area, areaRadius: OPERATIONAL_BRIEF.areaRadius });
+  const [briefCondition, setBriefCondition] = useState({
+    condition: OPERATIONAL_BRIEF.condition,
+    conditionNote: OPERATIONAL_BRIEF.conditionNote,
+  });
   const [locatingBrief, setLocatingBrief] = useState(false);
 
   async function useMyLocationForBrief() {
@@ -186,6 +200,19 @@ export default function Dashboard() {
         area: result.name ?? result.city ?? result.label,
         areaRadius: "Based on your current location",
       });
+
+      if (result.lat != null && result.lng != null) {
+        try {
+          const { finding } = await api.weather.check(result.lat, result.lng);
+          setBriefCondition(
+            finding
+              ? { condition: WEATHER_SEVERITY_LABELS[finding.severity], conditionNote: finding.summary }
+              : { condition: "Normal", conditionNote: "No elevated weather risk detected at your location." },
+          );
+        } catch (err) {
+          console.error("Failed to check weather for the Brief:", err);
+        }
+      }
     } catch (err) {
       console.error("Failed to get current location for the Brief:", err);
     } finally {
@@ -262,8 +289,8 @@ export default function Dashboard() {
             <div className="rounded-2xl bg-white/10 border border-white/10 p-5">
               <ShieldCheck className="w-5 h-5 text-amber-300 mb-4" />
               <p className="text-sm text-slate-400">Current Operating Conditions</p>
-              <p className="text-xl font-semibold">{OPERATIONAL_BRIEF.condition}</p>
-              <p className="text-sm text-slate-400 mt-1">{OPERATIONAL_BRIEF.conditionNote}</p>
+              <p className="text-xl font-semibold">{briefCondition.condition}</p>
+              <p className="text-sm text-slate-400 mt-1">{briefCondition.conditionNote}</p>
             </div>
 
             <div className="rounded-2xl bg-white/10 border border-white/10 p-5">
@@ -303,7 +330,12 @@ export default function Dashboard() {
     <div className="fixed inset-0 z-50 overflow-hidden text-white flex flex-col" style={{ backgroundColor: OCEAN_COLOR }}>
       <TopBanner onSignOut={() => setStep("login")} />
       <div className="flex-1 min-h-0 relative">
-        <OperationalCanvas briefArea={briefArea} onUseMyLocationForBrief={useMyLocationForBrief} locatingBrief={locatingBrief} />
+        <OperationalCanvas
+          briefArea={briefArea}
+          briefCondition={briefCondition}
+          onUseMyLocationForBrief={useMyLocationForBrief}
+          locatingBrief={locatingBrief}
+        />
       </div>
     </div>
   );
@@ -1084,10 +1116,12 @@ type CountryAdjustment = { status: "review-required"; notes: string };
 
 function OperationalCanvas({
   briefArea,
+  briefCondition,
   onUseMyLocationForBrief,
   locatingBrief,
 }: {
   briefArea: { area: string; areaRadius: string };
+  briefCondition: { condition: string; conditionNote: string };
   onUseMyLocationForBrief: () => void;
   locatingBrief: boolean;
 }) {
@@ -2339,8 +2373,8 @@ function OperationalCanvas({
           <div className="brief-panel-stat">
             <ShieldCheck className="w-4 h-4 text-amber-300" />
             <p className="brief-panel-stat-label">Operating Conditions</p>
-            <p className="brief-panel-stat-value">{OPERATIONAL_BRIEF.condition}</p>
-            <p className="brief-panel-stat-note">{OPERATIONAL_BRIEF.conditionNote}</p>
+            <p className="brief-panel-stat-value">{briefCondition.condition}</p>
+            <p className="brief-panel-stat-note">{briefCondition.conditionNote}</p>
           </div>
           <div className="brief-panel-stat">
             <Clock className="w-4 h-4 text-sky-300" />

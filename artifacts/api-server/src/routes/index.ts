@@ -16,6 +16,7 @@ import searchPhrasesRouter from "./search-phrases";
 import tasksRouter from "./tasks";
 import plansRouter from "./plans";
 import venueRiskAssessmentsRouter from "./venue-risk-assessments";
+import weatherRouter from "./weather";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use(searchPhrasesRouter);
 router.use(tasksRouter);
 router.use(plansRouter);
 router.use(venueRiskAssessmentsRouter);
+router.use(weatherRouter);
 
 export default router;

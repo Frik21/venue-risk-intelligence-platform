@@ -124,6 +124,20 @@ export interface VenueRiskAssessment {
   updatedAt: string;
 }
 
+// Mirrors artifacts/api-server/src/lib/weather.ts's WeatherFinding -
+// this frontend package can't import a backend module directly. Only
+// returned when conditions are genuinely notable (see that file's own
+// comment on why "nothing to report" is a real, positive result, not
+// an omission).
+export type WeatherSeverity = "moderate" | "high" | "critical";
+
+export interface WeatherFinding {
+  summary: string;
+  severity: WeatherSeverity;
+  sourceName: string;
+  sourceUrl: string;
+}
+
 export interface AssessmentSummary {
   id: number; venueId: number | null; venueName: string | null; venueCity: string | null;
   title: string; description: string | null; status: AssessmentStatus; version: number;
@@ -305,6 +319,9 @@ export const api = {
       >,
     ) => apiFetch<VenueRiskAssessment>(`/risk-assessments/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     submit: (id: number) => apiFetch<VenueRiskAssessment>(`/risk-assessments/${id}/submit`, { method: "POST" }),
+  },
+  weather: {
+    check: (lat: number, lng: number) => apiFetch<{ finding: WeatherFinding | null }>(`/weather?lat=${lat}&lng=${lng}`),
   },
   assessments: {
     list: () => apiFetch<AssessmentSummary[]>("/assessments"),
