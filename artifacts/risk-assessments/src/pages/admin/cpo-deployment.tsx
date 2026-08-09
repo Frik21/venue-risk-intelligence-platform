@@ -1,11 +1,10 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { api, type Task, type User } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Mail, ClipboardList } from "lucide-react";
-import { formatDate } from "@/lib/display-utils";
 import { cn } from "@/lib/utils";
 
 type DeployStatus = "deployed" | "available" | "off_duty";
@@ -22,6 +21,7 @@ const STATUS_CONFIG: Record<DeployStatus, { label: string; color: string }> = {
 // Qualifications/certifications aren't tracked anywhere in the schema
 // yet, so they're not shown here rather than faked.
 export default function CpoDeployment() {
+  const [statusFilter, setStatusFilter] = useState<DeployStatus | null>(null);
   const { data: users = [], isLoading: usersLoading } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list });
   const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({ queryKey: ["tasks"], queryFn: () => api.tasks.list() });
 
@@ -46,6 +46,8 @@ export default function CpoDeployment() {
     off_duty: rows.filter((r) => r.status === "off_duty").length,
   };
 
+  const visibleRows = statusFilter == null ? rows : rows.filter((r) => r.status === statusFilter);
+
   return (
     <div className="space-y-5">
       <div>
@@ -55,14 +57,28 @@ export default function CpoDeployment() {
 
       <div className="grid grid-cols-3 gap-4">
         {(["deployed", "available", "off_duty"] as const).map((s) => (
-          <Card key={s}>
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-slate-900">{isLoading ? "—" : counts[s]}</div>
-              <div className="text-xs text-slate-500">{STATUS_CONFIG[s].label}</div>
-            </CardContent>
-          </Card>
+          <button
+            key={s}
+            onClick={() => setStatusFilter((current) => (current === s ? null : s))}
+            className="text-left"
+            disabled={isLoading}
+          >
+            <Card className={cn("transition-colors", statusFilter === s && "ring-2 ring-blue-500 border-blue-500")}>
+              <CardContent className="p-4">
+                <div className="text-2xl font-bold text-slate-900">{isLoading ? "—" : counts[s]}</div>
+                <div className="text-xs text-slate-500">{STATUS_CONFIG[s].label}</div>
+              </CardContent>
+            </Card>
+          </button>
         ))}
       </div>
+
+      {statusFilter != null && (
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          Showing only {STATUS_CONFIG[statusFilter].label.toLowerCase()} operators
+          <button onClick={() => setStatusFilter(null)} className="text-blue-600 hover:underline">Clear filter</button>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="space-y-2">{Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-24" />)}</div>
@@ -74,9 +90,16 @@ export default function CpoDeployment() {
             <p className="text-sm text-slate-400">Add a CPO user from <Link href="/admin/users" className="text-blue-600 hover:underline">Users</Link>.</p>
           </CardContent>
         </Card>
+      ) : visibleRows.length === 0 ? (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <Users className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+            <h3 className="font-medium text-slate-600 mb-1">No {STATUS_CONFIG[statusFilter!].label.toLowerCase()} operators</h3>
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-3">
-          {rows.map(({ cpo, current, upcoming, taskCount, status }) => (
+          {visibleRows.map(({ cpo, current, upcoming, taskCount, status }) => (
             <Card key={cpo.id}>
               <CardContent className="p-4">
                 <div className="flex items-start gap-4">
