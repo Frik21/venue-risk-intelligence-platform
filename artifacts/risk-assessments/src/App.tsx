@@ -24,6 +24,7 @@ import EvidencePage from "@/pages/evidence/list";
 import MapsPage from "@/pages/maps/index";
 import ReportsPage from "@/pages/reports/index";
 import UsersPage from "@/pages/admin/users";
+import AdminDashboard from "@/pages/admin/dashboard";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -65,6 +66,7 @@ function Router() {
         <Route path="/reports" component={ReportsPage} />
 
         {/* Admin */}
+        <Route path="/admin" component={AdminDashboard} />
         <Route path="/admin/users" component={UsersPage} />
 
         <Route component={NotFound} />

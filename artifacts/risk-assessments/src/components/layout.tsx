@@ -16,6 +16,7 @@ import {
   Search,
   Menu,
   X,
+  Gauge,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -54,6 +55,7 @@ const navGroups = [
   {
     label: "Admin",
     items: [
+      { href: "/admin", label: "Dashboard", icon: Gauge },
       { href: "/admin/users", label: "Users", icon: Users },
     ],
   },
@@ -78,8 +80,11 @@ const hideShell = location === "/" && !showShell;
   };
 }, []);
 const hideShell = location === "/" && !showShell;
+  // "/admin" needs the same exact-match treatment as "/" - otherwise
+  // it'd also read as active on "/admin/users" (a real, distinct nav
+  // item), since that path also starts with "/admin".
   const isActive = (href: string) =>
-    href === "/" ? location === "/" : location.startsWith(href);
+    href === "/" || href === "/admin" ? location === href : location.startsWith(href);
 
   const Sidebar = () => (
     <aside className="w-64 bg-slate-950 text-slate-100 flex flex-col h-full">
