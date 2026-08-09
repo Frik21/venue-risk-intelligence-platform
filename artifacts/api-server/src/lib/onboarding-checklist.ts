@@ -24,10 +24,4 @@ export const ONBOARDING_CHECKLIST_ITEMS: OnboardingChecklistItem[] = [
 export const DOCUMENT_TYPES = [
   { value: "id_document", label: "ID Document" },
   { value: "passport", label: "Passport" },
-  { value: "psira_registration", label: "PSIRA Registration" },
-  { value: "firearm_competency", label: "Firearm Competency Certificate" },
-  { value: "drivers_license", label: "Driver's License" },
-  { value: "medical_certificate", label: "Medical Certificate" },
-  { value: "background_check_report", label: "Background Check Report" },
-  { value: "other", label: "Other" },
 ] as const;

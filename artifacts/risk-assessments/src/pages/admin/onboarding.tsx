@@ -26,12 +26,6 @@ const STATUS_CONFIG: Record<OnboardingStatus, { label: string; color: string }> 
 const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
   { value: "id_document", label: "ID Document" },
   { value: "passport", label: "Passport" },
-  { value: "psira_registration", label: "PSIRA Registration" },
-  { value: "firearm_competency", label: "Firearm Competency Certificate" },
-  { value: "drivers_license", label: "Driver's License" },
-  { value: "medical_certificate", label: "Medical Certificate" },
-  { value: "background_check_report", label: "Background Check Report" },
-  { value: "other", label: "Other" },
 ];
 
 // Comfortably under the api-server's 10mb JSON body limit once
