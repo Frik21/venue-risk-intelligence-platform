@@ -1459,6 +1459,34 @@
   transform: translateX(0);
 }
 
+/* Route Planning panel - empty placeholder for now (per direct
+   product direction), same base panel styling as Risk Assessments/
+   Layers. */
+.route-planning-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 29;
+  width: min(360px, 88vw);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  background: rgba(8, 11, 15, 0.92);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+  color: #fff;
+  transform: translateX(-100%);
+  transition: transform 0.28s ease;
+  pointer-events: auto;
+}
+
+.route-planning-panel-open {
+  transform: translateX(0);
+}
+
 /* Operational Layers panel - a legend/control panel for the canvas
    itself, docking to the same left edge as Brief/Tasks (all three
    opened via the VenueGuard brand menu). Shifts right by one panel-
