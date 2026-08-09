@@ -16,12 +16,25 @@ import { useToast } from "@/hooks/use-toast";
 // needed, special requests") rather than a bare title + one assignee -
 // the CPO roster can hold several operators when a client asks for
 // more than one.
-export function NewTaskDialog({ venues, users, onClose }: { venues: Venue[]; users: User[]; onClose: () => void }) {
+export function NewTaskDialog({
+  venues,
+  users,
+  onClose,
+  initialAssigneeId,
+}: {
+  venues: Venue[];
+  users: User[];
+  onClose: () => void;
+  // Pre-checks a CPO as assignee - used by Operator Onboarding's
+  // "Assign User" button so approving an operator can flow straight
+  // into giving them their first task.
+  initialAssigneeId?: number;
+}) {
   const managers = users.filter((u) => u.role === "manager" || u.role === "admin");
   const cpos = users.filter((u) => u.role === "cpo");
   const [form, setForm] = useState({
     venueId: "",
-    assigneeIds: [] as number[],
+    assigneeIds: initialAssigneeId != null ? [initialAssigneeId] : [] as number[],
     assignedBy: "",
     title: "",
     dueDate: "",

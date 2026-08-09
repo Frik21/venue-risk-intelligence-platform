@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type OnboardingOverviewRecord, type OnboardingRecord, type OnboardingDocument, type DocumentType, type OnboardingStatus } from "@/lib/api";
+import { api, type OnboardingOverviewRecord, type OnboardingRecord, type OnboardingDocument, type DocumentType, type OnboardingStatus, type Venue, type User } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,10 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useRef, useState } from "react";
-import { UserPlus, ChevronDown, ChevronUp, FileText, CheckCircle2, Trash2, Plus, Search } from "lucide-react";
+import { UserPlus, ChevronDown, ChevronUp, FileText, CheckCircle2, Trash2, Plus, Search, ClipboardList } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { NewTaskDialog } from "@/components/new-task-dialog";
 
 // Labels only - the underlying status values (in_progress/onboarded/denied)
 // stay as-is in the schema and API to avoid a migration.
@@ -302,12 +303,19 @@ export default function OnboardingPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [statusFilter, setStatusFilter] = useState<OnboardingStatus | null>(null);
   const [search, setSearch] = useState("");
+  const [assigningUserId, setAssigningUserId] = useState<number | null>(null);
   const cardRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   const { data: records = [], isLoading } = useQuery<OnboardingOverviewRecord[]>({
     queryKey: ["onboarding-overview"],
     queryFn: api.onboarding.listAll,
   });
+
+  // Only fetched once "Assign User" is actually clicked - Task Request
+  // creation needs the full venue/user lists that the onboarding list
+  // itself doesn't.
+  const { data: venues = [] } = useQuery<Venue[]>({ queryKey: ["venues"], queryFn: api.venues.list, enabled: assigningUserId != null });
+  const { data: users = [] } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list, enabled: assigningUserId != null });
 
   // Scroll a freshly-added operator's row into view once it's expanded,
   // so creating them flows straight into their onboarding checklist.
@@ -339,6 +347,15 @@ export default function OnboardingPage() {
             setStatusFilter(null);
             setExpandedOnboardingId(onboardingId);
           }}
+        />
+      )}
+
+      {assigningUserId != null && (
+        <NewTaskDialog
+          venues={venues}
+          users={users}
+          initialAssigneeId={assigningUserId}
+          onClose={() => setAssigningUserId(null)}
         />
       )}
 
@@ -432,13 +449,23 @@ export default function OnboardingPage() {
                         <span className="text-xs text-slate-500 shrink-0">{r.checkedCount}/{r.totalCount}</span>
                       </div>
                     </div>
-                    <button
-                      onClick={() => setExpandedOnboardingId((id) => (id === r.id ? null : r.id))}
-                      className="flex items-center gap-1 text-xs text-blue-600 hover:underline shrink-0"
-                    >
-                      {expandedOnboardingId === r.id ? "Hide" : "Manage"}
-                      {expandedOnboardingId === r.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                    </button>
+                    <div className="flex items-center gap-3 shrink-0">
+                      {r.status === "onboarded" && r.userId != null && (
+                        <button
+                          onClick={() => setAssigningUserId(r.userId!)}
+                          className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                        >
+                          <ClipboardList className="w-3.5 h-3.5" /> Assign User
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setExpandedOnboardingId((id) => (id === r.id ? null : r.id))}
+                        className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                      >
+                        {expandedOnboardingId === r.id ? "Hide" : "Manage"}
+                        {expandedOnboardingId === r.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
                   </div>
                   {expandedOnboardingId === r.id && <CpoOnboardingDetail onboardingId={r.id} />}
                 </CardContent>
