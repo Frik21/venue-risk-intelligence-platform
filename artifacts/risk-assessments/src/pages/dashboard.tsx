@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, ChangeEvent } from "react";
-import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -405,6 +405,14 @@ const OPEN_RISK_ASSESSMENTS_PANEL_EVENT = "venueguard-open-risk-assessments-pane
 const OPEN_ROUTE_PLANNING_PANEL_EVENT = "venueguard-open-route-planning-panel";
 const OPEN_DOWNLOAD_TASK_PANEL_EVENT = "venueguard-open-download-task-panel";
 const OPEN_LAYERS_PANEL_EVENT = "venueguard-open-layers-panel";
+// Dispatched by the operator menu (TopBanner, top-right - separate
+// from the VenueGuard brand menu on the left) when "Profile" is
+// clicked. Kept in the same activePanel state as the six brand-menu
+// panels above (not its own boolean) so it automatically gets the
+// same mutual-exclusivity and click-outside-to-close behavior for
+// free, even though it's opened from a different menu and docks on
+// the opposite edge.
+const OPEN_PROFILE_PANEL_EVENT = "venueguard-open-profile-panel";
 // Dispatched by each panel's "Back to Menu" button (OperationalCanvas)
 // and picked up by TopBanner, for the same cross-sibling reason as the
 // OPEN_*_PANEL_EVENT constants above - reopens the brand dropdown after
@@ -781,6 +789,7 @@ function TaskRouteSlotCard({
 function TopBanner({ onSignOut }: { onSignOut: () => void }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
+  const [operatorMenuOpen, setOperatorMenuOpen] = useState(false);
 
   useEffect(() => {
     const reopenMenu = () => setBrandMenuOpen(true);
@@ -946,15 +955,51 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
           />
         </div>
       </div>
-      <div className="top-banner-operator">
-        <div className="top-banner-operator-avatar" aria-hidden="true">
-          F
-        </div>
-        <span className="top-banner-operator-name">Frik</span>
-        <button type="button" className="top-banner-sign-out" onClick={onSignOut}>
-          <LogOut className="w-4 h-4" />
-          Sign Out
+      <div
+        className="top-banner-operator"
+        onClick={(event) => event.stopPropagation()}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node)) setOperatorMenuOpen(false);
+        }}
+      >
+        <button
+          type="button"
+          className="top-banner-operator-trigger"
+          onClick={() => setOperatorMenuOpen((open) => !open)}
+          aria-expanded={operatorMenuOpen}
+        >
+          <span className="top-banner-operator-avatar" aria-hidden="true">
+            F
+          </span>
+          <span className="top-banner-operator-name">Frik</span>
+          <ChevronDown
+            className={`w-3.5 h-3.5 top-banner-operator-chevron ${operatorMenuOpen ? "top-banner-operator-chevron-open" : ""}`}
+          />
         </button>
+
+        {operatorMenuOpen && (
+          <div className="top-banner-operator-menu">
+            <button
+              type="button"
+              className="top-banner-operator-menu-item"
+              onClick={() => {
+                window.dispatchEvent(new Event(OPEN_PROFILE_PANEL_EVENT));
+                setOperatorMenuOpen(false);
+              }}
+            >
+              <UserIcon className="w-4 h-4" />
+              Profile
+            </button>
+            <button
+              type="button"
+              className="top-banner-operator-menu-item top-banner-operator-menu-item-danger"
+              onClick={onSignOut}
+            >
+              <LogOut className="w-4 h-4" />
+              Sign Out
+            </button>
+          </div>
+        )}
       </div>
     </header>
   );
@@ -1439,6 +1484,7 @@ function OperationalCanvas({
     | "route-planning"
     | "download-task"
     | "layers"
+    | "profile"
     | null;
   const [activePanel, setActivePanel] = useState<VenueGuardPanel>(null);
   const briefPanelOpen = activePanel === "brief";
@@ -1449,6 +1495,7 @@ function OperationalCanvas({
   const routePlanningPanelOpen = activePanel === "route-planning";
   const downloadTaskPanelOpen = activePanel === "download-task";
   const layersPanelOpen = activePanel === "layers";
+  const profilePanelOpen = activePanel === "profile";
 
   // Risk Assessments has its own sub-navigation ("Venues," step 1 of a
   // bigger project, per direct product direction) - a view switch inside
@@ -2299,6 +2346,15 @@ function OperationalCanvas({
     const openRoutePlanning = () => setActivePanel("route-planning");
     const openDownloadTask = () => setActivePanel("download-task");
     const openLayers = () => setActivePanel("layers");
+    // Profile docks on the same right edge as Alerts (unlike the other
+    // six panels above, which dock left) - close Alerts when Profile
+    // opens so the two don't render on top of each other; the reverse
+    // (Alerts trigger closing Profile) is handled in TopBanner's alerts
+    // toggle itself.
+    const openProfile = () => {
+      setActivePanel("profile");
+      setAlertsPanelOpen(false);
+    };
     // Mirrors the panel-closing half of handleCanvasClick below, fired
     // from TopBanner (a sibling, not a descendant of this canvas) when a
     // click lands outside its brand menu - see CLOSE_VENUEGUARD_PANELS_EVENT.
@@ -2314,6 +2370,7 @@ function OperationalCanvas({
     window.addEventListener(OPEN_ROUTE_PLANNING_PANEL_EVENT, openRoutePlanning);
     window.addEventListener(OPEN_DOWNLOAD_TASK_PANEL_EVENT, openDownloadTask);
     window.addEventListener(OPEN_LAYERS_PANEL_EVENT, openLayers);
+    window.addEventListener(OPEN_PROFILE_PANEL_EVENT, openProfile);
     window.addEventListener(CLOSE_VENUEGUARD_PANELS_EVENT, closePanelsFromTopBanner);
     return () => {
       window.removeEventListener(OPEN_BRIEF_PANEL_EVENT, openBrief);
@@ -2324,6 +2381,7 @@ function OperationalCanvas({
       window.removeEventListener(OPEN_ROUTE_PLANNING_PANEL_EVENT, openRoutePlanning);
       window.removeEventListener(OPEN_DOWNLOAD_TASK_PANEL_EVENT, openDownloadTask);
       window.removeEventListener(OPEN_LAYERS_PANEL_EVENT, openLayers);
+      window.removeEventListener(OPEN_PROFILE_PANEL_EVENT, openProfile);
       window.removeEventListener(CLOSE_VENUEGUARD_PANELS_EVENT, closePanelsFromTopBanner);
     };
   }, []);
@@ -3529,7 +3587,14 @@ function OperationalCanvas({
         className="alerts-panel-trigger"
         onClick={(event) => {
           event.stopPropagation();
-          setAlertsPanelOpen((open) => !open);
+          setAlertsPanelOpen((open) => {
+            const next = !open;
+            // Alerts and Profile both dock on the right edge - opening
+            // one closes the other so they don't render on top of each
+            // other (see openProfile above for the reverse direction).
+            if (next && profilePanelOpen) setActivePanel(null);
+            return next;
+          });
         }}
       >
         <Bell className="w-4 h-4" />
@@ -3601,6 +3666,28 @@ function OperationalCanvas({
             })
           )}
         </div>
+      </div>
+
+      <div
+        className={`profile-panel ${profilePanelOpen ? "profile-panel-open" : ""}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="profile-panel-header">
+          <div>
+            <p className="profile-panel-eyebrow">Profile</p>
+            <h2 className="profile-panel-title">Your account.</h2>
+          </div>
+          <button
+            type="button"
+            className="profile-panel-close"
+            onClick={() => setActivePanel(null)}
+            aria-label="Close Profile"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <p className="tasks-panel-empty">Coming soon.</p>
       </div>
 
       {renderedCountry && countryPanelData && (
