@@ -2043,7 +2043,7 @@ function OperationalCanvas({
     if (viewingAsCpoId == null) return;
     setCpoTasksLoading(true);
     api.tasks
-      .list(viewingAsCpoId)
+      .list({ assignedTo: viewingAsCpoId })
       .then(setCpoTasks)
       .catch((err) => console.error(`Failed to load tasks for CPO ${viewingAsCpoId}:`, err))
       .finally(() => setCpoTasksLoading(false));
@@ -2162,7 +2162,7 @@ function OperationalCanvas({
     setCpoTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status } : t)));
     api.tasks.updateStatus(taskId, { status }).catch((err) => {
       console.error(`Failed to update task ${taskId}:`, err);
-      if (viewingAsCpoId != null) api.tasks.list(viewingAsCpoId).then(setCpoTasks).catch(() => {});
+      if (viewingAsCpoId != null) api.tasks.list({ assignedTo: viewingAsCpoId }).then(setCpoTasks).catch(() => {});
     });
   }
 
@@ -2181,6 +2181,7 @@ function OperationalCanvas({
   const MOCK_TASK_ID = -1;
   const MOCK_TASK: Task = {
     id: MOCK_TASK_ID,
+    taskNumber: "T-DEMO",
     venueId: -1,
     venueName: "Example Venue (Demo)",
     assignedTo: -1,
@@ -2190,6 +2191,8 @@ function OperationalCanvas({
     title: "Demo Task - Complete assessment for venue X",
     dueDate: null,
     status: "not_completed",
+    priority: "medium",
+    archived: false,
     completionNote: null,
     planSubmittedAt: null,
     createdAt: new Date().toISOString(),

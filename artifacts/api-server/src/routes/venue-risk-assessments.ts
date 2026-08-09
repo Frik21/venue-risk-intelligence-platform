@@ -111,6 +111,7 @@ router.post("/tasks/:taskId/risk-assessments", async (req, res): Promise<void> =
 
   const [task] = await db.select().from(tasksTable).where(eq(tasksTable.id, taskId));
   if (!task) { res.status(404).json({ error: "Task not found" }); return; }
+  if (task.assignedTo === null) { res.status(400).json({ error: "Task has no assigned CPO yet" }); return; }
 
   const [{ highest }] = await db
     .select({ highest: max(venueRiskAssessmentsTable.slotIndex) })

@@ -19,6 +19,9 @@ import {
   MapPinned,
   Files,
   History,
+  CalendarDays,
+  UserCog,
+  DollarSign,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -47,6 +50,13 @@ const navGroups = [
     ],
   },
   {
+    label: "Operations",
+    items: [
+      { href: "/admin/schedule", label: "Schedule", icon: CalendarDays },
+      { href: "/admin/cpo-deployment", label: "CPO Deployment", icon: UserCog },
+    ],
+  },
+  {
     label: "Repository",
     items: [
       { href: "/evidence", label: "Evidence", icon: FolderOpen },
@@ -58,6 +68,7 @@ const navGroups = [
     label: "Admin",
     items: [
       { href: "/admin", label: "Dashboard", icon: Gauge },
+      { href: "/admin/costs", label: "Costs", icon: DollarSign },
       { href: "/admin/users", label: "Users", icon: Users },
       { href: "/admin/audit-log", label: "Audit History", icon: History },
     ],

@@ -28,6 +28,9 @@ import AdminDashboard from "@/pages/admin/dashboard";
 import FieldIntelligence from "@/pages/admin/field-intelligence";
 import DocumentsPage from "@/pages/admin/documents";
 import AuditLogPage from "@/pages/admin/audit-log";
+import CpoDeployment from "@/pages/admin/cpo-deployment";
+import SchedulePage from "@/pages/admin/schedule";
+import CostsPage from "@/pages/admin/costs";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -74,6 +77,9 @@ function Router() {
         <Route path="/admin/field-intelligence" component={FieldIntelligence} />
         <Route path="/admin/documents" component={DocumentsPage} />
         <Route path="/admin/audit-log" component={AuditLogPage} />
+        <Route path="/admin/cpo-deployment" component={CpoDeployment} />
+        <Route path="/admin/schedule" component={SchedulePage} />
+        <Route path="/admin/costs" component={CostsPage} />
 
         <Route component={NotFound} />
       </Switch>

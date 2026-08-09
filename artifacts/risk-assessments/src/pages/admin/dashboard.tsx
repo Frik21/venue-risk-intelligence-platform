@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { api, type DashboardSummary, type Task, type Venue, type User, type AssessmentSummary } from "@/lib/api";
+import { api, type DashboardSummary, type Task, type Venue, type User, type AssessmentSummary, type GlobalExpense } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,18 +14,20 @@ import {
   Bell,
   ListChecks,
   AlertOctagon,
-  Activity,
-  CalendarClock,
   ClipboardCheck,
   MapPinned,
-  Rss,
-  Sparkles,
   Plus,
   CheckCircle2,
+  UserPlus,
+  ClipboardPlus,
+  UserCog,
+  CalendarDays,
+  DollarSign,
+  FileWarning,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { getStatusColor, getStatusLabel, getPriorityColor, timeAgo, formatDate } from "@/lib/display-utils";
+import { getStatusColor, getStatusLabel, getPriorityColor, formatDate } from "@/lib/display-utils";
 
 const TASK_STATUS_LABELS: Record<string, string> = {
   not_completed: "Not Completed",
@@ -33,10 +35,11 @@ const TASK_STATUS_LABELS: Record<string, string> = {
   completed: "Completed",
 };
 
-const TASK_STATUS_COLORS: Record<string, string> = {
-  not_completed: "text-red-700 bg-red-50 border-red-200",
-  in_progress: "text-amber-700 bg-amber-50 border-amber-200",
-  completed: "text-green-700 bg-green-50 border-green-200",
+const PRIORITY_COLORS: Record<string, string> = {
+  low: "text-slate-600 bg-slate-100 border-slate-200",
+  medium: "text-blue-700 bg-blue-50 border-blue-200",
+  high: "text-orange-700 bg-orange-50 border-orange-200",
+  urgent: "text-red-700 bg-red-50 border-red-200",
 };
 
 function StatCard({ icon: Icon, label, value, href }: { icon: LucideIcon; label: string; value: number; href: string }) {
@@ -84,39 +87,20 @@ function SectionCard({
   );
 }
 
-function ComingSoonCard({ title, icon: Icon, description }: { title: string; icon: LucideIcon; description: string }) {
-  return (
-    <Card>
-      <CardContent className="p-5">
-        <h2 className="font-semibold text-slate-900 flex items-center gap-2 mb-3">
-          <Icon className="w-4 h-4 text-slate-400" />
-          {title}
-        </h2>
-        <div className="flex flex-col items-center justify-center text-center py-8 px-4 border border-dashed border-slate-200 rounded-lg">
-          <Icon className="w-8 h-8 text-slate-300 mb-3" />
-          <p className="text-sm text-slate-500 max-w-xs">{description}</p>
-          <Badge variant="secondary" className="mt-3 text-[10px] uppercase">Coming Soon</Badge>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 function TaskRow({ task }: { task: Task }) {
   return (
     <div className="flex items-start justify-between gap-2 text-sm">
       <div className="min-w-0">
-        <p className="font-medium text-slate-900 truncate">{task.title}</p>
+        <span className="text-[9px] font-mono text-slate-400 border border-slate-200 px-1 py-0.5 rounded mr-1.5">{task.taskNumber}</span>
+        <span className="font-medium text-slate-900">{task.title}</span>
         <p className="text-xs text-slate-400">
           {task.venueName ?? "No venue"}
-          {task.assignedToName && ` · ${task.assignedToName}`}
+          {task.assignedToName ? ` · ${task.assignedToName}` : " · Unassigned"}
           {task.dueDate && ` · Due ${formatDate(task.dueDate)}`}
         </p>
       </div>
-      <span
-        className={`text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase shrink-0 ${TASK_STATUS_COLORS[task.status] ?? ""}`}
-      >
-        {TASK_STATUS_LABELS[task.status] ?? task.status}
+      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase shrink-0 ${PRIORITY_COLORS[task.priority] ?? ""}`}>
+        {task.priority}
       </span>
     </div>
   );
@@ -128,15 +112,19 @@ const startOfToday = () => {
   return d;
 };
 
-// Management Dashboard - the Manager/Admin persona's landing page,
-// restructured to the fixed 9-section main-screen layout from direct
-// product direction (a 20-item full information architecture, with
-// only these 9 immediately visible to avoid clutter - the rest live
-// on their own pages, reachable via the sidebar). Everything below is
-// computed from data that already exists (Tasks, Assessments, Alerts,
-// the dashboard summary) - "Operational Footprint" and "Ask
-// Intelligence" have no backing feature yet, so they show an honest
-// "Coming Soon" state rather than fake data.
+// Management Dashboard - restructured per direct product direction to
+// this exact 9-section hierarchy (of a much larger 23-item full
+// information architecture - everything else lives on its own page,
+// reachable via the sidebar, to avoid cluttering this landing screen):
+// Management Overview -> Requires Attention -> Task Management ->
+// CPO Deployment -> Schedule -> Task Readiness -> Costs ->
+// Operational Footprint -> Outstanding Reports.
+//
+// CPO status (Deployed/Available) is computed, not a stored field -
+// Deployed means "has a task in progress right now". Outstanding
+// Reports has no backing data (report generation isn't persisted
+// anywhere - see /reports) so it points at what does exist instead of
+// showing fake numbers.
 export default function AdminDashboard() {
   const [showNewTask, setShowNewTask] = useState(false);
 
@@ -154,26 +142,55 @@ export default function AdminDashboard() {
   });
   const { data: venues = [] } = useQuery<Venue[]>({ queryKey: ["venues"], queryFn: api.venues.list });
   const { data: users = [] } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list });
+  const { data: expenses = [], isLoading: expensesLoading } = useQuery<GlobalExpense[]>({
+    queryKey: ["expenses-all"],
+    queryFn: api.expenses.listAll,
+  });
 
   const today = startOfToday();
+  const cpos = users.filter((u) => u.role === "cpo");
 
+  const activeTasks = tasks.filter((t) => t.status === "in_progress");
+  const upcomingTasks = tasks.filter((t) => t.status === "not_completed");
+  const unassignedTasks = tasks.filter((t) => t.assignedTo == null && t.status !== "completed");
   const overdueTasks = tasks.filter((t) => t.status !== "completed" && t.dueDate && new Date(t.dueDate) < today);
   const attentionAlerts = (summary?.recentAlerts ?? []).filter(
     (a) => a.status === "pending" && (a.priority === "high" || a.priority === "critical"),
   );
   const attentionAssessments = assessments.filter((a) => a.status === "review_required" || a.status === "escalated");
-  const attentionCount = overdueTasks.length + attentionAlerts.length + attentionAssessments.length;
+  const attentionCount = overdueTasks.length + unassignedTasks.length + attentionAlerts.length + attentionAssessments.length;
+  const outstandingAssessments = assessments.filter((a) => a.status !== "approved" && a.status !== "archived").length;
 
-  const activeOps = tasks.filter((t) => t.status === "in_progress");
-  const upcomingOps = tasks
-    .filter((t) => t.status === "not_completed")
-    .sort((a, b) => (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999"))
-    .slice(0, 6);
+  const deployedCpos = cpos.filter((c) => tasks.some((t) => t.assignedTo === c.id && t.status === "in_progress"));
+  const availableCpos = cpos.filter((c) => c.active && !deployedCpos.includes(c));
+
+  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+  const scheduleWithDates = tasks.filter((t) => t.dueDate);
+  const todaySchedule = scheduleWithDates.filter((t) => {
+    const d = new Date(t.dueDate!); d.setHours(0, 0, 0, 0);
+    return d.getTime() === today.getTime();
+  });
+  const tomorrowSchedule = scheduleWithDates.filter((t) => {
+    const d = new Date(t.dueDate!); d.setHours(0, 0, 0, 0);
+    return d.getTime() === tomorrow.getTime();
+  });
 
   const activePool = tasks.filter((t) => t.status !== "completed");
   const readyCount = activePool.filter((t) => t.planSubmittedAt).length;
   const readinessPct = activePool.length === 0 ? 100 : Math.round((readyCount / activePool.length) * 100);
   const tasksMissingPlan = activePool.filter((t) => !t.planSubmittedAt).slice(0, 5);
+
+  const spendByCurrency = expenses.reduce<Record<string, number>>((acc, e) => {
+    acc[e.currency] = (acc[e.currency] ?? 0) + e.amount;
+    return acc;
+  }, {});
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  const monthSpendByCurrency = expenses
+    .filter((e) => e.incurredOn.startsWith(thisMonth))
+    .reduce<Record<string, number>>((acc, e) => {
+      acc[e.currency] = (acc[e.currency] ?? 0) + e.amount;
+      return acc;
+    }, {});
 
   const footprintByCountry = Object.entries(
     venues.reduce<Record<string, { total: number; cities: Set<string> }>>((acc, v) => {
@@ -185,28 +202,7 @@ export default function AdminDashboard() {
   ).sort((a, b) => b[1].total - a[1].total);
   const officeCount = venues.filter((v) => v.venueType === "office").length;
 
-  const activityFeed = [
-    ...(summary?.recentAlerts ?? []).map((a) => ({
-      key: `alert-${a.id}`,
-      time: a.createdAt,
-      icon: Bell,
-      label: a.title,
-      meta: a.venueName ?? "Unknown venue",
-      badge: a.priority,
-      badgeClass: getPriorityColor(a.priority),
-    })),
-    ...(summary?.recentAssessments ?? []).map((a) => ({
-      key: `assessment-${a.id}`,
-      time: a.updatedAt,
-      icon: ClipboardList,
-      label: a.title,
-      meta: a.venueName ?? "Unknown venue",
-      badge: getStatusLabel(a.status),
-      badgeClass: getStatusColor(a.status),
-    })),
-  ]
-    .sort((a, b) => b.time.localeCompare(a.time))
-    .slice(0, 6);
+  const overviewLoading = summaryLoading || tasksLoading || assessmentsLoading;
 
   return (
     <div className="space-y-6">
@@ -222,27 +218,30 @@ export default function AdminDashboard() {
         </Button>
       </div>
 
-      {/* 1. Executive Overview */}
+      {/* 1. Management Overview */}
       <div>
-        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Executive Overview</h2>
-        {summaryLoading || tasksLoading ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {Array(5).fill(0).map((_, i) => <Skeleton key={i} className="h-24" />)}
+        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Management Overview</h2>
+        {overviewLoading ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {Array(8).fill(0).map((_, i) => <Skeleton key={i} className="h-24" />)}
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <StatCard icon={Building2} label="Venues" value={summary?.totalVenues ?? 0} href="/venues" />
-            <StatCard icon={ListChecks} label="Tasks" value={tasks.length} href="/tasks" />
-            <StatCard icon={Bell} label="Pending Alerts" value={summary?.pendingAlerts ?? 0} href="/alerts" />
-            <StatCard icon={ClipboardList} label="Assessments" value={summary?.totalAssessments ?? 0} href="/assessments" />
-            <StatCard icon={AlertTriangle} label="Incidents" value={summary?.totalIncidents ?? 0} href="/incidents" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatCard icon={ListChecks} label="Active Tasks" value={activeTasks.length} href="/tasks" />
+            <StatCard icon={CalendarDays} label="Upcoming Tasks" value={upcomingTasks.length} href="/tasks" />
+            <StatCard icon={UserPlus} label="Unassigned Tasks" value={unassignedTasks.length} href="/tasks" />
+            <StatCard icon={AlertOctagon} label="Requires Attention" value={attentionCount} href="/tasks" />
+            <StatCard icon={UserCog} label="CPOs Deployed" value={deployedCpos.length} href="/admin/cpo-deployment" />
+            <StatCard icon={UserCog} label="CPOs Available" value={availableCpos.length} href="/admin/cpo-deployment" />
+            <StatCard icon={ClipboardList} label="Outstanding Assessments" value={outstandingAssessments} href="/assessments" />
+            <StatCard icon={Building2} label="Venues" value={venues.length} href="/venues" />
           </div>
         )}
       </div>
 
       {/* 2. Requires Attention */}
       <SectionCard title="Requires Attention" icon={AlertOctagon}>
-        {summaryLoading || tasksLoading || assessmentsLoading ? (
+        {overviewLoading ? (
           <Skeleton className="h-24" />
         ) : attentionCount === 0 ? (
           <div className="flex items-center gap-2 text-sm text-slate-500 py-2">
@@ -251,6 +250,17 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <div className="space-y-3">
+            {unassignedTasks.map((t) => (
+              <div key={`unassigned-${t.id}`} className="flex items-start justify-between gap-2 text-sm">
+                <div className="min-w-0">
+                  <p className="font-medium text-slate-900 truncate">{t.title}</p>
+                  <p className="text-xs text-slate-400">{t.venueName ?? "No venue"}</p>
+                </div>
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase shrink-0 text-orange-700 bg-orange-50 border-orange-200">
+                  Unassigned
+                </span>
+              </div>
+            ))}
             {overdueTasks.map((t) => (
               <div key={`overdue-${t.id}`} className="flex items-start justify-between gap-2 text-sm">
                 <div className="min-w-0">
@@ -288,48 +298,75 @@ export default function AdminDashboard() {
         )}
       </SectionCard>
 
-      {/* 3. Active Operations */}
-      <SectionCard title="Active Operations" icon={Activity} action={{ href: "/tasks", label: "View all" }}>
+      {/* 3. Task Management */}
+      <SectionCard title="Task Management" icon={ClipboardPlus} action={{ href: "/tasks", label: "Open Task Board" }}>
         {tasksLoading ? (
           <Skeleton className="h-24" />
-        ) : activeOps.length === 0 ? (
-          <p className="text-sm text-slate-400">No operations in progress right now.</p>
+        ) : tasks.length === 0 ? (
+          <p className="text-sm text-slate-400">No tasks yet - assign one to get started.</p>
         ) : (
-          <div className="space-y-3">{activeOps.slice(0, 6).map((t) => <TaskRow key={t.id} task={t} />)}</div>
-        )}
-      </SectionCard>
-
-      {/* 4. Upcoming Operations */}
-      <SectionCard title="Upcoming Operations" icon={CalendarClock} action={{ href: "/tasks", label: "View all" }}>
-        {tasksLoading ? (
-          <Skeleton className="h-24" />
-        ) : upcomingOps.length === 0 ? (
-          <p className="text-sm text-slate-400">Nothing scheduled.</p>
-        ) : (
-          <div className="space-y-3">{upcomingOps.map((t) => <TaskRow key={t.id} task={t} />)}</div>
-        )}
-      </SectionCard>
-
-      {/* 5. Risk Assessments */}
-      <SectionCard title="Risk Assessments" icon={ClipboardList} action={{ href: "/assessments", label: "View all" }}>
-        {summaryLoading ? (
-          <Skeleton className="h-24" />
-        ) : (summary?.totalAssessments ?? 0) === 0 ? (
-          <p className="text-sm text-slate-400">No assessments yet.</p>
-        ) : (
-          <div className="space-y-2.5">
-            {Object.entries(summary?.assessmentsByStatus ?? {}).map(([status, count]) => (
-              <div key={status} className="flex items-center justify-between text-sm">
-                <span className="text-slate-600">{getStatusLabel(status)}</span>
-                <Badge variant="secondary">{count}</Badge>
-              </div>
-            ))}
+          <div className="space-y-3">
+            {tasks.slice(0, 5).map((t) => <TaskRow key={t.id} task={t} />)}
           </div>
         )}
       </SectionCard>
 
-      {/* 6. Operational Plan Readiness */}
-      <SectionCard title="Operational Plan Readiness" icon={ClipboardCheck}>
+      {/* 4. CPO Deployment */}
+      <SectionCard title="CPO Deployment" icon={UserCog} action={{ href: "/admin/cpo-deployment", label: "View all" }}>
+        {tasksLoading ? (
+          <Skeleton className="h-24" />
+        ) : cpos.length === 0 ? (
+          <p className="text-sm text-slate-400">No CPOs yet.</p>
+        ) : (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              {deployedCpos.length} deployed · {availableCpos.length} available · {cpos.length - deployedCpos.length - availableCpos.length} off duty
+            </p>
+            {deployedCpos.length > 0 && (
+              <div className="space-y-2">
+                {deployedCpos.slice(0, 5).map((c) => {
+                  const t = tasks.find((t) => t.assignedTo === c.id && t.status === "in_progress");
+                  return (
+                    <div key={c.id} className="flex items-center justify-between text-sm">
+                      <span className="text-slate-700">{c.name}</span>
+                      <span className="text-xs text-slate-400 truncate">{t?.title}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </SectionCard>
+
+      {/* 5. Schedule */}
+      <SectionCard title="Schedule" icon={CalendarDays} action={{ href: "/admin/schedule", label: "View all" }}>
+        {tasksLoading ? (
+          <Skeleton className="h-24" />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Today ({todaySchedule.length})</p>
+              {todaySchedule.length === 0 ? (
+                <p className="text-sm text-slate-400">Nothing scheduled.</p>
+              ) : (
+                <div className="space-y-2.5">{todaySchedule.slice(0, 4).map((t) => <TaskRow key={t.id} task={t} />)}</div>
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Tomorrow ({tomorrowSchedule.length})</p>
+              {tomorrowSchedule.length === 0 ? (
+                <p className="text-sm text-slate-400">Nothing scheduled.</p>
+              ) : (
+                <div className="space-y-2.5">{tomorrowSchedule.slice(0, 4).map((t) => <TaskRow key={t.id} task={t} />)}</div>
+              )}
+            </div>
+          </div>
+        )}
+      </SectionCard>
+
+      {/* 6. Task Readiness */}
+      <SectionCard title="Task Readiness" icon={ClipboardCheck}>
         {tasksLoading ? (
           <Skeleton className="h-24" />
         ) : activePool.length === 0 ? (
@@ -360,7 +397,39 @@ export default function AdminDashboard() {
         )}
       </SectionCard>
 
-      {/* 7. Operational Footprint */}
+      {/* 7. Costs */}
+      <SectionCard title="Costs" icon={DollarSign} action={{ href: "/admin/costs", label: "View all" }}>
+        {expensesLoading ? (
+          <Skeleton className="h-20" />
+        ) : expenses.length === 0 ? (
+          <p className="text-sm text-slate-400">No expenses logged yet.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1.5">Total Spend</p>
+              {Object.entries(spendByCurrency).map(([cur, total]) => (
+                <p key={cur} className="text-lg font-bold text-slate-900">
+                  {total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {cur}
+                </p>
+              ))}
+            </div>
+            <div>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1.5">This Month</p>
+              {Object.keys(monthSpendByCurrency).length === 0 ? (
+                <p className="text-sm text-slate-400">Nothing this month.</p>
+              ) : (
+                Object.entries(monthSpendByCurrency).map(([cur, total]) => (
+                  <p key={cur} className="text-lg font-bold text-slate-900">
+                    {total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {cur}
+                  </p>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </SectionCard>
+
+      {/* 8. Operational Footprint */}
       <SectionCard title="Operational Footprint" icon={MapPinned} action={{ href: "/venues", label: "View all" }}>
         {venues.length === 0 ? (
           <p className="text-sm text-slate-400">No venues yet.</p>
@@ -382,38 +451,15 @@ export default function AdminDashboard() {
         )}
       </SectionCard>
 
-      {/* 8. Recent Activity */}
-      <SectionCard title="Recent Activity" icon={Rss}>
-        {summaryLoading ? (
-          <Skeleton className="h-32" />
-        ) : activityFeed.length === 0 ? (
-          <p className="text-sm text-slate-400">No recent activity.</p>
-        ) : (
-          <div className="space-y-3">
-            {activityFeed.map((item) => (
-              <div key={item.key} className="flex items-start justify-between gap-2 text-sm">
-                <div className="flex items-start gap-2 min-w-0">
-                  <item.icon className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="font-medium text-slate-900 truncate">{item.label}</p>
-                    <p className="text-xs text-slate-400">{item.meta} &middot; {timeAgo(item.time)}</p>
-                  </div>
-                </div>
-                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase shrink-0 ${item.badgeClass}`}>
-                  {item.badge}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+      {/* 9. Outstanding Reports */}
+      <SectionCard title="Outstanding Reports" icon={FileWarning} action={{ href: "/reports", label: "Open Reports" }}>
+        <div className="flex flex-col items-center justify-center text-center py-6 px-4 border border-dashed border-slate-200 rounded-lg">
+          <p className="text-sm text-slate-500 max-w-sm">
+            Report generation isn't tracked as a persisted record yet, so there's no real "outstanding vs submitted" count to show.
+            See <Link href="/reports" className="text-blue-600 hover:underline">Reportable Assessments</Link> for what's ready to report on.
+          </p>
+        </div>
       </SectionCard>
-
-      {/* 9. Ask Intelligence */}
-      <ComingSoonCard
-        title="Ask Intelligence"
-        icon={Sparkles}
-        description="Coming soon - ask natural-language questions about your operations and get instant, sourced answers."
-      />
     </div>
   );
 }

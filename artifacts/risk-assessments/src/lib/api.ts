@@ -51,22 +51,27 @@ export interface SearchPhrase {
 }
 
 export type TaskStatus = "not_completed" | "in_progress" | "completed";
+export type TaskPriority = "low" | "medium" | "high" | "urgent";
 
 // Task Assignment - a Manager assigns a CPO a specific piece of
 // structured work already in the platform, tied to a venue. The CPO
 // moves it through TaskStatus; that status is what feeds back to the
-// Manager. Not a general worklist or two-way chat.
+// Manager. Not a general worklist or two-way chat. assignedTo is
+// nullable - a task can be created "unassigned" and covered later.
 export interface Task {
   id: number;
+  taskNumber: string;
   venueId: number;
   venueName: string | null;
-  assignedTo: number;
+  assignedTo: number | null;
   assignedToName: string | null;
   assignedBy: number;
   assignedByName: string | null;
   title: string;
   dueDate: string | null;
   status: TaskStatus;
+  priority: TaskPriority;
+  archived: boolean;
   completionNote: string | null;
   planSubmittedAt: string | null;
   createdAt: string;
@@ -222,6 +227,12 @@ export interface Expense {
   receiptDataUrl: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface GlobalExpense extends Expense {
+  taskTitle: string | null;
+  venueName: string | null;
+  venueCountry: string | null;
 }
 
 export interface AssessmentSummary {
@@ -389,11 +400,22 @@ export const api = {
     delete: (id: number) => apiFetch<void>(`/search-phrases/${id}`, { method: "DELETE" }),
   },
   tasks: {
-    list: (assignedTo?: number) => apiFetch<Task[]>(`/tasks${assignedTo != null ? `?assignedTo=${assignedTo}` : ""}`),
-    create: (data: { venueId: number; assignedTo: number; assignedBy: number; title: string; dueDate?: string }) =>
+    list: (params?: { assignedTo?: number; includeArchived?: boolean }) => {
+      const q = new URLSearchParams();
+      if (params?.assignedTo != null) q.set("assignedTo", String(params.assignedTo));
+      if (params?.includeArchived) q.set("includeArchived", "true");
+      const qs = q.toString();
+      return apiFetch<Task[]>(`/tasks${qs ? `?${qs}` : ""}`);
+    },
+    create: (data: { venueId: number; assignedTo?: number | null; assignedBy: number; title: string; dueDate?: string; priority?: TaskPriority }) =>
       apiFetch<Task>("/tasks", { method: "POST", body: JSON.stringify(data) }),
     updateStatus: (id: number, data: { status: TaskStatus; completionNote?: string }) =>
       apiFetch<Task>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<{
+      venueId: number; assignedTo: number | null; assignedBy: number; title: string;
+      dueDate: string | null; status: TaskStatus; priority: TaskPriority; archived: boolean;
+    }>) => apiFetch<Task>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    duplicate: (id: number) => apiFetch<Task>(`/tasks/${id}/duplicate`, { method: "POST" }),
   },
   plans: {
     forTask: (taskId: number) => apiFetch<Plan>(`/tasks/${taskId}/plan`),
@@ -454,6 +476,7 @@ export const api = {
       >,
     ) => apiFetch<Expense>(`/expenses/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     delete: (id: number) => apiFetch<void>(`/expenses/${id}`, { method: "DELETE" }),
+    listAll: () => apiFetch<GlobalExpense[]>("/expenses"),
   },
   weather: {
     check: (lat: number, lng: number) =>

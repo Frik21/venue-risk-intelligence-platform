@@ -19,7 +19,9 @@ router.get("/tasks/:taskId/download", async (req, res): Promise<void> => {
   if (!task) { res.status(404).json({ error: "Task not found" }); return; }
 
   const [venue] = await db.select({ name: venuesTable.name }).from(venuesTable).where(eq(venuesTable.id, task.venueId));
-  const [assignedToUser] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, task.assignedTo));
+  const [assignedToUser] = task.assignedTo !== null
+    ? await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, task.assignedTo))
+    : [undefined];
   const [assignedByUser] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, task.assignedBy));
 
   const [plan] = await db.select().from(plansTable).where(eq(plansTable.taskId, taskId));
@@ -50,12 +52,14 @@ router.get("/tasks/:taskId/download", async (req, res): Promise<void> => {
 
   // Not scoped to this task - the operator's full timesheet, per
   // direct product direction (Timesheet is a per-operator log, not a
-  // task-scoped feature).
-  const timesheetRows = await db
-    .select()
-    .from(timesheetEntriesTable)
-    .where(eq(timesheetEntriesTable.userId, task.assignedTo))
-    .orderBy(timesheetEntriesTable.date);
+  // task-scoped feature). Skipped entirely for an unassigned task.
+  const timesheetRows = task.assignedTo !== null
+    ? await db
+        .select()
+        .from(timesheetEntriesTable)
+        .where(eq(timesheetEntriesTable.userId, task.assignedTo))
+        .orderBy(timesheetEntriesTable.date)
+    : [];
 
   const doc = buildTaskPdf({
     task: {

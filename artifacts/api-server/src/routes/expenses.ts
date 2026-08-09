@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
-import { db, expensesTable, tasksTable } from "@workspace/db";
+import { db, expensesTable, tasksTable, venuesTable } from "@workspace/db";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -23,6 +23,37 @@ function formatExpense(row: typeof expensesTable.$inferSelect) {
     updatedAt: row.updatedAt.toISOString(),
   };
 }
+
+// Global feed across every task - powers Task Costs / Budget Overview
+// on the Management Dashboard, which has no destination of its own
+// (the route below only covers one task at a time).
+router.get("/expenses", async (_req, res): Promise<void> => {
+  const rows = await db.select().from(expensesTable).orderBy(desc(expensesTable.incurredOn)).limit(200);
+
+  const taskIds = [...new Set(rows.map((r) => r.taskId))];
+  const tasks = taskIds.length
+    ? await db.select({ id: tasksTable.id, title: tasksTable.title, venueId: tasksTable.venueId }).from(tasksTable)
+    : [];
+  const taskMap: Record<number, { title: string; venueId: number }> = {};
+  for (const t of tasks) taskMap[t.id] = { title: t.title, venueId: t.venueId };
+
+  const venues = await db.select({ id: venuesTable.id, name: venuesTable.name, country: venuesTable.country }).from(venuesTable);
+  const venueMap: Record<number, { name: string; country: string }> = {};
+  for (const v of venues) venueMap[v.id] = { name: v.name, country: v.country };
+
+  res.json(
+    rows.map((r) => {
+      const task = taskMap[r.taskId];
+      const venue = task ? venueMap[task.venueId] : undefined;
+      return {
+        ...formatExpense(r),
+        taskTitle: task?.title ?? null,
+        venueName: venue?.name ?? null,
+        venueCountry: venue?.country ?? null,
+      };
+    }),
+  );
+});
 
 // All expenses logged against a task, most recently incurred first.
 router.get("/tasks/:taskId/expenses", async (req, res): Promise<void> => {
@@ -47,6 +78,7 @@ router.post("/tasks/:taskId/expenses", async (req, res): Promise<void> => {
 
   const [task] = await db.select().from(tasksTable).where(eq(tasksTable.id, taskId));
   if (!task) { res.status(404).json({ error: "Task not found" }); return; }
+  if (task.assignedTo === null) { res.status(400).json({ error: "Task has no assigned CPO yet" }); return; }
 
   const today = new Date().toISOString().slice(0, 10);
   const [expense] = await db
