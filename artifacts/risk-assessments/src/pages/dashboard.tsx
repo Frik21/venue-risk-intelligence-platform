@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, ChangeEvent } from "react";
-import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -1530,6 +1530,12 @@ function OperationalCanvas({
   const layersPanelOpen = activePanel === "layers";
   const profilePanelOpen = activePanel === "profile";
 
+  // Profile has its own sub-navigation (Overview/Account Details/
+  // Expenses), same "view switch inside one panel" pattern as Risk
+  // Assessments below rather than separate sliding panels. Resets to
+  // "root" whenever the panel is (re)opened (see openProfile).
+  const [profileView, setProfileView] = useState<"root" | "overview" | "account" | "expenses">("root");
+
   // Risk Assessments has its own sub-navigation ("Venues," step 1 of a
   // bigger project, per direct product direction) - a view switch inside
   // this one panel rather than a separate sliding panel, deliberately:
@@ -2387,6 +2393,7 @@ function OperationalCanvas({
     const openProfile = () => {
       setActivePanel("profile");
       setAlertsPanelOpen(false);
+      setProfileView("root");
     };
     // Mirrors the panel-closing half of handleCanvasClick below, fired
     // from TopBanner (a sibling, not a descendant of this canvas) when a
@@ -3709,7 +3716,15 @@ function OperationalCanvas({
         <div className="profile-panel-header">
           <div>
             <p className="profile-panel-eyebrow">Profile</p>
-            <h2 className="profile-panel-title">Your account.</h2>
+            <h2 className="profile-panel-title">
+              {profileView === "root"
+                ? "Your account."
+                : profileView === "overview"
+                  ? "Overview"
+                  : profileView === "account"
+                    ? "Account Details"
+                    : "Expenses"}
+            </h2>
           </div>
           <button
             type="button"
@@ -3721,7 +3736,32 @@ function OperationalCanvas({
           </button>
         </div>
 
-        <p className="tasks-panel-empty">Coming soon.</p>
+        {profileView === "root" ? (
+          <div className="tasks-panel-list">
+            <button type="button" className="risk-assessments-nav-item" onClick={() => setProfileView("overview")}>
+              <LayoutDashboard className="w-4 h-4" />
+              Overview
+              <ChevronRight className="w-4 h-4 risk-assessments-nav-item-chevron" />
+            </button>
+            <button type="button" className="risk-assessments-nav-item" onClick={() => setProfileView("account")}>
+              <UserIcon className="w-4 h-4" />
+              Account Details
+              <ChevronRight className="w-4 h-4 risk-assessments-nav-item-chevron" />
+            </button>
+            <button type="button" className="risk-assessments-nav-item" onClick={() => setProfileView("expenses")}>
+              <Wallet className="w-4 h-4" />
+              Expenses
+              <ChevronRight className="w-4 h-4 risk-assessments-nav-item-chevron" />
+            </button>
+          </div>
+        ) : (
+          <>
+            <button type="button" className="venueguard-panel-back" onClick={() => setProfileView("root")}>
+              <ArrowLeft className="w-3.5 h-3.5" /> Back to Profile
+            </button>
+            <p className="tasks-panel-empty">Coming soon.</p>
+          </>
+        )}
       </div>
 
       {renderedCountry && countryPanelData && (
