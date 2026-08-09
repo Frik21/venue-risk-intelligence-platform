@@ -27,6 +27,7 @@ import type {
   CountryRiskLevel,
   HealthRating,
   User,
+  UserRole,
   Task,
   TaskStatus,
   Plan,
@@ -140,6 +141,12 @@ const PROFILE_VIEW_TITLES: Record<"overview" | "account" | "expenses" | "timeshe
   account: "Account Details",
   expenses: "Expenses",
   timesheet: "Timesheet",
+};
+
+const USER_ROLE_LABELS: Record<UserRole, string> = {
+  admin: "Admin",
+  manager: "Manager",
+  cpo: "CPO",
 };
 
 // Mirrors artifacts/api-server/src/lib/plan-checklist.ts (PLAN_CHECKLIST_ITEMS)
@@ -453,6 +460,12 @@ const CLOSE_VENUEGUARD_PANELS_EVENT = "venueguard-close-panels";
 // up to Dashboard.
 const TOGGLE_ALERTS_PANEL_EVENT = "venueguard-toggle-alerts-panel";
 const ALERTS_COUNT_EVENT = "venueguard-alerts-count";
+// OperationalCanvas -> TopBanner, a CustomEvent<{ name: string;
+// avatarInitials: string | null } | null> - lets the operator area's
+// name/avatar reflect the real profileUserId account (see its
+// declaration below) instead of the hardcoded "Frik"/"F", including
+// live updates right after an Account Details save.
+const PROFILE_USER_EVENT = "venueguard-profile-user";
 
 // Venue Risk Assessment - the CPO's in-field checklist for a specific
 // (task, venue) pair, reached from Risk Assessments > Venues > a venue.
@@ -1184,20 +1197,39 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
   // ALERTS_COUNT_EVENT above for why this is a mirrored count rather
   // than the real list.
   const [alertsCount, setAlertsCount] = useState(0);
+  // Mirrors OperationalCanvas's profileUser - see PROFILE_USER_EVENT
+  // above. null until that lookup resolves, so the operator area falls
+  // back to the original static "Frik"/"F" until then.
+  const [profileDisplay, setProfileDisplay] = useState<{ name: string; avatarInitials: string | null } | null>(null);
 
   useEffect(() => {
     const reopenMenu = () => setBrandMenuOpen(true);
     const reopenOperatorMenu = () => setOperatorMenuOpen(true);
     const updateAlertsCount = (event: Event) => setAlertsCount((event as CustomEvent<number>).detail);
+    const updateProfileDisplay = (event: Event) =>
+      setProfileDisplay((event as CustomEvent<{ name: string; avatarInitials: string | null } | null>).detail);
     window.addEventListener(REOPEN_BRAND_MENU_EVENT, reopenMenu);
     window.addEventListener(REOPEN_OPERATOR_MENU_EVENT, reopenOperatorMenu);
     window.addEventListener(ALERTS_COUNT_EVENT, updateAlertsCount);
+    window.addEventListener(PROFILE_USER_EVENT, updateProfileDisplay);
     return () => {
       window.removeEventListener(REOPEN_BRAND_MENU_EVENT, reopenMenu);
       window.removeEventListener(REOPEN_OPERATOR_MENU_EVENT, reopenOperatorMenu);
       window.removeEventListener(ALERTS_COUNT_EVENT, updateAlertsCount);
+      window.removeEventListener(PROFILE_USER_EVENT, updateProfileDisplay);
     };
   }, []);
+
+  const operatorDisplayName = profileDisplay?.name ?? "Frik";
+  const operatorDisplayInitials =
+    profileDisplay?.avatarInitials ||
+    operatorDisplayName
+      .split(" ")
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2) ||
+    "F";
 
   // Matches a live search result back to a selectable country by ISO
   // 3166-1 alpha-2 code, then runs it through the same Country Selection
@@ -1383,9 +1415,9 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
           aria-expanded={operatorMenuOpen}
         >
           <span className="top-banner-operator-avatar" aria-hidden="true">
-            F
+            {operatorDisplayInitials}
           </span>
-          <span className="top-banner-operator-name">Frik</span>
+          <span className="top-banner-operator-name">{operatorDisplayName}</span>
           <ChevronDown
             className={`w-3.5 h-3.5 top-banner-operator-chevron ${operatorMenuOpen ? "top-banner-operator-chevron-open" : ""}`}
           />
@@ -1963,6 +1995,7 @@ function OperationalCanvas({
   // viewingAsCpoId above, which is a separate "Manager viewing as a
   // CPO" concept for admin testing elsewhere in this dashboard.
   const [profileUserId, setProfileUserId] = useState<number | null>(null);
+  const [profileUser, setProfileUser] = useState<User | null>(null);
 
   useEffect(() => {
     api.users
@@ -1977,9 +2010,21 @@ function OperationalCanvas({
           users.find((u) => u.role === "admin") ??
           users[0];
         setProfileUserId(frikMatch?.id ?? null);
+        setProfileUser(frikMatch ?? null);
       })
       .catch((err) => console.error("Failed to load CPO users:", err));
   }, []);
+
+  // Broadcasts to TopBanner (a sibling that can't see this state
+  // directly) so the operator area's name/avatar can reflect the real
+  // account instead of staying hardcoded - see PROFILE_USER_EVENT above.
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent(PROFILE_USER_EVENT, {
+        detail: profileUser ? { name: profileUser.name, avatarInitials: profileUser.avatarInitials } : null,
+      }),
+    );
+  }, [profileUser]);
 
   useEffect(() => {
     if (viewingAsCpoId == null) return;
@@ -1990,6 +2035,47 @@ function OperationalCanvas({
       .catch((err) => console.error(`Failed to load tasks for CPO ${viewingAsCpoId}:`, err))
       .finally(() => setCpoTasksLoading(false));
   }, [viewingAsCpoId]);
+
+  // Profile > Account Details - self-service edit of the same
+  // profileUser record Timesheet is scoped to. Local input state
+  // mirrors profileUser (re-synced whenever it changes, e.g. once the
+  // initial lookup resolves, or right after a successful save) rather
+  // than editing it directly, same "edit locally, Save persists"
+  // pattern used elsewhere in this file.
+  const [accountNameInput, setAccountNameInput] = useState("");
+  const [accountEmailInput, setAccountEmailInput] = useState("");
+  const [accountInitialsInput, setAccountInitialsInput] = useState("");
+  const [savingAccountDetails, setSavingAccountDetails] = useState(false);
+  const [accountDetailsError, setAccountDetailsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!profileUser) return;
+    setAccountNameInput(profileUser.name);
+    setAccountEmailInput(profileUser.email);
+    setAccountInitialsInput(profileUser.avatarInitials ?? "");
+  }, [profileUser]);
+
+  function saveAccountDetails() {
+    if (profileUserId == null) return;
+    if (accountNameInput.trim() === "" || accountEmailInput.trim() === "") {
+      setAccountDetailsError("Name and email are required.");
+      return;
+    }
+    setSavingAccountDetails(true);
+    setAccountDetailsError(null);
+    api.users
+      .update(profileUserId, {
+        name: accountNameInput.trim(),
+        email: accountEmailInput.trim(),
+        avatarInitials: accountInitialsInput.trim() || undefined,
+      })
+      .then((updated) => setProfileUser(updated))
+      .catch((err) => {
+        console.error("Failed to save account details:", err);
+        setAccountDetailsError(friendlyErrorMessage(err, "Couldn't save account details."));
+      })
+      .finally(() => setSavingAccountDetails(false));
+  }
 
   // Profile > Timesheet - scoped to profileUserId, not viewingAsCpoId
   // (see its declaration above for why they're different concepts).
@@ -4329,7 +4415,65 @@ function OperationalCanvas({
             <button type="button" className="venueguard-panel-back" onClick={() => setProfileView("root")}>
               <ArrowLeft className="w-3.5 h-3.5" /> Back to Profile
             </button>
-            {profileView === "timesheet" ? (
+            {profileView === "account" ? (
+              profileUser == null ? (
+                <p className="tasks-panel-empty">
+                  No profile user found yet - add a user named &quot;Frik&quot; (or an Admin) from Admin &gt; Users.
+                </p>
+              ) : (
+                <div className="venue-assessment-form">
+                  <label className="venue-assessment-field">
+                    <span>Name</span>
+                    <input
+                      type="text"
+                      value={accountNameInput}
+                      onChange={(event) => setAccountNameInput(event.target.value)}
+                      className="venue-assessment-field-input"
+                    />
+                  </label>
+                  <label className="venue-assessment-field">
+                    <span>Email</span>
+                    <input
+                      type="email"
+                      value={accountEmailInput}
+                      onChange={(event) => setAccountEmailInput(event.target.value)}
+                      className="venue-assessment-field-input"
+                    />
+                  </label>
+                  <label className="venue-assessment-field">
+                    <span>Avatar Initials</span>
+                    <input
+                      type="text"
+                      value={accountInitialsInput}
+                      onChange={(event) => setAccountInitialsInput(event.target.value.toUpperCase())}
+                      maxLength={4}
+                      className="venue-assessment-field-input"
+                    />
+                  </label>
+
+                  <div className="venue-assessment-meta">
+                    <div className="venue-assessment-meta-row">
+                      <span className="venue-assessment-meta-label">Role</span>
+                      <span className="venue-assessment-meta-value">{USER_ROLE_LABELS[profileUser.role] ?? profileUser.role}</span>
+                    </div>
+                    <div className="venue-assessment-meta-row">
+                      <span className="venue-assessment-meta-label">Member Since</span>
+                      <span className="venue-assessment-meta-value">{new Date(profileUser.createdAt).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+
+                  {accountDetailsError && <p className="venue-assessment-action-error">{accountDetailsError}</p>}
+                  <button
+                    type="button"
+                    className="venue-assessment-save-btn"
+                    onClick={saveAccountDetails}
+                    disabled={savingAccountDetails}
+                  >
+                    {savingAccountDetails ? "Saving…" : "Save"}
+                  </button>
+                </div>
+              )
+            ) : profileView === "timesheet" ? (
               <TimesheetCalendar
                 entries={timesheetEntries}
                 loading={timesheetLoading}

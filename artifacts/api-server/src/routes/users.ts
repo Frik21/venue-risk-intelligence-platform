@@ -38,4 +38,25 @@ router.post("/users", async (req, res): Promise<void> => {
   res.status(201).json(formatUser(user));
 });
 
+const UserUpdateSchema = z.object({
+  name: z.string().min(1).optional(),
+  email: z.string().email().optional(),
+  avatarInitials: z.string().max(4).optional(),
+});
+
+// Self-service profile edit (Profile > Account Details) - deliberately
+// doesn't accept role/active, which stay admin-managed elsewhere.
+router.patch("/users/:id", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const parsed = UserUpdateSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [user] = await db.update(usersTable).set(parsed.data).where(eq(usersTable.id, id)).returning();
+  if (!user) { res.status(404).json({ error: "User not found" }); return; }
+
+  res.json(formatUser(user));
+});
+
 export default router;

@@ -351,6 +351,8 @@ export const api = {
   users: {
     list: () => apiFetch<User[]>("/users"),
     create: (data: Partial<User>) => apiFetch<User>("/users", { method: "POST", body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<Pick<User, "name" | "email" | "avatarInitials">>) =>
+      apiFetch<User>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   },
   venues: {
     list: () => apiFetch<Venue[]>("/venues"),
