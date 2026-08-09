@@ -130,6 +130,15 @@ const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   completed: "Completed",
 };
 
+// Profile's sub-navigation titles (excludes "root", which uses its own
+// "Your account." header instead of a nav item name).
+const PROFILE_VIEW_TITLES: Record<"overview" | "account" | "expenses" | "timesheet", string> = {
+  overview: "Overview",
+  account: "Account Details",
+  expenses: "Expenses",
+  timesheet: "Timesheet",
+};
+
 // Mirrors artifacts/api-server/src/lib/plan-checklist.ts (PLAN_CHECKLIST_ITEMS)
 // - only needed here to build MOCK_TASK's local-only demo checklist, since
 // this frontend package can't import a backend module directly. The real
@@ -1534,7 +1543,7 @@ function OperationalCanvas({
   // Expenses), same "view switch inside one panel" pattern as Risk
   // Assessments below rather than separate sliding panels. Resets to
   // "root" whenever the panel is (re)opened (see openProfile).
-  const [profileView, setProfileView] = useState<"root" | "overview" | "account" | "expenses">("root");
+  const [profileView, setProfileView] = useState<"root" | "overview" | "account" | "expenses" | "timesheet">("root");
 
   // Risk Assessments has its own sub-navigation ("Venues," step 1 of a
   // bigger project, per direct product direction) - a view switch inside
@@ -3717,13 +3726,7 @@ function OperationalCanvas({
           <div>
             <p className="profile-panel-eyebrow">Profile</p>
             <h2 className="profile-panel-title">
-              {profileView === "root"
-                ? "Your account."
-                : profileView === "overview"
-                  ? "Overview"
-                  : profileView === "account"
-                    ? "Account Details"
-                    : "Expenses"}
+              {profileView === "root" ? "Your account." : PROFILE_VIEW_TITLES[profileView]}
             </h2>
           </div>
           <button
@@ -3751,6 +3754,11 @@ function OperationalCanvas({
             <button type="button" className="risk-assessments-nav-item" onClick={() => setProfileView("expenses")}>
               <Wallet className="w-4 h-4" />
               Expenses
+              <ChevronRight className="w-4 h-4 risk-assessments-nav-item-chevron" />
+            </button>
+            <button type="button" className="risk-assessments-nav-item" onClick={() => setProfileView("timesheet")}>
+              <Clock className="w-4 h-4" />
+              Timesheet
               <ChevronRight className="w-4 h-4 risk-assessments-nav-item-chevron" />
             </button>
           </div>
