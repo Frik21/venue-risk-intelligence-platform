@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
-import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2 } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -180,6 +180,10 @@ export default function Dashboard() {
     condition: OPERATIONAL_BRIEF.condition,
     conditionNote: OPERATIONAL_BRIEF.conditionNote,
   });
+  const [briefTraffic, setBriefTraffic] = useState({
+    traffic: "Not checked yet",
+    trafficNote: "Use your current location to check traffic.",
+  });
   const [locatingBrief, setLocatingBrief] = useState(false);
 
   async function useMyLocationForBrief() {
@@ -201,6 +205,24 @@ export default function Dashboard() {
           });
         } catch (err) {
           console.error("Failed to check weather for the Brief:", err);
+        }
+
+        try {
+          const { condition } = await api.traffic.check(result.lat, result.lng);
+          setBriefTraffic(
+            condition
+              ? {
+                  traffic: condition.label,
+                  trafficNote:
+                    condition.currentSpeedKph != null && condition.freeFlowSpeedKph != null
+                      ? `${Math.round(condition.currentSpeedKph)} km/h (normally ${Math.round(condition.freeFlowSpeedKph)} km/h)`
+                      : "No speed data for this road segment.",
+                }
+              : { traffic: "No traffic data", trafficNote: "No road segment data available for this location." },
+          );
+        } catch (err) {
+          console.error("Failed to check traffic for the Brief:", err);
+          setBriefTraffic({ traffic: "Traffic unavailable", trafficNote: "Couldn't reach the traffic service." });
         }
       }
     } catch (err) {
@@ -272,7 +294,7 @@ export default function Dashboard() {
             <h1 className="text-4xl font-semibold mt-2">Here&apos;s what&apos;s happening around you.</h1>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="rounded-2xl bg-white/10 border border-white/10 p-5">
               <MapPin className="w-5 h-5 text-sky-300 mb-4" />
               <p className="text-sm text-slate-400">Current Area</p>
@@ -294,6 +316,13 @@ export default function Dashboard() {
               <p className="text-sm text-slate-400">Current Operating Conditions</p>
               <p className="text-xl font-semibold">{briefCondition.condition}</p>
               <p className="text-sm text-slate-400 mt-1">{briefCondition.conditionNote}</p>
+            </div>
+
+            <div className="rounded-2xl bg-white/10 border border-white/10 p-5">
+              <Car className="w-5 h-5 text-amber-300 mb-4" />
+              <p className="text-sm text-slate-400">Traffic</p>
+              <p className="text-xl font-semibold">{briefTraffic.traffic}</p>
+              <p className="text-sm text-slate-400 mt-1">{briefTraffic.trafficNote}</p>
             </div>
 
             <div className="rounded-2xl bg-white/10 border border-white/10 p-5">
@@ -336,6 +365,7 @@ export default function Dashboard() {
         <OperationalCanvas
           briefArea={briefArea}
           briefCondition={briefCondition}
+          briefTraffic={briefTraffic}
           onUseMyLocationForBrief={useMyLocationForBrief}
           locatingBrief={locatingBrief}
         />
@@ -1120,11 +1150,13 @@ type CountryAdjustment = { status: "review-required"; notes: string };
 function OperationalCanvas({
   briefArea,
   briefCondition,
+  briefTraffic,
   onUseMyLocationForBrief,
   locatingBrief,
 }: {
   briefArea: { area: string; areaRadius: string };
   briefCondition: { condition: string; conditionNote: string };
+  briefTraffic: { traffic: string; trafficNote: string };
   onUseMyLocationForBrief: () => void;
   locatingBrief: boolean;
 }) {
@@ -2378,6 +2410,12 @@ function OperationalCanvas({
             <p className="brief-panel-stat-label">Operating Conditions</p>
             <p className="brief-panel-stat-value">{briefCondition.condition}</p>
             <p className="brief-panel-stat-note">{briefCondition.conditionNote}</p>
+          </div>
+          <div className="brief-panel-stat">
+            <Car className="w-4 h-4 text-amber-300" />
+            <p className="brief-panel-stat-label">Traffic</p>
+            <p className="brief-panel-stat-value">{briefTraffic.traffic}</p>
+            <p className="brief-panel-stat-note">{briefTraffic.trafficNote}</p>
           </div>
           <div className="brief-panel-stat">
             <Clock className="w-4 h-4 text-sky-300" />

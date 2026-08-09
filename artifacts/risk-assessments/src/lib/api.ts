@@ -138,6 +138,19 @@ export interface WeatherFinding {
   sourceUrl: string;
 }
 
+// Mirrors artifacts/api-server/src/lib/traffic.ts's TrafficCondition -
+// same "frontend can't import a backend module" reasoning as
+// WeatherFinding above. Null (from the API) means no road segment data
+// for this exact point, not a failure.
+export type TrafficSeverity = "free_flow" | "light" | "moderate" | "heavy" | "closed";
+
+export interface TrafficCondition {
+  severity: TrafficSeverity;
+  label: string;
+  currentSpeedKph: number | null;
+  freeFlowSpeedKph: number | null;
+}
+
 export interface AssessmentSummary {
   id: number; venueId: number | null; venueName: string | null; venueCity: string | null;
   title: string; description: string | null; status: AssessmentStatus; version: number;
@@ -325,6 +338,10 @@ export const api = {
       apiFetch<{ temperatureC: number | null; conditions: string; finding: WeatherFinding | null }>(
         `/weather?lat=${lat}&lng=${lng}`,
       ),
+  },
+  traffic: {
+    check: (lat: number, lng: number) =>
+      apiFetch<{ condition: TrafficCondition | null }>(`/traffic?lat=${lat}&lng=${lng}`),
   },
   assessments: {
     list: () => apiFetch<AssessmentSummary[]>("/assessments"),

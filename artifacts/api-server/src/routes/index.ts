@@ -17,6 +17,7 @@ import tasksRouter from "./tasks";
 import plansRouter from "./plans";
 import venueRiskAssessmentsRouter from "./venue-risk-assessments";
 import weatherRouter from "./weather";
+import trafficRouter from "./traffic";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use(tasksRouter);
 router.use(plansRouter);
 router.use(venueRiskAssessmentsRouter);
 router.use(weatherRouter);
+router.use(trafficRouter);
 
 export default router;
