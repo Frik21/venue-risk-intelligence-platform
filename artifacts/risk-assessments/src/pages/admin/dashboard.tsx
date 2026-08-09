@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { api, type DashboardSummary, type Task } from "@/lib/api";
+import { api, type DashboardSummary, type Task, type Venue, type User } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { NewTaskDialog } from "@/components/new-task-dialog";
 import {
   Building2,
   ClipboardList,
@@ -13,14 +15,22 @@ import {
   Users,
   FolderOpen,
   FileText,
+  Plus,
   type LucideIcon,
 } from "lucide-react";
-import { getStatusColor, getStatusLabel, getPriorityColor, timeAgo } from "@/lib/display-utils";
+import { useState } from "react";
+import { getStatusColor, getStatusLabel, getPriorityColor, timeAgo, formatDate } from "@/lib/display-utils";
 
 const TASK_STATUS_LABELS: Record<string, string> = {
   not_completed: "Not Completed",
   in_progress: "In Progress",
   completed: "Completed",
+};
+
+const TASK_STATUS_COLORS: Record<string, string> = {
+  not_completed: "text-red-700 bg-red-50 border-red-200",
+  in_progress: "text-amber-700 bg-amber-50 border-amber-200",
+  completed: "text-green-700 bg-green-50 border-green-200",
 };
 
 const QUICK_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
@@ -48,12 +58,17 @@ function StatCard({ icon: Icon, label, value, href }: { icon: LucideIcon; label:
   );
 }
 
-// Manager/Admin home - a real landing page for that persona, built
-// almost entirely from api.dashboard() (GET /dashboard/summary), which
-// existed on the backend but had no page consuming it before this.
-// Task counts are computed client-side from api.tasks.list() since the
-// summary endpoint doesn't cover Tasks.
+// Management Dashboard - a real landing page for the Manager/Admin
+// persona, built almost entirely from api.dashboard() (GET
+// /dashboard/summary), which existed on the backend but had no page
+// consuming it before this. Task counts are computed client-side from
+// api.tasks.list() since the summary endpoint doesn't cover Tasks.
+// "New Task" is the primary action here - task assignment used to only
+// live on the separate Tasks list page, but this is now the Manager's
+// actual home, so creating a task shouldn't require leaving it.
 export default function AdminDashboard() {
+  const [showNewTask, setShowNewTask] = useState(false);
+
   const { data: summary, isLoading: summaryLoading } = useQuery<DashboardSummary>({
     queryKey: ["dashboard-summary"],
     queryFn: api.dashboard,
@@ -62,6 +77,8 @@ export default function AdminDashboard() {
     queryKey: ["tasks"],
     queryFn: () => api.tasks.list(),
   });
+  const { data: venues = [] } = useQuery<Venue[]>({ queryKey: ["venues"], queryFn: api.venues.list });
+  const { data: users = [] } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list });
 
   const taskCounts: Record<string, number> = {
     not_completed: tasks.filter((t) => t.status === "not_completed").length,
@@ -71,9 +88,16 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Admin Dashboard</h1>
-        <p className="text-slate-500 text-sm mt-0.5">Operations at a glance.</p>
+      {showNewTask && <NewTaskDialog venues={venues} users={users} onClose={() => setShowNewTask(false)} />}
+
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Management Dashboard</h1>
+          <p className="text-slate-500 text-sm mt-0.5">Operations at a glance.</p>
+        </div>
+        <Button onClick={() => setShowNewTask(true)}>
+          <Plus className="w-4 h-4 mr-1.5" /> New Task
+        </Button>
       </div>
 
       {summaryLoading || tasksLoading ? (
@@ -93,6 +117,42 @@ export default function AdminDashboard() {
           <StatCard icon={AlertTriangle} label="Incidents" value={summary?.totalIncidents ?? 0} href="/incidents" />
         </div>
       )}
+
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-slate-900">Recent Tasks</h2>
+            <Link href="/tasks" className="text-xs text-blue-600 hover:underline">
+              View all
+            </Link>
+          </div>
+          {tasksLoading ? (
+            <Skeleton className="h-32" />
+          ) : tasks.length === 0 ? (
+            <p className="text-sm text-slate-400">No tasks yet - assign one to get started.</p>
+          ) : (
+            <div className="space-y-3">
+              {tasks.slice(0, 5).map((task) => (
+                <div key={task.id} className="flex items-start justify-between gap-2 text-sm">
+                  <div className="min-w-0">
+                    <p className="font-medium text-slate-900 truncate">{task.title}</p>
+                    <p className="text-xs text-slate-400">
+                      {task.venueName ?? "No venue"}
+                      {task.assignedToName && ` · ${task.assignedToName}`}
+                      {task.dueDate && ` · Due ${formatDate(task.dueDate)}`}
+                    </p>
+                  </div>
+                  <span
+                    className={`text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase shrink-0 ${TASK_STATUS_COLORS[task.status] ?? ""}`}
+                  >
+                    {TASK_STATUS_LABELS[task.status] ?? task.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
