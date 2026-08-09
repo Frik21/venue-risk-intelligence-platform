@@ -16,6 +16,9 @@ export interface LocationSearchResult {
   district: string | null;
   state: string | null;
   country: string | null;
+  // ISO 3166-1 alpha-2, e.g. "ZA" - handy for matching a result back to
+  // an internal country record without fuzzy-matching country names.
+  countrycode: string | null;
   postcode: string | null;
 }
 
@@ -61,6 +64,7 @@ async function searchPhoton(query: string, signal: AbortSignal): Promise<Locatio
       district: get("district"),
       state: get("state"),
       country: get("country"),
+      countrycode: get("countrycode")?.toUpperCase() ?? null,
       postcode: get("postcode"),
     };
   });
@@ -149,6 +153,15 @@ export function LocationSearch({
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            setOpen(false);
+            event.currentTarget.blur();
+          } else if (event.key === "Enter" && results.length > 0) {
+            event.preventDefault();
+            handleSelect(results[0]);
+          }
+        }}
       />
 
       {open && value.trim().length >= MIN_QUERY_LENGTH && (

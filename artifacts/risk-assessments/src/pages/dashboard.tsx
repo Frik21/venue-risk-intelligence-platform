@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
-import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, Globe, X, ChevronDown, ChevronRight, ListChecks, MessageSquare, Check, Building2, Plus } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ListChecks, MessageSquare, Check, Building2, Plus } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -33,6 +33,7 @@ import type {
   VenueRiskAssessment,
 } from "@/lib/api";
 import { LocationSearch } from "@/components/location-search";
+import type { LocationSearchResult } from "@/components/location-search";
 
 // Background tone for the outer page wrapper (behind MapLayer).
 const OCEAN_COLOR = "#00081a";
@@ -271,73 +272,15 @@ export default function Dashboard() {
   );
 }
 
-type SearchResult =
-  | { type: "country"; name: string; iso3: string; region: CountryDefinition }
-  | { type: "city"; name: string; countryName: string; iso3: string; capital: boolean; region: CountryDefinition; city: CityDefinition };
-
 const SEARCH_RESULT_LIMIT = 8;
 
-// Operational Search Index (Layer 6 follow-up) - selects through the same
-// Country Selection Engine every other consumer does (Index 3.0: "mouse
-// click today; search... later all select through this module"), so a
-// search result and a map click behave identically once selected. Built
-// once at module scope, not per keystroke/render - the underlying
-// registries never change at runtime.
-//
-// A city only becomes searchable if its iso3 (from the City Registry,
-// keyed by the ORIGINAL country's iso3) resolves to a real selectable
-// region. For a handful of split countries (Index 3.13/3.16 - France,
-// Spain, Russia, etc.) an overseas city's iso3 resolves to the mainland
-// region rather than its own split-out shape (the City Registry was
-// generated against the pre-split Country Registry) - searching it still
-// selects and zooms to the right country, just not that specific split
-// region. Acceptable for a v1 city-to-country jump; not a crash risk
-// either way; no dead entries either way.
-//
-// City-level (not just country-level) zoom is a known gap - it depends
-// on the capital-zoom step of the World -> Country -> Capital -> City
-// roadmap, deferred per direct product direction ("we should not do the
-// capital zoom" / "much later"). Selecting a city today jumps to its
-// country, same as clicking that country on the map.
-//
-// TODO (come back to this later): the City Registry itself is capped by
-// its source, not by anything in this file - Natural Earth's populated-
-// places dataset tops out at 7,342 places worldwide, real but not
-// exhaustive (e.g. Stellenbosch, a real town, isn't in it). See the TODO
-// in generate-city-registry.py for the fuller note - the short version
-// is a genuinely bigger database (e.g. GeoNames) is a separate, larger
-// piece of work, likely needing a real search backend rather than a
-// static array shipped to the browser the way SEARCH_INDEX is today.
-const SEARCH_INDEX: SearchResult[] = (() => {
-  const regionByIso3 = new Map(OPERATIONAL_SELECTABLE_REGIONS.map((region) => [region.iso3, region]));
-  const results: SearchResult[] = OPERATIONAL_SELECTABLE_REGIONS.map((region) => ({
-    type: "country",
-    name: region.name,
-    iso3: region.iso3,
-    region,
-  }));
-  for (const [iso3, cities] of Object.entries(CITY_REGISTRY)) {
-    const region = regionByIso3.get(iso3);
-    if (!region) continue;
-    for (const city of cities) {
-      results.push({ type: "city", name: city.name, countryName: region.name, iso3, capital: city.capital, region, city });
-    }
-  }
-  return results;
-})();
-
-function searchOperationalIndex(query: string): SearchResult[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
-  return SEARCH_INDEX.filter((result) => result.name.toLowerCase().includes(q))
-    .sort((a, b) => {
-      const aStarts = a.name.toLowerCase().startsWith(q) ? 0 : 1;
-      const bStarts = b.name.toLowerCase().startsWith(q) ? 0 : 1;
-      if (aStarts !== bStarts) return aStarts - bStarts;
-      return a.name.localeCompare(b.name);
-    })
-    .slice(0, SEARCH_RESULT_LIMIT);
-}
+// The top banner's main search used to be a fixed local list (countries
+// + the City Registry, capped by its source at 7,342 places worldwide -
+// see the note above CITY_REGISTRY's use below for Major Cities). It's
+// now live address search (LocationSearch, Photon/OpenStreetMap-backed)
+// - selecting a result matches its country by ISO 3166-1 alpha-2 code
+// and runs it through the same Country Selection Engine a map click
+// does (see handleTopBannerSearchSelect in TopBanner).
 
 // Persistent top bar for the Operations Centre - branding on the left,
 // operator identity + sign-out on the right. Takes up permanent screen
@@ -513,7 +456,6 @@ function VenueRiskAssessmentForm({
 
 function TopBanner({ onSignOut }: { onSignOut: () => void }) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -521,12 +463,17 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
     window.addEventListener(REOPEN_BRAND_MENU_EVENT, reopenMenu);
     return () => window.removeEventListener(REOPEN_BRAND_MENU_EVENT, reopenMenu);
   }, []);
-  const searchResults = useMemo(() => searchOperationalIndex(searchQuery), [searchQuery]);
 
-  function selectSearchResult(result: SearchResult) {
-    selectCountry(result.region, result.type === "city" ? result.city : undefined);
+  // Matches a live search result back to a selectable country by ISO
+  // 3166-1 alpha-2 code, then runs it through the same Country Selection
+  // Engine a map click does - the address itself isn't pinned, only its
+  // country gets selected (per direct product direction).
+  function handleSearchSelect(result: LocationSearchResult) {
+    const region = result.countrycode
+      ? OPERATIONAL_SELECTABLE_REGIONS.find((r) => r.iso2 === result.countrycode)
+      : undefined;
+    if (region) selectCountry(region);
     setSearchQuery("");
-    setSearchOpen(false);
   }
 
   return (
@@ -622,58 +569,15 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
         )}
       </div>
       <div className="top-banner-search-wrap">
-        <div
-          className="top-banner-search"
-          onBlur={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node)) setSearchOpen(false);
-          }}
-        >
+        <div className="top-banner-search">
           <Search className="w-4 h-4 top-banner-search-icon" />
-          <input
-            type="text"
-            className="top-banner-search-input"
-            placeholder="Search towns, cities..."
+          <LocationSearch
             value={searchQuery}
-            onChange={(event) => {
-              setSearchQuery(event.target.value);
-              setSearchOpen(true);
-            }}
-            onFocus={() => setSearchOpen(true)}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                setSearchOpen(false);
-                event.currentTarget.blur();
-              } else if (event.key === "Enter" && searchResults.length > 0) {
-                selectSearchResult(searchResults[0]);
-              }
-            }}
+            onChange={setSearchQuery}
+            onSelect={handleSearchSelect}
+            placeholder="Search for a place or address…"
+            className="top-banner-search-input"
           />
-          {searchOpen && searchQuery.trim() && (
-            <div className="top-banner-search-results">
-              {searchResults.length === 0 ? (
-                <div className="top-banner-search-empty">No matches for &quot;{searchQuery.trim()}&quot;</div>
-              ) : (
-                searchResults.map((result) => (
-                  <button
-                    key={`${result.type}-${result.iso3}-${result.name}`}
-                    type="button"
-                    className="top-banner-search-result"
-                    onClick={() => selectSearchResult(result)}
-                  >
-                    {result.type === "country" ? (
-                      <Globe className="w-4 h-4 top-banner-search-result-icon" />
-                    ) : (
-                      <MapPin className="w-4 h-4 top-banner-search-result-icon" />
-                    )}
-                    <span className="top-banner-search-result-name">{result.name}</span>
-                    <span className="top-banner-search-result-meta">
-                      {result.type === "country" ? "Country" : result.capital ? `${result.countryName} · Capital` : result.countryName}
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-          )}
         </div>
       </div>
       <div className="top-banner-operator">
@@ -810,10 +714,10 @@ const MAJOR_CITY_LABEL_MIN_SEPARATION_PX = 46;
 const MAJOR_CITY_DISPLAY_CAP = 6;
 
 // city-registry.ts (CITY_REGISTRY) now holds every place matching a known
-// country - no per-country cap - so the Operational Search Index
-// (dashboard.tsx's SEARCH_INDEX) can find real towns and smaller cities,
-// not just each country's handful of largest. The map's own Major Cities
-// layer must NOT follow that expansion: it stays a small, curated
+// country - no per-country cap - so the in-panel country city search
+// (countryCitySearchResults, below) can find real towns and smaller
+// cities, not just each country's handful of largest. The map's own
+// Major Cities layer must NOT follow that expansion: it stays a small, curated
 // placeholder set (capitals + largest others, capped here) exactly as it
 // looked before the database grew, per direct product direction - later,
 // only cities with a real "operational selection" (the presence/office
