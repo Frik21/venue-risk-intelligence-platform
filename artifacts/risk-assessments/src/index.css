@@ -1903,6 +1903,16 @@
   border-left-width: 3px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.04);
+  transition: opacity 0.15s ease;
+}
+
+.alert-item-reviewed {
+  opacity: 0.55;
+}
+
+.alert-item-body {
+  min-width: 0;
+  flex: 1;
 }
 
 .alert-item-critical {
@@ -1934,10 +1944,28 @@
   color: rgba(125, 211, 252, 0.95);
 }
 
+.alert-item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .alert-item-title {
   font-size: 13px;
   font-weight: 600;
   margin: 0 0 3px;
+}
+
+.alert-item-reviewed-badge {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(134, 239, 172, 0.14);
+  color: rgba(134, 239, 172, 0.9);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .alert-item-description {
@@ -1950,7 +1978,37 @@
 .alert-item-meta {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.45);
-  margin: 0;
+  margin: 0 0 8px;
+}
+
+.alert-item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.alert-item-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.alert-item-action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.alert-item-action-btn-dismiss:hover {
+  background: rgba(248, 113, 113, 0.14);
+  border-color: rgba(248, 113, 113, 0.3);
+  color: rgba(252, 165, 165, 0.95);
 }
 
 /* Country Intelligence panel - tied to Active Country selection rather

@@ -73,6 +73,12 @@ interface OperationalAlert {
   description: string;
   location: string;
   timestamp: string;
+  // Set only for alerts backed by a real Alert record (api.alerts) -
+  // lets dismiss/mark-reviewed persist to the backend for those, while
+  // demo/instruction entries (no backend row) fall back to local-only
+  // state (see locallyDismissedAlertIds/locallyReviewedAlertIds).
+  realAlertId?: number;
+  reviewed?: boolean;
 }
 
 // Mock feed for the Alerts panel (OperationalCanvas) - distinct from the
@@ -1619,10 +1625,43 @@ function OperationalCanvas({
           description: a.summary,
           location: a.venueName ?? "Unknown venue",
           timestamp: timeAgo(a.createdAt),
+          realAlertId: a.id,
+          reviewed: a.status === "reviewed",
         }))
       : OPERATIONAL_ALERTS;
 
-  const combinedAlerts = [...instructionAlerts, ...feedAlerts];
+  // Dismiss/Mark Reviewed for entries with no backing Alert record
+  // (instructionAlerts, the OPERATIONAL_ALERTS demo feed) - there's
+  // nothing to PATCH, so the action just hides/flags it locally,
+  // same "local-only" convention as MOCK_TASK elsewhere in this file.
+  const [locallyDismissedAlertIds, setLocallyDismissedAlertIds] = useState<Set<string>>(new Set());
+  const [locallyReviewedAlertIds, setLocallyReviewedAlertIds] = useState<Set<string>>(new Set());
+
+  const combinedAlerts = [...instructionAlerts, ...feedAlerts]
+    .filter((alert) => !locallyDismissedAlertIds.has(alert.id))
+    .map((alert) => ({ ...alert, reviewed: alert.reviewed || locallyReviewedAlertIds.has(alert.id) }));
+
+  function dismissAlert(alert: OperationalAlert) {
+    if (alert.realAlertId != null) {
+      api.alerts
+        .update(alert.realAlertId, { status: "dismissed" })
+        .then((updated) => setRealAlerts((prev) => prev.map((a) => (a.id === updated.id ? updated : a))))
+        .catch((err) => console.error(`Failed to dismiss alert ${alert.realAlertId}:`, err));
+    } else {
+      setLocallyDismissedAlertIds((prev) => new Set(prev).add(alert.id));
+    }
+  }
+
+  function markAlertReviewed(alert: OperationalAlert) {
+    if (alert.realAlertId != null) {
+      api.alerts
+        .update(alert.realAlertId, { status: "reviewed" })
+        .then((updated) => setRealAlerts((prev) => prev.map((a) => (a.id === updated.id ? updated : a))))
+        .catch((err) => console.error(`Failed to mark alert ${alert.realAlertId} reviewed:`, err));
+    } else {
+      setLocallyReviewedAlertIds((prev) => new Set(prev).add(alert.id));
+    }
+  }
 
   // Each accepted task can be expanded to reveal its detail and Risk
   // Assessment slots - demo/local-only expand state, same as the rest
@@ -3479,21 +3518,49 @@ function OperationalCanvas({
         </div>
 
         <div className="alerts-panel-list">
-          {combinedAlerts.map((alert) => {
-            const SeverityIcon = ALERT_SEVERITY_ICON[alert.severity];
-            return (
-              <div key={alert.id} className={`alert-item alert-item-${alert.severity}`}>
-                <SeverityIcon className="w-4 h-4 alert-item-icon" />
-                <div className="alert-item-body">
-                  <p className="alert-item-title">{alert.title}</p>
-                  <p className="alert-item-description">{alert.description}</p>
-                  <p className="alert-item-meta">
-                    {alert.location} &middot; {alert.timestamp}
-                  </p>
+          {combinedAlerts.length === 0 ? (
+            <p className="tasks-panel-empty">No active alerts.</p>
+          ) : (
+            combinedAlerts.map((alert) => {
+              const SeverityIcon = ALERT_SEVERITY_ICON[alert.severity];
+              return (
+                <div
+                  key={alert.id}
+                  className={`alert-item alert-item-${alert.severity} ${alert.reviewed ? "alert-item-reviewed" : ""}`}
+                >
+                  <SeverityIcon className="w-4 h-4 alert-item-icon" />
+                  <div className="alert-item-body">
+                    <div className="alert-item-title-row">
+                      <p className="alert-item-title">{alert.title}</p>
+                      {alert.reviewed && <span className="alert-item-reviewed-badge">Reviewed</span>}
+                    </div>
+                    <p className="alert-item-description">{alert.description}</p>
+                    <p className="alert-item-meta">
+                      {alert.location} &middot; {alert.timestamp}
+                    </p>
+                    <div className="alert-item-actions">
+                      {!alert.reviewed && (
+                        <button
+                          type="button"
+                          className="alert-item-action-btn"
+                          onClick={() => markAlertReviewed(alert)}
+                        >
+                          <Check className="w-3 h-3" /> Mark Reviewed
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="alert-item-action-btn alert-item-action-btn-dismiss"
+                        onClick={() => dismissAlert(alert)}
+                      >
+                        <X className="w-3 h-3" /> Dismiss
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
       </div>
 
