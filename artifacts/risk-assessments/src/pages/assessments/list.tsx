@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Link, useLocation } from "wouter";
 import { ClipboardList, Plus, Search, Filter } from "lucide-react";
 import { useState } from "react";
-import { getStatusColor, getStatusLabel, getRiskRatingColor, getRiskRatingLabel, formatDate, ASSESSMENT_STATUSES } from "@/lib/display-utils";
+import { getStatusColor, getStatusLabel, getRiskRatingColor, getRiskRatingLabel, formatDate, ASSESSMENT_STATUSES, RISK_RATINGS } from "@/lib/display-utils";
 import { cn } from "@/lib/utils";
 
 export default function AssessmentsList() {
@@ -29,6 +29,15 @@ export default function AssessmentsList() {
     return matchSearch && matchStatus;
   });
 
+  // Assessment Status: a status x risk-rating breakdown, distinct
+  // from the plain status counts already shown on the Management
+  // Dashboard's "Risk Assessments" section - this surfaces e.g. "2 of
+  // 3 escalated assessments are High risk" at a glance.
+  const statusBreakdown = ASSESSMENT_STATUSES.map((s) => {
+    const inStatus = assessments.filter((a) => a.status === s.value);
+    return { ...s, total: inStatus.length, assessments: inStatus };
+  }).filter((s) => s.total > 0);
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-4">
@@ -40,6 +49,37 @@ export default function AssessmentsList() {
           <Plus className="w-4 h-4 mr-1.5" /> New Assessment
         </Button>
       </div>
+
+      {statusBreakdown.length > 0 && (
+        <Card>
+          <CardContent className="p-5">
+            <h2 className="font-semibold text-slate-900 mb-4">Assessment Status</h2>
+            <div className="space-y-3">
+              {statusBreakdown.map((s) => (
+                <div key={s.value} className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase", getStatusColor(s.value))}>
+                      {s.label}
+                    </span>
+                    <span className="text-sm text-slate-500">{s.total}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {RISK_RATINGS.map((r) => {
+                      const n = s.assessments.filter((a) => (a.overallRating ?? "unknown") === r.value).length;
+                      if (n === 0) return null;
+                      return (
+                        <span key={r.value} className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase", getRiskRatingColor(r.value))}>
+                          {n} {getRiskRatingLabel(r.value)}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[200px] max-w-sm">

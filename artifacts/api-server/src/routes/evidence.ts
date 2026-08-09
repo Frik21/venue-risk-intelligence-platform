@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
-import { db, evidenceTable, usersTable } from "@workspace/db";
+import { db, evidenceTable, usersTable, assessmentsTable } from "@workspace/db";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -32,6 +32,40 @@ async function formatEvidence(row: typeof evidenceTable.$inferSelect, uploadedBy
     createdAt: row.createdAt.toISOString(),
   };
 }
+
+// Global feed across every assessment - powers the Management
+// Dashboard's "Documents / PDF Repository" item, which has no
+// destination of its own (the route below only covers one assessment
+// at a time).
+router.get("/evidence", async (_req, res): Promise<void> => {
+  const rows = await db.select().from(evidenceTable).orderBy(desc(evidenceTable.createdAt)).limit(50);
+
+  const assessmentIds = [...new Set(rows.map((r) => r.assessmentId))];
+  const assessments = assessmentIds.length
+    ? await db.select({ id: assessmentsTable.id, title: assessmentsTable.title }).from(assessmentsTable)
+    : [];
+  const assessmentMap: Record<number, string> = {};
+  for (const a of assessments) assessmentMap[a.id] = a.title;
+
+  const users = await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable);
+  const userMap: Record<number, string> = {};
+  for (const u of users) userMap[u.id] = u.name;
+
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      assessmentId: r.assessmentId,
+      assessmentTitle: assessmentMap[r.assessmentId] ?? null,
+      evidenceType: r.evidenceType,
+      label: r.label,
+      filename: r.filename ?? null,
+      url: r.url ?? null,
+      verified: r.verified,
+      uploadedByName: r.uploadedBy ? (userMap[r.uploadedBy] ?? null) : null,
+      createdAt: r.createdAt.toISOString(),
+    })),
+  );
+});
 
 router.get("/assessments/:id/evidence", async (req, res): Promise<void> => {
   const id = Number(req.params.id);

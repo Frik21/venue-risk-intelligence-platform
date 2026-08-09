@@ -16,6 +16,9 @@ import {
   X,
   Gauge,
   ArrowLeftRight,
+  MapPinned,
+  Files,
+  History,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -33,6 +36,7 @@ const navGroups = [
       { href: "/venues", label: "Venues", icon: Building2 },
       { href: "/assessments", label: "Assessments", icon: ClipboardList },
       { href: "/incidents", label: "Incidents", icon: AlertTriangle },
+      { href: "/admin/field-intelligence", label: "Field Intelligence", icon: MapPinned },
     ],
   },
   {
@@ -47,6 +51,7 @@ const navGroups = [
     items: [
       { href: "/evidence", label: "Evidence", icon: FolderOpen },
       { href: "/reports", label: "Reports", icon: FileText },
+      { href: "/admin/documents", label: "Documents", icon: Files },
     ],
   },
   {
@@ -54,6 +59,7 @@ const navGroups = [
     items: [
       { href: "/admin", label: "Dashboard", icon: Gauge },
       { href: "/admin/users", label: "Users", icon: Users },
+      { href: "/admin/audit-log", label: "Audit History", icon: History },
     ],
   },
 ];

@@ -93,8 +93,10 @@ export default function UsersPage() {
 
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">User Management</h1>
-          <p className="text-slate-500 text-sm mt-0.5">Manage platform users and access roles</p>
+          <h1 className="text-2xl font-bold text-slate-900">Users, Roles &amp; Permissions</h1>
+          <p className="text-slate-500 text-sm mt-0.5">
+            Manage platform users and access roles. No team grouping or granular per-user permissions exist yet - access is controlled entirely by the three roles below.
+          </p>
         </div>
         <Button onClick={() => setShowNew(true)}>
           <Plus className="w-4 h-4 mr-1.5" /> Add User
@@ -105,15 +107,16 @@ export default function UsersPage() {
       <div className="grid grid-cols-3 gap-3">
         {(["admin", "manager", "cpo"] as const).map((role) => {
           const Icon = ROLE_ICONS[role];
-          const count = users.filter(u => u.role === role).length;
+          const inRole = users.filter(u => u.role === role);
+          const activeCount = inRole.filter(u => u.active).length;
           return (
             <Card key={role}>
               <CardContent className="p-4">
                 <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center mb-2", ROLE_COLORS[role])}>
                   <Icon className="w-4 h-4" />
                 </div>
-                <div className="text-xl font-bold">{count}</div>
-                <div className="text-xs text-slate-500 capitalize">{role}s</div>
+                <div className="text-xl font-bold">{inRole.length}</div>
+                <div className="text-xs text-slate-500 capitalize">{role}s{inRole.length > 0 && ` · ${activeCount} active`}</div>
               </CardContent>
             </Card>
           );

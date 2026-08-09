@@ -175,6 +175,16 @@ export default function AdminDashboard() {
   const readinessPct = activePool.length === 0 ? 100 : Math.round((readyCount / activePool.length) * 100);
   const tasksMissingPlan = activePool.filter((t) => !t.planSubmittedAt).slice(0, 5);
 
+  const footprintByCountry = Object.entries(
+    venues.reduce<Record<string, { total: number; cities: Set<string> }>>((acc, v) => {
+      const entry = (acc[v.country] ??= { total: 0, cities: new Set() });
+      entry.total += 1;
+      entry.cities.add(v.city);
+      return acc;
+    }, {}),
+  ).sort((a, b) => b[1].total - a[1].total);
+  const officeCount = venues.filter((v) => v.venueType === "office").length;
+
   const activityFeed = [
     ...(summary?.recentAlerts ?? []).map((a) => ({
       key: `alert-${a.id}`,
@@ -351,11 +361,26 @@ export default function AdminDashboard() {
       </SectionCard>
 
       {/* 7. Operational Footprint */}
-      <ComingSoonCard
-        title="Operational Footprint"
-        icon={MapPinned}
-        description="Coming soon - a consolidated view of your offices and venues by region."
-      />
+      <SectionCard title="Operational Footprint" icon={MapPinned} action={{ href: "/venues", label: "View all" }}>
+        {venues.length === 0 ? (
+          <p className="text-sm text-slate-400">No venues yet.</p>
+        ) : (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              {venues.length} venue{venues.length !== 1 ? "s" : ""} across {footprintByCountry.length} countr{footprintByCountry.length !== 1 ? "ies" : "y"}
+              {officeCount > 0 && ` · ${officeCount} office${officeCount !== 1 ? "s" : ""}`}
+            </p>
+            <div className="space-y-2.5">
+              {footprintByCountry.slice(0, 6).map(([country, info]) => (
+                <div key={country} className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">{country} <span className="text-slate-400">({[...info.cities].slice(0, 3).join(", ")}{info.cities.size > 3 ? ", …" : ""})</span></span>
+                  <Badge variant="secondary">{info.total}</Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </SectionCard>
 
       {/* 8. Recent Activity */}
       <SectionCard title="Recent Activity" icon={Rss}>

@@ -135,6 +135,15 @@ export default function ReportsPage() {
     queryFn: api.assessments.list,
   });
 
+  // "Operational Reports" quick-pick - there's no persisted report
+  // history to show (report generation below never saves a row), so
+  // this surfaces the assessments most likely to actually get
+  // reported on: recently approved ones.
+  const reportable = assessments
+    .filter((a) => a.status === "approved")
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 5);
+
   const { data: assessment, isLoading: detailLoading } = useQuery<AssessmentDetail>({
     queryKey: ["assessments", Number(selectedId)],
     queryFn: () => api.assessments.get(Number(selectedId)),
@@ -164,6 +173,25 @@ export default function ReportsPage() {
           </Button>
         )}
       </div>
+
+      {reportable.length > 0 && !selectedId && (
+        <Card className="print:hidden">
+          <CardContent className="p-4">
+            <h2 className="text-sm font-semibold text-slate-900 mb-3">Reportable Assessments</h2>
+            <div className="flex flex-wrap gap-2">
+              {reportable.map((a) => (
+                <button
+                  key={a.id}
+                  onClick={() => setSelectedId(String(a.id))}
+                  className="text-xs px-3 py-1.5 rounded-full border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 transition-colors"
+                >
+                  {a.title} — {a.venueName ?? "No venue"}
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="print:hidden">
         <CardContent className="p-4">

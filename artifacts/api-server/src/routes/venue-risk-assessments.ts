@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, max } from "drizzle-orm";
-import { db, venueRiskAssessmentsTable, tasksTable, usersTable } from "@workspace/db";
+import { eq, max, desc, or, ne } from "drizzle-orm";
+import { db, venueRiskAssessmentsTable, tasksTable, usersTable, venuesTable } from "@workspace/db";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -33,6 +33,55 @@ async function withOperatorName(row: typeof venueRiskAssessmentsTable.$inferSele
   const [operator] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, row.operatorId));
   return formatAssessment(row, operator?.name);
 }
+
+// Global feed of CPO field notes across every task - powers the
+// Management Dashboard's "Area Advisories" / "Current Operating
+// Conditions" items, which have no destination of their own (the
+// per-task list route below only covers one task at a time). Only
+// rows where the CPO actually wrote something into one of those two
+// fields are returned - an empty default("") value isn't a real note.
+router.get("/venue-risk-assessments", async (_req, res): Promise<void> => {
+  const rows = await db
+    .select()
+    .from(venueRiskAssessmentsTable)
+    .where(or(ne(venueRiskAssessmentsTable.areaAdvisories, ""), ne(venueRiskAssessmentsTable.currentOperatingConditions, "")))
+    .orderBy(desc(venueRiskAssessmentsTable.updatedAt))
+    .limit(30);
+
+  const taskIds = [...new Set(rows.map((r) => r.taskId))];
+  const tasks = taskIds.length
+    ? await db.select({ id: tasksTable.id, title: tasksTable.title, venueId: tasksTable.venueId }).from(tasksTable)
+    : [];
+  const taskMap: Record<number, { title: string; venueId: number }> = {};
+  for (const t of tasks) taskMap[t.id] = { title: t.title, venueId: t.venueId };
+
+  const venues = await db.select({ id: venuesTable.id, name: venuesTable.name, city: venuesTable.city }).from(venuesTable);
+  const venueMap: Record<number, { name: string; city: string }> = {};
+  for (const v of venues) venueMap[v.id] = { name: v.name, city: v.city };
+
+  const operators = await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable);
+  const operatorMap: Record<number, string> = {};
+  for (const o of operators) operatorMap[o.id] = o.name;
+
+  res.json(
+    rows.map((r) => {
+      const task = taskMap[r.taskId];
+      const venue = task ? venueMap[task.venueId] : undefined;
+      return {
+        id: r.id,
+        taskId: r.taskId,
+        taskTitle: task?.title ?? null,
+        venueName: venue?.name ?? null,
+        venueCity: venue?.city ?? null,
+        operatorName: operatorMap[r.operatorId] ?? null,
+        location: r.location,
+        currentOperatingConditions: r.currentOperatingConditions,
+        areaAdvisories: r.areaAdvisories,
+        updatedAt: r.updatedAt.toISOString(),
+      };
+    }),
+  );
+});
 
 // All the risk assessment slots for a task, ordered 1, 2, 3...
 router.get("/tasks/:taskId/risk-assessments", async (req, res): Promise<void> => {

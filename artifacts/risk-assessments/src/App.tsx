@@ -25,6 +25,9 @@ import MapsPage from "@/pages/maps/index";
 import ReportsPage from "@/pages/reports/index";
 import UsersPage from "@/pages/admin/users";
 import AdminDashboard from "@/pages/admin/dashboard";
+import FieldIntelligence from "@/pages/admin/field-intelligence";
+import DocumentsPage from "@/pages/admin/documents";
+import AuditLogPage from "@/pages/admin/audit-log";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -68,6 +71,9 @@ function Router() {
         {/* Admin */}
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/admin/users" component={UsersPage} />
+        <Route path="/admin/field-intelligence" component={FieldIntelligence} />
+        <Route path="/admin/documents" component={DocumentsPage} />
+        <Route path="/admin/audit-log" component={AuditLogPage} />
 
         <Route component={NotFound} />
       </Switch>

@@ -259,6 +259,26 @@ export interface AuditLogEntry {
   reason: string | null; createdAt: string;
 }
 
+export interface GlobalAuditLogEntry extends AuditLogEntry {
+  assessmentTitle: string | null;
+}
+
+// A CPO field note - one row from venue_risk_assessments, but only
+// the two Manager-facing fields (Area Advisories / Current Operating
+// Conditions), across every task rather than one at a time.
+export interface FieldNote {
+  id: number; taskId: number; taskTitle: string | null;
+  venueName: string | null; venueCity: string | null; operatorName: string | null;
+  location: string; currentOperatingConditions: string; areaAdvisories: string;
+  updatedAt: string;
+}
+
+export interface DocumentRecord {
+  id: number; assessmentId: number; assessmentTitle: string | null;
+  evidenceType: string; label: string; filename: string | null; url: string | null;
+  verified: boolean; uploadedByName: string | null; createdAt: string;
+}
+
 export interface Incident {
   id: number; venueId: number | null; venueName: string | null; incidentType: string;
   severity: IncidentSeverity; incidentDate: string; summary: string; sourceName: string | null;
@@ -407,6 +427,7 @@ export const api = {
       >,
     ) => apiFetch<VenueRiskAssessment>(`/risk-assessments/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     submit: (id: number) => apiFetch<VenueRiskAssessment>(`/risk-assessments/${id}/submit`, { method: "POST" }),
+    listFieldNotes: () => apiFetch<FieldNote[]>("/venue-risk-assessments"),
   },
   taskRoutes: {
     list: (taskId: number) => apiFetch<TaskRoute[]>(`/tasks/${taskId}/routes`),
@@ -467,6 +488,10 @@ export const api = {
   evidence: {
     update: (id: number, data: Partial<Evidence>) => apiFetch<Evidence>(`/evidence/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     delete: (id: number) => apiFetch<void>(`/evidence/${id}`, { method: "DELETE" }),
+    listAll: () => apiFetch<DocumentRecord[]>("/evidence"),
+  },
+  auditLog: {
+    listAll: () => apiFetch<GlobalAuditLogEntry[]>("/audit-log"),
   },
   alerts: {
     list: () => apiFetch<Alert[]>("/alerts"),

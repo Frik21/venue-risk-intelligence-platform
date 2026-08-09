@@ -446,4 +446,40 @@ router.get("/assessments/:id/audit-log", async (req, res): Promise<void> => {
   );
 });
 
+// Global feed across every assessment - powers the Management
+// Dashboard's "Audit History" item. Honestly scoped: audit_log is
+// only ever written to from this file (create/status-change/approve),
+// so this is assessment lifecycle activity, not a platform-wide
+// audit trail - tasks, users, venues etc. have no audit logging today.
+router.get("/audit-log", async (_req, res): Promise<void> => {
+  const logs = await db.select().from(auditLogTable).orderBy(desc(auditLogTable.createdAt)).limit(50);
+
+  const assessmentIds = [...new Set(logs.map((l) => l.assessmentId).filter((id): id is number => id !== null))];
+  const assessments = assessmentIds.length
+    ? await db.select({ id: assessmentsTable.id, title: assessmentsTable.title }).from(assessmentsTable)
+    : [];
+  const assessmentMap: Record<number, string> = {};
+  for (const a of assessments) assessmentMap[a.id] = a.title;
+
+  const users = await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable);
+  const userMap: Record<number, string> = {};
+  for (const u of users) userMap[u.id] = u.name;
+
+  res.json(
+    logs.map((l) => ({
+      id: l.id,
+      assessmentId: l.assessmentId ?? null,
+      assessmentTitle: l.assessmentId ? (assessmentMap[l.assessmentId] ?? null) : null,
+      userId: l.userId ?? null,
+      userName: l.userId ? (userMap[l.userId] ?? null) : null,
+      action: l.action,
+      fieldChanged: l.fieldChanged ?? null,
+      oldValue: l.oldValue ?? null,
+      newValue: l.newValue ?? null,
+      reason: l.reason ?? null,
+      createdAt: l.createdAt.toISOString(),
+    })),
+  );
+});
+
 export default router;
