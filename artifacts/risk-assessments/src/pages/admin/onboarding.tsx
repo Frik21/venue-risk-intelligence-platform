@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useRef, useState } from "react";
-import { UserPlus, ChevronDown, ChevronUp, FileText, CheckCircle2, Trash2, Plus } from "lucide-react";
+import { UserPlus, ChevronDown, ChevronUp, FileText, CheckCircle2, Trash2, Plus, Search } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -301,6 +301,7 @@ export default function OnboardingPage() {
   const [expandedOnboardingId, setExpandedOnboardingId] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [statusFilter, setStatusFilter] = useState<OnboardingStatus | null>(null);
+  const [search, setSearch] = useState("");
   const cardRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   const { data: records = [], isLoading } = useQuery<OnboardingOverviewRecord[]>({
@@ -320,7 +321,12 @@ export default function OnboardingPage() {
     denied: records.filter((r) => r.status === "denied").length,
   };
 
-  const visibleRecords = statusFilter == null ? records : records.filter((r) => r.status === statusFilter);
+  const query = search.trim().toLowerCase();
+  const visibleRecords = records.filter((r) => {
+    if (statusFilter != null && r.status !== statusFilter) return false;
+    if (query && !r.userName?.toLowerCase().includes(query)) return false;
+    return true;
+  });
 
   return (
     <div className="space-y-5">
@@ -365,6 +371,18 @@ export default function OnboardingPage() {
         </div>
       )}
 
+      {!isLoading && records.length > 0 && (
+        <div className="relative max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <Input
+            placeholder="Search operators by name..."
+            className="pl-8 h-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      )}
+
       {statusFilter != null && (
         <div className="flex items-center gap-2 text-xs text-slate-500">
           Showing only {STATUS_CONFIG[statusFilter].label.toLowerCase()} operators
@@ -386,7 +404,11 @@ export default function OnboardingPage() {
         <Card>
           <CardContent className="py-16 text-center">
             <UserPlus className="w-10 h-10 mx-auto mb-3 text-slate-300" />
-            <h3 className="font-medium text-slate-600 mb-1">No {STATUS_CONFIG[statusFilter!].label.toLowerCase()} operators</h3>
+            <h3 className="font-medium text-slate-600 mb-1">
+              {query
+                ? `No operators match "${search.trim()}"`
+                : `No ${STATUS_CONFIG[statusFilter!].label.toLowerCase()} operators`}
+            </h3>
           </CardContent>
         </Card>
       ) : (
