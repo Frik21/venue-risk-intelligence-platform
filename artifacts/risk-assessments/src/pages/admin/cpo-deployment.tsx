@@ -49,7 +49,7 @@ export default function CpoDeployment() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">CPO Deployment</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Operator Deployment</h1>
         <p className="text-slate-500 text-sm mt-0.5">Status, current assignment, and upcoming assignments for every CPO</p>
       </div>
 
