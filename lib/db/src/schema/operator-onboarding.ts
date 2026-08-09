@@ -28,6 +28,11 @@ export const operatorOnboardingTable = pgTable("operator_onboarding", {
   candidateEmail: text("candidate_email").notNull().default(""),
   checklist: jsonb("checklist").notNull().default({}),
   status: text("status").notNull().default("in_progress"),
+  // Independent of status/account creation above - a Manager-set
+  // record of when operational access (credentials handed over,
+  // briefed, etc.) was actually given, toggled via the "Assign
+  // Operational Access" button. Doesn't touch the user account itself.
+  operationalAccessGrantedAt: timestamp("operational_access_granted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

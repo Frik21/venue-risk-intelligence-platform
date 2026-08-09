@@ -47,7 +47,19 @@ function isExpiringSoon(expiryDate: string | null): boolean {
   return days < 30;
 }
 
-function DocumentUploadForm({ onboardingId, onAdded }: { onboardingId: number; onAdded: () => void }) {
+function DocumentUploadForm({
+  onboardingId,
+  onAdded,
+  operationalAccessGranted,
+  onToggleOperationalAccess,
+  togglingOperationalAccess,
+}: {
+  onboardingId: number;
+  onAdded: () => void;
+  operationalAccessGranted: boolean;
+  onToggleOperationalAccess: () => void;
+  togglingOperationalAccess: boolean;
+}) {
   const [documentType, setDocumentType] = useState<DocumentType>("id_document");
   const [expiryDate, setExpiryDate] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -100,9 +112,19 @@ function DocumentUploadForm({ onboardingId, onAdded }: { onboardingId: number; o
         {uploading || mutation.isPending ? "Uploading..." : "Choose File"}
         <input type="file" className="hidden" onChange={handleFile} disabled={uploading || mutation.isPending} />
       </label>
-      {/* Placeholder - not wired up yet, per direct product direction. */}
-      <button type="button" className="h-8 px-3 flex items-center rounded-md border border-slate-200 text-xs font-medium hover:bg-slate-50">
-        Assign Operational Access
+      <button
+        type="button"
+        onClick={onToggleOperationalAccess}
+        disabled={togglingOperationalAccess}
+        className={cn(
+          "h-8 px-3 flex items-center gap-1.5 rounded-md border text-xs font-medium",
+          operationalAccessGranted
+            ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
+            : "border-slate-200 hover:bg-slate-50",
+        )}
+      >
+        {operationalAccessGranted && <CheckCircle2 className="w-3.5 h-3.5" />}
+        {togglingOperationalAccess ? "Updating..." : operationalAccessGranted ? "Operational Access Granted" : "Assign Operational Access"}
       </button>
     </div>
   );
@@ -192,6 +214,15 @@ function CpoOnboardingDetail({ onboardingId }: { onboardingId: number }) {
   const verifyMutation = useMutation({
     mutationFn: ({ id, verified }: { id: number; verified: boolean }) => api.onboarding.updateDocument(id, { verified }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["onboarding-documents", onboardingId] }),
+  });
+
+  const operationalAccessMutation = useMutation({
+    mutationFn: (granted: boolean) => api.onboarding.setOperationalAccess(record!.id, granted),
+    onSuccess: (updated) => {
+      qc.setQueryData(["onboarding", onboardingId], updated);
+      toast({ title: updated.operationalAccessGrantedAt ? "Operational access granted" : "Operational access revoked" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
@@ -290,7 +321,13 @@ function CpoOnboardingDetail({ onboardingId }: { onboardingId: number }) {
             })}
           </div>
         )}
-        <DocumentUploadForm onboardingId={onboardingId} onAdded={() => qc.invalidateQueries({ queryKey: ["onboarding-documents", onboardingId] })} />
+        <DocumentUploadForm
+          onboardingId={onboardingId}
+          onAdded={() => qc.invalidateQueries({ queryKey: ["onboarding-documents", onboardingId] })}
+          operationalAccessGranted={record?.operationalAccessGrantedAt != null}
+          onToggleOperationalAccess={() => record && operationalAccessMutation.mutate(record.operationalAccessGrantedAt == null)}
+          togglingOperationalAccess={operationalAccessMutation.isPending || recordLoading}
+        />
       </div>
     </div>
   );

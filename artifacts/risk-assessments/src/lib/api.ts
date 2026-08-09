@@ -286,6 +286,10 @@ export interface OnboardingRecord {
   checklist: OnboardingChecklistEntry[];
   checkedCount: number;
   totalCount: number;
+  // Independent of status - a Manager-set record of when operational
+  // access was actually handed over, separate from the Approved/
+  // Pending/Denied decision and from account creation.
+  operationalAccessGrantedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -608,6 +612,8 @@ export const api = {
       apiFetch<OnboardingRecord>(`/onboarding/${onboardingId}/checklist`, { method: "PATCH", body: JSON.stringify({ key, checked }) }),
     updateStatus: (onboardingId: number, status: OnboardingStatus) =>
       apiFetch<OnboardingRecord>(`/onboarding/${onboardingId}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+    setOperationalAccess: (onboardingId: number, granted: boolean) =>
+      apiFetch<OnboardingRecord>(`/onboarding/${onboardingId}/operational-access`, { method: "PATCH", body: JSON.stringify({ granted }) }),
     listDocuments: (onboardingId: number) => apiFetch<OnboardingDocument[]>(`/onboarding/${onboardingId}/documents`),
     addDocument: (onboardingId: number, data: { documentType: DocumentType; label?: string; filename?: string; fileDataUrl?: string; expiryDate?: string }) =>
       apiFetch<OnboardingDocument>(`/onboarding/${onboardingId}/documents`, { method: "POST", body: JSON.stringify(data) }),

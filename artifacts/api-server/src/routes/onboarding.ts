@@ -23,6 +23,7 @@ function formatOnboarding(row: typeof operatorOnboardingTable.$inferSelect, user
     checklist,
     checkedCount: checklist.filter((c) => c.checked).length,
     totalCount: checklist.length,
+    operationalAccessGrantedAt: row.operationalAccessGrantedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -198,6 +199,36 @@ router.patch("/onboarding/:id/status", async (req, res): Promise<void> => {
   const userName = userId != null
     ? (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, userId)))[0]?.name ?? null
     : null;
+
+  res.json(formatOnboarding(updated, userName));
+});
+
+const OperationalAccessSchema = z.object({
+  granted: z.boolean(),
+});
+
+// Independent of status - see the schema comment on
+// operatorOnboardingTable. Doesn't touch the user account.
+router.patch("/onboarding/:id/operational-access", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const parsed = OperationalAccessSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [updated] = await db
+    .update(operatorOnboardingTable)
+    .set({ operationalAccessGrantedAt: parsed.data.granted ? new Date() : null })
+    .where(eq(operatorOnboardingTable.id, id))
+    .returning();
+
+  if (!updated) { res.status(404).json({ error: "Onboarding record not found" }); return; }
+
+  let userName: string | null = null;
+  if (updated.userId != null) {
+    const [user] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, updated.userId));
+    userName = user?.name ?? null;
+  }
 
   res.json(formatOnboarding(updated, userName));
 });
