@@ -427,6 +427,10 @@ const OPEN_PROFILE_PANEL_EVENT = "venueguard-open-profile-panel";
 // OPEN_*_PANEL_EVENT constants above - reopens the brand dropdown after
 // the panel that triggered it closes itself.
 const REOPEN_BRAND_MENU_EVENT = "venueguard-reopen-brand-menu";
+// Same idea as REOPEN_BRAND_MENU_EVENT, but for Profile's "Back to
+// Menu" button - Profile is opened from the operator menu (top-right),
+// not the brand menu, so it needs to reopen that dropdown instead.
+const REOPEN_OPERATOR_MENU_EVENT = "venueguard-reopen-operator-menu";
 // Dispatched by TopBanner whenever a click lands outside the brand
 // menu/dropdown (e.g. the search bar, the operator area, blank space
 // in the banner) and picked up by OperationalCanvas, the same
@@ -818,11 +822,14 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
 
   useEffect(() => {
     const reopenMenu = () => setBrandMenuOpen(true);
+    const reopenOperatorMenu = () => setOperatorMenuOpen(true);
     const updateAlertsCount = (event: Event) => setAlertsCount((event as CustomEvent<number>).detail);
     window.addEventListener(REOPEN_BRAND_MENU_EVENT, reopenMenu);
+    window.addEventListener(REOPEN_OPERATOR_MENU_EVENT, reopenOperatorMenu);
     window.addEventListener(ALERTS_COUNT_EVENT, updateAlertsCount);
     return () => {
       window.removeEventListener(REOPEN_BRAND_MENU_EVENT, reopenMenu);
+      window.removeEventListener(REOPEN_OPERATOR_MENU_EVENT, reopenOperatorMenu);
       window.removeEventListener(ALERTS_COUNT_EVENT, updateAlertsCount);
     };
   }, []);
@@ -1668,6 +1675,14 @@ function OperationalCanvas({
   function backToMenu() {
     setActivePanel(null);
     window.dispatchEvent(new Event(REOPEN_BRAND_MENU_EVENT));
+  }
+
+  // Same idea as backToMenu, but for Profile - it was opened from the
+  // operator menu (top-right), not the brand menu, so its own "Back to
+  // Menu" button needs to reopen that dropdown instead.
+  function backToOperatorMenu() {
+    setActivePanel(null);
+    window.dispatchEvent(new Event(REOPEN_OPERATOR_MENU_EVENT));
   }
 
   // Risk Assessments > Venues starts from tasks this CPO has actually
@@ -3738,6 +3753,12 @@ function OperationalCanvas({
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {profileView === "root" && (
+          <button type="button" className="venueguard-panel-back" onClick={backToOperatorMenu}>
+            <ArrowLeft className="w-3.5 h-3.5" /> Back to Menu
+          </button>
+        )}
 
         {profileView === "root" ? (
           <div className="tasks-panel-list">
