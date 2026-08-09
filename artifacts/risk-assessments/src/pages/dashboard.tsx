@@ -220,6 +220,19 @@ export default function Dashboard() {
     }
   }
 
+  // Captures location + weather automatically the moment the Brief
+  // screen is reached, rather than waiting on the CPO to press the
+  // button - the sign-in click just before this is itself the user
+  // gesture, so the browser's permission prompt still appears in a
+  // reasonable context. The button stays too, for retrying (e.g. after
+  // initially denying, or after actually moving somewhere else).
+  useEffect(() => {
+    if (step === "brief") {
+      useMyLocationForBrief();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
   function signIn() {
     setStep("preparing");
     setTimeout(() => setStep("brief"), 1400);
