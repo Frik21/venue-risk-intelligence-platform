@@ -20,6 +20,7 @@ import weatherRouter from "./weather";
 import trafficRouter from "./traffic";
 import taskRoutesRouter from "./task-routes";
 import taskPdfRouter from "./task-pdf";
+import timesheetRouter from "./timesheet";
 
 const router: IRouter = Router();
 
@@ -44,5 +45,6 @@ router.use(weatherRouter);
 router.use(trafficRouter);
 router.use(taskRoutesRouter);
 router.use(taskPdfRouter);
+router.use(timesheetRouter);
 
 export default router;

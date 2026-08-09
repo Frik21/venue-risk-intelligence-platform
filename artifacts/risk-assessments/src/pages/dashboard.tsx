@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, ChangeEvent } from "react";
-import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -37,6 +37,7 @@ import type {
   AlertPriority,
   WeatherFinding,
   TrafficCondition,
+  TimesheetEntry,
 } from "@/lib/api";
 import { LocationSearch, resolveCurrentLocation } from "@/components/location-search";
 import type { LocationSearchResult } from "@/components/location-search";
@@ -805,6 +806,198 @@ function TaskRouteSlotCard({
               ))}
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// One calendar cell per day of the month, padded to full weeks with
+// nulls so the grid always starts on the correct weekday.
+function buildCalendarWeeks(month: Date): (Date | null)[][] {
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const firstDay = new Date(year, monthIndex, 1);
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const startWeekday = firstDay.getDay();
+  const cells: (Date | null)[] = [];
+  for (let i = 0; i < startWeekday; i++) cells.push(null);
+  for (let day = 1; day <= daysInMonth; day++) cells.push(new Date(year, monthIndex, day));
+  while (cells.length % 7 !== 0) cells.push(null);
+  const weeks: (Date | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+  return weeks;
+}
+
+function formatDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+const TIMESHEET_WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
+
+// Profile > Timesheet - a hand-rolled month-grid calendar rather than
+// the shadcn Calendar component elsewhere in this app (components/ui/
+// calendar.tsx), which is styled for the light Tailwind/shadcn admin
+// pages, not this panel's dark, hand-styled VenueGuard theme. Clicking
+// a day opens the log-hours form below the grid for that date; days
+// that already have an entry show the hours logged right on the cell.
+function TimesheetCalendar({
+  entries,
+  loading,
+  month,
+  onChangeMonth,
+  selectedDate,
+  onSelectDate,
+  hoursInput,
+  notesInput,
+  onHoursChange,
+  onNotesChange,
+  onSave,
+  onDelete,
+  saving,
+  deleting,
+  noOperator,
+}: {
+  entries: TimesheetEntry[];
+  loading: boolean;
+  month: Date;
+  onChangeMonth: (month: Date) => void;
+  selectedDate: string | null;
+  onSelectDate: (dateKey: string) => void;
+  hoursInput: string;
+  notesInput: string;
+  onHoursChange: (value: string) => void;
+  onNotesChange: (value: string) => void;
+  onSave: () => void;
+  onDelete: () => void;
+  saving: boolean;
+  deleting: boolean;
+  noOperator: boolean;
+}) {
+  const entryMap = useMemo(() => {
+    const map: Record<string, TimesheetEntry> = {};
+    for (const entry of entries) map[entry.date] = entry;
+    return map;
+  }, [entries]);
+  const weeks = useMemo(() => buildCalendarWeeks(month), [month]);
+
+  if (noOperator) {
+    return <p className="tasks-panel-empty">No CPO selected yet - add one from Admin &gt; Users.</p>;
+  }
+
+  const todayKey = formatDateKey(new Date());
+  const selectedEntry = selectedDate ? entryMap[selectedDate] : undefined;
+
+  return (
+    <div className="timesheet-calendar">
+      <div className="timesheet-calendar-nav">
+        <button
+          type="button"
+          className="timesheet-calendar-nav-btn"
+          onClick={() => onChangeMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}
+          aria-label="Previous month"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <p className="timesheet-calendar-month">
+          {month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+        </p>
+        <button
+          type="button"
+          className="timesheet-calendar-nav-btn"
+          onClick={() => onChangeMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
+          aria-label="Next month"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="tasks-panel-empty">Loading…</p>
+      ) : (
+        <>
+          <div className="timesheet-calendar-weekdays">
+            {TIMESHEET_WEEKDAY_LABELS.map((label, i) => (
+              <span key={i}>{label}</span>
+            ))}
+          </div>
+          <div className="timesheet-calendar-grid">
+            {weeks.map((week, weekIndex) =>
+              week.map((day, dayIndex) => {
+                if (!day) {
+                  return <span key={`${weekIndex}-${dayIndex}`} className="timesheet-calendar-cell timesheet-calendar-cell-empty" />;
+                }
+                const dateKey = formatDateKey(day);
+                const entry = entryMap[dateKey];
+                return (
+                  <button
+                    key={dateKey}
+                    type="button"
+                    className={`timesheet-calendar-cell ${dateKey === todayKey ? "timesheet-calendar-cell-today" : ""} ${
+                      dateKey === selectedDate ? "timesheet-calendar-cell-selected" : ""
+                    } ${entry ? "timesheet-calendar-cell-logged" : ""}`}
+                    onClick={() => onSelectDate(dateKey)}
+                  >
+                    <span className="timesheet-calendar-cell-day">{day.getDate()}</span>
+                    {entry && <span className="timesheet-calendar-cell-hours">{entry.hoursWorked}h</span>}
+                  </button>
+                );
+              }),
+            )}
+          </div>
+        </>
+      )}
+
+      {selectedDate && (
+        <div className="timesheet-entry-form">
+          <p className="timesheet-entry-form-date">
+            {new Date(`${selectedDate}T00:00:00`).toLocaleDateString(undefined, {
+              weekday: "long",
+              month: "long",
+              day: "numeric",
+            })}
+          </p>
+          <label className="venue-assessment-field">
+            <span>Hours Worked</span>
+            <input
+              type="number"
+              min={0}
+              max={24}
+              step={0.25}
+              value={hoursInput}
+              onChange={(event) => onHoursChange(event.target.value)}
+              className="venue-assessment-field-input"
+              placeholder="e.g. 8"
+            />
+          </label>
+          <label className="venue-assessment-field">
+            <span>Notes</span>
+            <input
+              type="text"
+              value={notesInput}
+              onChange={(event) => onNotesChange(event.target.value)}
+              className="venue-assessment-field-input"
+              placeholder="Optional"
+            />
+          </label>
+          <div className="timesheet-entry-form-actions">
+            <button
+              type="button"
+              className="venue-assessment-save-btn"
+              onClick={onSave}
+              disabled={saving || hoursInput.trim() === ""}
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+            {selectedEntry && (
+              <button type="button" className="timesheet-entry-form-delete" onClick={onDelete} disabled={deleting}>
+                {deleting ? "Removing…" : "Remove"}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -1611,6 +1804,73 @@ function OperationalCanvas({
       .catch((err) => console.error(`Failed to load tasks for CPO ${viewingAsCpoId}:`, err))
       .finally(() => setCpoTasksLoading(false));
   }, [viewingAsCpoId]);
+
+  // Profile > Timesheet - scoped to viewingAsCpoId, the closest thing
+  // this app has to "the operator currently signed in" (there's no
+  // real auth/session yet). Fetched lazily, once, the first time the
+  // Timesheet sub-view is actually opened.
+  const [timesheetEntries, setTimesheetEntries] = useState<TimesheetEntry[]>([]);
+  const [timesheetLoading, setTimesheetLoading] = useState(false);
+  const [timesheetLoadedForUserId, setTimesheetLoadedForUserId] = useState<number | null>(null);
+  const [timesheetMonth, setTimesheetMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [selectedTimesheetDate, setSelectedTimesheetDate] = useState<string | null>(null);
+  const [timesheetHoursInput, setTimesheetHoursInput] = useState("");
+  const [timesheetNotesInput, setTimesheetNotesInput] = useState("");
+  const [savingTimesheetEntry, setSavingTimesheetEntry] = useState(false);
+  const [deletingTimesheetEntry, setDeletingTimesheetEntry] = useState(false);
+
+  useEffect(() => {
+    if (profileView !== "timesheet" || viewingAsCpoId == null) return;
+    if (timesheetLoadedForUserId === viewingAsCpoId) return;
+    setTimesheetLoading(true);
+    api.timesheet
+      .list(viewingAsCpoId)
+      .then((entries) => {
+        setTimesheetEntries(entries);
+        setTimesheetLoadedForUserId(viewingAsCpoId);
+      })
+      .catch((err) => console.error(`Failed to load timesheet for CPO ${viewingAsCpoId}:`, err))
+      .finally(() => setTimesheetLoading(false));
+  }, [profileView, viewingAsCpoId, timesheetLoadedForUserId]);
+
+  function selectTimesheetDate(dateKey: string) {
+    setSelectedTimesheetDate(dateKey);
+    const existing = timesheetEntries.find((e) => e.date === dateKey);
+    setTimesheetHoursInput(existing ? String(existing.hoursWorked) : "");
+    setTimesheetNotesInput(existing ? existing.notes : "");
+  }
+
+  function saveTimesheetEntry() {
+    if (!selectedTimesheetDate || viewingAsCpoId == null) return;
+    const hours = Number(timesheetHoursInput);
+    if (isNaN(hours) || hours < 0 || hours > 24) return;
+    setSavingTimesheetEntry(true);
+    api.timesheet
+      .upsert(viewingAsCpoId, { date: selectedTimesheetDate, hoursWorked: hours, notes: timesheetNotesInput })
+      .then((entry) => {
+        setTimesheetEntries((prev) => [...prev.filter((e) => e.date !== entry.date), entry].sort((a, b) => a.date.localeCompare(b.date)));
+      })
+      .catch((err) => console.error("Failed to save timesheet entry:", err))
+      .finally(() => setSavingTimesheetEntry(false));
+  }
+
+  function deleteTimesheetEntry() {
+    const existing = selectedTimesheetDate ? timesheetEntries.find((e) => e.date === selectedTimesheetDate) : undefined;
+    if (!existing) return;
+    setDeletingTimesheetEntry(true);
+    api.timesheet
+      .delete(existing.id)
+      .then(() => {
+        setTimesheetEntries((prev) => prev.filter((e) => e.id !== existing.id));
+        setTimesheetHoursInput("");
+        setTimesheetNotesInput("");
+      })
+      .catch((err) => console.error("Failed to delete timesheet entry:", err))
+      .finally(() => setDeletingTimesheetEntry(false));
+  }
 
   function updateTaskStatus(taskId: number, status: TaskStatus) {
     setCpoTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status } : t)));
@@ -3788,7 +4048,27 @@ function OperationalCanvas({
             <button type="button" className="venueguard-panel-back" onClick={() => setProfileView("root")}>
               <ArrowLeft className="w-3.5 h-3.5" /> Back to Profile
             </button>
-            <p className="tasks-panel-empty">Coming soon.</p>
+            {profileView === "timesheet" ? (
+              <TimesheetCalendar
+                entries={timesheetEntries}
+                loading={timesheetLoading}
+                month={timesheetMonth}
+                onChangeMonth={setTimesheetMonth}
+                selectedDate={selectedTimesheetDate}
+                onSelectDate={selectTimesheetDate}
+                hoursInput={timesheetHoursInput}
+                notesInput={timesheetNotesInput}
+                onHoursChange={setTimesheetHoursInput}
+                onNotesChange={setTimesheetNotesInput}
+                onSave={saveTimesheetEntry}
+                onDelete={deleteTimesheetEntry}
+                saving={savingTimesheetEntry}
+                deleting={deletingTimesheetEntry}
+                noOperator={viewingAsCpoId == null}
+              />
+            ) : (
+              <p className="tasks-panel-empty">Coming soon.</p>
+            )}
           </>
         )}
       </div>

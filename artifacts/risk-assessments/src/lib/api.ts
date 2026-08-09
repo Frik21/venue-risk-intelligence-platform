@@ -190,6 +190,19 @@ export interface TaskRoute {
   updatedAt: string;
 }
 
+// One logged day - Profile > Timesheet. date is a plain "YYYY-MM-DD"
+// string, matching the backend's schema (see
+// lib/db/src/schema/timesheet-entries.ts).
+export interface TimesheetEntry {
+  id: number;
+  userId: number;
+  date: string;
+  hoursWorked: number;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AssessmentSummary {
   id: number; venueId: number | null; venueName: string | null; venueCity: string | null;
   title: string; description: string | null; status: AssessmentStatus; version: number;
@@ -380,6 +393,12 @@ export const api = {
       data: Partial<Pick<TaskRoute, "startLabel" | "startLat" | "startLng" | "endLabel" | "endLat" | "endLng">>,
     ) => apiFetch<TaskRoute>(`/task-routes/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     calculate: (id: number) => apiFetch<TaskRoute>(`/task-routes/${id}/calculate`, { method: "POST" }),
+  },
+  timesheet: {
+    list: (userId: number) => apiFetch<TimesheetEntry[]>(`/users/${userId}/timesheet`),
+    upsert: (userId: number, data: { date: string; hoursWorked: number; notes?: string }) =>
+      apiFetch<TimesheetEntry>(`/users/${userId}/timesheet`, { method: "POST", body: JSON.stringify(data) }),
+    delete: (id: number) => apiFetch<void>(`/timesheet/${id}`, { method: "DELETE" }),
   },
   weather: {
     check: (lat: number, lng: number) =>

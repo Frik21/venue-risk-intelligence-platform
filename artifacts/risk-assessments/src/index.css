@@ -2133,6 +2133,154 @@
   cursor: pointer;
 }
 
+/* Profile > Timesheet - hand-rolled month calendar (see
+   TimesheetCalendar in dashboard.tsx for why this isn't the shadcn
+   Calendar component). */
+.timesheet-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.timesheet-calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.timesheet-calendar-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+}
+
+.timesheet-calendar-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.timesheet-calendar-month {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.timesheet-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.timesheet-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.timesheet-calendar-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  aspect-ratio: 1;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.timesheet-calendar-cell:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.timesheet-calendar-cell-empty {
+  background: transparent;
+  cursor: default;
+}
+
+.timesheet-calendar-cell-today {
+  border-color: rgba(125, 211, 252, 0.4);
+}
+
+.timesheet-calendar-cell-logged {
+  background: rgba(134, 239, 172, 0.1);
+}
+
+.timesheet-calendar-cell-selected {
+  background: rgba(125, 211, 252, 0.2);
+  border-color: rgba(125, 211, 252, 0.6);
+}
+
+.timesheet-calendar-cell-day {
+  font-weight: 500;
+}
+
+.timesheet-calendar-cell-hours {
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(134, 239, 172, 0.9);
+}
+
+.timesheet-entry-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.timesheet-entry-form-date {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.timesheet-entry-form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.timesheet-entry-form-actions .venue-assessment-save-btn {
+  margin-bottom: 0;
+}
+
+.timesheet-entry-form-delete {
+  padding: 10px 16px;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 10px;
+  background: rgba(248, 113, 113, 0.1);
+  color: rgba(252, 165, 165, 0.95);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.timesheet-entry-form-delete:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.18);
+}
+
+.timesheet-entry-form-delete:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* Country Intelligence panel - tied to Active Country selection rather
    than a manual trigger (mirrors the country focus visuals' own
    entered/exited timing via focusEntered), so it appears and dismisses
