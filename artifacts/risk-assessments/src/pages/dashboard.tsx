@@ -885,7 +885,7 @@ function TimesheetCalendar({
   const weeks = useMemo(() => buildCalendarWeeks(month), [month]);
 
   if (noOperator) {
-    return <p className="tasks-panel-empty">No CPO selected yet - add one from Admin &gt; Users.</p>;
+    return <p className="tasks-panel-empty">No profile user found yet - add a user named &quot;Frik&quot; (or an Admin) from Admin &gt; Users.</p>;
   }
 
   const todayKey = formatDateKey(new Date());
@@ -1783,6 +1783,14 @@ function OperationalCanvas({
   const [viewingAsCpoId, setViewingAsCpoId] = useState<number | null>(null);
   const [cpoTasks, setCpoTasks] = useState<Task[]>([]);
   const [cpoTasksLoading, setCpoTasksLoading] = useState(false);
+  // Closest thing this app has to "the logged-in user" without real
+  // auth - matches the operator area's hardcoded "Frik" by name,
+  // falling back to an Admin, then anyone, if that name isn't in the
+  // Users table yet. Scopes Profile > Timesheet (and anything else
+  // Profile grows) to one specific real account - distinct from
+  // viewingAsCpoId above, which is a separate "Manager viewing as a
+  // CPO" concept for admin testing elsewhere in this dashboard.
+  const [profileUserId, setProfileUserId] = useState<number | null>(null);
 
   useEffect(() => {
     api.users
@@ -1791,6 +1799,12 @@ function OperationalCanvas({
         const cpos = users.filter((u) => u.role === "cpo");
         setCpoUsers(cpos);
         setViewingAsCpoId((current) => current ?? cpos[0]?.id ?? null);
+
+        const frikMatch =
+          users.find((u) => u.name.trim().toLowerCase() === "frik") ??
+          users.find((u) => u.role === "admin") ??
+          users[0];
+        setProfileUserId(frikMatch?.id ?? null);
       })
       .catch((err) => console.error("Failed to load CPO users:", err));
   }, []);
@@ -1805,10 +1819,10 @@ function OperationalCanvas({
       .finally(() => setCpoTasksLoading(false));
   }, [viewingAsCpoId]);
 
-  // Profile > Timesheet - scoped to viewingAsCpoId, the closest thing
-  // this app has to "the operator currently signed in" (there's no
-  // real auth/session yet). Fetched lazily, once, the first time the
-  // Timesheet sub-view is actually opened.
+  // Profile > Timesheet - scoped to profileUserId, not viewingAsCpoId
+  // (see its declaration above for why they're different concepts).
+  // Fetched lazily, once, the first time the Timesheet sub-view is
+  // actually opened.
   const [timesheetEntries, setTimesheetEntries] = useState<TimesheetEntry[]>([]);
   const [timesheetLoading, setTimesheetLoading] = useState(false);
   const [timesheetLoadedForUserId, setTimesheetLoadedForUserId] = useState<number | null>(null);
@@ -1823,18 +1837,18 @@ function OperationalCanvas({
   const [deletingTimesheetEntry, setDeletingTimesheetEntry] = useState(false);
 
   useEffect(() => {
-    if (profileView !== "timesheet" || viewingAsCpoId == null) return;
-    if (timesheetLoadedForUserId === viewingAsCpoId) return;
+    if (profileView !== "timesheet" || profileUserId == null) return;
+    if (timesheetLoadedForUserId === profileUserId) return;
     setTimesheetLoading(true);
     api.timesheet
-      .list(viewingAsCpoId)
+      .list(profileUserId)
       .then((entries) => {
         setTimesheetEntries(entries);
-        setTimesheetLoadedForUserId(viewingAsCpoId);
+        setTimesheetLoadedForUserId(profileUserId);
       })
-      .catch((err) => console.error(`Failed to load timesheet for CPO ${viewingAsCpoId}:`, err))
+      .catch((err) => console.error(`Failed to load timesheet for user ${profileUserId}:`, err))
       .finally(() => setTimesheetLoading(false));
-  }, [profileView, viewingAsCpoId, timesheetLoadedForUserId]);
+  }, [profileView, profileUserId, timesheetLoadedForUserId]);
 
   function selectTimesheetDate(dateKey: string) {
     setSelectedTimesheetDate(dateKey);
@@ -1844,12 +1858,12 @@ function OperationalCanvas({
   }
 
   function saveTimesheetEntry() {
-    if (!selectedTimesheetDate || viewingAsCpoId == null) return;
+    if (!selectedTimesheetDate || profileUserId == null) return;
     const hours = Number(timesheetHoursInput);
     if (isNaN(hours) || hours < 0 || hours > 24) return;
     setSavingTimesheetEntry(true);
     api.timesheet
-      .upsert(viewingAsCpoId, { date: selectedTimesheetDate, hoursWorked: hours, notes: timesheetNotesInput })
+      .upsert(profileUserId, { date: selectedTimesheetDate, hoursWorked: hours, notes: timesheetNotesInput })
       .then((entry) => {
         setTimesheetEntries((prev) => [...prev.filter((e) => e.date !== entry.date), entry].sort((a, b) => a.date.localeCompare(b.date)));
       })
@@ -4064,7 +4078,7 @@ function OperationalCanvas({
                 onDelete={deleteTimesheetEntry}
                 saving={savingTimesheetEntry}
                 deleting={deletingTimesheetEntry}
-                noOperator={viewingAsCpoId == null}
+                noOperator={profileUserId == null}
               />
             ) : (
               <p className="tasks-panel-empty">Coming soon.</p>
