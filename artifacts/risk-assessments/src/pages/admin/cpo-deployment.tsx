@@ -29,7 +29,7 @@ export default function CpoDeployment() {
   const isLoading = usersLoading || tasksLoading;
 
   const rows = cpos.map((cpo) => {
-    const cpoTasks = tasks.filter((t) => t.assignedTo === cpo.id);
+    const cpoTasks = tasks.filter((t) => t.assignedToIds.includes(cpo.id));
     const current = cpoTasks.find((t) => t.status === "in_progress");
     const upcoming = cpoTasks
       .filter((t) => t.status === "not_completed")

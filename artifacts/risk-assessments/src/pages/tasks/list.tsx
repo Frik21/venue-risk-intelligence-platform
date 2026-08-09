@@ -6,11 +6,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
-import { ListChecks, Plus, ClipboardCheck, MoreVertical, Pencil, Copy, Archive, ArchiveRestore } from "lucide-react";
+import { ListChecks, Plus, ClipboardCheck, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -33,10 +35,18 @@ function EditTaskDialog({ task, venues, users, onClose }: { task: Task; venues: 
   const cpos = users.filter((u) => u.role === "cpo");
   const [form, setForm] = useState({
     venueId: String(task.venueId),
-    assignedTo: task.assignedTo != null ? String(task.assignedTo) : "",
+    assigneeIds: task.assignedToIds,
     title: task.title,
-    dueDate: task.dueDate ? task.dueDate.slice(0, 10) : "",
+    dueDate: task.dueDate ? task.dueDate.slice(0, 16) : "",
+    endDate: task.endDate ? task.endDate.slice(0, 16) : "",
     priority: task.priority,
+    clientName: task.clientName,
+    clientContact: task.clientContact,
+    clientRequirements: task.clientRequirements,
+    operatorsRequired: String(task.operatorsRequired),
+    vehiclesRequired: String(task.vehiclesRequired),
+    estimatedCost: task.estimatedCost != null ? String(task.estimatedCost) : "",
+    estimatedCostCurrency: task.estimatedCostCurrency,
   });
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -45,10 +55,18 @@ function EditTaskDialog({ task, venues, users, onClose }: { task: Task; venues: 
     mutationFn: () =>
       api.tasks.update(task.id, {
         venueId: Number(form.venueId),
-        assignedTo: form.assignedTo ? Number(form.assignedTo) : null,
+        assigneeIds: form.assigneeIds,
         title: form.title,
         dueDate: form.dueDate || null,
+        endDate: form.endDate || null,
         priority: form.priority as TaskPriority,
+        clientName: form.clientName,
+        clientContact: form.clientContact,
+        clientRequirements: form.clientRequirements,
+        operatorsRequired: Number(form.operatorsRequired) || 0,
+        vehiclesRequired: Number(form.vehiclesRequired) || 0,
+        estimatedCost: form.estimatedCost ? Number(form.estimatedCost) : null,
+        estimatedCostCurrency: form.estimatedCostCurrency,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tasks"] });
@@ -59,11 +77,20 @@ function EditTaskDialog({ task, venues, users, onClose }: { task: Task; venues: 
   });
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const toggleAssignee = (id: number) =>
+    setForm((f) => ({
+      ...f,
+      assigneeIds: f.assigneeIds.includes(id) ? f.assigneeIds.filter((x) => x !== id) : [...f.assigneeIds, id],
+    }));
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg my-8 p-6 space-y-4">
         <h2 className="text-lg font-bold">Edit {task.taskNumber}</h2>
+        <div>
+          <Label>Task *</Label>
+          <Input value={form.title} onChange={(e) => set("title", e.target.value)} />
+        </div>
         <div>
           <Label>Venue *</Label>
           <Select value={form.venueId} onValueChange={(v) => set("venueId", v)}>
@@ -73,33 +100,72 @@ function EditTaskDialog({ task, venues, users, onClose }: { task: Task; venues: 
             </SelectContent>
           </Select>
         </div>
-        <div>
-          <Label>Assign To (CPO)</Label>
-          <Select value={form.assignedTo} onValueChange={(v) => set("assignedTo", v)}>
-            <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
-            <SelectContent>
-              {cpos.map((u) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Client Name</Label>
+            <Input value={form.clientName} onChange={(e) => set("clientName", e.target.value)} />
+          </div>
+          <div>
+            <Label>Client Contact</Label>
+            <Input value={form.clientContact} onChange={(e) => set("clientContact", e.target.value)} />
+          </div>
         </div>
         <div>
-          <Label>Priority</Label>
-          <Select value={form.priority} onValueChange={(v) => set("priority", v)}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {(Object.keys(PRIORITY_CONFIG) as TaskPriority[]).map((p) => (
-                <SelectItem key={p} value={p}>{PRIORITY_CONFIG[p].label}</SelectItem>
+          <Label>Client Requirements / Special Requests</Label>
+          <Textarea value={form.clientRequirements} onChange={(e) => set("clientRequirements", e.target.value)} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Start Date/Time</Label>
+            <Input type="datetime-local" value={form.dueDate} onChange={(e) => set("dueDate", e.target.value)} />
+          </div>
+          <div>
+            <Label>End Date/Time</Label>
+            <Input type="datetime-local" value={form.endDate} onChange={(e) => set("endDate", e.target.value)} />
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <Label>Operators Needed</Label>
+            <Input type="number" min={0} value={form.operatorsRequired} onChange={(e) => set("operatorsRequired", e.target.value)} />
+          </div>
+          <div>
+            <Label>Vehicles Needed</Label>
+            <Input type="number" min={0} value={form.vehiclesRequired} onChange={(e) => set("vehiclesRequired", e.target.value)} />
+          </div>
+          <div>
+            <Label>Priority</Label>
+            <Select value={form.priority} onValueChange={(v) => set("priority", v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {(Object.keys(PRIORITY_CONFIG) as TaskPriority[]).map((p) => (
+                  <SelectItem key={p} value={p}>{PRIORITY_CONFIG[p].label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div>
+          <Label>Estimated Cost</Label>
+          <div className="flex gap-2">
+            <Input type="number" min={0} step="0.01" value={form.estimatedCost} onChange={(e) => set("estimatedCost", e.target.value)} className="flex-1" />
+            <Input value={form.estimatedCostCurrency} onChange={(e) => set("estimatedCostCurrency", e.target.value)} className="w-20" />
+          </div>
+        </div>
+        <div>
+          <Label>Assign CPO(s)</Label>
+          {cpos.length === 0 ? (
+            <p className="text-sm text-slate-400 mt-1">No CPO users yet</p>
+          ) : (
+            <div className="border border-slate-200 rounded-md max-h-36 overflow-y-auto divide-y divide-slate-100 mt-1">
+              {cpos.map((u) => (
+                <label key={u.id} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-slate-50">
+                  <Checkbox checked={form.assigneeIds.includes(u.id)} onCheckedChange={() => toggleAssignee(u.id)} />
+                  {u.name}
+                </label>
               ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label>Task *</Label>
-          <Input value={form.title} onChange={(e) => set("title", e.target.value)} />
-        </div>
-        <div>
-          <Label>Due Date</Label>
-          <Input type="date" value={form.dueDate} onChange={(e) => set("dueDate", e.target.value)} />
+            </div>
+          )}
         </div>
         <div className="flex gap-3 pt-2">
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !form.venueId || !form.title.trim()}>
@@ -135,8 +201,9 @@ export default function TasksList() {
     },
   });
 
-  const assignMutation = useMutation({
-    mutationFn: ({ id, assignedTo }: { id: number; assignedTo: number }) => api.tasks.update(id, { assignedTo }),
+  const addAssigneeMutation = useMutation({
+    mutationFn: ({ task, cpoId }: { task: Task; cpoId: number }) =>
+      api.tasks.update(task.id, { assigneeIds: [...task.assignedToIds, cpoId] }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tasks"] });
       toast({ title: "CPO assigned" });
@@ -167,10 +234,10 @@ export default function TasksList() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Tasks</h1>
-          <p className="text-slate-500 text-sm mt-0.5">Assign CPOs to complete structured work, tied to a venue</p>
+          <p className="text-slate-500 text-sm mt-0.5">Task requests, assignments, and status - tied to a venue</p>
         </div>
         <Button onClick={() => setShowNew(true)}>
-          <Plus className="w-4 h-4 mr-1.5" /> Assign Task
+          <Plus className="w-4 h-4 mr-1.5" /> New Task Request
         </Button>
       </div>
 
@@ -188,7 +255,7 @@ export default function TasksList() {
           <CardContent className="py-16 text-center">
             <ListChecks className="w-10 h-10 mx-auto mb-3 text-slate-300" />
             <h3 className="font-medium text-slate-600">No tasks yet</h3>
-            <Button onClick={() => setShowNew(true)} className="mt-2"><Plus className="w-4 h-4 mr-1.5" />Assign Task</Button>
+            <Button onClick={() => setShowNew(true)} className="mt-2"><Plus className="w-4 h-4 mr-1.5" />New Task Request</Button>
           </CardContent>
         </Card>
       ) : (
@@ -196,6 +263,8 @@ export default function TasksList() {
           {tasks.map((task) => {
             const sc = STATUS_CONFIG[task.status];
             const pc = PRIORITY_CONFIG[task.priority];
+            const understaffed = task.assignedToIds.length < task.operatorsRequired;
+            const availableToAdd = cpos.filter((u) => !task.assignedToIds.includes(u.id));
             return (
               <Card key={task.id} className={cn(task.archived && "opacity-60")}>
                 <CardContent className="p-4">
@@ -214,29 +283,48 @@ export default function TasksList() {
                         {task.dueDate && <span className="text-xs text-slate-400 ml-auto">Due {formatDate(task.dueDate)}</span>}
                       </div>
                       <div className="font-semibold text-slate-900 text-sm mb-0.5">{task.title}</div>
-                      {task.assignedTo == null ? (
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs text-orange-600 font-medium">Unassigned</span>
-                          <Select onValueChange={(v) => assignMutation.mutate({ id: task.id, assignedTo: Number(v) })}>
-                            <SelectTrigger className="h-6 text-xs w-40"><SelectValue placeholder="Assign a CPO..." /></SelectTrigger>
+                      {task.clientName && (
+                        <p className="text-xs text-slate-500">Client: {task.clientName}{task.clientContact && ` (${task.clientContact})`}</p>
+                      )}
+
+                      <div className="flex items-center gap-3 flex-wrap mt-1.5">
+                        <div className="flex items-center gap-1 text-xs">
+                          <Users className="w-3 h-3 text-slate-400" />
+                          <span className={understaffed ? "text-orange-600 font-medium" : "text-slate-500"}>
+                            {task.assignedToNames.length > 0 ? task.assignedToNames.join(", ") : "Unassigned"}
+                            {` (${task.assignedToIds.length}/${task.operatorsRequired})`}
+                          </span>
+                        </div>
+                        {task.vehiclesRequired > 0 && (
+                          <div className="flex items-center gap-1 text-xs text-slate-500">
+                            <Car className="w-3 h-3 text-slate-400" /> {task.vehiclesRequired} vehicle{task.vehiclesRequired !== 1 ? "s" : ""}
+                          </div>
+                        )}
+                        {task.estimatedCost != null && (
+                          <div className="flex items-center gap-1 text-xs text-slate-500">
+                            <DollarSign className="w-3 h-3 text-slate-400" /> {task.estimatedCost.toLocaleString()} {task.estimatedCostCurrency}
+                          </div>
+                        )}
+                      </div>
+
+                      {understaffed && availableToAdd.length > 0 && (
+                        <div className="mt-1.5">
+                          <Select onValueChange={(v) => addAssigneeMutation.mutate({ task, cpoId: Number(v) })}>
+                            <SelectTrigger className="h-6 text-xs w-44"><SelectValue placeholder="+ Add a CPO..." /></SelectTrigger>
                             <SelectContent>
-                              {cpos.map((u) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
+                              {availableToAdd.map((u) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </div>
-                      ) : (
-                        <p className="text-xs text-slate-400">
-                          Assigned to {task.assignedToName}
-                          {task.assignedByName && ` by ${task.assignedByName}`}
-                        </p>
                       )}
+
                       {task.planSubmittedAt ? (
-                        <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
+                        <p className="text-xs text-green-600 flex items-center gap-1 mt-1.5">
                           <ClipboardCheck className="w-3 h-3" />
                           Plan submitted {new Date(task.planSubmittedAt).toLocaleString()}
                         </p>
                       ) : (
-                        <p className="text-xs text-slate-400 flex items-center gap-1 mt-1">
+                        <p className="text-xs text-slate-400 flex items-center gap-1 mt-1.5">
                           <ClipboardCheck className="w-3 h-3" />
                           Plan not submitted yet
                         </p>

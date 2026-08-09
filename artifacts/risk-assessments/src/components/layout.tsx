@@ -1,12 +1,6 @@
 import { Link, useLocation } from "wouter";
 import {
-  LayoutDashboard,
   Building2,
-  ClipboardList,
-  AlertTriangle,
-  Bell,
-  FolderOpen,
-  FileText,
   Users,
   ListChecks,
   ChevronDown,
@@ -16,61 +10,30 @@ import {
   X,
   Gauge,
   ArrowLeftRight,
-  MapPinned,
-  Files,
-  History,
-  CalendarDays,
   UserCog,
   DollarSign,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
+// Deliberately lean - this is a dispatch console for Managers
+// (creating/costing task requests, assigning CPOs, tracking who's
+// deployed, office locations), not a general risk-intelligence
+// analyst tool. Venues/Assessments/Incidents/Alerts/Field
+// Intelligence/Evidence/Reports/Documents/Audit History are the
+// CPO's/analyst's concerns (the CPO's own Operational Canvas at "/"
+// covers assessments) - their routes still exist and work, they're
+// just not cluttering this nav per direct product direction.
 const navGroups = [
   {
-    label: "Overview",
-    items: [
-      { href: "/", label: "Dashboard", icon: LayoutDashboard },
-    ],
-  },
-  {
-    label: "Intelligence",
-    items: [
-      { href: "/venues", label: "Venues", icon: Building2 },
-      { href: "/assessments", label: "Assessments", icon: ClipboardList },
-      { href: "/incidents", label: "Incidents", icon: AlertTriangle },
-      { href: "/admin/field-intelligence", label: "Field Intelligence", icon: MapPinned },
-    ],
-  },
-  {
-    label: "Monitoring",
-    items: [
-      { href: "/alerts", label: "Alert Queue", icon: Bell },
-      { href: "/tasks", label: "Tasks", icon: ListChecks },
-    ],
-  },
-  {
-    label: "Operations",
-    items: [
-      { href: "/admin/schedule", label: "Schedule", icon: CalendarDays },
-      { href: "/admin/cpo-deployment", label: "CPO Deployment", icon: UserCog },
-    ],
-  },
-  {
-    label: "Repository",
-    items: [
-      { href: "/evidence", label: "Evidence", icon: FolderOpen },
-      { href: "/reports", label: "Reports", icon: FileText },
-      { href: "/admin/documents", label: "Documents", icon: Files },
-    ],
-  },
-  {
-    label: "Admin",
+    label: "Management",
     items: [
       { href: "/admin", label: "Dashboard", icon: Gauge },
+      { href: "/tasks", label: "Tasks", icon: ListChecks },
+      { href: "/admin/cpo-deployment", label: "CPO Deployment", icon: UserCog },
+      { href: "/admin/offices", label: "Offices", icon: Building2 },
       { href: "/admin/costs", label: "Costs", icon: DollarSign },
       { href: "/admin/users", label: "Users", icon: Users },
-      { href: "/admin/audit-log", label: "Audit History", icon: History },
     ],
   },
 ];

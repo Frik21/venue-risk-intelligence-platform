@@ -10,3 +10,5 @@ export * from "./venue-risk-assessments";
 export * from "./task-routes";
 export * from "./timesheet-entries";
 export * from "./expenses";
+export * from "./task-assignments";
+export * from "./offices";

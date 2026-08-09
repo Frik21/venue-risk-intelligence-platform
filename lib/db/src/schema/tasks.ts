@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, boolean, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { venuesTable } from "./venues";
@@ -19,6 +19,20 @@ import { usersTable } from "./users";
 // every existing status-based UI (PDF, dashboard counts, CPO task
 // history) doesn't need to learn a new state - archived tasks are
 // just excluded from the lists that matter.
+//
+// assignedTo is the primary/first CPO on the task, kept for backward
+// compatibility with everything already built around "one operator
+// per task" (Expenses' default operator, the PDF report header,
+// Timesheet, the CPO Operational Canvas's own task list). The full
+// roster - which can be more than one CPO, per direct product
+// direction ("client wants 3 operators") - lives in
+// task-assignments.ts; assignedTo is always also a member of that
+// roster when set.
+//
+// The client* / *Required / estimatedCost* fields turn task creation
+// into a real intake form for phone-in requests ("need a CPO for
+// these dates, X operators, X vehicles") rather than just a title +
+// assignee - per direct product direction.
 export const tasksTable = pgTable("tasks", {
   id: serial("id").primaryKey(),
   venueId: integer("venue_id").notNull().references(() => venuesTable.id, { onDelete: "cascade" }),
@@ -26,10 +40,18 @@ export const tasksTable = pgTable("tasks", {
   assignedBy: integer("assigned_by").notNull().references(() => usersTable.id),
   title: text("title").notNull(),
   dueDate: timestamp("due_date", { withTimezone: true }),
+  endDate: timestamp("end_date", { withTimezone: true }),
   status: text("status").notNull().default("not_completed"),
   priority: text("priority").notNull().default("medium"),
   archived: boolean("archived").notNull().default(false),
   completionNote: text("completion_note"),
+  clientName: text("client_name").notNull().default(""),
+  clientContact: text("client_contact").notNull().default(""),
+  clientRequirements: text("client_requirements").notNull().default(""),
+  operatorsRequired: integer("operators_required").notNull().default(1),
+  vehiclesRequired: integer("vehicles_required").notNull().default(0),
+  estimatedCost: real("estimated_cost"),
+  estimatedCostCurrency: text("estimated_cost_currency").notNull().default("ZAR"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

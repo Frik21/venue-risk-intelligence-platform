@@ -53,11 +53,16 @@ export interface SearchPhrase {
 export type TaskStatus = "not_completed" | "in_progress" | "completed";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
 
-// Task Assignment - a Manager assigns a CPO a specific piece of
+// Task Assignment - a Manager assigns CPOs a specific piece of
 // structured work already in the platform, tied to a venue. The CPO
 // moves it through TaskStatus; that status is what feeds back to the
-// Manager. Not a general worklist or two-way chat. assignedTo is
-// nullable - a task can be created "unassigned" and covered later.
+// Manager. Not a general worklist or two-way chat.
+//
+// assignedTo/assignedToName is the primary CPO (nullable - a task can
+// be created "unassigned" and covered later); assignedToIds/Names is
+// the full roster, which can hold several CPOs when a client needs
+// more than one operator. assignedTo is always the first entry of the
+// roster when the roster is non-empty.
 export interface Task {
   id: number;
   taskNumber: string;
@@ -65,15 +70,38 @@ export interface Task {
   venueName: string | null;
   assignedTo: number | null;
   assignedToName: string | null;
+  assignedToIds: number[];
+  assignedToNames: string[];
   assignedBy: number;
   assignedByName: string | null;
   title: string;
   dueDate: string | null;
+  endDate: string | null;
   status: TaskStatus;
   priority: TaskPriority;
   archived: boolean;
   completionNote: string | null;
+  clientName: string;
+  clientContact: string;
+  clientRequirements: string;
+  operatorsRequired: number;
+  vehiclesRequired: number;
+  estimatedCost: number | null;
+  estimatedCostCurrency: string;
   planSubmittedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Office {
+  id: number;
+  name: string;
+  address: string;
+  city: string;
+  country: string;
+  managerId: number | null;
+  managerName: string | null;
+  notes: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -407,15 +435,31 @@ export const api = {
       const qs = q.toString();
       return apiFetch<Task[]>(`/tasks${qs ? `?${qs}` : ""}`);
     },
-    create: (data: { venueId: number; assignedTo?: number | null; assignedBy: number; title: string; dueDate?: string; priority?: TaskPriority }) =>
-      apiFetch<Task>("/tasks", { method: "POST", body: JSON.stringify(data) }),
+    create: (data: {
+      venueId: number; assigneeIds?: number[]; assignedBy: number; title: string;
+      dueDate?: string; endDate?: string; priority?: TaskPriority;
+      clientName?: string; clientContact?: string; clientRequirements?: string;
+      operatorsRequired?: number; vehiclesRequired?: number;
+      estimatedCost?: number | null; estimatedCostCurrency?: string;
+    }) => apiFetch<Task>("/tasks", { method: "POST", body: JSON.stringify(data) }),
     updateStatus: (id: number, data: { status: TaskStatus; completionNote?: string }) =>
       apiFetch<Task>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     update: (id: number, data: Partial<{
-      venueId: number; assignedTo: number | null; assignedBy: number; title: string;
-      dueDate: string | null; status: TaskStatus; priority: TaskPriority; archived: boolean;
+      venueId: number; assigneeIds: number[]; assignedTo: number | null; assignedBy: number; title: string;
+      dueDate: string | null; endDate: string | null; status: TaskStatus; priority: TaskPriority; archived: boolean;
+      clientName: string; clientContact: string; clientRequirements: string;
+      operatorsRequired: number; vehiclesRequired: number;
+      estimatedCost: number | null; estimatedCostCurrency: string;
     }>) => apiFetch<Task>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     duplicate: (id: number) => apiFetch<Task>(`/tasks/${id}/duplicate`, { method: "POST" }),
+  },
+  offices: {
+    list: () => apiFetch<Office[]>("/offices"),
+    create: (data: { name: string; address?: string; city: string; country: string; managerId?: number | null; notes?: string }) =>
+      apiFetch<Office>("/offices", { method: "POST", body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<{ name: string; address: string; city: string; country: string; managerId: number | null; notes: string }>) =>
+      apiFetch<Office>(`/offices/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    delete: (id: number) => apiFetch<void>(`/offices/${id}`, { method: "DELETE" }),
   },
   plans: {
     forTask: (taskId: number) => apiFetch<Plan>(`/tasks/${taskId}/plan`),

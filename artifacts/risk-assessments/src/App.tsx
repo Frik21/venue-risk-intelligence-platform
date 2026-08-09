@@ -31,6 +31,7 @@ import AuditLogPage from "@/pages/admin/audit-log";
 import CpoDeployment from "@/pages/admin/cpo-deployment";
 import SchedulePage from "@/pages/admin/schedule";
 import CostsPage from "@/pages/admin/costs";
+import OfficesPage from "@/pages/admin/offices";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -80,6 +81,7 @@ function Router() {
         <Route path="/admin/cpo-deployment" component={CpoDeployment} />
         <Route path="/admin/schedule" component={SchedulePage} />
         <Route path="/admin/costs" component={CostsPage} />
+        <Route path="/admin/offices" component={OfficesPage} />
 
         <Route component={NotFound} />
       </Switch>
