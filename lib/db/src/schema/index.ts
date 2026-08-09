@@ -7,3 +7,4 @@ export * from "./monitoring";
 export * from "./tasks";
 export * from "./plans";
 export * from "./venue-risk-assessments";
+export * from "./task-routes";

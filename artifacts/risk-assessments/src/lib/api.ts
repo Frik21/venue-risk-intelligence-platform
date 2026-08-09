@@ -151,6 +151,33 @@ export interface TrafficCondition {
   freeFlowSpeedKph: number | null;
 }
 
+// The CPO's Route Planning slot (Route Planning panel, Operational
+// Canvas) - task-scoped/slot-based, same pattern as VenueRiskAssessment
+// above. Start/end are set via the location engine, then "Calculate"
+// fetches geometry/distance/static duration from OSRM and a live-
+// traffic-aware ETA from TomTom (see task-routes.ts on the backend).
+// Distinct from Route/api.routes above, which is the separate, formal
+// Assessment-based route-analysis feature.
+export interface TaskRoute {
+  id: number;
+  taskId: number;
+  slotIndex: number;
+  startLabel: string;
+  startLat: number | null;
+  startLng: number | null;
+  endLabel: string;
+  endLat: number | null;
+  endLng: number | null;
+  routeGeometryGeojson: RouteGeoJSON | null;
+  distanceMeters: number | null;
+  staticTravelTimeSeconds: number | null;
+  liveTravelTimeSeconds: number | null;
+  trafficDelaySeconds: number | null;
+  trafficCheckedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AssessmentSummary {
   id: number; venueId: number | null; venueName: string | null; venueCity: string | null;
   title: string; description: string | null; status: AssessmentStatus; version: number;
@@ -332,6 +359,15 @@ export const api = {
       >,
     ) => apiFetch<VenueRiskAssessment>(`/risk-assessments/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     submit: (id: number) => apiFetch<VenueRiskAssessment>(`/risk-assessments/${id}/submit`, { method: "POST" }),
+  },
+  taskRoutes: {
+    list: (taskId: number) => apiFetch<TaskRoute[]>(`/tasks/${taskId}/routes`),
+    create: (taskId: number) => apiFetch<TaskRoute>(`/tasks/${taskId}/routes`, { method: "POST" }),
+    update: (
+      id: number,
+      data: Partial<Pick<TaskRoute, "startLabel" | "startLat" | "startLng" | "endLabel" | "endLat" | "endLng">>,
+    ) => apiFetch<TaskRoute>(`/task-routes/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    calculate: (id: number) => apiFetch<TaskRoute>(`/task-routes/${id}/calculate`, { method: "POST" }),
   },
   weather: {
     check: (lat: number, lng: number) =>

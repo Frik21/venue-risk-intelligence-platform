@@ -1459,9 +1459,8 @@
   transform: translateX(0);
 }
 
-/* Route Planning panel - empty placeholder for now (per direct
-   product direction), same base panel styling as Risk Assessments/
-   Layers. */
+/* Route Planning panel - same base panel styling and task-list-with-
+   expandable-slots pattern as Risk Assessments/Venues. */
 .route-planning-panel {
   position: absolute;
   top: 0;
@@ -1485,6 +1484,28 @@
 
 .route-planning-panel-open {
   transform: translateX(0);
+}
+
+/* One route slot's Start/End fields + Calculate result, inside an
+   expanded task row (see TaskRouteSlotCard in dashboard.tsx) - reuses
+   the venue-assessment-field/-meta classes above rather than
+   duplicating their styling. */
+.route-slot-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-left: 10px;
+  border-left: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.route-slot-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.45);
 }
 
 /* Operational Layers panel - a legend/control panel for the canvas

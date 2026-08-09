@@ -31,6 +31,7 @@ import type {
   TaskStatus,
   Plan,
   VenueRiskAssessment,
+  TaskRoute,
   Alert,
   AlertPriority,
 } from "@/lib/api";
@@ -554,6 +555,125 @@ function VenueRiskAssessmentForm({
         </div>
       )}
     </>
+  );
+}
+
+function formatRouteDuration(seconds: number | null): string {
+  if (seconds == null) return "—";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder > 0 ? `${hours}h ${remainder}m` : `${hours}h`;
+}
+
+function formatRouteDistance(meters: number | null): string {
+  if (meters == null) return "—";
+  return `${(meters / 1000).toFixed(1)} km`;
+}
+
+// One Route Planning slot - Start/End picked via the location engine
+// (search or "use my current location", both built into LocationSearch
+// itself) and an explicit "Calculate Route" action, kept separate from
+// selecting the points so the metered TomTom traffic call only fires
+// when the CPO actually asks for it. Local startInput/endInput mirror
+// what's typed/selected so the field responds immediately, while
+// onUpdatePoint persists the pick (parent owns the source of truth).
+function TaskRouteSlotCard({
+  route,
+  index,
+  onUpdatePoint,
+  onCalculate,
+  calculating,
+  calcError,
+}: {
+  route: TaskRoute;
+  index: number;
+  onUpdatePoint: (route: TaskRoute, point: "start" | "end", result: LocationSearchResult) => void;
+  onCalculate: (route: TaskRoute) => void;
+  calculating: boolean;
+  calcError: string | null;
+}) {
+  const [startInput, setStartInput] = useState(route.startLabel);
+  const [endInput, setEndInput] = useState(route.endLabel);
+  const canCalculate = route.startLat != null && route.startLng != null && route.endLat != null && route.endLng != null;
+  const hasResults = route.distanceMeters != null;
+
+  return (
+    <div className="route-slot-card">
+      <p className="route-slot-title">Route {index + 1}</p>
+
+      <label className="venue-assessment-field">
+        <span>Start</span>
+        <LocationSearch
+          value={startInput}
+          onChange={setStartInput}
+          onSelect={(result) => {
+            setStartInput(result.label);
+            onUpdatePoint(route, "start", result);
+          }}
+          className="venue-assessment-field-input"
+          placeholder="Search for a start point…"
+        />
+      </label>
+
+      <label className="venue-assessment-field">
+        <span>End</span>
+        <LocationSearch
+          value={endInput}
+          onChange={setEndInput}
+          onSelect={(result) => {
+            setEndInput(result.label);
+            onUpdatePoint(route, "end", result);
+          }}
+          className="venue-assessment-field-input"
+          placeholder="Search for a destination…"
+        />
+      </label>
+
+      <button
+        type="button"
+        className="venue-assessment-save-btn"
+        onClick={() => onCalculate(route)}
+        disabled={!canCalculate || calculating}
+      >
+        {calculating ? "Calculating…" : "Calculate Route"}
+      </button>
+      {calcError && <p className="venue-assessment-action-error">{calcError}</p>}
+
+      {hasResults && (
+        <div className="venue-assessment-meta">
+          <div className="venue-assessment-meta-row">
+            <span className="venue-assessment-meta-label">Distance</span>
+            <span className="venue-assessment-meta-value">{formatRouteDistance(route.distanceMeters)}</span>
+          </div>
+          <div className="venue-assessment-meta-row">
+            <span className="venue-assessment-meta-label">Static Duration</span>
+            <span className="venue-assessment-meta-value">{formatRouteDuration(route.staticTravelTimeSeconds)}</span>
+          </div>
+          {route.liveTravelTimeSeconds != null && (
+            <>
+              <div className="venue-assessment-meta-row">
+                <span className="venue-assessment-meta-label">Live ETA (traffic)</span>
+                <span className="venue-assessment-meta-value">{formatRouteDuration(route.liveTravelTimeSeconds)}</span>
+              </div>
+              <div className="venue-assessment-meta-row">
+                <span className="venue-assessment-meta-label">Traffic Delay</span>
+                <span className="venue-assessment-meta-value">
+                  {route.trafficDelaySeconds ? `+${formatRouteDuration(route.trafficDelaySeconds)}` : "None"}
+                </span>
+              </div>
+            </>
+          )}
+          {route.trafficCheckedAt && (
+            <div className="venue-assessment-meta-row">
+              <span className="venue-assessment-meta-label">Traffic Checked</span>
+              <span className="venue-assessment-meta-value">{timeAgo(route.trafficCheckedAt)}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1607,6 +1727,128 @@ function OperationalCanvas({
         setAssessmentActionError(friendlyErrorMessage(err, "Couldn't submit this risk assessment."));
       })
       .finally(() => setSubmittingAssessment(false));
+  }
+
+  // Route Planning - same task-scoped/slot pattern as Risk Assessments >
+  // Venues above (acceptedTasksList, expand-to-load, "Add
+  // Route"/"Add Another Route" per task). Each slot's Start/End is
+  // picked via the location engine; "Calculate Route" is a separate,
+  // explicitly-triggered action (not automatic) since it's the call
+  // that spends the metered TomTom traffic quota.
+  const [expandedRouteTaskIds, setExpandedRouteTaskIds] = useState<Set<number>>(new Set());
+  const [taskRoutesMap, setTaskRoutesMap] = useState<Record<number, TaskRoute[]>>({});
+  const [taskRoutesLoading, setTaskRoutesLoading] = useState<Record<number, boolean>>({});
+  const [creatingRouteTaskId, setCreatingRouteTaskId] = useState<number | null>(null);
+  const [calculatingRouteId, setCalculatingRouteId] = useState<number | null>(null);
+  const [routeCalcErrors, setRouteCalcErrors] = useState<Record<number, string | null>>({});
+
+  // Same reasoning as mockAssessment - MOCK_TASK's id doesn't exist
+  // server-side, so its route slots are local-only, using a distinct
+  // negative id per slot.
+  function mockRoute(taskId: number, slotIndex: number): TaskRoute {
+    return {
+      id: -slotIndex,
+      taskId,
+      slotIndex,
+      startLabel: "",
+      startLat: null,
+      startLng: null,
+      endLabel: "",
+      endLat: null,
+      endLng: null,
+      routeGeometryGeojson: null,
+      distanceMeters: null,
+      staticTravelTimeSeconds: null,
+      liveTravelTimeSeconds: null,
+      trafficDelaySeconds: null,
+      trafficCheckedAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  function ensureTaskRoutesLoaded(taskId: number) {
+    if (taskRoutesMap[taskId] || taskRoutesLoading[taskId]) return;
+    if (taskId === MOCK_TASK_ID) {
+      setTaskRoutesMap((prev) => ({ ...prev, [taskId]: [] }));
+      return;
+    }
+    setTaskRoutesLoading((prev) => ({ ...prev, [taskId]: true }));
+    api.taskRoutes
+      .list(taskId)
+      .then((routes) => setTaskRoutesMap((prev) => ({ ...prev, [taskId]: routes })))
+      .catch((err) => console.error(`Failed to load routes for task ${taskId}:`, err))
+      .finally(() => setTaskRoutesLoading((prev) => ({ ...prev, [taskId]: false })));
+  }
+
+  function toggleRouteTaskExpanded(taskId: number) {
+    setExpandedRouteTaskIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else {
+        next.add(taskId);
+        ensureTaskRoutesLoaded(taskId);
+      }
+      return next;
+    });
+  }
+
+  function addRouteSlot(taskId: number) {
+    if (taskId === MOCK_TASK_ID) {
+      setTaskRoutesMap((prev) => {
+        const existing = prev[taskId] ?? [];
+        return { ...prev, [taskId]: [...existing, mockRoute(taskId, existing.length + 1)] };
+      });
+      return;
+    }
+    setCreatingRouteTaskId(taskId);
+    api.taskRoutes
+      .create(taskId)
+      .then((route) => setTaskRoutesMap((prev) => ({ ...prev, [taskId]: [...(prev[taskId] ?? []), route] })))
+      .catch((err) => console.error(`Failed to add a route for task ${taskId}:`, err))
+      .finally(() => setCreatingRouteTaskId(null));
+  }
+
+  function applyRouteUpdate(updated: TaskRoute) {
+    setTaskRoutesMap((prev) => ({
+      ...prev,
+      [updated.taskId]: (prev[updated.taskId] ?? []).map((r) => (r.id === updated.id ? updated : r)),
+    }));
+  }
+
+  function updateRoutePoint(route: TaskRoute, point: "start" | "end", result: LocationSearchResult) {
+    if (result.lat == null || result.lng == null) return;
+    const patch =
+      point === "start"
+        ? { startLabel: result.label, startLat: result.lat, startLng: result.lng }
+        : { endLabel: result.label, endLat: result.lat, endLng: result.lng };
+
+    if (route.taskId === MOCK_TASK_ID) {
+      applyRouteUpdate({ ...route, ...patch, updatedAt: new Date().toISOString() });
+      return;
+    }
+    api.taskRoutes
+      .update(route.id, patch)
+      .then(applyRouteUpdate)
+      .catch((err) => console.error(`Failed to update route ${route.id}:`, err));
+  }
+
+  function calculateRoute(route: TaskRoute) {
+    if (route.startLat == null || route.startLng == null || route.endLat == null || route.endLng == null) return;
+    if (route.taskId === MOCK_TASK_ID) {
+      setRouteCalcErrors((prev) => ({ ...prev, [route.id]: "Accept a real task to calculate a route." }));
+      return;
+    }
+    setCalculatingRouteId(route.id);
+    setRouteCalcErrors((prev) => ({ ...prev, [route.id]: null }));
+    api.taskRoutes
+      .calculate(route.id)
+      .then(applyRouteUpdate)
+      .catch((err) => {
+        console.error(`Failed to calculate route ${route.id}:`, err);
+        setRouteCalcErrors((prev) => ({ ...prev, [route.id]: friendlyErrorMessage(err, "Couldn't calculate this route.") }));
+      })
+      .finally(() => setCalculatingRouteId(null));
   }
 
   const [planningTaskId, setPlanningTaskId] = useState<number | null>(null);
@@ -2824,7 +3066,74 @@ function OperationalCanvas({
           <ArrowLeft className="w-3.5 h-3.5" /> Back to Menu
         </button>
 
-        <p className="tasks-panel-empty">Coming soon.</p>
+        {acceptedTasksList.length === 0 ? (
+          <p className="tasks-panel-empty">No tasks yet - accept a task to get started.</p>
+        ) : (
+          <div className="tasks-panel-list">
+            {acceptedTasksList.map((task) => {
+              const isExpanded = expandedRouteTaskIds.has(task.id);
+              const slots = taskRoutesMap[task.id] ?? [];
+              const slotsLoading = taskRoutesLoading[task.id];
+              return (
+                <div key={task.id} className="risk-assessments-venue-group">
+                  <button
+                    type="button"
+                    className="risk-assessments-nav-item"
+                    onClick={() => toggleRouteTaskExpanded(task.id)}
+                  >
+                    <Building2 className="w-4 h-4" />
+                    {task.venueName ?? task.title}
+                    {isExpanded ? (
+                      <ChevronDown className="w-4 h-4 risk-assessments-nav-item-chevron" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 risk-assessments-nav-item-chevron" />
+                    )}
+                  </button>
+                  {isExpanded && (
+                    <>
+                      <div className="risk-assessments-venue-detail">
+                        <p className="risk-assessments-venue-detail-label">
+                          <ClipboardList className="w-3.5 h-3.5" /> Task
+                        </p>
+                        <p className="task-row-title">{task.title}</p>
+                      </div>
+
+                      {slotsLoading ? (
+                        <p className="tasks-panel-empty">Loading…</p>
+                      ) : slots.length === 0 ? (
+                        <p className="tasks-panel-empty">No routes yet.</p>
+                      ) : (
+                        slots.map((route, index) => (
+                          <TaskRouteSlotCard
+                            key={route.id}
+                            route={route}
+                            index={index}
+                            onUpdatePoint={updateRoutePoint}
+                            onCalculate={calculateRoute}
+                            calculating={calculatingRouteId === route.id}
+                            calcError={routeCalcErrors[route.id] ?? null}
+                          />
+                        ))
+                      )}
+
+                      {task.status !== "completed" && (
+                        <button
+                          type="button"
+                          className="venue-assessment-add-btn"
+                          onClick={() => addRouteSlot(task.id)}
+                          disabled={creatingRouteTaskId === task.id}
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          {creatingRouteTaskId === task.id ? "Adding…" : slots.length === 0 ? "Add Route" : "Add Another Route"}
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div

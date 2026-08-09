@@ -4,6 +4,7 @@
 // which need none) - set TOMTOM_API_KEY in .env. Same native-fetch +
 // AbortSignal.timeout pattern as weather.ts/OSRM.
 const TOMTOM_FLOW_BASE = "https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json";
+const TOMTOM_ROUTING_BASE = "https://api.tomtom.com/routing/1/calculateRoute";
 
 export type TrafficSeverity = "free_flow" | "light" | "moderate" | "heavy" | "closed";
 
@@ -79,4 +80,47 @@ export async function fetchTrafficCondition(lat: number, lng: number): Promise<T
   }
 
   return { severity, label, currentSpeedKph: current, freeFlowSpeedKph: freeFlow };
+}
+
+export interface TrafficAwareRoute {
+  liveTravelTimeSeconds: number;
+  trafficDelaySeconds: number;
+  distanceMeters: number;
+}
+
+// Live-traffic ETA for a specific start->end route, via TomTom's
+// Routing API (traffic=true) - a separate product from the Traffic
+// Flow endpoint above, kept as a distinct, explicitly-triggered call
+// (Route Planning's "Check traffic" action) rather than something run
+// automatically, since it's the more expensive of the two calls
+// against the same free-tier quota. Route geometry/distance/static
+// duration for Route Planning come from OSRM (lib/route-calculation.ts)
+// instead - this call is only for the traffic-aware timing on top.
+export async function fetchTrafficAwareRoute(
+  startLat: number,
+  startLng: number,
+  endLat: number,
+  endLng: number,
+): Promise<TrafficAwareRoute> {
+  const apiKey = process.env.TOMTOM_API_KEY;
+  if (!apiKey) {
+    throw new TrafficNotConfiguredError();
+  }
+
+  const url = `${TOMTOM_ROUTING_BASE}/${startLat},${startLng}:${endLat},${endLng}/json?key=${apiKey}&traffic=true`;
+  const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  if (!resp.ok) {
+    throw new Error(`TomTom Routing API returned HTTP ${resp.status}`);
+  }
+  const data: any = await resp.json();
+  const summary = data.routes?.[0]?.summary;
+  if (!summary) {
+    throw new Error("TomTom Routing API returned no route");
+  }
+
+  return {
+    liveTravelTimeSeconds: summary.travelTimeInSeconds,
+    trafficDelaySeconds: summary.trafficDelayInSeconds ?? 0,
+    distanceMeters: summary.lengthInMeters,
+  };
 }
