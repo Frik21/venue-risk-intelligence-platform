@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
-import { db, osintEventsTable, venuesTable, alertsTable } from "@workspace/db";
+import { db, osintEventsTable, venuesTable, venueSearchPhrasesTable, alertsTable } from "@workspace/db";
 import { z } from "zod";
 import { fetchWeatherFinding, weatherEventType, weatherAlertPriority } from "../lib/weather";
+import { fetchGdeltFindings, gdeltEventType, gdeltAlertPriority } from "../lib/gdelt";
 
 const router: IRouter = Router();
 
@@ -105,6 +106,38 @@ router.get("/venues/:id/osint", async (req, res): Promise<void> => {
     }
   }
 
+  // Live GDELT news check - only runs if this venue has search phrases
+  // configured (see venueSearchPhrasesTable's own comment for why that's
+  // deliberate). Deduped against existing rows by sourceUrl so the same
+  // article isn't inserted again on every page load.
+  try {
+    const phrases = await db
+      .select({ phrase: venueSearchPhrasesTable.phrase })
+      .from(venueSearchPhrasesTable)
+      .where(eq(venueSearchPhrasesTable.venueId, id));
+
+    if (phrases.length > 0) {
+      const findings = await fetchGdeltFindings(phrases.map((p) => p.phrase));
+      const existingUrls = new Set(existing.map((row) => row.sourceUrl).filter((url): url is string => Boolean(url)));
+      const fresh = findings.filter((f) => !existingUrls.has(f.sourceUrl));
+
+      if (fresh.length > 0) {
+        await db.insert(osintEventsTable).values(
+          fresh.map((f) => ({
+            venueId: id,
+            eventType: gdeltEventType(f.severity),
+            summary: f.summary,
+            sourceName: f.sourceName,
+            sourceUrl: f.sourceUrl,
+            status: "pending" as const,
+          })),
+        );
+      }
+    }
+  } catch (err) {
+    console.error(`GDELT OSINT check failed for venue ${id}:`, err);
+  }
+
   const finalRows = await db
     .select()
     .from(osintEventsTable)
@@ -132,13 +165,15 @@ router.patch("/osint/:id/review", async (req, res): Promise<void> => {
 
   if (!row) { res.status(404).json({ error: "OSINT event not found" }); return; }
 
-  const promotableTypes = ["crime", "protest", "riot", "weather", "weather_high", "weather_critical"];
+  const promotableTypes = ["crime", "protest", "riot", "weather", "weather_high", "weather_critical", "news", "news_high", "news_critical"];
   if (parsed.data.status === "accepted" && promotableTypes.includes(row.eventType)) {
     const priority = row.eventType.startsWith("weather")
       ? weatherAlertPriority(row.eventType)
-      : row.eventType === "riot"
-        ? "critical"
-        : "medium";
+      : row.eventType.startsWith("news")
+        ? gdeltAlertPriority(row.eventType)
+        : row.eventType === "riot"
+          ? "critical"
+          : "medium";
     await db.insert(alertsTable).values({
       venueId: row.venueId,
       priority,
