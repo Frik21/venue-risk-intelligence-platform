@@ -38,6 +38,8 @@ import type {
   WeatherFinding,
   TrafficCondition,
   TimesheetEntry,
+  Expense,
+  ExpenseCategory,
 } from "@/lib/api";
 import { LocationSearch, resolveCurrentLocation } from "@/components/location-search";
 import type { LocationSearchResult } from "@/components/location-search";
@@ -1000,6 +1002,176 @@ function TimesheetCalendar({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
+  fuel: "Fuel",
+  accommodation: "Accommodation",
+  food: "Food",
+  parking: "Parking",
+  tolls: "Tolls",
+  equipment: "Equipment",
+  other: "Other",
+};
+
+// Comfortably under the api-server's 10mb JSON body limit once
+// base64-encoded (~33% larger than the raw file) - see app.ts.
+const MAX_RECEIPT_BYTES = 6 * 1024 * 1024;
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+// One expense entry - Profile > Expenses, inside an expanded task row.
+// Local form state mirrors the expense's fields (same "edit locally,
+// Save persists" pattern as VenueRiskAssessmentForm) rather than
+// saving on every keystroke, since there are several fields here.
+// Receipts are read client-side into a base64 data: URL and held in
+// this same local state until Save - see MAX_RECEIPT_BYTES/
+// readFileAsDataUrl above for why (no cloud file storage in this app).
+function ExpenseEntryCard({
+  expense,
+  onSave,
+  onDelete,
+}: {
+  expense: Expense;
+  onSave: (expense: Expense, patch: Partial<Expense>) => Promise<unknown>;
+  onDelete: (expense: Expense) => void;
+}) {
+  const [category, setCategory] = useState<ExpenseCategory>(expense.category);
+  const [amount, setAmount] = useState(String(expense.amount));
+  const [currency, setCurrency] = useState(expense.currency);
+  const [description, setDescription] = useState(expense.description);
+  const [incurredOn, setIncurredOn] = useState(expense.incurredOn);
+  const [receiptFilename, setReceiptFilename] = useState(expense.receiptFilename);
+  const [receiptDataUrl, setReceiptDataUrl] = useState(expense.receiptDataUrl);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_RECEIPT_BYTES) {
+      setError("Receipt is too large - please use a file under 6MB.");
+      return;
+    }
+    setError(null);
+    readFileAsDataUrl(file)
+      .then((dataUrl) => {
+        setReceiptFilename(file.name);
+        setReceiptDataUrl(dataUrl);
+      })
+      .catch(() => setError("Couldn't read that file."));
+  }
+
+  function handleSave() {
+    const parsedAmount = Number(amount);
+    if (isNaN(parsedAmount) || parsedAmount < 0) {
+      setError("Enter a valid amount.");
+      return;
+    }
+    setError(null);
+    setSaving(true);
+    onSave(expense, { category, amount: parsedAmount, currency, description, incurredOn, receiptFilename, receiptDataUrl })
+      .catch(() => setError("Couldn't save this expense."))
+      .finally(() => setSaving(false));
+  }
+
+  function handleDelete() {
+    setDeleting(true);
+    onDelete(expense);
+  }
+
+  return (
+    <div className="expense-entry-card">
+      <label className="venue-assessment-field">
+        <span>Category</span>
+        <select
+          className="venue-assessment-field-input"
+          value={category}
+          onChange={(event) => setCategory(event.target.value as ExpenseCategory)}
+        >
+          {Object.entries(EXPENSE_CATEGORY_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div className="expense-entry-amount-row">
+        <label className="venue-assessment-field expense-entry-amount-field">
+          <span>Amount</span>
+          <input
+            type="number"
+            min={0}
+            step={0.01}
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            className="venue-assessment-field-input"
+          />
+        </label>
+        <label className="venue-assessment-field expense-entry-currency-field">
+          <span>Currency</span>
+          <input
+            type="text"
+            value={currency}
+            onChange={(event) => setCurrency(event.target.value.toUpperCase())}
+            maxLength={10}
+            className="venue-assessment-field-input"
+          />
+        </label>
+      </div>
+
+      <label className="venue-assessment-field">
+        <span>Date Incurred</span>
+        <input
+          type="date"
+          value={incurredOn}
+          onChange={(event) => setIncurredOn(event.target.value)}
+          className="venue-assessment-field-input"
+        />
+      </label>
+
+      <label className="venue-assessment-field">
+        <span>Description</span>
+        <input
+          type="text"
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          placeholder="e.g. Fuel for venue recce"
+          className="venue-assessment-field-input"
+        />
+      </label>
+
+      <label className="venue-assessment-field">
+        <span>Receipt</span>
+        <input type="file" accept="image/*,.pdf" onChange={handleFileChange} className="expense-entry-file-input" />
+        {receiptDataUrl && (
+          <a href={receiptDataUrl} target="_blank" rel="noopener noreferrer" className="expense-entry-receipt-link">
+            <Eye className="w-3.5 h-3.5" /> {receiptFilename ?? "View receipt"}
+          </a>
+        )}
+      </label>
+
+      {error && <p className="venue-assessment-action-error">{error}</p>}
+
+      <div className="expense-entry-actions">
+        <button type="button" className="venue-assessment-save-btn" onClick={handleSave} disabled={saving}>
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button type="button" className="timesheet-entry-form-delete" onClick={handleDelete} disabled={deleting}>
+          {deleting ? "Removing…" : "Remove"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -2442,6 +2614,101 @@ function OperationalCanvas({
         setRouteCalcErrors((prev) => ({ ...prev, [route.id]: friendlyErrorMessage(err, "Couldn't calculate this route.") }));
       })
       .finally(() => setCalculatingRouteId(null));
+  }
+
+  // Expenses - Profile > Expenses, same task-scoped/list pattern as
+  // Risk Assessments/Route Planning above (acceptedTasksList,
+  // expand-to-load, "Add Expense"/"Add Another Expense" per task).
+  // Rendered from Profile, not this task-list panel, but the task
+  // scoping and MOCK_TASK_ID handling are identical.
+  const [taskExpenses, setTaskExpenses] = useState<Record<number, Expense[]>>({});
+  const [taskExpensesLoading, setTaskExpensesLoading] = useState<Record<number, boolean>>({});
+  const [expandedExpenseTaskIds, setExpandedExpenseTaskIds] = useState<Set<number>>(new Set());
+  const [creatingExpenseTaskId, setCreatingExpenseTaskId] = useState<number | null>(null);
+
+  function mockExpense(taskId: number, slotIndex: number): Expense {
+    return {
+      id: -slotIndex,
+      taskId,
+      operatorId: MOCK_TASK_ID,
+      category: "other",
+      amount: 0,
+      currency: "ZAR",
+      description: "",
+      incurredOn: new Date().toISOString().slice(0, 10),
+      receiptFilename: null,
+      receiptDataUrl: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  function ensureTaskExpensesLoaded(taskId: number) {
+    if (taskExpenses[taskId] || taskExpensesLoading[taskId]) return;
+    if (taskId === MOCK_TASK_ID) {
+      setTaskExpenses((prev) => ({ ...prev, [taskId]: [] }));
+      return;
+    }
+    setTaskExpensesLoading((prev) => ({ ...prev, [taskId]: true }));
+    api.expenses
+      .list(taskId)
+      .then((expenses) => setTaskExpenses((prev) => ({ ...prev, [taskId]: expenses })))
+      .catch((err) => console.error(`Failed to load expenses for task ${taskId}:`, err))
+      .finally(() => setTaskExpensesLoading((prev) => ({ ...prev, [taskId]: false })));
+  }
+
+  function toggleExpenseTaskExpanded(taskId: number) {
+    setExpandedExpenseTaskIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else {
+        next.add(taskId);
+        ensureTaskExpensesLoaded(taskId);
+      }
+      return next;
+    });
+  }
+
+  function addExpenseSlot(taskId: number) {
+    if (taskId === MOCK_TASK_ID) {
+      setTaskExpenses((prev) => {
+        const existing = prev[taskId] ?? [];
+        return { ...prev, [taskId]: [...existing, mockExpense(taskId, existing.length + 1)] };
+      });
+      return;
+    }
+    setCreatingExpenseTaskId(taskId);
+    api.expenses
+      .create(taskId)
+      .then((expense) => setTaskExpenses((prev) => ({ ...prev, [taskId]: [...(prev[taskId] ?? []), expense] })))
+      .catch((err) => console.error(`Failed to add an expense for task ${taskId}:`, err))
+      .finally(() => setCreatingExpenseTaskId(null));
+  }
+
+  function applyExpenseUpdate(updated: Expense) {
+    setTaskExpenses((prev) => ({
+      ...prev,
+      [updated.taskId]: (prev[updated.taskId] ?? []).map((e) => (e.id === updated.id ? updated : e)),
+    }));
+  }
+
+  function saveExpense(expense: Expense, patch: Partial<Expense>) {
+    if (expense.taskId === MOCK_TASK_ID) {
+      applyExpenseUpdate({ ...expense, ...patch, updatedAt: new Date().toISOString() });
+      return Promise.resolve();
+    }
+    return api.expenses.update(expense.id, patch).then(applyExpenseUpdate);
+  }
+
+  function deleteExpense(expense: Expense) {
+    if (expense.taskId === MOCK_TASK_ID) {
+      setTaskExpenses((prev) => ({ ...prev, [expense.taskId]: (prev[expense.taskId] ?? []).filter((e) => e.id !== expense.id) }));
+      return;
+    }
+    api.expenses
+      .delete(expense.id)
+      .then(() => setTaskExpenses((prev) => ({ ...prev, [expense.taskId]: (prev[expense.taskId] ?? []).filter((e) => e.id !== expense.id) })))
+      .catch((err) => console.error(`Failed to delete expense ${expense.id}:`, err));
   }
 
   const [planningTaskId, setPlanningTaskId] = useState<number | null>(null);
@@ -4080,6 +4347,71 @@ function OperationalCanvas({
                 deleting={deletingTimesheetEntry}
                 noOperator={profileUserId == null}
               />
+            ) : profileView === "expenses" ? (
+              acceptedTasksList.length === 0 ? (
+                <p className="tasks-panel-empty">No tasks yet - accept a task to get started.</p>
+              ) : (
+                <div className="tasks-panel-list">
+                  {acceptedTasksList.map((task) => {
+                    const isExpanded = expandedExpenseTaskIds.has(task.id);
+                    const taskExpenseList = taskExpenses[task.id] ?? [];
+                    const expensesLoading = taskExpensesLoading[task.id];
+                    return (
+                      <div key={task.id} className="risk-assessments-venue-group">
+                        <button
+                          type="button"
+                          className="risk-assessments-nav-item"
+                          onClick={() => toggleExpenseTaskExpanded(task.id)}
+                        >
+                          <Building2 className="w-4 h-4" />
+                          {task.venueName ?? task.title}
+                          {isExpanded ? (
+                            <ChevronDown className="w-4 h-4 risk-assessments-nav-item-chevron" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4 risk-assessments-nav-item-chevron" />
+                          )}
+                        </button>
+                        {isExpanded && (
+                          <>
+                            <div className="risk-assessments-venue-detail">
+                              <p className="risk-assessments-venue-detail-label">
+                                <ClipboardList className="w-3.5 h-3.5" /> Task
+                              </p>
+                              <p className="task-row-title">{task.title}</p>
+                            </div>
+
+                            {expensesLoading ? (
+                              <p className="tasks-panel-empty">Loading…</p>
+                            ) : taskExpenseList.length === 0 ? (
+                              <p className="tasks-panel-empty">No expenses yet.</p>
+                            ) : (
+                              taskExpenseList.map((expense) => (
+                                <ExpenseEntryCard key={expense.id} expense={expense} onSave={saveExpense} onDelete={deleteExpense} />
+                              ))
+                            )}
+
+                            {task.status !== "completed" && (
+                              <button
+                                type="button"
+                                className="venue-assessment-add-btn"
+                                onClick={() => addExpenseSlot(task.id)}
+                                disabled={creatingExpenseTaskId === task.id}
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                {creatingExpenseTaskId === task.id
+                                  ? "Adding…"
+                                  : taskExpenseList.length === 0
+                                    ? "Add Expense"
+                                    : "Add Another Expense"}
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )
             ) : (
               <p className="tasks-panel-empty">Coming soon.</p>
             )}

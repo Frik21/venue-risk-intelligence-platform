@@ -2281,6 +2281,60 @@
   cursor: default;
 }
 
+/* Profile > Expenses - one expense entry inside an expanded task row
+   (see ExpenseEntryCard in dashboard.tsx). Reuses the venue-assessment-
+   field/-save-btn and timesheet-entry-form-delete classes above rather
+   than duplicating their styling. */
+.expense-entry-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-left: 10px;
+  border-left: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.expense-entry-amount-row {
+  display: flex;
+  gap: 10px;
+}
+
+.expense-entry-amount-field {
+  flex: 2;
+}
+
+.expense-entry-currency-field {
+  flex: 1;
+}
+
+.expense-entry-file-input {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.expense-entry-receipt-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(125, 211, 252, 0.9);
+  text-decoration: none;
+}
+
+.expense-entry-receipt-link:hover {
+  text-decoration: underline;
+}
+
+.expense-entry-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.expense-entry-actions .venue-assessment-save-btn {
+  margin-bottom: 0;
+}
+
 /* Country Intelligence panel - tied to Active Country selection rather
    than a manual trigger (mirrors the country focus visuals' own
    entered/exited timing via focusEntered), so it appears and dismisses

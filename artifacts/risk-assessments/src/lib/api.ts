@@ -203,6 +203,27 @@ export interface TimesheetEntry {
   updatedAt: string;
 }
 
+export type ExpenseCategory = "fuel" | "accommodation" | "food" | "parking" | "tolls" | "equipment" | "other";
+
+// One expense logged against a task - Profile > Expenses. receiptDataUrl
+// is a base64 data: URL (this app has no cloud file storage set up),
+// stored/returned directly on the row - see
+// lib/db/src/schema/expenses.ts on the backend.
+export interface Expense {
+  id: number;
+  taskId: number;
+  operatorId: number;
+  category: ExpenseCategory;
+  amount: number;
+  currency: string;
+  description: string;
+  incurredOn: string;
+  receiptFilename: string | null;
+  receiptDataUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AssessmentSummary {
   id: number; venueId: number | null; venueName: string | null; venueCity: string | null;
   title: string; description: string | null; status: AssessmentStatus; version: number;
@@ -399,6 +420,17 @@ export const api = {
     upsert: (userId: number, data: { date: string; hoursWorked: number; notes?: string }) =>
       apiFetch<TimesheetEntry>(`/users/${userId}/timesheet`, { method: "POST", body: JSON.stringify(data) }),
     delete: (id: number) => apiFetch<void>(`/timesheet/${id}`, { method: "DELETE" }),
+  },
+  expenses: {
+    list: (taskId: number) => apiFetch<Expense[]>(`/tasks/${taskId}/expenses`),
+    create: (taskId: number) => apiFetch<Expense>(`/tasks/${taskId}/expenses`, { method: "POST" }),
+    update: (
+      id: number,
+      data: Partial<
+        Pick<Expense, "category" | "amount" | "currency" | "description" | "incurredOn" | "receiptFilename" | "receiptDataUrl">
+      >,
+    ) => apiFetch<Expense>(`/expenses/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    delete: (id: number) => apiFetch<void>(`/expenses/${id}`, { method: "DELETE" }),
   },
   weather: {
     check: (lat: number, lng: number) =>

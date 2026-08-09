@@ -21,6 +21,7 @@ import trafficRouter from "./traffic";
 import taskRoutesRouter from "./task-routes";
 import taskPdfRouter from "./task-pdf";
 import timesheetRouter from "./timesheet";
+import expensesRouter from "./expenses";
 
 const router: IRouter = Router();
 
@@ -46,5 +47,6 @@ router.use(trafficRouter);
 router.use(taskRoutesRouter);
 router.use(taskPdfRouter);
 router.use(timesheetRouter);
+router.use(expensesRouter);
 
 export default router;
