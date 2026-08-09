@@ -13,6 +13,7 @@ import {
   UserCog,
   DollarSign,
   UserPlus,
+  CalendarDays,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,7 @@ const navGroups = [
     label: "Management",
     items: [
       { href: "/admin", label: "Dashboard", icon: Gauge },
+      { href: "/admin/calendar", label: "Calendar", icon: CalendarDays },
       { href: "/tasks", label: "Tasks", icon: ListChecks },
       { href: "/admin/cpo-deployment", label: "Operator Deployment", icon: UserCog },
       { href: "/admin/onboarding", label: "Operator Onboarding", icon: UserPlus },
