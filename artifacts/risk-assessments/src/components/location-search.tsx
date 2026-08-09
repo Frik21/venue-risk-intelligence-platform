@@ -8,6 +8,10 @@ import { cn } from "@/lib/utils";
 // backend), same as any other client-side fetch in this app.
 export interface LocationSearchResult {
   label: string;
+  // The place's own short name, if Photon has one (e.g. "Stellenbosch"),
+  // as opposed to label's full "name, street, city, country" string -
+  // for callers that want something shorter than the full label.
+  name: string | null;
   lat: number | null;
   lng: number | null;
   street: string | null;
@@ -56,6 +60,7 @@ async function searchPhoton(query: string, signal: AbortSignal): Promise<Locatio
     const get = (key: string) => (typeof props[key] === "string" ? (props[key] as string) : null);
     return {
       label: formatLabel(props),
+      name: get("name"),
       lat: coords ? coords[1] : null,
       lng: coords ? coords[0] : null,
       street: get("street"),

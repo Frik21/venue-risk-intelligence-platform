@@ -34,6 +34,7 @@ import type {
 } from "@/lib/api";
 import { LocationSearch } from "@/components/location-search";
 import type { LocationSearchResult } from "@/components/location-search";
+import { projectToOperationalGeometry } from "@/lib/map-projection";
 
 // Background tone for the outer page wrapper (behind MapLayer).
 const OCEAN_COLOR = "#00081a";
@@ -472,7 +473,23 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
     const region = result.countrycode
       ? OPERATIONAL_SELECTABLE_REGIONS.find((r) => r.iso2 === result.countrycode)
       : undefined;
-    if (region) selectCountry(region);
+    if (region) {
+      // Shows the searched place on the map the same way a curated
+      // Major City does - guaranteed a spot even if it's nowhere near
+      // that list (see highlightedCity/getMajorCitiesForDisplay above),
+      // projected into the map's own coordinate space so it lands in
+      // the right place regardless of which country it's in.
+      const highlightedCity: CityDefinition | undefined =
+        result.lat != null && result.lng != null
+          ? {
+              name: result.name ?? result.label,
+              position: projectToOperationalGeometry(result.lng, result.lat),
+              population: 0,
+              capital: false,
+            }
+          : undefined;
+      selectCountry(region, highlightedCity);
+    }
     setSearchQuery("");
   }
 
