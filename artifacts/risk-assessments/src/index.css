@@ -1546,9 +1546,8 @@
 
 .download-task-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
   padding: 10px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -1557,11 +1556,19 @@
   min-width: 0;
 }
 
+.download-task-row-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.download-task-row-actions .venue-assessment-add-btn {
+  flex: 1;
+  justify-content: center;
+}
+
 .download-task-row-disabled-note {
-  flex-shrink: 0;
   font-size: 11px;
   color: rgba(255, 255, 255, 0.4);
-  text-align: right;
 }
 
 /* One route slot's Start/End fields + Calculate result, inside an

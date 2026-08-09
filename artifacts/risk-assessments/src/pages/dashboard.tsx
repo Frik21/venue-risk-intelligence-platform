@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, ChangeEvent } from "react";
-import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -3302,10 +3302,21 @@ function OperationalCanvas({
                 {task.id === MOCK_TASK_ID ? (
                   <span className="download-task-row-disabled-note">Accept a real task to download.</span>
                 ) : (
-                  <a className="venue-assessment-add-btn" href={`/api/tasks/${task.id}/download`} download>
-                    <Download className="w-3.5 h-3.5" />
-                    Download PDF
-                  </a>
+                  <div className="download-task-row-actions">
+                    <a
+                      className="venue-assessment-add-btn"
+                      href={`/api/tasks/${task.id}/download?preview=1`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      Review
+                    </a>
+                    <a className="venue-assessment-add-btn" href={`/api/tasks/${task.id}/download`} download>
+                      <Download className="w-3.5 h-3.5" />
+                      Download PDF
+                    </a>
+                  </div>
                 )}
               </div>
             ))}

@@ -81,8 +81,13 @@ router.get("/tasks/:taskId/download", async (req, res): Promise<void> => {
   });
 
   const filenameSafeTitle = task.title.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "task";
+  // ?preview=1 renders inline in the browser's own PDF viewer (a new
+  // tab) instead of forcing a save - lets the CPO review the document
+  // before choosing to download it, using the exact same generated PDF
+  // either way.
+  const disposition = req.query.preview === "1" ? "inline" : "attachment";
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="${filenameSafeTitle}-${task.id}.pdf"`);
+  res.setHeader("Content-Disposition", `${disposition}; filename="${filenameSafeTitle}-${task.id}.pdf"`);
 
   doc.pipe(res);
   doc.end();
