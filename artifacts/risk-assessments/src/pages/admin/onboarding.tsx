@@ -15,9 +15,11 @@ import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
+// Labels only - the underlying status values (in_progress/onboarded/denied)
+// stay as-is in the schema and API to avoid a migration.
 const STATUS_CONFIG: Record<OnboardingStatus, { label: string; color: string }> = {
-  onboarded: { label: "Onboarded", color: "text-green-700 bg-green-50 border-green-200" },
-  in_progress: { label: "In Progress", color: "text-amber-700 bg-amber-50 border-amber-200" },
+  onboarded: { label: "Approved", color: "text-green-700 bg-green-50 border-green-200" },
+  in_progress: { label: "Pending", color: "text-amber-700 bg-amber-50 border-amber-200" },
   denied: { label: "Denied", color: "text-red-700 bg-red-50 border-red-200" },
 };
 
