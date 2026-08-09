@@ -17,6 +17,7 @@ import {
   Menu,
   X,
   Gauge,
+  ArrowLeftRight,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -128,7 +129,19 @@ const hideShell = location === "/" && !showShell;
         ))}
       </div>
 
-      <div className="p-3 border-t border-slate-800 shrink-0">
+      <div className="p-3 border-t border-slate-800 shrink-0 space-y-2">
+        {/* Leaves this admin/manager shell entirely for the CPO's own
+            full-screen Operational Canvas (its own login/brief flow,
+            no persistent sidebar) - the reverse direction lives in
+            that flow's own operator menu ("Admin Dashboard"). */}
+        <Link
+          href="/"
+          onClick={() => setMobileOpen(false)}
+          className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors border border-slate-800"
+        >
+          <ArrowLeftRight className="w-4 h-4 shrink-0" />
+          Operator View
+        </Link>
         <div className="flex items-center gap-3 px-2 py-2 rounded-md text-slate-400">
           <div className="w-7 h-7 rounded bg-blue-600/30 flex items-center justify-center text-blue-300 text-xs font-bold shrink-0">
             SA
