@@ -6,6 +6,7 @@ import {
   endOfMonth,
   startOfWeek,
   endOfWeek,
+  startOfDay,
   eachDayOfInterval,
   isSameMonth,
   isSameDay,
@@ -22,9 +23,21 @@ import { cn } from "@/lib/utils";
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MAX_VISIBLE_PER_DAY = 3;
 
-// Month-grid Calendar - built from Task.dueDate, the only date/time
-// the platform tracks per task (same underlying data as the Operations
-// Schedule list view at /admin/schedule, just a different layout).
+// A task's calendar range is [dueDate, endDate] inclusive (endDate
+// falling back to dueDate for a single-day task, and never before it -
+// guards against a mis-entered endDate producing a negative range).
+function taskRange(t: Task): { start: Date; end: Date } {
+  const start = startOfDay(new Date(t.dueDate!));
+  const endRaw = t.endDate ? startOfDay(new Date(t.endDate)) : start;
+  return { start, end: endRaw < start ? start : endRaw };
+}
+
+// Month-grid Calendar - built from each Task's [dueDate, endDate] span
+// (same underlying data as the Operations Schedule list view at
+// /admin/schedule, just a different layout). A multi-day task appears
+// as a continuous bar across every day it runs, re-labeled at the
+// start of each week row so it stays readable without repeating the
+// title on every single day.
 export default function CalendarPage() {
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
   const { data: tasks = [], isLoading } = useQuery<Task[]>({ queryKey: ["tasks"], queryFn: () => api.tasks.list() });
@@ -33,13 +46,24 @@ export default function CalendarPage() {
   const gridEnd = endOfWeek(endOfMonth(month));
   const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
 
+  const datedTasks = [...tasks].filter((t) => t.dueDate).sort((a, b) => a.dueDate!.localeCompare(b.dueDate!));
+
   const tasksByDay = new Map<string, Task[]>();
-  for (const t of tasks) {
-    if (!t.dueDate) continue;
-    const key = format(new Date(t.dueDate), "yyyy-MM-dd");
-    const bucket = tasksByDay.get(key) ?? [];
-    bucket.push(t);
-    tasksByDay.set(key, bucket);
+  for (const t of datedTasks) {
+    const { start, end } = taskRange(t);
+    // Clamped to the visible grid - both correct (nothing to show
+    // outside it) and safe (bounds the loop below regardless of how
+    // far out endDate is set).
+    const rangeStart = start < gridStart ? gridStart : start;
+    const rangeEnd = end > gridEnd ? gridEnd : end;
+    if (rangeStart > rangeEnd) continue;
+
+    for (const day of eachDayOfInterval({ start: rangeStart, end: rangeEnd })) {
+      const key = format(day, "yyyy-MM-dd");
+      const bucket = tasksByDay.get(key) ?? [];
+      bucket.push(t);
+      tasksByDay.set(key, bucket);
+    }
   }
 
   const today = new Date();
@@ -100,16 +124,33 @@ export default function CalendarPage() {
                     {format(day, "d")}
                   </span>
                   <div className="space-y-1">
-                    {visible.map((t) => (
-                      <Link
-                        key={t.id}
-                        href="/tasks"
-                        className="block text-[10px] leading-tight px-1.5 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-100 truncate hover:bg-blue-100"
-                        title={`${t.taskNumber} · ${t.title}`}
-                      >
-                        {t.title}
-                      </Link>
-                    ))}
+                    {visible.map((t) => {
+                      const { start: taskStart, end: taskEnd } = taskRange(t);
+                      const weekday = day.getDay();
+                      // A segment gets a rounded, bordered cap at each
+                      // end it's actually true (the task's own start/end)
+                      // or a week-row boundary - everywhere else it
+                      // bridges into the neighboring cell via negative
+                      // margin so it reads as one continuous bar.
+                      const capLeft = isSameDay(day, taskStart) || weekday === 0;
+                      const capRight = isSameDay(day, taskEnd) || weekday === 6;
+                      const spans = taskEnd.getTime() !== taskStart.getTime();
+
+                      return (
+                        <Link
+                          key={t.id}
+                          href="/tasks"
+                          className={cn(
+                            "block text-[10px] leading-tight py-0.5 truncate border-y bg-blue-50 text-blue-800 border-blue-100 hover:bg-blue-100",
+                            capLeft ? "rounded-l pl-1.5 border-l" : "-ml-1.5 pl-1.5",
+                            capRight ? "rounded-r pr-1.5 border-r" : "-mr-1.5 pr-1.5",
+                          )}
+                          title={`${t.taskNumber} · ${t.title}${spans ? ` (${format(taskStart, "MMM d")} – ${format(taskEnd, "MMM d")})` : ""}`}
+                        >
+                          {capLeft ? t.title : " "}
+                        </Link>
+                      );
+                    })}
                     {overflow > 0 && (
                       <Link href="/tasks" className="block text-[10px] text-slate-400 hover:text-blue-600 px-1.5">
                         +{overflow} more
