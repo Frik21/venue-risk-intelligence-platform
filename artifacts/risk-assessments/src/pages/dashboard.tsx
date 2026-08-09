@@ -2095,7 +2095,8 @@ function OperationalCanvas({
   const [deletingTimesheetEntry, setDeletingTimesheetEntry] = useState(false);
 
   useEffect(() => {
-    if (profileView !== "timesheet" || profileUserId == null) return;
+    // Also loaded for "overview", which summarises hours logged.
+    if ((profileView !== "timesheet" && profileView !== "overview") || profileUserId == null) return;
     if (timesheetLoadedForUserId === profileUserId) return;
     setTimesheetLoading(true);
     api.timesheet
@@ -2796,6 +2797,37 @@ function OperationalCanvas({
       .then(() => setTaskExpenses((prev) => ({ ...prev, [expense.taskId]: (prev[expense.taskId] ?? []).filter((e) => e.id !== expense.id) })))
       .catch((err) => console.error(`Failed to delete expense ${expense.id}:`, err));
   }
+
+  // Profile > Overview - a summary built entirely from data already
+  // fetched elsewhere (Timesheet, Expenses), not a separate aggregate
+  // endpoint. Loads every accepted task's expenses when Overview opens
+  // (each individually guarded against re-fetching by
+  // ensureTaskExpensesLoaded itself, same as expanding a task row in
+  // the Expenses sub-view would) so the running total is real.
+  useEffect(() => {
+    if (profileView !== "overview") return;
+    for (const task of acceptedTasksList) {
+      ensureTaskExpensesLoaded(task.id);
+    }
+  }, [profileView, acceptedTasksList]);
+
+  const overviewStats = useMemo(() => {
+    const now = new Date();
+    const currentMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const hoursThisMonth = timesheetEntries
+      .filter((entry) => entry.date.startsWith(currentMonthPrefix))
+      .reduce((sum, entry) => sum + entry.hoursWorked, 0);
+    const totalHours = timesheetEntries.reduce((sum, entry) => sum + entry.hoursWorked, 0);
+
+    const expenseTotalsByCurrency: Record<string, number> = {};
+    for (const task of acceptedTasksList) {
+      for (const expense of taskExpenses[task.id] ?? []) {
+        expenseTotalsByCurrency[expense.currency] = (expenseTotalsByCurrency[expense.currency] ?? 0) + expense.amount;
+      }
+    }
+
+    return { hoursThisMonth, totalHours, expenseTotalsByCurrency };
+  }, [timesheetEntries, acceptedTasksList, taskExpenses]);
 
   const [planningTaskId, setPlanningTaskId] = useState<number | null>(null);
   const [taskPlans, setTaskPlans] = useState<Record<number, Plan>>({});
@@ -4415,7 +4447,76 @@ function OperationalCanvas({
             <button type="button" className="venueguard-panel-back" onClick={() => setProfileView("root")}>
               <ArrowLeft className="w-3.5 h-3.5" /> Back to Profile
             </button>
-            {profileView === "account" ? (
+            {profileView === "overview" ? (
+              profileUser == null ? (
+                <p className="tasks-panel-empty">
+                  No profile user found yet - add a user named &quot;Frik&quot; (or an Admin) from Admin &gt; Users.
+                </p>
+              ) : (
+                <div className="profile-overview">
+                  <div className="profile-overview-identity">
+                    <span className="profile-overview-avatar">
+                      {profileUser.avatarInitials ||
+                        profileUser.name
+                          .split(" ")
+                          .map((part) => part[0])
+                          .join("")
+                          .toUpperCase()
+                          .slice(0, 2)}
+                    </span>
+                    <div>
+                      <p className="profile-overview-name">{profileUser.name}</p>
+                      <p className="profile-overview-role">{USER_ROLE_LABELS[profileUser.role] ?? profileUser.role}</p>
+                    </div>
+                  </div>
+
+                  <div className="venue-assessment-meta">
+                    <div className="venue-assessment-meta-row">
+                      <span className="venue-assessment-meta-label">Accepted Tasks</span>
+                      <span className="venue-assessment-meta-value">{acceptedTasksList.length}</span>
+                    </div>
+                    <div className="venue-assessment-meta-row">
+                      <span className="venue-assessment-meta-label">Hours This Month</span>
+                      <span className="venue-assessment-meta-value">
+                        {timesheetLoading ? "…" : overviewStats.hoursThisMonth}
+                      </span>
+                    </div>
+                    <div className="venue-assessment-meta-row">
+                      <span className="venue-assessment-meta-label">Total Hours Logged</span>
+                      <span className="venue-assessment-meta-value">{timesheetLoading ? "…" : overviewStats.totalHours}</span>
+                    </div>
+                    <div className="venue-assessment-meta-row">
+                      <span className="venue-assessment-meta-label">Total Expenses</span>
+                      <span className="venue-assessment-meta-value">
+                        {Object.keys(overviewStats.expenseTotalsByCurrency).length === 0
+                          ? "None logged"
+                          : Object.entries(overviewStats.expenseTotalsByCurrency)
+                              .map(([currency, amount]) => `${currency} ${amount.toFixed(2)}`)
+                              .join(", ")}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="tasks-panel-list">
+                    <button type="button" className="risk-assessments-nav-item" onClick={() => setProfileView("account")}>
+                      <UserIcon className="w-4 h-4" />
+                      Account Details
+                      <ChevronRight className="w-4 h-4 risk-assessments-nav-item-chevron" />
+                    </button>
+                    <button type="button" className="risk-assessments-nav-item" onClick={() => setProfileView("expenses")}>
+                      <Wallet className="w-4 h-4" />
+                      Expenses
+                      <ChevronRight className="w-4 h-4 risk-assessments-nav-item-chevron" />
+                    </button>
+                    <button type="button" className="risk-assessments-nav-item" onClick={() => setProfileView("timesheet")}>
+                      <Clock className="w-4 h-4" />
+                      Timesheet
+                      <ChevronRight className="w-4 h-4 risk-assessments-nav-item-chevron" />
+                    </button>
+                  </div>
+                </div>
+              )
+            ) : profileView === "account" ? (
               profileUser == null ? (
                 <p className="tasks-panel-empty">
                   No profile user found yet - add a user named &quot;Frik&quot; (or an Admin) from Admin &gt; Users.
