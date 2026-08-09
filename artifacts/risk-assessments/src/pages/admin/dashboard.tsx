@@ -13,8 +13,6 @@ import {
   Users,
   FolderOpen,
   FileText,
-  Radio,
-  Map,
   type LucideIcon,
 } from "lucide-react";
 import { getStatusColor, getStatusLabel, getPriorityColor, timeAgo } from "@/lib/display-utils";
@@ -31,8 +29,6 @@ const QUICK_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/assessments", label: "Assessments", icon: ClipboardList },
   { href: "/incidents", label: "Incidents", icon: AlertTriangle },
   { href: "/alerts", label: "Alert Queue", icon: Bell },
-  { href: "/osint", label: "OSINT", icon: Radio },
-  { href: "/maps", label: "Maps", icon: Map },
   { href: "/evidence", label: "Evidence", icon: FolderOpen },
   { href: "/reports", label: "Reports", icon: FileText },
   { href: "/admin/users", label: "Users", icon: Users },
