@@ -12,3 +12,4 @@ export * from "./timesheet-entries";
 export * from "./expenses";
 export * from "./task-assignments";
 export * from "./offices";
+export * from "./company-settings";

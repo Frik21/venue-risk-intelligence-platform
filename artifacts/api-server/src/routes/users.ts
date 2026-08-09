@@ -20,6 +20,8 @@ function formatUser(row: typeof usersTable.$inferSelect) {
     role: row.role as "admin" | "manager" | "cpo",
     avatarInitials: row.avatarInitials ?? null,
     active: row.active,
+    dayRate: row.dayRate ?? null,
+    nightRate: row.nightRate ?? null,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -51,6 +53,27 @@ router.patch("/users/:id", async (req, res): Promise<void> => {
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const parsed = UserUpdateSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [user] = await db.update(usersTable).set(parsed.data).where(eq(usersTable.id, id)).returning();
+  if (!user) { res.status(404).json({ error: "User not found" }); return; }
+
+  res.json(formatUser(user));
+});
+
+const RatesUpdateSchema = z.object({
+  dayRate: z.number().min(0).nullable().optional(),
+  nightRate: z.number().min(0).nullable().optional(),
+});
+
+// Manager-set pay rate, deliberately separate from the self-service
+// PATCH above - a CPO editing their own Account Details should never
+// be able to set their own pay rate.
+router.patch("/users/:id/rates", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const parsed = RatesUpdateSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const [user] = await db.update(usersTable).set(parsed.data).where(eq(usersTable.id, id)).returning();

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
-import { Users, Plus, ShieldCheck, Shield, MapPin } from "lucide-react";
+import { Users, Plus, ShieldCheck, Shield, MapPin, Pencil } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -75,6 +75,53 @@ function NewUserDialog({ onClose }: { onClose: () => void }) {
           <Button variant="outline" onClick={onClose}>Cancel</Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// CPO pay rate - Manager-set, drives Personnel Costs (Costs page).
+// Deliberately not part of self-service Account Details.
+function CpoRateEditor({ user }: { user: User }) {
+  const [editing, setEditing] = useState(false);
+  const [dayRate, setDayRate] = useState(user.dayRate != null ? String(user.dayRate) : "");
+  const [nightRate, setNightRate] = useState(user.nightRate != null ? String(user.nightRate) : "");
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      api.users.updateRates(user.id, {
+        dayRate: dayRate.trim() === "" ? null : Number(dayRate),
+        nightRate: nightRate.trim() === "" ? null : Number(nightRate),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      toast({ title: "Rates updated" });
+      setEditing(false);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 shrink-0"
+      >
+        <Pencil className="w-3 h-3" />
+        {user.dayRate != null || user.nightRate != null
+          ? `Day ${user.dayRate ?? "—"} / Night ${user.nightRate ?? "—"}`
+          : "Set rates"}
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 shrink-0">
+      <Input className="h-7 w-20 text-xs" type="number" min={0} placeholder="Day" value={dayRate} onChange={(e) => setDayRate(e.target.value)} />
+      <Input className="h-7 w-20 text-xs" type="number" min={0} placeholder="Night" value={nightRate} onChange={(e) => setNightRate(e.target.value)} />
+      <Button size="sm" className="h-7 px-2 text-xs" onClick={() => mutation.mutate()} disabled={mutation.isPending}>Save</Button>
+      <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setEditing(false)}>Cancel</Button>
     </div>
   );
 }
@@ -150,6 +197,7 @@ export default function UsersPage() {
                     </div>
                     <div className="text-xs text-slate-400 mt-0.5">{user.email} · Joined {formatDate(user.createdAt)}</div>
                   </div>
+                  {user.role === "cpo" && <CpoRateEditor user={user} />}
                   <div className={cn("flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded border uppercase shrink-0", ROLE_COLORS[user.role])}>
                     <Icon className="w-3.5 h-3.5" />
                     {user.role}

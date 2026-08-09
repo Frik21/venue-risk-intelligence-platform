@@ -2322,6 +2322,57 @@
   cursor: default;
 }
 
+.timesheet-day-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.timesheet-day-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.timesheet-day-entry:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.timesheet-day-entry-active {
+  border-color: rgba(96, 165, 250, 0.5);
+  background: rgba(96, 165, 250, 0.1);
+}
+
+.timesheet-day-entry-task {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timesheet-day-entry-hours {
+  color: rgba(255, 255, 255, 0.55);
+  flex-shrink: 0;
+}
+
+.timesheet-day-entry-add {
+  justify-content: center;
+  color: rgba(96, 165, 250, 0.9);
+  font-weight: 600;
+}
+
 /* Profile > Expenses - one expense entry inside an expanded task row
    (see ExpenseEntryCard in dashboard.tsx). Reuses the venue-assessment-
    field/-save-btn and timesheet-entry-form-delete classes above rather

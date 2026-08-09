@@ -862,15 +862,23 @@ const TIMESHEET_WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 // that already have an entry show the hours logged right on the cell.
 function TimesheetCalendar({
   entries,
+  tasks,
   loading,
   month,
   onChangeMonth,
   selectedDate,
   onSelectDate,
-  hoursInput,
+  editingEntryId,
+  taskIdInput,
+  dayHoursInput,
+  nightHoursInput,
   notesInput,
-  onHoursChange,
+  onTaskIdChange,
+  onDayHoursChange,
+  onNightHoursChange,
   onNotesChange,
+  onStartAdd,
+  onStartEdit,
   onSave,
   onDelete,
   saving,
@@ -878,24 +886,32 @@ function TimesheetCalendar({
   noOperator,
 }: {
   entries: TimesheetEntry[];
+  tasks: Task[];
   loading: boolean;
   month: Date;
   onChangeMonth: (month: Date) => void;
   selectedDate: string | null;
   onSelectDate: (dateKey: string) => void;
-  hoursInput: string;
+  editingEntryId: number | null;
+  taskIdInput: string;
+  dayHoursInput: string;
+  nightHoursInput: string;
   notesInput: string;
-  onHoursChange: (value: string) => void;
+  onTaskIdChange: (value: string) => void;
+  onDayHoursChange: (value: string) => void;
+  onNightHoursChange: (value: string) => void;
   onNotesChange: (value: string) => void;
+  onStartAdd: () => void;
+  onStartEdit: (entry: TimesheetEntry) => void;
   onSave: () => void;
-  onDelete: () => void;
+  onDelete: (id: number) => void;
   saving: boolean;
   deleting: boolean;
   noOperator: boolean;
 }) {
   const entryMap = useMemo(() => {
-    const map: Record<string, TimesheetEntry> = {};
-    for (const entry of entries) map[entry.date] = entry;
+    const map: Record<string, TimesheetEntry[]> = {};
+    for (const entry of entries) (map[entry.date] ??= []).push(entry);
     return map;
   }, [entries]);
   const weeks = useMemo(() => buildCalendarWeeks(month), [month]);
@@ -905,7 +921,7 @@ function TimesheetCalendar({
   }
 
   const todayKey = formatDateKey(new Date());
-  const selectedEntry = selectedDate ? entryMap[selectedDate] : undefined;
+  const selectedDayEntries = selectedDate ? (entryMap[selectedDate] ?? []) : [];
 
   return (
     <div className="timesheet-calendar">
@@ -947,18 +963,19 @@ function TimesheetCalendar({
                   return <span key={`${weekIndex}-${dayIndex}`} className="timesheet-calendar-cell timesheet-calendar-cell-empty" />;
                 }
                 const dateKey = formatDateKey(day);
-                const entry = entryMap[dateKey];
+                const dayEntries = entryMap[dateKey] ?? [];
+                const dayTotal = dayEntries.reduce((sum, e) => sum + e.hoursWorked, 0);
                 return (
                   <button
                     key={dateKey}
                     type="button"
                     className={`timesheet-calendar-cell ${dateKey === todayKey ? "timesheet-calendar-cell-today" : ""} ${
                       dateKey === selectedDate ? "timesheet-calendar-cell-selected" : ""
-                    } ${entry ? "timesheet-calendar-cell-logged" : ""}`}
+                    } ${dayEntries.length > 0 ? "timesheet-calendar-cell-logged" : ""}`}
                     onClick={() => onSelectDate(dateKey)}
                   >
                     <span className="timesheet-calendar-cell-day">{day.getDate()}</span>
-                    {entry && <span className="timesheet-calendar-cell-hours">{entry.hoursWorked}h</span>}
+                    {dayEntries.length > 0 && <span className="timesheet-calendar-cell-hours">{dayTotal}h</span>}
                   </button>
                 );
               }),
@@ -976,44 +993,96 @@ function TimesheetCalendar({
               day: "numeric",
             })}
           </p>
-          <label className="venue-assessment-field">
-            <span>Hours Worked</span>
-            <input
-              type="number"
-              min={0}
-              max={24}
-              step={0.25}
-              value={hoursInput}
-              onChange={(event) => onHoursChange(event.target.value)}
-              className="venue-assessment-field-input"
-              placeholder="e.g. 8"
-            />
-          </label>
-          <label className="venue-assessment-field">
-            <span>Notes</span>
-            <input
-              type="text"
-              value={notesInput}
-              onChange={(event) => onNotesChange(event.target.value)}
-              className="venue-assessment-field-input"
-              placeholder="Optional"
-            />
-          </label>
-          <div className="timesheet-entry-form-actions">
-            <button
-              type="button"
-              className="venue-assessment-save-btn"
-              onClick={onSave}
-              disabled={saving || hoursInput.trim() === ""}
-            >
-              {saving ? "Saving…" : "Save"}
-            </button>
-            {selectedEntry && (
-              <button type="button" className="timesheet-entry-form-delete" onClick={onDelete} disabled={deleting}>
-                {deleting ? "Removing…" : "Remove"}
+
+          {selectedDayEntries.length > 0 && (
+            <div className="timesheet-day-entries">
+              {selectedDayEntries.map((entry) => (
+                <button
+                  key={entry.id}
+                  type="button"
+                  className={`timesheet-day-entry ${editingEntryId === entry.id ? "timesheet-day-entry-active" : ""}`}
+                  onClick={() => onStartEdit(entry)}
+                >
+                  <span className="timesheet-day-entry-task">{entry.taskTitle ?? "Unknown task"}</span>
+                  <span className="timesheet-day-entry-hours">{entry.dayHours}d + {entry.nightHours}n</span>
+                </button>
+              ))}
+              <button type="button" className="timesheet-day-entry timesheet-day-entry-add" onClick={onStartAdd}>
+                + Log another task
               </button>
-            )}
-          </div>
+            </div>
+          )}
+
+          {tasks.length === 0 ? (
+            <p className="tasks-panel-empty">No assigned tasks yet - accept a task to log hours against it.</p>
+          ) : (
+            <>
+              <label className="venue-assessment-field">
+                <span>Task</span>
+                <select
+                  value={taskIdInput}
+                  onChange={(event) => onTaskIdChange(event.target.value)}
+                  className="venue-assessment-field-input"
+                >
+                  <option value="">Select a task…</option>
+                  {tasks.map((t) => (
+                    <option key={t.id} value={t.id}>{t.title}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="venue-assessment-field">
+                <span>Day Hours</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={24}
+                  step={0.25}
+                  value={dayHoursInput}
+                  onChange={(event) => onDayHoursChange(event.target.value)}
+                  className="venue-assessment-field-input"
+                  placeholder="e.g. 8"
+                />
+              </label>
+              <label className="venue-assessment-field">
+                <span>Night Hours</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={24}
+                  step={0.25}
+                  value={nightHoursInput}
+                  onChange={(event) => onNightHoursChange(event.target.value)}
+                  className="venue-assessment-field-input"
+                  placeholder="e.g. 0"
+                />
+              </label>
+              <label className="venue-assessment-field">
+                <span>Notes</span>
+                <input
+                  type="text"
+                  value={notesInput}
+                  onChange={(event) => onNotesChange(event.target.value)}
+                  className="venue-assessment-field-input"
+                  placeholder="Optional"
+                />
+              </label>
+              <div className="timesheet-entry-form-actions">
+                <button
+                  type="button"
+                  className="venue-assessment-save-btn"
+                  onClick={onSave}
+                  disabled={saving || !taskIdInput || (dayHoursInput.trim() === "" && nightHoursInput.trim() === "")}
+                >
+                  {saving ? "Saving…" : editingEntryId ? "Save Changes" : "Log Hours"}
+                </button>
+                {editingEntryId && (
+                  <button type="button" className="timesheet-entry-form-delete" onClick={() => onDelete(editingEntryId)} disabled={deleting}>
+                    {deleting ? "Removing…" : "Remove"}
+                  </button>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -2093,8 +2162,12 @@ function OperationalCanvas({
   // Profile > Timesheet - scoped to profileUserId, not viewingAsCpoId
   // (see its declaration above for why they're different concepts).
   // Fetched lazily, once, the first time the Timesheet sub-view is
-  // actually opened.
+  // actually opened. profileUserTasks is this same user's own task
+  // list, used only to populate the "which task were these hours for"
+  // picker - entries are task-linked so Personnel Costs can be
+  // computed per task, not just per CPO overall.
   const [timesheetEntries, setTimesheetEntries] = useState<TimesheetEntry[]>([]);
+  const [profileUserTasks, setProfileUserTasks] = useState<Task[]>([]);
   const [timesheetLoading, setTimesheetLoading] = useState(false);
   const [timesheetLoadedForUserId, setTimesheetLoadedForUserId] = useState<number | null>(null);
   const [timesheetMonth, setTimesheetMonth] = useState(() => {
@@ -2102,7 +2175,10 @@ function OperationalCanvas({
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedTimesheetDate, setSelectedTimesheetDate] = useState<string | null>(null);
-  const [timesheetHoursInput, setTimesheetHoursInput] = useState("");
+  const [editingTimesheetEntryId, setEditingTimesheetEntryId] = useState<number | null>(null);
+  const [timesheetTaskIdInput, setTimesheetTaskIdInput] = useState("");
+  const [timesheetDayHoursInput, setTimesheetDayHoursInput] = useState("");
+  const [timesheetNightHoursInput, setTimesheetNightHoursInput] = useState("");
   const [timesheetNotesInput, setTimesheetNotesInput] = useState("");
   const [savingTimesheetEntry, setSavingTimesheetEntry] = useState(false);
   const [deletingTimesheetEntry, setDeletingTimesheetEntry] = useState(false);
@@ -2112,47 +2188,68 @@ function OperationalCanvas({
     if ((profileView !== "timesheet" && profileView !== "overview") || profileUserId == null) return;
     if (timesheetLoadedForUserId === profileUserId) return;
     setTimesheetLoading(true);
-    api.timesheet
-      .list(profileUserId)
-      .then((entries) => {
+    Promise.all([api.timesheet.list(profileUserId), api.tasks.list({ assignedTo: profileUserId })])
+      .then(([entries, tasks]) => {
         setTimesheetEntries(entries);
+        setProfileUserTasks(tasks);
         setTimesheetLoadedForUserId(profileUserId);
       })
       .catch((err) => console.error(`Failed to load timesheet for user ${profileUserId}:`, err))
       .finally(() => setTimesheetLoading(false));
   }, [profileView, profileUserId, timesheetLoadedForUserId]);
 
+  function resetTimesheetForm() {
+    setEditingTimesheetEntryId(null);
+    setTimesheetTaskIdInput("");
+    setTimesheetDayHoursInput("");
+    setTimesheetNightHoursInput("");
+    setTimesheetNotesInput("");
+  }
+
   function selectTimesheetDate(dateKey: string) {
     setSelectedTimesheetDate(dateKey);
-    const existing = timesheetEntries.find((e) => e.date === dateKey);
-    setTimesheetHoursInput(existing ? String(existing.hoursWorked) : "");
-    setTimesheetNotesInput(existing ? existing.notes : "");
+    resetTimesheetForm();
+  }
+
+  function startEditTimesheetEntry(entry: TimesheetEntry) {
+    setEditingTimesheetEntryId(entry.id);
+    setTimesheetTaskIdInput(String(entry.taskId ?? ""));
+    setTimesheetDayHoursInput(String(entry.dayHours));
+    setTimesheetNightHoursInput(String(entry.nightHours));
+    setTimesheetNotesInput(entry.notes);
   }
 
   function saveTimesheetEntry() {
-    if (!selectedTimesheetDate || profileUserId == null) return;
-    const hours = Number(timesheetHoursInput);
-    if (isNaN(hours) || hours < 0 || hours > 24) return;
+    if (!selectedTimesheetDate || profileUserId == null || !timesheetTaskIdInput) return;
+    const dayHours = Number(timesheetDayHoursInput) || 0;
+    const nightHours = Number(timesheetNightHoursInput) || 0;
+    if (dayHours < 0 || nightHours < 0 || dayHours + nightHours > 24) return;
     setSavingTimesheetEntry(true);
     api.timesheet
-      .upsert(profileUserId, { date: selectedTimesheetDate, hoursWorked: hours, notes: timesheetNotesInput })
+      .upsert(profileUserId, {
+        taskId: Number(timesheetTaskIdInput),
+        date: selectedTimesheetDate,
+        dayHours,
+        nightHours,
+        notes: timesheetNotesInput,
+      })
       .then((entry) => {
-        setTimesheetEntries((prev) => [...prev.filter((e) => e.date !== entry.date), entry].sort((a, b) => a.date.localeCompare(b.date)));
+        setTimesheetEntries((prev) =>
+          [...prev.filter((e) => !(e.date === entry.date && e.taskId === entry.taskId)), entry].sort((a, b) => a.date.localeCompare(b.date)),
+        );
+        resetTimesheetForm();
       })
       .catch((err) => console.error("Failed to save timesheet entry:", err))
       .finally(() => setSavingTimesheetEntry(false));
   }
 
-  function deleteTimesheetEntry() {
-    const existing = selectedTimesheetDate ? timesheetEntries.find((e) => e.date === selectedTimesheetDate) : undefined;
-    if (!existing) return;
+  function deleteTimesheetEntry(id: number) {
     setDeletingTimesheetEntry(true);
     api.timesheet
-      .delete(existing.id)
+      .delete(id)
       .then(() => {
-        setTimesheetEntries((prev) => prev.filter((e) => e.id !== existing.id));
-        setTimesheetHoursInput("");
-        setTimesheetNotesInput("");
+        setTimesheetEntries((prev) => prev.filter((e) => e.id !== id));
+        resetTimesheetForm();
       })
       .catch((err) => console.error("Failed to delete timesheet entry:", err))
       .finally(() => setDeletingTimesheetEntry(false));
@@ -4603,15 +4700,23 @@ function OperationalCanvas({
             ) : profileView === "timesheet" ? (
               <TimesheetCalendar
                 entries={timesheetEntries}
+                tasks={profileUserTasks}
                 loading={timesheetLoading}
                 month={timesheetMonth}
                 onChangeMonth={setTimesheetMonth}
                 selectedDate={selectedTimesheetDate}
                 onSelectDate={selectTimesheetDate}
-                hoursInput={timesheetHoursInput}
+                editingEntryId={editingTimesheetEntryId}
+                taskIdInput={timesheetTaskIdInput}
+                dayHoursInput={timesheetDayHoursInput}
+                nightHoursInput={timesheetNightHoursInput}
                 notesInput={timesheetNotesInput}
-                onHoursChange={setTimesheetHoursInput}
+                onTaskIdChange={setTimesheetTaskIdInput}
+                onDayHoursChange={setTimesheetDayHoursInput}
+                onNightHoursChange={setTimesheetNightHoursInput}
                 onNotesChange={setTimesheetNotesInput}
+                onStartAdd={resetTimesheetForm}
+                onStartEdit={startEditTimesheetEntry}
                 onSave={saveTimesheetEntry}
                 onDelete={deleteTimesheetEntry}
                 saving={savingTimesheetEntry}

@@ -26,7 +26,8 @@ export type RouteType =
 export type RouteCreationMethod = "endpoint_marker" | "street_builder" | "freehand_draw";
 
 export interface User {
-  id: number; name: string; email: string; role: UserRole; avatarInitials: string | null; active: boolean; createdAt: string;
+  id: number; name: string; email: string; role: UserRole; avatarInitials: string | null; active: boolean;
+  dayRate: number | null; nightRate: number | null; createdAt: string;
 }
 
 export interface Venue {
@@ -229,11 +230,33 @@ export interface TaskRoute {
 export interface TimesheetEntry {
   id: number;
   userId: number;
+  taskId: number | null;
+  taskTitle: string | null;
   date: string;
   hoursWorked: number;
+  dayHours: number;
+  nightHours: number;
   notes: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CompanySettings {
+  overtimeThresholdHours: number;
+  overtimeThresholdPeriod: "daily" | "weekly";
+  overtimeMultiplier: number;
+  updatedAt: string;
+}
+
+export interface PersonnelCostLine {
+  entryId: number;
+  userId: number;
+  userName: string | null;
+  taskId: number | null;
+  taskTitle: string | null;
+  date: string;
+  hours: number;
+  cost: number;
 }
 
 export type ExpenseCategory = "fuel" | "accommodation" | "food" | "parking" | "tolls" | "equipment" | "other";
@@ -412,6 +435,8 @@ export const api = {
     create: (data: Partial<User>) => apiFetch<User>("/users", { method: "POST", body: JSON.stringify(data) }),
     update: (id: number, data: Partial<Pick<User, "name" | "email" | "avatarInitials">>) =>
       apiFetch<User>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    updateRates: (id: number, data: { dayRate: number | null; nightRate: number | null }) =>
+      apiFetch<User>(`/users/${id}/rates`, { method: "PATCH", body: JSON.stringify(data) }),
   },
   venues: {
     list: () => apiFetch<Venue[]>("/venues"),
@@ -506,9 +531,16 @@ export const api = {
   },
   timesheet: {
     list: (userId: number) => apiFetch<TimesheetEntry[]>(`/users/${userId}/timesheet`),
-    upsert: (userId: number, data: { date: string; hoursWorked: number; notes?: string }) =>
+    upsert: (userId: number, data: { taskId: number; date: string; dayHours: number; nightHours: number; notes?: string }) =>
       apiFetch<TimesheetEntry>(`/users/${userId}/timesheet`, { method: "POST", body: JSON.stringify(data) }),
     delete: (id: number) => apiFetch<void>(`/timesheet/${id}`, { method: "DELETE" }),
+  },
+  settings: {
+    get: () => apiFetch<CompanySettings>("/settings"),
+    update: (data: Partial<CompanySettings>) => apiFetch<CompanySettings>("/settings", { method: "PATCH", body: JSON.stringify(data) }),
+  },
+  personnelCosts: {
+    list: () => apiFetch<PersonnelCostLine[]>("/personnel-costs"),
   },
   expenses: {
     list: (taskId: number) => apiFetch<Expense[]>(`/tasks/${taskId}/expenses`),

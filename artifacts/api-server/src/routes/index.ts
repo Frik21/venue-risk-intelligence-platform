@@ -23,6 +23,8 @@ import taskPdfRouter from "./task-pdf";
 import timesheetRouter from "./timesheet";
 import expensesRouter from "./expenses";
 import officesRouter from "./offices";
+import settingsRouter from "./settings";
+import personnelCostsRouter from "./personnel-costs";
 
 const router: IRouter = Router();
 
@@ -50,5 +52,7 @@ router.use(taskPdfRouter);
 router.use(timesheetRouter);
 router.use(expensesRouter);
 router.use(officesRouter);
+router.use(settingsRouter);
+router.use(personnelCostsRouter);
 
 export default router;
