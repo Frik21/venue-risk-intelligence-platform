@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, ChangeEvent } from "react";
-import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -404,6 +404,7 @@ const OPEN_TASKS_PANEL_EVENT = "venueguard-open-tasks-panel";
 const OPEN_TASK_PLANNING_PANEL_EVENT = "venueguard-open-task-planning-panel";
 const OPEN_RISK_ASSESSMENTS_PANEL_EVENT = "venueguard-open-risk-assessments-panel";
 const OPEN_ROUTE_PLANNING_PANEL_EVENT = "venueguard-open-route-planning-panel";
+const OPEN_DOWNLOAD_TASK_PANEL_EVENT = "venueguard-open-download-task-panel";
 const OPEN_LAYERS_PANEL_EVENT = "venueguard-open-layers-panel";
 // Dispatched by each panel's "Back to Menu" button (OperationalCanvas)
 // and picked up by TopBanner, for the same cross-sibling reason as the
@@ -870,6 +871,17 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
             >
               <Route className="w-4 h-4" />
               Route Planning
+            </button>
+            <button
+              type="button"
+              className="top-banner-brand-menu-item"
+              onClick={() => {
+                window.dispatchEvent(new Event(OPEN_DOWNLOAD_TASK_PANEL_EVENT));
+                setBrandMenuOpen(false);
+              }}
+            >
+              <Download className="w-4 h-4" />
+              Download Task
             </button>
             <button
               type="button"
@@ -1384,6 +1396,7 @@ function OperationalCanvas({
     | "task-planning"
     | "risk-assessments"
     | "route-planning"
+    | "download-task"
     | "layers"
     | null;
   const [activePanel, setActivePanel] = useState<VenueGuardPanel>(null);
@@ -1393,6 +1406,7 @@ function OperationalCanvas({
   const taskPlanningPanelOpen = activePanel === "task-planning";
   const riskAssessmentsPanelOpen = activePanel === "risk-assessments";
   const routePlanningPanelOpen = activePanel === "route-planning";
+  const downloadTaskPanelOpen = activePanel === "download-task";
   const layersPanelOpen = activePanel === "layers";
 
   // Risk Assessments has its own sub-navigation ("Venues," step 1 of a
@@ -2165,6 +2179,7 @@ function OperationalCanvas({
       setAssessmentForm(null);
     };
     const openRoutePlanning = () => setActivePanel("route-planning");
+    const openDownloadTask = () => setActivePanel("download-task");
     const openLayers = () => setActivePanel("layers");
     window.addEventListener(OPEN_BRIEF_PANEL_EVENT, openBrief);
     window.addEventListener(OPEN_COMMUNICATIONS_PANEL_EVENT, openCommunications);
@@ -2172,6 +2187,7 @@ function OperationalCanvas({
     window.addEventListener(OPEN_TASK_PLANNING_PANEL_EVENT, openTaskPlanning);
     window.addEventListener(OPEN_RISK_ASSESSMENTS_PANEL_EVENT, openRiskAssessments);
     window.addEventListener(OPEN_ROUTE_PLANNING_PANEL_EVENT, openRoutePlanning);
+    window.addEventListener(OPEN_DOWNLOAD_TASK_PANEL_EVENT, openDownloadTask);
     window.addEventListener(OPEN_LAYERS_PANEL_EVENT, openLayers);
     return () => {
       window.removeEventListener(OPEN_BRIEF_PANEL_EVENT, openBrief);
@@ -2180,6 +2196,7 @@ function OperationalCanvas({
       window.removeEventListener(OPEN_TASK_PLANNING_PANEL_EVENT, openTaskPlanning);
       window.removeEventListener(OPEN_RISK_ASSESSMENTS_PANEL_EVENT, openRiskAssessments);
       window.removeEventListener(OPEN_ROUTE_PLANNING_PANEL_EVENT, openRoutePlanning);
+      window.removeEventListener(OPEN_DOWNLOAD_TASK_PANEL_EVENT, openDownloadTask);
       window.removeEventListener(OPEN_LAYERS_PANEL_EVENT, openLayers);
     };
   }, []);
@@ -3218,6 +3235,32 @@ function OperationalCanvas({
             })}
           </div>
         )}
+      </div>
+
+      <div
+        className={`download-task-panel ${downloadTaskPanelOpen ? "download-task-panel-open" : ""}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="tasks-panel-header">
+          <div>
+            <p className="tasks-panel-eyebrow">Download Task</p>
+            <h2 className="tasks-panel-title">Download Task</h2>
+          </div>
+          <button
+            type="button"
+            className="tasks-panel-close"
+            onClick={() => setActivePanel(null)}
+            aria-label="Close Download Task"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <button type="button" className="venueguard-panel-back" onClick={backToMenu}>
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to Menu
+        </button>
+
+        <p className="tasks-panel-empty">Coming soon.</p>
       </div>
 
       <div

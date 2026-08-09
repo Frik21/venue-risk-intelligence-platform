@@ -1514,6 +1514,34 @@
   transform: translateX(0);
 }
 
+/* Download Task panel - empty placeholder for now (per direct
+   product direction), same base panel styling as Route Planning/
+   Layers. */
+.download-task-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 29;
+  width: min(360px, 88vw);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  background: rgba(8, 11, 15, 0.92);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+  color: #fff;
+  transform: translateX(-100%);
+  transition: transform 0.28s ease;
+  pointer-events: auto;
+}
+
+.download-task-panel-open {
+  transform: translateX(0);
+}
+
 /* One route slot's Start/End fields + Calculate result, inside an
    expanded task row (see TaskRouteSlotCard in dashboard.tsx) - reuses
    the venue-assessment-field/-meta classes above rather than
