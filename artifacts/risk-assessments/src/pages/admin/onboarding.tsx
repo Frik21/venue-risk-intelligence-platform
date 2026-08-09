@@ -300,6 +300,7 @@ function CpoOnboardingDetail({ onboardingId }: { onboardingId: number }) {
 export default function OnboardingPage() {
   const [expandedOnboardingId, setExpandedOnboardingId] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<OnboardingStatus | null>(null);
   const cardRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   const { data: records = [], isLoading } = useQuery<OnboardingOverviewRecord[]>({
@@ -319,12 +320,19 @@ export default function OnboardingPage() {
     denied: records.filter((r) => r.status === "denied").length,
   };
 
+  const visibleRecords = statusFilter == null ? records : records.filter((r) => r.status === statusFilter);
+
   return (
     <div className="space-y-5">
       {showAdd && (
         <AddOperatorDialog
           onClose={() => setShowAdd(false)}
-          onCreated={(onboardingId) => setExpandedOnboardingId(onboardingId)}
+          onCreated={(onboardingId) => {
+            // Clear any active status filter so the new (Pending)
+            // operator is guaranteed to be visible when we expand them.
+            setStatusFilter(null);
+            setExpandedOnboardingId(onboardingId);
+          }}
         />
       )}
 
@@ -341,13 +349,26 @@ export default function OnboardingPage() {
       {!isLoading && records.length > 0 && (
         <div className="grid grid-cols-3 gap-4">
           {(["onboarded", "in_progress", "denied"] as const).map((s) => (
-            <Card key={s}>
-              <CardContent className="p-4">
-                <div className="text-2xl font-bold text-slate-900">{counts[s]}</div>
-                <div className="text-xs text-slate-500">{STATUS_CONFIG[s].label}</div>
-              </CardContent>
-            </Card>
+            <button
+              key={s}
+              onClick={() => setStatusFilter((current) => (current === s ? null : s))}
+              className="text-left"
+            >
+              <Card className={cn("transition-colors", statusFilter === s && "ring-2 ring-blue-500 border-blue-500")}>
+                <CardContent className="p-4">
+                  <div className="text-2xl font-bold text-slate-900">{counts[s]}</div>
+                  <div className="text-xs text-slate-500">{STATUS_CONFIG[s].label}</div>
+                </CardContent>
+              </Card>
+            </button>
           ))}
+        </div>
+      )}
+
+      {statusFilter != null && (
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          Showing only {STATUS_CONFIG[statusFilter].label.toLowerCase()} operators
+          <button onClick={() => setStatusFilter(null)} className="text-blue-600 hover:underline">Clear filter</button>
         </div>
       )}
 
@@ -361,9 +382,16 @@ export default function OnboardingPage() {
             <p className="text-sm text-slate-400">Add an operator above to start onboarding.</p>
           </CardContent>
         </Card>
+      ) : visibleRecords.length === 0 ? (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <UserPlus className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+            <h3 className="font-medium text-slate-600 mb-1">No {STATUS_CONFIG[statusFilter!].label.toLowerCase()} operators</h3>
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-3">
-          {records.map((r) => {
+          {visibleRecords.map((r) => {
             const pct = r.totalCount === 0 ? 0 : Math.round((r.checkedCount / r.totalCount) * 100);
             return (
               <Card key={r.id} ref={(el) => { cardRefs.current[r.id] = el; }}>
