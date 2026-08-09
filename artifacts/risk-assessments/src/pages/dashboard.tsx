@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, MouseEvent } from "react";
+import type { CSSProperties, MouseEvent, ChangeEvent } from "react";
 import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
@@ -32,6 +32,7 @@ import type {
   Plan,
   VenueRiskAssessment,
   TaskRoute,
+  Venue,
   Alert,
   AlertPriority,
 } from "@/lib/api";
@@ -572,16 +573,40 @@ function formatRouteDistance(meters: number | null): string {
   return `${(meters / 1000).toFixed(1)} km`;
 }
 
-// One Route Planning slot - Start/End picked via the location engine
-// (search or "use my current location", both built into LocationSearch
-// itself) and an explicit "Calculate Route" action, kept separate from
-// selecting the points so the metered TomTom traffic call only fires
-// when the CPO actually asks for it. Local startInput/endInput mirror
-// what's typed/selected so the field responds immediately, while
-// onUpdatePoint persists the pick (parent owns the source of truth).
+// Turns a real Venue record into the same shape a location search
+// result takes, so picking a venue from the dropdown below can reuse
+// the exact onUpdatePoint path a search/current-location pick already
+// uses - no separate "venue-backed point" concept needed.
+function venueToLocationResult(venue: Venue): LocationSearchResult {
+  return {
+    label: venue.name,
+    name: venue.name,
+    lat: venue.lat,
+    lng: venue.lng,
+    street: null,
+    housenumber: null,
+    city: venue.city ?? null,
+    district: venue.district ?? null,
+    state: null,
+    country: venue.country ?? null,
+    countrycode: null,
+    postcode: null,
+  };
+}
+
+// One Route Planning slot - Start/End picked either via the location
+// engine (search or "use my current location", both built into
+// LocationSearch itself) or via a real Venue record, plus an explicit
+// "Calculate Route" action kept separate from selecting the points so
+// the metered TomTom traffic call only fires when the CPO actually
+// asks for it. Local startInput/endInput mirror what's typed/selected
+// so the field responds immediately, while onUpdatePoint persists the
+// pick (parent owns the source of truth).
 function TaskRouteSlotCard({
   route,
   index,
+  venues,
+  taskVenueId,
   onUpdatePoint,
   onCalculate,
   calculating,
@@ -589,6 +614,8 @@ function TaskRouteSlotCard({
 }: {
   route: TaskRoute;
   index: number;
+  venues: Venue[];
+  taskVenueId: number | null;
   onUpdatePoint: (route: TaskRoute, point: "start" | "end", result: LocationSearchResult) => void;
   onCalculate: (route: TaskRoute) => void;
   calculating: boolean;
@@ -598,6 +625,26 @@ function TaskRouteSlotCard({
   const [endInput, setEndInput] = useState(route.endLabel);
   const canCalculate = route.startLat != null && route.startLng != null && route.endLat != null && route.endLng != null;
   const hasResults = route.distanceMeters != null;
+
+  // Only venues with coordinates are usable as a route point; the
+  // task's own venue (if it has one) is listed first as the likely pick.
+  const venueOptions = useMemo(() => {
+    const withCoords = venues.filter((v) => v.lat != null && v.lng != null);
+    if (taskVenueId == null) return withCoords;
+    return [...withCoords].sort((a, b) => (a.id === taskVenueId ? -1 : b.id === taskVenueId ? 1 : 0));
+  }, [venues, taskVenueId]);
+
+  function selectVenueFor(point: "start" | "end", event: ChangeEvent<HTMLSelectElement>) {
+    const id = Number(event.target.value);
+    event.target.value = "";
+    if (!id) return;
+    const venue = venueOptions.find((v) => v.id === id);
+    if (!venue) return;
+    const result = venueToLocationResult(venue);
+    if (point === "start") setStartInput(result.label);
+    else setEndInput(result.label);
+    onUpdatePoint(route, point, result);
+  }
 
   return (
     <div className="route-slot-card">
@@ -615,6 +662,16 @@ function TaskRouteSlotCard({
           className="venue-assessment-field-input"
           placeholder="Search for a start point…"
         />
+        {venueOptions.length > 0 && (
+          <select className="route-slot-venue-select" value="" onChange={(event) => selectVenueFor("start", event)}>
+            <option value="">Or select a venue…</option>
+            {venueOptions.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+        )}
       </label>
 
       <label className="venue-assessment-field">
@@ -629,6 +686,16 @@ function TaskRouteSlotCard({
           className="venue-assessment-field-input"
           placeholder="Search for a destination…"
         />
+        {venueOptions.length > 0 && (
+          <select className="route-slot-venue-select" value="" onChange={(event) => selectVenueFor("end", event)}>
+            <option value="">Or select a venue…</option>
+            {venueOptions.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+        )}
       </label>
 
       <button
@@ -1732,9 +1799,19 @@ function OperationalCanvas({
   // Route Planning - same task-scoped/slot pattern as Risk Assessments >
   // Venues above (acceptedTasksList, expand-to-load, "Add
   // Route"/"Add Another Route" per task). Each slot's Start/End is
-  // picked via the location engine; "Calculate Route" is a separate,
-  // explicitly-triggered action (not automatic) since it's the call
-  // that spends the metered TomTom traffic quota.
+  // picked via the location engine or a real Venue record; "Calculate
+  // Route" is a separate, explicitly-triggered action (not automatic)
+  // since it's the call that spends the metered TomTom traffic quota.
+  // Venues are fetched once, scoped down per-slot inside
+  // TaskRouteSlotCard (task's own venue listed first) - a task can be
+  // linked to several different venues across its route slots, so this
+  // isn't filtered down to just the one venue a task happens to carry.
+  const [venues, setVenues] = useState<Venue[]>([]);
+
+  useEffect(() => {
+    api.venues.list().then(setVenues).catch((err) => console.error("Failed to load venues:", err));
+  }, []);
+
   const [expandedRouteTaskIds, setExpandedRouteTaskIds] = useState<Set<number>>(new Set());
   const [taskRoutesMap, setTaskRoutesMap] = useState<Record<number, TaskRoute[]>>({});
   const [taskRoutesLoading, setTaskRoutesLoading] = useState<Record<number, boolean>>({});
@@ -3108,6 +3185,8 @@ function OperationalCanvas({
                             key={route.id}
                             route={route}
                             index={index}
+                            venues={venues}
+                            taskVenueId={task.venueId > 0 ? task.venueId : null}
                             onUpdatePoint={updateRoutePoint}
                             onCalculate={calculateRoute}
                             calculating={calculatingRouteId === route.id}

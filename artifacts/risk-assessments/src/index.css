@@ -1508,6 +1508,23 @@
   color: rgba(255, 255, 255, 0.45);
 }
 
+/* Alternative to searching - fills a route slot's Start/End straight
+   from a real Venue record's saved address/coordinates. */
+.route-slot-venue-select {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  font-family: inherit;
+  width: 100%;
+}
+
 /* Operational Layers panel - a legend/control panel for the canvas
    itself, docking to the same left edge as Brief/Tasks (all three
    opened via the VenueGuard brand menu). Shifts right by one panel-
