@@ -295,7 +295,7 @@ export interface OnboardingOverviewRecord extends OnboardingRecord {
 }
 
 export type DocumentType =
-  | "id_document" | "psira_registration" | "firearm_competency"
+  | "id_document" | "passport" | "psira_registration" | "firearm_competency"
   | "drivers_license" | "medical_certificate" | "background_check_report" | "other";
 
 // fileDataUrl is a base64 data: URL (this app has no cloud file
