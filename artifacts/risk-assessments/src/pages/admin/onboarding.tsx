@@ -52,7 +52,7 @@ function isExpiringSoon(expiryDate: string | null): boolean {
   return days < 30;
 }
 
-function DocumentUploadForm({ userId, onAdded }: { userId: number; onAdded: () => void }) {
+function DocumentUploadForm({ onboardingId, onAdded }: { onboardingId: number; onAdded: () => void }) {
   const [documentType, setDocumentType] = useState<DocumentType>("id_document");
   const [expiryDate, setExpiryDate] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -60,7 +60,7 @@ function DocumentUploadForm({ userId, onAdded }: { userId: number; onAdded: () =
 
   const mutation = useMutation({
     mutationFn: (data: { filename: string; fileDataUrl: string }) =>
-      api.onboarding.addDocument(userId, { documentType, expiryDate: expiryDate || undefined, ...data }),
+      api.onboarding.addDocument(onboardingId, { documentType, expiryDate: expiryDate || undefined, ...data }),
     onSuccess: () => {
       toast({ title: "Document added" });
       setExpiryDate("");
@@ -109,25 +109,26 @@ function DocumentUploadForm({ userId, onAdded }: { userId: number; onAdded: () =
   );
 }
 
-// Creates the CPO user directly - their onboarding record is then
-// auto-created lazily the first time it's fetched, same as any other
-// CPO (see GET /users/:userId/onboarding).
-function AddOperatorDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (userId: number) => void }) {
+// Creates a pending onboarding candidate - deliberately does NOT
+// create a real CPO user account yet. That only happens once a
+// Manager approves them (see CpoOnboardingDetail's statusMutation),
+// so a Pending/Denied operator can't be assigned tasks or show up in
+// Operator View until they're actually approved.
+function AddOperatorDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (onboardingId: number) => void }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const qc = useQueryClient();
   const { toast } = useToast();
 
   const mutation = useMutation({
-    mutationFn: () => api.users.create({ name, email, role: "cpo" }),
-    onSuccess: async (user) => {
+    mutationFn: () => api.onboarding.create({ name, email }),
+    onSuccess: async (record) => {
       // Wait for the overview list to include the new operator before
       // handing off to onCreated, which expands their row - otherwise
       // there's nothing to expand yet.
       await qc.invalidateQueries({ queryKey: ["onboarding-overview"] });
-      qc.invalidateQueries({ queryKey: ["users"] });
       toast({ title: "Operator added" });
-      onCreated(user.id);
+      onCreated(record.id);
       onClose();
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -156,24 +157,24 @@ function AddOperatorDialog({ onClose, onCreated }: { onClose: () => void; onCrea
   );
 }
 
-function CpoOnboardingDetail({ userId }: { userId: number }) {
+function CpoOnboardingDetail({ onboardingId }: { onboardingId: number }) {
   const qc = useQueryClient();
   const { toast } = useToast();
 
   const { data: record, isLoading: recordLoading } = useQuery<OnboardingRecord>({
-    queryKey: ["onboarding", userId],
-    queryFn: () => api.onboarding.get(userId),
+    queryKey: ["onboarding", onboardingId],
+    queryFn: () => api.onboarding.get(onboardingId),
   });
   const { data: documents = [], isLoading: docsLoading } = useQuery<OnboardingDocument[]>({
-    queryKey: ["onboarding-documents", userId],
-    queryFn: () => api.onboarding.listDocuments(userId),
+    queryKey: ["onboarding-documents", onboardingId],
+    queryFn: () => api.onboarding.listDocuments(onboardingId),
   });
 
   const toggleMutation = useMutation({
     mutationFn: ({ key, checked }: { key: string; checked: boolean }) =>
       api.onboarding.setChecklistItem(record!.id, key, checked),
     onSuccess: (updated) => {
-      qc.setQueryData(["onboarding", userId], updated);
+      qc.setQueryData(["onboarding", onboardingId], updated);
       qc.invalidateQueries({ queryKey: ["onboarding-overview"] });
     },
   });
@@ -181,21 +182,23 @@ function CpoOnboardingDetail({ userId }: { userId: number }) {
   const statusMutation = useMutation({
     mutationFn: (status: OnboardingStatus) => api.onboarding.updateStatus(record!.id, status),
     onSuccess: (updated) => {
-      qc.setQueryData(["onboarding", userId], updated);
+      qc.setQueryData(["onboarding", onboardingId], updated);
       qc.invalidateQueries({ queryKey: ["onboarding-overview"] });
+      qc.invalidateQueries({ queryKey: ["users"] });
       toast({ title: "Status updated" });
     },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const verifyMutation = useMutation({
     mutationFn: ({ id, verified }: { id: number; verified: boolean }) => api.onboarding.updateDocument(id, { verified }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["onboarding-documents", userId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["onboarding-documents", onboardingId] }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.onboarding.deleteDocument(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["onboarding-documents", userId] });
+      qc.invalidateQueries({ queryKey: ["onboarding-documents", onboardingId] });
       toast({ title: "Document removed" });
     },
   });
@@ -207,14 +210,19 @@ function CpoOnboardingDetail({ userId }: { userId: number }) {
         {recordLoading ? (
           <Skeleton className="h-8 w-40" />
         ) : (
-          <Select value={record?.status} onValueChange={(v) => statusMutation.mutate(v as OnboardingStatus)}>
-            <SelectTrigger className="h-8 w-44 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {(Object.keys(STATUS_CONFIG) as OnboardingStatus[]).map((s) => (
-                <SelectItem key={s} value={s}>{STATUS_CONFIG[s].label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <>
+            <Select value={record?.status} onValueChange={(v) => statusMutation.mutate(v as OnboardingStatus)}>
+              <SelectTrigger className="h-8 w-44 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {(Object.keys(STATUS_CONFIG) as OnboardingStatus[]).map((s) => (
+                  <SelectItem key={s} value={s}>{STATUS_CONFIG[s].label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {record?.userId == null && (
+              <p className="text-xs text-slate-400 mt-1.5">No CPO account exists yet - approving them creates one.</p>
+            )}
+          </>
         )}
       </div>
 
@@ -283,7 +291,7 @@ function CpoOnboardingDetail({ userId }: { userId: number }) {
             })}
           </div>
         )}
-        <DocumentUploadForm userId={userId} onAdded={() => qc.invalidateQueries({ queryKey: ["onboarding-documents", userId] })} />
+        <DocumentUploadForm onboardingId={onboardingId} onAdded={() => qc.invalidateQueries({ queryKey: ["onboarding-documents", onboardingId] })} />
       </div>
     </div>
   );
@@ -295,7 +303,7 @@ function CpoOnboardingDetail({ userId }: { userId: number }) {
 // server-defined list (same pattern as the Operational Plan
 // checklist), not user-configurable.
 export default function OnboardingPage() {
-  const [expandedUserId, setExpandedUserId] = useState<number | null>(null);
+  const [expandedOnboardingId, setExpandedOnboardingId] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const cardRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
@@ -307,8 +315,8 @@ export default function OnboardingPage() {
   // Scroll a freshly-added operator's row into view once it's expanded,
   // so creating them flows straight into their onboarding checklist.
   useEffect(() => {
-    if (expandedUserId != null) cardRefs.current[expandedUserId]?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [expandedUserId, records]);
+    if (expandedOnboardingId != null) cardRefs.current[expandedOnboardingId]?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [expandedOnboardingId, records]);
 
   const counts = {
     onboarded: records.filter((r) => r.status === "onboarded").length,
@@ -321,7 +329,7 @@ export default function OnboardingPage() {
       {showAdd && (
         <AddOperatorDialog
           onClose={() => setShowAdd(false)}
-          onCreated={(userId) => setExpandedUserId(userId)}
+          onCreated={(onboardingId) => setExpandedOnboardingId(onboardingId)}
         />
       )}
 
@@ -363,7 +371,7 @@ export default function OnboardingPage() {
           {records.map((r) => {
             const pct = r.totalCount === 0 ? 0 : Math.round((r.checkedCount / r.totalCount) * 100);
             return (
-              <Card key={r.userId} ref={(el) => { cardRefs.current[r.userId] = el; }}>
+              <Card key={r.id} ref={(el) => { cardRefs.current[r.id] = el; }}>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex-1 min-w-0">
@@ -380,14 +388,14 @@ export default function OnboardingPage() {
                       </div>
                     </div>
                     <button
-                      onClick={() => setExpandedUserId((id) => (id === r.userId ? null : r.userId))}
+                      onClick={() => setExpandedOnboardingId((id) => (id === r.id ? null : r.id))}
                       className="flex items-center gap-1 text-xs text-blue-600 hover:underline shrink-0"
                     >
-                      {expandedUserId === r.userId ? "Hide" : "Manage"}
-                      {expandedUserId === r.userId ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      {expandedOnboardingId === r.id ? "Hide" : "Manage"}
+                      {expandedOnboardingId === r.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                     </button>
                   </div>
-                  {expandedUserId === r.userId && <CpoOnboardingDetail userId={r.userId} />}
+                  {expandedOnboardingId === r.id && <CpoOnboardingDetail onboardingId={r.id} />}
                 </CardContent>
               </Card>
             );

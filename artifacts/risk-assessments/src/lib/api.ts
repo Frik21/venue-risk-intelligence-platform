@@ -269,13 +269,18 @@ export interface OnboardingChecklistEntry {
   checked: boolean;
 }
 
-// Operator Onboarding - one per CPO, exists implicitly (auto-created
-// server-side on first fetch, same pattern as Plan).
+// Operator Onboarding - one per candidate/CPO, created the moment a
+// Manager adds an operator, before any real user account exists.
+// userId is null until they're Approved - approving them is what
+// creates their actual account (see PATCH /onboarding/:id/status) -
+// so a Pending/Denied operator can't be assigned tasks, appear in
+// Operator View, etc. Until then, userName reflects the candidate
+// name entered at Add Operator time.
 export type OnboardingStatus = "in_progress" | "onboarded" | "denied";
 
 export interface OnboardingRecord {
   id: number;
-  userId: number;
+  userId: number | null;
   userName: string | null;
   status: OnboardingStatus;
   checklist: OnboardingChecklistEntry[];
@@ -294,10 +299,12 @@ export type DocumentType =
   | "drivers_license" | "medical_certificate" | "background_check_report" | "other";
 
 // fileDataUrl is a base64 data: URL (this app has no cloud file
-// storage) - same pattern as Expenses receipts.
+// storage) - same pattern as Expenses receipts. Attached to the
+// onboarding record, not the user, since documents can be uploaded
+// before a real user account exists.
 export interface OnboardingDocument {
   id: number;
-  userId: number;
+  operatorOnboardingId: number;
   documentType: DocumentType;
   label: string;
   filename: string | null;
@@ -596,14 +603,16 @@ export const api = {
   },
   onboarding: {
     listAll: () => apiFetch<OnboardingOverviewRecord[]>("/onboarding"),
-    get: (userId: number) => apiFetch<OnboardingRecord>(`/users/${userId}/onboarding`),
+    create: (data: { name: string; email: string }) =>
+      apiFetch<OnboardingRecord>("/onboarding", { method: "POST", body: JSON.stringify(data) }),
+    get: (onboardingId: number) => apiFetch<OnboardingRecord>(`/onboarding/${onboardingId}`),
     setChecklistItem: (onboardingId: number, key: string, checked: boolean) =>
       apiFetch<OnboardingRecord>(`/onboarding/${onboardingId}/checklist`, { method: "PATCH", body: JSON.stringify({ key, checked }) }),
     updateStatus: (onboardingId: number, status: OnboardingStatus) =>
       apiFetch<OnboardingRecord>(`/onboarding/${onboardingId}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
-    listDocuments: (userId: number) => apiFetch<OnboardingDocument[]>(`/users/${userId}/onboarding-documents`),
-    addDocument: (userId: number, data: { documentType: DocumentType; label?: string; filename?: string; fileDataUrl?: string; expiryDate?: string }) =>
-      apiFetch<OnboardingDocument>(`/users/${userId}/onboarding-documents`, { method: "POST", body: JSON.stringify(data) }),
+    listDocuments: (onboardingId: number) => apiFetch<OnboardingDocument[]>(`/onboarding/${onboardingId}/documents`),
+    addDocument: (onboardingId: number, data: { documentType: DocumentType; label?: string; filename?: string; fileDataUrl?: string; expiryDate?: string }) =>
+      apiFetch<OnboardingDocument>(`/onboarding/${onboardingId}/documents`, { method: "POST", body: JSON.stringify(data) }),
     updateDocument: (id: number, data: Partial<{ label: string; expiryDate: string; verified: boolean }>) =>
       apiFetch<OnboardingDocument>(`/onboarding-documents/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     deleteDocument: (id: number) => apiFetch<void>(`/onboarding-documents/${id}`, { method: "DELETE" }),

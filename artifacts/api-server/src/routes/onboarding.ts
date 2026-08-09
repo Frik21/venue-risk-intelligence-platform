@@ -18,7 +18,7 @@ function formatOnboarding(row: typeof operatorOnboardingTable.$inferSelect, user
   return {
     id: row.id,
     userId: row.userId,
-    userName: userName ?? null,
+    userName: userName ?? row.candidateName,
     status: row.status as (typeof ONBOARDING_STATUSES)[number],
     checklist,
     checkedCount: checklist.filter((c) => c.checked).length,
@@ -31,7 +31,7 @@ function formatOnboarding(row: typeof operatorOnboardingTable.$inferSelect, user
 function formatDocument(row: typeof operatorDocumentsTable.$inferSelect) {
   return {
     id: row.id,
-    userId: row.userId,
+    operatorOnboardingId: row.operatorOnboardingId,
     documentType: row.documentType as (typeof DOCUMENT_TYPES)[number]["value"],
     label: row.label,
     filename: row.filename ?? null,
@@ -43,44 +43,80 @@ function formatDocument(row: typeof operatorDocumentsTable.$inferSelect) {
   };
 }
 
-// Every CPO's onboarding progress, most recently updated first -
-// powers the Operator Onboarding overview page.
+const CreateOnboardingSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+});
+
+// Creates a pending onboarding candidate - deliberately does NOT
+// create a real user account yet (see the schema comment on
+// operatorOnboardingTable for why). The account only gets created
+// once a Manager approves them via PATCH /onboarding/:id/status.
+router.post("/onboarding", async (req, res): Promise<void> => {
+  const parsed = CreateOnboardingSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [existingUser] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, parsed.data.email));
+  if (existingUser) { res.status(409).json({ error: `A user with email "${parsed.data.email}" already exists` }); return; }
+
+  const [record] = await db
+    .insert(operatorOnboardingTable)
+    .values({ candidateName: parsed.data.name, candidateEmail: parsed.data.email, checklist: {} })
+    .returning();
+
+  res.status(201).json(formatOnboarding(record));
+});
+
+// Every operator's onboarding progress, most recently added first -
+// powers the Operator Onboarding overview page. Also auto-provisions
+// onboarding rows (defaulted to Approved) for any CPO user that
+// somehow has none yet - e.g. one created directly from the Users
+// page rather than through Add Operator, which already has a real
+// account so the Pending gate doesn't apply to them.
 router.get("/onboarding", async (_req, res): Promise<void> => {
   const cpos = await db.select().from(usersTable).where(eq(usersTable.role, "cpo"));
-  const records = await db.select().from(operatorOnboardingTable);
-  const recordMap: Record<number, typeof operatorOnboardingTable.$inferSelect> = {};
-  for (const r of records) recordMap[r.userId] = r;
+  let records = await db.select().from(operatorOnboardingTable);
 
-  const documents = await db.select({ userId: operatorDocumentsTable.userId }).from(operatorDocumentsTable);
+  const linkedUserIds = new Set(records.map((r) => r.userId).filter((id): id is number => id != null));
+  const unlinked = cpos.filter((c) => !linkedUserIds.has(c.id));
+  if (unlinked.length > 0) {
+    const inserted = await db
+      .insert(operatorOnboardingTable)
+      .values(unlinked.map((c) => ({ userId: c.id, candidateName: c.name, candidateEmail: c.email, checklist: {}, status: "onboarded" as const })))
+      .returning();
+    records = [...records, ...inserted];
+  }
+  records.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+  const userMap: Record<number, (typeof cpos)[number]> = {};
+  for (const u of cpos) userMap[u.id] = u;
+
+  const documents = await db.select({ operatorOnboardingId: operatorDocumentsTable.operatorOnboardingId }).from(operatorDocumentsTable);
   const docCountMap: Record<number, number> = {};
-  for (const d of documents) docCountMap[d.userId] = (docCountMap[d.userId] ?? 0) + 1;
+  for (const d of documents) docCountMap[d.operatorOnboardingId] = (docCountMap[d.operatorOnboardingId] ?? 0) + 1;
 
   res.json(
-    cpos.map((cpo) => ({
-      ...formatOnboarding(
-        recordMap[cpo.id] ?? { id: -1, userId: cpo.id, checklist: {}, status: "in_progress", createdAt: new Date(), updatedAt: new Date() },
-        cpo.name,
-      ),
-      documentCount: docCountMap[cpo.id] ?? 0,
+    records.map((r) => ({
+      ...formatOnboarding(r, r.userId != null ? userMap[r.userId]?.name ?? null : null),
+      documentCount: docCountMap[r.id] ?? 0,
     })),
   );
 });
 
-// A CPO's onboarding record exists implicitly the moment they do -
-// lazily created on first fetch, same pattern as GET /tasks/:taskId/plan.
-router.get("/users/:userId/onboarding", async (req, res): Promise<void> => {
-  const userId = Number(req.params.userId);
-  if (isNaN(userId)) { res.status(400).json({ error: "Invalid id" }); return; }
+router.get("/onboarding/:id", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const [user] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, userId));
-  if (!user) { res.status(404).json({ error: "User not found" }); return; }
+  const [record] = await db.select().from(operatorOnboardingTable).where(eq(operatorOnboardingTable.id, id));
+  if (!record) { res.status(404).json({ error: "Onboarding record not found" }); return; }
 
-  let [record] = await db.select().from(operatorOnboardingTable).where(eq(operatorOnboardingTable.userId, userId));
-  if (!record) {
-    [record] = await db.insert(operatorOnboardingTable).values({ userId, checklist: {} }).returning();
+  let userName: string | null = null;
+  if (record.userId != null) {
+    const [user] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, record.userId));
+    userName = user?.name ?? null;
   }
 
-  res.json(formatOnboarding(record, user.name));
+  res.json(formatOnboarding(record, userName));
 });
 
 const ChecklistUpdateSchema = z.object({
@@ -118,8 +154,14 @@ const StatusUpdateSchema = z.object({
   status: z.enum(ONBOARDING_STATUSES),
 });
 
-// Manager-set decision - see the schema comment for why this is
-// separate from checklist completion.
+// Manager-set decision. Approving a Pending candidate for the first
+// time creates their real operational account here - see the schema
+// comment on operatorOnboardingTable for why account creation is
+// gated on approval rather than immediate. Moving an already-approved
+// operator to Pending/Denied deactivates (not deletes) their account,
+// preserving their task/timesheet history while pulling them out of
+// Operator View, task assignment, etc. (all filtered on users.active
+// elsewhere) - re-approving reactivates the same account.
 router.patch("/onboarding/:id/status", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -127,24 +169,47 @@ router.patch("/onboarding/:id/status", async (req, res): Promise<void> => {
   const parsed = StatusUpdateSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const [existing] = await db.select().from(operatorOnboardingTable).where(eq(operatorOnboardingTable.id, id));
+  if (!existing) { res.status(404).json({ error: "Onboarding record not found" }); return; }
+
+  let userId = existing.userId;
+  const approving = parsed.data.status === "onboarded";
+
+  if (approving && userId == null) {
+    const [dupe] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, existing.candidateEmail));
+    if (dupe) { res.status(409).json({ error: `A user with email "${existing.candidateEmail}" already exists` }); return; }
+
+    const initials = existing.candidateName.trim().split(/\s+/).map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+    const [user] = await db
+      .insert(usersTable)
+      .values({ name: existing.candidateName, email: existing.candidateEmail, role: "cpo", avatarInitials: initials })
+      .returning();
+    userId = user.id;
+  } else if (userId != null) {
+    await db.update(usersTable).set({ active: approving }).where(eq(usersTable.id, userId));
+  }
+
   const [updated] = await db
     .update(operatorOnboardingTable)
-    .set({ status: parsed.data.status })
+    .set({ status: parsed.data.status, userId })
     .where(eq(operatorOnboardingTable.id, id))
     .returning();
 
-  if (!updated) { res.status(404).json({ error: "Onboarding record not found" }); return; }
-  res.json(formatOnboarding(updated));
+  const userName = userId != null
+    ? (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, userId)))[0]?.name ?? null
+    : null;
+
+  res.json(formatOnboarding(updated, userName));
 });
 
-router.get("/users/:userId/onboarding-documents", async (req, res): Promise<void> => {
-  const userId = Number(req.params.userId);
-  if (isNaN(userId)) { res.status(400).json({ error: "Invalid id" }); return; }
+router.get("/onboarding/:id/documents", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const rows = await db
     .select()
     .from(operatorDocumentsTable)
-    .where(eq(operatorDocumentsTable.userId, userId))
+    .where(eq(operatorDocumentsTable.operatorOnboardingId, id))
     .orderBy(desc(operatorDocumentsTable.createdAt));
 
   res.json(rows.map(formatDocument));
@@ -158,21 +223,21 @@ const DocumentInputSchema = z.object({
   expiryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expiryDate must be YYYY-MM-DD").optional(),
 });
 
-router.post("/users/:userId/onboarding-documents", async (req, res): Promise<void> => {
-  const userId = Number(req.params.userId);
-  if (isNaN(userId)) { res.status(400).json({ error: "Invalid id" }); return; }
+router.post("/onboarding/:id/documents", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const parsed = DocumentInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const [user] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, userId));
-  if (!user) { res.status(404).json({ error: "User not found" }); return; }
+  const [record] = await db.select({ id: operatorOnboardingTable.id }).from(operatorOnboardingTable).where(eq(operatorOnboardingTable.id, id));
+  if (!record) { res.status(404).json({ error: "Onboarding record not found" }); return; }
 
   const typeLabel = DOCUMENT_TYPES.find((t) => t.value === parsed.data.documentType)?.label ?? "Document";
   const [doc] = await db
     .insert(operatorDocumentsTable)
     .values({
-      userId,
+      operatorOnboardingId: id,
       documentType: parsed.data.documentType,
       label: parsed.data.label || typeLabel,
       filename: parsed.data.filename,

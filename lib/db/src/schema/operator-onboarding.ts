@@ -3,9 +3,15 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
 
-// Operator Onboarding - one record per CPO, exists implicitly the
-// moment the CPO user does (lazily created on first fetch, same
-// pattern as plans.ts's per-task Plan). The checklist itself is a
+// Operator Onboarding - one record per candidate/CPO, created the
+// moment a Manager adds an operator (POST /onboarding) - *before* any
+// real user account exists. candidateName/candidateEmail hold their
+// details until they're Approved; userId is only set once approved,
+// which is also the moment their real account gets created (see
+// PATCH /onboarding/:id/status in routes/onboarding.ts). This is
+// deliberate: an operator can't be assigned tasks, log in as a CPO,
+// etc. while Pending or Denied, because until Approved there's no
+// user account for any of that to point at. The checklist itself is a
 // fixed, ordered list of items (see
 // artifacts/api-server/src/lib/onboarding-checklist.ts) - stored here
 // as a { [itemKey]: boolean } map rather than one row per item, same
@@ -13,11 +19,13 @@ import { usersTable } from "./users";
 // user-managed, so it can change without a data migration.
 // status is a Manager-set decision, deliberately not derived from
 // checklist completion - a fully-checked checklist doesn't
-// automatically mean "Onboarded" (the Manager still confirms it), and
+// automatically mean "Approved" (the Manager still confirms it), and
 // "Denied" is a terminal decision the checklist alone can't express.
 export const operatorOnboardingTable = pgTable("operator_onboarding", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().unique().references(() => usersTable.id, { onDelete: "cascade" }),
+  userId: integer("user_id").unique().references(() => usersTable.id, { onDelete: "set null" }),
+  candidateName: text("candidate_name").notNull().default(""),
+  candidateEmail: text("candidate_email").notNull().default(""),
   checklist: jsonb("checklist").notNull().default({}),
   status: text("status").notNull().default("in_progress"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -28,14 +36,17 @@ export const insertOperatorOnboardingSchema = createInsertSchema(operatorOnboard
 export type InsertOperatorOnboarding = z.infer<typeof insertOperatorOnboardingSchema>;
 export type OperatorOnboarding = typeof operatorOnboardingTable.$inferSelect;
 
-// A CPO's onboarding documents (ID, PSIRA registration, firearm
-// competency, etc.) - several per CPO, each with its own optional
-// expiry date. fileDataUrl is a base64 data: URL (this app has no
-// cloud file storage - see lib/db/src/schema/expenses.ts for the same
-// reasoning/pattern with receipts), stored/returned directly on the row.
+// A candidate's onboarding documents (ID, PSIRA registration, firearm
+// competency, etc.) - several per candidate, each with its own
+// optional expiry date. Attached to the onboarding record rather than
+// the user, since documents can be uploaded before a real user
+// account exists (see operatorOnboardingTable above). fileDataUrl is
+// a base64 data: URL (this app has no cloud file storage - see
+// lib/db/src/schema/expenses.ts for the same reasoning/pattern with
+// receipts), stored/returned directly on the row.
 export const operatorDocumentsTable = pgTable("operator_documents", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  operatorOnboardingId: integer("operator_onboarding_id").notNull().references(() => operatorOnboardingTable.id, { onDelete: "cascade" }),
   documentType: text("document_type").notNull().default("other"),
   label: text("label").notNull().default(""),
   filename: text("filename"),
