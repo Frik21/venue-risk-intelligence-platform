@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { UserPlus, ChevronDown, ChevronUp, FileText, CheckCircle2, Trash2, Plus } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
@@ -110,7 +110,7 @@ function DocumentUploadForm({ userId, onAdded }: { userId: number; onAdded: () =
 // Creates the CPO user directly - their onboarding record is then
 // auto-created lazily the first time it's fetched, same as any other
 // CPO (see GET /users/:userId/onboarding).
-function AddOperatorDialog({ onClose }: { onClose: () => void }) {
+function AddOperatorDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (userId: number) => void }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const qc = useQueryClient();
@@ -118,10 +118,14 @@ function AddOperatorDialog({ onClose }: { onClose: () => void }) {
 
   const mutation = useMutation({
     mutationFn: () => api.users.create({ name, email, role: "cpo" }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["onboarding-overview"] });
+    onSuccess: async (user) => {
+      // Wait for the overview list to include the new operator before
+      // handing off to onCreated, which expands their row - otherwise
+      // there's nothing to expand yet.
+      await qc.invalidateQueries({ queryKey: ["onboarding-overview"] });
       qc.invalidateQueries({ queryKey: ["users"] });
       toast({ title: "Operator added" });
+      onCreated(user.id);
       onClose();
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -291,11 +295,18 @@ function CpoOnboardingDetail({ userId }: { userId: number }) {
 export default function OnboardingPage() {
   const [expandedUserId, setExpandedUserId] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const cardRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   const { data: records = [], isLoading } = useQuery<OnboardingOverviewRecord[]>({
     queryKey: ["onboarding-overview"],
     queryFn: api.onboarding.listAll,
   });
+
+  // Scroll a freshly-added operator's row into view once it's expanded,
+  // so creating them flows straight into their onboarding checklist.
+  useEffect(() => {
+    if (expandedUserId != null) cardRefs.current[expandedUserId]?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [expandedUserId, records]);
 
   const counts = {
     onboarded: records.filter((r) => r.status === "onboarded").length,
@@ -305,7 +316,12 @@ export default function OnboardingPage() {
 
   return (
     <div className="space-y-5">
-      {showAdd && <AddOperatorDialog onClose={() => setShowAdd(false)} />}
+      {showAdd && (
+        <AddOperatorDialog
+          onClose={() => setShowAdd(false)}
+          onCreated={(userId) => setExpandedUserId(userId)}
+        />
+      )}
 
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -345,7 +361,7 @@ export default function OnboardingPage() {
           {records.map((r) => {
             const pct = r.totalCount === 0 ? 0 : Math.round((r.checkedCount / r.totalCount) * 100);
             return (
-              <Card key={r.userId}>
+              <Card key={r.userId} ref={(el) => { cardRefs.current[r.userId] = el; }}>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex-1 min-w-0">
