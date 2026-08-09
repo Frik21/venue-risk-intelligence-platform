@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
-import { UserPlus, ChevronDown, ChevronUp, FileText, CheckCircle2, Trash2 } from "lucide-react";
+import { UserPlus, ChevronDown, ChevronUp, FileText, CheckCircle2, Trash2, Plus } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -103,6 +103,49 @@ function DocumentUploadForm({ userId, onAdded }: { userId: number; onAdded: () =
         {uploading || mutation.isPending ? "Uploading..." : "Choose File"}
         <input type="file" className="hidden" onChange={handleFile} disabled={uploading || mutation.isPending} />
       </label>
+    </div>
+  );
+}
+
+// Creates the CPO user directly - their onboarding record is then
+// auto-created lazily the first time it's fetched, same as any other
+// CPO (see GET /users/:userId/onboarding).
+function AddOperatorDialog({ onClose }: { onClose: () => void }) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const mutation = useMutation({
+    mutationFn: () => api.users.create({ name, email, role: "cpo" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["onboarding-overview"] });
+      qc.invalidateQueries({ queryKey: ["users"] });
+      toast({ title: "Operator added" });
+      onClose();
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
+        <h2 className="text-lg font-bold">Add Operator</h2>
+        <div>
+          <Label>Full Name *</Label>
+          <Input placeholder="John Smith" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div>
+          <Label>Email *</Label>
+          <Input type="email" placeholder="john@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </div>
+        <div className="flex gap-3 pt-2">
+          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !name || !email}>
+            {mutation.isPending ? "Adding..." : "Add Operator"}
+          </Button>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -247,6 +290,7 @@ function CpoOnboardingDetail({ userId }: { userId: number }) {
 // checklist), not user-configurable.
 export default function OnboardingPage() {
   const [expandedUserId, setExpandedUserId] = useState<number | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
 
   const { data: records = [], isLoading } = useQuery<OnboardingOverviewRecord[]>({
     queryKey: ["onboarding-overview"],
@@ -261,9 +305,16 @@ export default function OnboardingPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Operator Onboarding</h1>
-        <p className="text-slate-500 text-sm mt-0.5">Checklist progress and document verification for every CPO</p>
+      {showAdd && <AddOperatorDialog onClose={() => setShowAdd(false)} />}
+
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Operator Onboarding</h1>
+          <p className="text-slate-500 text-sm mt-0.5">Checklist progress and document verification for every CPO</p>
+        </div>
+        <Button onClick={() => setShowAdd(true)} className="shrink-0">
+          <Plus className="w-4 h-4 mr-1.5" /> Add Operator
+        </Button>
       </div>
 
       {!isLoading && records.length > 0 && (
@@ -286,7 +337,7 @@ export default function OnboardingPage() {
           <CardContent className="py-16 text-center">
             <UserPlus className="w-10 h-10 mx-auto mb-3 text-slate-300" />
             <h3 className="font-medium text-slate-600 mb-1">No CPOs yet</h3>
-            <p className="text-sm text-slate-400">Add a CPO user from Users to start onboarding.</p>
+            <p className="text-sm text-slate-400">Add an operator above to start onboarding.</p>
           </CardContent>
         </Card>
       ) : (
