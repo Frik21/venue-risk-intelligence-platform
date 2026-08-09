@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { api, type Task, type User } from "@/lib/api";
+import { api, type Task, type User, type Venue } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Mail, ClipboardList } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { NewTaskDialog } from "@/components/new-task-dialog";
 
 type DeployStatus = "deployed" | "available" | "off_duty";
 
@@ -22,8 +23,11 @@ const STATUS_CONFIG: Record<DeployStatus, { label: string; color: string }> = {
 // yet, so they're not shown here rather than faked.
 export default function CpoDeployment() {
   const [statusFilter, setStatusFilter] = useState<DeployStatus | null>(null);
+  const [assigningCpoId, setAssigningCpoId] = useState<number | null>(null);
   const { data: users = [], isLoading: usersLoading } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list });
   const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({ queryKey: ["tasks"], queryFn: () => api.tasks.list() });
+  // Only fetched once "Assign User" is actually clicked.
+  const { data: venues = [] } = useQuery<Venue[]>({ queryKey: ["venues"], queryFn: api.venues.list, enabled: assigningCpoId != null });
 
   const cpos = users.filter((u) => u.role === "cpo");
   const isLoading = usersLoading || tasksLoading;
@@ -50,6 +54,15 @@ export default function CpoDeployment() {
 
   return (
     <div className="space-y-5">
+      {assigningCpoId != null && (
+        <NewTaskDialog
+          venues={venues}
+          users={users}
+          initialAssigneeId={assigningCpoId}
+          onClose={() => setAssigningCpoId(null)}
+        />
+      )}
+
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Operator Deployment</h1>
         <p className="text-slate-500 text-sm mt-0.5">Status, current assignment, and upcoming assignments for every CPO</p>
@@ -129,11 +142,17 @@ export default function CpoDeployment() {
                       </p>
                     )}
                   </div>
-                  <div className="text-right shrink-0">
+                  <div className="text-right shrink-0 space-y-2">
                     <div className="flex items-center gap-1 text-xs text-slate-500">
                       <ClipboardList className="w-3.5 h-3.5" />
                       <span>{taskCount} task{taskCount !== 1 ? "s" : ""} total</span>
                     </div>
+                    <button
+                      onClick={() => setAssigningCpoId(cpo.id)}
+                      className="flex items-center gap-1 text-xs text-blue-600 hover:underline ml-auto"
+                    >
+                      <ClipboardList className="w-3.5 h-3.5" /> Assign User
+                    </button>
                   </div>
                 </div>
               </CardContent>
