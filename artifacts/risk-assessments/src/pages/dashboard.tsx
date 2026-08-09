@@ -2929,42 +2929,47 @@ function OperationalCanvas({
         ) : planLoadingTaskId === planningTaskId ? (
           <p className="tasks-panel-empty">Loading…</p>
         ) : taskPlans[planningTaskId] ? (
-          <>
-            <div className="task-plan-checklist">
-              {taskPlans[planningTaskId].checklist.map((item) => (
-                <label key={item.key} className="task-plan-checklist-item">
-                  <input
-                    type="checkbox"
-                    checked={item.checked}
-                    onChange={(event) =>
-                      toggleChecklistItem(planningTaskId, taskPlans[planningTaskId].id, item.key, event.target.checked)
-                    }
-                  />
-                  {item.label}
-                </label>
-              ))}
+          taskPlans[planningTaskId].submittedAt ? (
+            // Once submitted, the checklist is locked - a Manager owns
+            // it from here, so it collapses into a single closed
+            // summary rather than staying open/re-editable/
+            // re-submittable from the CPO's side.
+            <div className="task-plan-locked">
+              <ClipboardCheck className="w-5 h-5" />
+              <p className="task-plan-locked-title">Checklist submitted</p>
+              <p className="task-plan-locked-note">
+                Submitted {new Date(taskPlans[planningTaskId].submittedAt as string).toLocaleString()}
+              </p>
             </div>
+          ) : (
+            <>
+              <div className="task-plan-checklist">
+                {taskPlans[planningTaskId].checklist.map((item) => (
+                  <label key={item.key} className="task-plan-checklist-item">
+                    <input
+                      type="checkbox"
+                      checked={item.checked}
+                      onChange={(event) =>
+                        toggleChecklistItem(planningTaskId, taskPlans[planningTaskId].id, item.key, event.target.checked)
+                      }
+                    />
+                    {item.label}
+                  </label>
+                ))}
+              </div>
 
-            <div className="task-plan-submit">
-              <button
-                type="button"
-                className="task-plan-submit-btn"
-                onClick={() => submitPlan(planningTaskId, taskPlans[planningTaskId].id)}
-                disabled={submittingPlanTaskId === planningTaskId}
-              >
-                {submittingPlanTaskId === planningTaskId
-                  ? "Submitting…"
-                  : taskPlans[planningTaskId].submittedAt
-                    ? "Re-submit to Manager"
-                    : "Submit to Manager"}
-              </button>
-              {taskPlans[planningTaskId].submittedAt && (
-                <p className="task-plan-submit-status">
-                  Submitted {new Date(taskPlans[planningTaskId].submittedAt as string).toLocaleString()}
-                </p>
-              )}
-            </div>
-          </>
+              <div className="task-plan-submit">
+                <button
+                  type="button"
+                  className="task-plan-submit-btn"
+                  onClick={() => submitPlan(planningTaskId, taskPlans[planningTaskId].id)}
+                  disabled={submittingPlanTaskId === planningTaskId}
+                >
+                  {submittingPlanTaskId === planningTaskId ? "Submitting…" : "Submit to Manager"}
+                </button>
+              </div>
+            </>
+          )
         ) : (
           <p className="tasks-panel-empty">Couldn&apos;t load plan.</p>
         )}
