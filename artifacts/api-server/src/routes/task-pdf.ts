@@ -75,6 +75,8 @@ router.get("/tasks/:taskId/download", async (req, res): Promise<void> => {
       liveTravelTimeSeconds: r.liveTravelTimeSeconds,
       trafficDelaySeconds: r.trafficDelaySeconds,
       trafficCheckedAt: r.trafficCheckedAt?.toISOString() ?? null,
+      nearestHospitals: (r.nearestHospitalsJson as { name: string; distanceMeters: number }[] | null) ?? [],
+      nearestPoliceStations: (r.nearestPoliceStationsJson as { name: string; distanceMeters: number }[] | null) ?? [],
     })),
   });
 

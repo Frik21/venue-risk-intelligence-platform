@@ -741,6 +741,33 @@ function TaskRouteSlotCard({
           )}
         </div>
       )}
+
+      {hasResults && (route.nearestHospitals.length > 0 || route.nearestPoliceStations.length > 0) && (
+        <div className="route-slot-nearby">
+          {route.nearestHospitals.length > 0 && (
+            <div className="route-slot-nearby-group">
+              <p className="route-slot-nearby-label">Nearest Hospitals</p>
+              {route.nearestHospitals.map((hospital, i) => (
+                <div key={i} className="route-slot-nearby-item">
+                  <span>{hospital.name}</span>
+                  <span className="route-slot-nearby-distance">{formatRouteDistance(hospital.distanceMeters)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {route.nearestPoliceStations.length > 0 && (
+            <div className="route-slot-nearby-group">
+              <p className="route-slot-nearby-label">Nearest Police Stations</p>
+              {route.nearestPoliceStations.map((station, i) => (
+                <div key={i} className="route-slot-nearby-item">
+                  <span>{station.name}</span>
+                  <span className="route-slot-nearby-distance">{formatRouteDistance(station.distanceMeters)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1853,6 +1880,8 @@ function OperationalCanvas({
       liveTravelTimeSeconds: null,
       trafficDelaySeconds: null,
       trafficCheckedAt: null,
+      nearestHospitals: [],
+      nearestPoliceStations: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

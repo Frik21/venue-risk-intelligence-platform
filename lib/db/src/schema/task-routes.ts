@@ -36,6 +36,13 @@ export const taskRoutesTable = pgTable(
     liveTravelTimeSeconds: integer("live_travel_time_seconds"),
     trafficDelaySeconds: integer("traffic_delay_seconds"),
     trafficCheckedAt: timestamp("traffic_checked_at", { withTimezone: true }),
+    // Nearest hospitals/police stations found along the route corridor
+    // (see lib/nearby-services.ts) - populated alongside the OSRM
+    // geometry on calculate, not user-editable. Automates the Task
+    // Planning checklist's "Closest hospitals identified"/"Closest
+    // police stations identified" items for this route.
+    nearestHospitalsJson: jsonb("nearest_hospitals_json"),
+    nearestPoliceStationsJson: jsonb("nearest_police_stations_json"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   },

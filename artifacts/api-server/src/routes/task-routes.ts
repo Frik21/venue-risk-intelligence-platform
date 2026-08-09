@@ -4,6 +4,7 @@ import { db, taskRoutesTable, tasksTable } from "@workspace/db";
 import { z } from "zod";
 import { fetchOsrmRoute } from "../lib/route-calculation";
 import { fetchTrafficAwareRoute, TrafficNotConfiguredError } from "../lib/traffic";
+import { fetchNearbyServices, type NearbyService } from "../lib/nearby-services";
 
 const router: IRouter = Router();
 
@@ -24,6 +25,8 @@ function formatRoute(row: typeof taskRoutesTable.$inferSelect) {
     liveTravelTimeSeconds: row.liveTravelTimeSeconds,
     trafficDelaySeconds: row.trafficDelaySeconds,
     trafficCheckedAt: row.trafficCheckedAt?.toISOString() ?? null,
+    nearestHospitals: (row.nearestHospitalsJson as NearbyService[] | null) ?? [],
+    nearestPoliceStations: (row.nearestPoliceStationsJson as NearbyService[] | null) ?? [],
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -88,9 +91,10 @@ router.patch("/task-routes/:id", async (req, res): Promise<void> => {
 });
 
 // Computes geometry/distance/static duration via OSRM (free, always
-// attempted) and live-traffic ETA via TomTom (only if configured) - a
-// missing/failing traffic check doesn't block getting the route itself,
-// it just leaves the traffic fields as they were.
+// attempted), live-traffic ETA via TomTom (only if configured), and the
+// nearest hospitals/police stations along the route via Overpass - the
+// latter two are best-effort and don't block getting the route itself
+// if they fail, they just leave those fields as they were.
 router.post("/task-routes/:id/calculate", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -126,6 +130,16 @@ router.post("/task-routes/:id/calculate", async (req, res): Promise<void> => {
     }
   }
 
+  let nearestHospitalsJson = route.nearestHospitalsJson;
+  let nearestPoliceStationsJson = route.nearestPoliceStationsJson;
+  try {
+    const nearby = await fetchNearbyServices(osrm.geometry.coordinates);
+    nearestHospitalsJson = nearby.hospitals;
+    nearestPoliceStationsJson = nearby.policeStations;
+  } catch (err) {
+    console.error(`Nearby hospitals/police lookup failed for route ${id}:`, err);
+  }
+
   const [updated] = await db
     .update(taskRoutesTable)
     .set({
@@ -135,6 +149,8 @@ router.post("/task-routes/:id/calculate", async (req, res): Promise<void> => {
       liveTravelTimeSeconds,
       trafficDelaySeconds,
       trafficCheckedAt,
+      nearestHospitalsJson,
+      nearestPoliceStationsJson,
     })
     .where(eq(taskRoutesTable.id, id))
     .returning();

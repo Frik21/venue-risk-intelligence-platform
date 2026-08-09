@@ -158,6 +158,16 @@ export interface TrafficCondition {
 // traffic-aware ETA from TomTom (see task-routes.ts on the backend).
 // Distinct from Route/api.routes above, which is the separate, formal
 // Assessment-based route-analysis feature.
+// Mirrors artifacts/api-server/src/lib/nearby-services.ts's
+// NearbyService - same "frontend can't import a backend module"
+// reasoning as WeatherFinding/TrafficCondition above.
+export interface NearbyService {
+  name: string;
+  lat: number;
+  lng: number;
+  distanceMeters: number;
+}
+
 export interface TaskRoute {
   id: number;
   taskId: number;
@@ -174,6 +184,8 @@ export interface TaskRoute {
   liveTravelTimeSeconds: number | null;
   trafficDelaySeconds: number | null;
   trafficCheckedAt: string | null;
+  nearestHospitals: NearbyService[];
+  nearestPoliceStations: NearbyService[];
   createdAt: string;
   updatedAt: string;
 }

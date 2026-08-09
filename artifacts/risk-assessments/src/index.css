@@ -1603,6 +1603,48 @@
   width: 100%;
 }
 
+/* Nearest hospitals/police stations along a calculated route (see
+   route-slot-nearby-* usage in TaskRouteSlotCard, populated by
+   lib/nearby-services.ts on the backend). Reuses the same visual
+   language as venue-assessment-meta above. */
+.route-slot-nearby {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.route-slot-nearby-group {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.route-slot-nearby-label {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.route-slot-nearby-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  padding: 2px 0;
+}
+
+.route-slot-nearby-distance {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
 /* Operational Layers panel - a legend/control panel for the canvas
    itself, docking to the same left edge as Brief/Tasks (all three
    opened via the VenueGuard brand menu). Shifts right by one panel-

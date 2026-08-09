@@ -40,6 +40,8 @@ export interface TaskPdfData {
     liveTravelTimeSeconds: number | null;
     trafficDelaySeconds: number | null;
     trafficCheckedAt: string | null;
+    nearestHospitals: { name: string; distanceMeters: number }[];
+    nearestPoliceStations: { name: string; distanceMeters: number }[];
   }[];
 }
 
@@ -165,6 +167,20 @@ export function buildTaskPdf(data: TaskPdfData): PDFKit.PDFDocument {
           .text("Traffic Delay: ", { continued: true })
           .font("Helvetica")
           .text(route.trafficDelaySeconds ? `+${formatDuration(route.trafficDelaySeconds)}` : "None");
+      }
+      if (route.nearestHospitals.length > 0) {
+        doc.font("Helvetica-Bold").text("Nearest Hospitals:");
+        doc.font("Helvetica");
+        for (const hospital of route.nearestHospitals) {
+          doc.text(`  • ${hospital.name} (${formatDistance(hospital.distanceMeters)})`);
+        }
+      }
+      if (route.nearestPoliceStations.length > 0) {
+        doc.font("Helvetica-Bold").text("Nearest Police Stations:");
+        doc.font("Helvetica");
+        for (const station of route.nearestPoliceStations) {
+          doc.text(`  • ${station.name} (${formatDistance(station.distanceMeters)})`);
+        }
       }
       doc.moveDown(0.5);
     }
