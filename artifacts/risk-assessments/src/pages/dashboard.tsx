@@ -411,6 +411,13 @@ const OPEN_LAYERS_PANEL_EVENT = "venueguard-open-layers-panel";
 // OPEN_*_PANEL_EVENT constants above - reopens the brand dropdown after
 // the panel that triggered it closes itself.
 const REOPEN_BRAND_MENU_EVENT = "venueguard-reopen-brand-menu";
+// Dispatched by TopBanner whenever a click lands outside the brand
+// menu/dropdown (e.g. the search bar, the operator area, blank space
+// in the banner) and picked up by OperationalCanvas, the same
+// cross-sibling reason as the events above - lets clicking anywhere in
+// the top banner close an open VenueGuard panel, matching what
+// clicking the canvas itself already does (see handleCanvasClick).
+const CLOSE_VENUEGUARD_PANELS_EVENT = "venueguard-close-panels";
 
 // Venue Risk Assessment - the CPO's in-field checklist for a specific
 // (task, venue) pair, reached from Risk Assessments > Venues > a venue.
@@ -811,9 +818,13 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
   }
 
   return (
-    <header className="top-banner">
+    <header
+      className="top-banner"
+      onClick={() => window.dispatchEvent(new Event(CLOSE_VENUEGUARD_PANELS_EVENT))}
+    >
       <div
         className="top-banner-brand"
+        onClick={(event) => event.stopPropagation()}
         onBlur={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget as Node)) setBrandMenuOpen(false);
         }}
@@ -2210,6 +2221,13 @@ function OperationalCanvas({
     const openRoutePlanning = () => setActivePanel("route-planning");
     const openDownloadTask = () => setActivePanel("download-task");
     const openLayers = () => setActivePanel("layers");
+    // Mirrors the panel-closing half of handleCanvasClick below, fired
+    // from TopBanner (a sibling, not a descendant of this canvas) when a
+    // click lands outside its brand menu - see CLOSE_VENUEGUARD_PANELS_EVENT.
+    const closePanelsFromTopBanner = () => {
+      setActivePanel(null);
+      setAlertsPanelOpen(false);
+    };
     window.addEventListener(OPEN_BRIEF_PANEL_EVENT, openBrief);
     window.addEventListener(OPEN_COMMUNICATIONS_PANEL_EVENT, openCommunications);
     window.addEventListener(OPEN_TASKS_PANEL_EVENT, openTasks);
@@ -2218,6 +2236,7 @@ function OperationalCanvas({
     window.addEventListener(OPEN_ROUTE_PLANNING_PANEL_EVENT, openRoutePlanning);
     window.addEventListener(OPEN_DOWNLOAD_TASK_PANEL_EVENT, openDownloadTask);
     window.addEventListener(OPEN_LAYERS_PANEL_EVENT, openLayers);
+    window.addEventListener(CLOSE_VENUEGUARD_PANELS_EVENT, closePanelsFromTopBanner);
     return () => {
       window.removeEventListener(OPEN_BRIEF_PANEL_EVENT, openBrief);
       window.removeEventListener(OPEN_COMMUNICATIONS_PANEL_EVENT, openCommunications);
@@ -2227,6 +2246,7 @@ function OperationalCanvas({
       window.removeEventListener(OPEN_ROUTE_PLANNING_PANEL_EVENT, openRoutePlanning);
       window.removeEventListener(OPEN_DOWNLOAD_TASK_PANEL_EVENT, openDownloadTask);
       window.removeEventListener(OPEN_LAYERS_PANEL_EVENT, openLayers);
+      window.removeEventListener(CLOSE_VENUEGUARD_PANELS_EVENT, closePanelsFromTopBanner);
     };
   }, []);
 
