@@ -6,6 +6,7 @@ import { ONBOARDING_CHECKLIST_ITEMS, DOCUMENT_TYPES } from "../lib/onboarding-ch
 
 const router: IRouter = Router();
 const DOCUMENT_TYPE_VALUES = DOCUMENT_TYPES.map((t) => t.value) as [string, ...string[]];
+const ONBOARDING_STATUSES = ["in_progress", "onboarded", "denied"] as const;
 
 function formatOnboarding(row: typeof operatorOnboardingTable.$inferSelect, userName?: string | null) {
   const stored = (row.checklist as Record<string, boolean>) ?? {};
@@ -18,6 +19,7 @@ function formatOnboarding(row: typeof operatorOnboardingTable.$inferSelect, user
     id: row.id,
     userId: row.userId,
     userName: userName ?? null,
+    status: row.status as (typeof ONBOARDING_STATUSES)[number],
     checklist,
     checkedCount: checklist.filter((c) => c.checked).length,
     totalCount: checklist.length,
@@ -56,7 +58,7 @@ router.get("/onboarding", async (_req, res): Promise<void> => {
   res.json(
     cpos.map((cpo) => ({
       ...formatOnboarding(
-        recordMap[cpo.id] ?? { id: -1, userId: cpo.id, checklist: {}, createdAt: new Date(), updatedAt: new Date() },
+        recordMap[cpo.id] ?? { id: -1, userId: cpo.id, checklist: {}, status: "in_progress", createdAt: new Date(), updatedAt: new Date() },
         cpo.name,
       ),
       documentCount: docCountMap[cpo.id] ?? 0,
@@ -109,6 +111,29 @@ router.patch("/onboarding/:id/checklist", async (req, res): Promise<void> => {
     .where(eq(operatorOnboardingTable.id, id))
     .returning();
 
+  res.json(formatOnboarding(updated));
+});
+
+const StatusUpdateSchema = z.object({
+  status: z.enum(ONBOARDING_STATUSES),
+});
+
+// Manager-set decision - see the schema comment for why this is
+// separate from checklist completion.
+router.patch("/onboarding/:id/status", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const parsed = StatusUpdateSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [updated] = await db
+    .update(operatorOnboardingTable)
+    .set({ status: parsed.data.status })
+    .where(eq(operatorOnboardingTable.id, id))
+    .returning();
+
+  if (!updated) { res.status(404).json({ error: "Onboarding record not found" }); return; }
   res.json(formatOnboarding(updated));
 });
 

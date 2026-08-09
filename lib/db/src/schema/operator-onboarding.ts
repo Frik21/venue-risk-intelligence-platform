@@ -11,10 +11,15 @@ import { usersTable } from "./users";
 // as a { [itemKey]: boolean } map rather than one row per item, same
 // reasoning as plans.ts: the list is defined in code, not
 // user-managed, so it can change without a data migration.
+// status is a Manager-set decision, deliberately not derived from
+// checklist completion - a fully-checked checklist doesn't
+// automatically mean "Onboarded" (the Manager still confirms it), and
+// "Denied" is a terminal decision the checklist alone can't express.
 export const operatorOnboardingTable = pgTable("operator_onboarding", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().unique().references(() => usersTable.id, { onDelete: "cascade" }),
   checklist: jsonb("checklist").notNull().default({}),
+  status: text("status").notNull().default("in_progress"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

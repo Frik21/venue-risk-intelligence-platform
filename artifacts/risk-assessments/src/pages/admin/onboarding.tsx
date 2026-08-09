@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type OnboardingOverviewRecord, type OnboardingRecord, type OnboardingDocument, type DocumentType } from "@/lib/api";
+import { api, type OnboardingOverviewRecord, type OnboardingRecord, type OnboardingDocument, type DocumentType, type OnboardingStatus } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,12 @@ import { UserPlus, ChevronDown, ChevronUp, FileText, CheckCircle2, Trash2 } from
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+
+const STATUS_CONFIG: Record<OnboardingStatus, { label: string; color: string }> = {
+  onboarded: { label: "Onboarded", color: "text-green-700 bg-green-50 border-green-200" },
+  in_progress: { label: "In Progress", color: "text-amber-700 bg-amber-50 border-amber-200" },
+  denied: { label: "Denied", color: "text-red-700 bg-red-50 border-red-200" },
+};
 
 const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
   { value: "id_document", label: "ID Document" },
@@ -123,6 +129,15 @@ function CpoOnboardingDetail({ userId }: { userId: number }) {
     },
   });
 
+  const statusMutation = useMutation({
+    mutationFn: (status: OnboardingStatus) => api.onboarding.updateStatus(record!.id, status),
+    onSuccess: (updated) => {
+      qc.setQueryData(["onboarding", userId], updated);
+      qc.invalidateQueries({ queryKey: ["onboarding-overview"] });
+      toast({ title: "Status updated" });
+    },
+  });
+
   const verifyMutation = useMutation({
     mutationFn: ({ id, verified }: { id: number; verified: boolean }) => api.onboarding.updateDocument(id, { verified }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["onboarding-documents", userId] }),
@@ -138,6 +153,22 @@ function CpoOnboardingDetail({ userId }: { userId: number }) {
 
   return (
     <div className="mt-3 pt-3 border-t border-slate-100 space-y-4">
+      <div>
+        <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Status</p>
+        {recordLoading ? (
+          <Skeleton className="h-8 w-40" />
+        ) : (
+          <Select value={record?.status} onValueChange={(v) => statusMutation.mutate(v as OnboardingStatus)}>
+            <SelectTrigger className="h-8 w-44 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {(Object.keys(STATUS_CONFIG) as OnboardingStatus[]).map((s) => (
+                <SelectItem key={s} value={s}>{STATUS_CONFIG[s].label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
       <div>
         <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Checklist</p>
         {recordLoading ? (
@@ -222,12 +253,31 @@ export default function OnboardingPage() {
     queryFn: api.onboarding.listAll,
   });
 
+  const counts = {
+    onboarded: records.filter((r) => r.status === "onboarded").length,
+    in_progress: records.filter((r) => r.status === "in_progress").length,
+    denied: records.filter((r) => r.status === "denied").length,
+  };
+
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Operator Onboarding</h1>
         <p className="text-slate-500 text-sm mt-0.5">Checklist progress and document verification for every CPO</p>
       </div>
+
+      {!isLoading && records.length > 0 && (
+        <div className="grid grid-cols-3 gap-4">
+          {(["onboarded", "in_progress", "denied"] as const).map((s) => (
+            <Card key={s}>
+              <CardContent className="p-4">
+                <div className="text-2xl font-bold text-slate-900">{counts[s]}</div>
+                <div className="text-xs text-slate-500">{STATUS_CONFIG[s].label}</div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="space-y-2">{Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-20" />)}</div>
@@ -243,7 +293,6 @@ export default function OnboardingPage() {
         <div className="space-y-3">
           {records.map((r) => {
             const pct = r.totalCount === 0 ? 0 : Math.round((r.checkedCount / r.totalCount) * 100);
-            const complete = pct === 100;
             return (
               <Card key={r.userId}>
                 <CardContent className="p-4">
@@ -251,11 +300,9 @@ export default function OnboardingPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1.5">
                         <span className="font-semibold text-slate-900 text-sm">{r.userName}</span>
-                        {complete ? (
-                          <Badge variant="secondary" className="text-[10px] uppercase text-green-700 bg-green-50 border-green-200">Ready for Deployment</Badge>
-                        ) : (
-                          <Badge variant="secondary" className="text-[10px] uppercase">In Progress</Badge>
-                        )}
+                        <Badge variant="secondary" className={cn("text-[10px] uppercase", STATUS_CONFIG[r.status].color)}>
+                          {STATUS_CONFIG[r.status].label}
+                        </Badge>
                         <span className="text-xs text-slate-400">{r.documentCount} document{r.documentCount !== 1 ? "s" : ""}</span>
                       </div>
                       <div className="flex items-center gap-2">

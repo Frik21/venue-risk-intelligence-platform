@@ -271,10 +271,13 @@ export interface OnboardingChecklistEntry {
 
 // Operator Onboarding - one per CPO, exists implicitly (auto-created
 // server-side on first fetch, same pattern as Plan).
+export type OnboardingStatus = "in_progress" | "onboarded" | "denied";
+
 export interface OnboardingRecord {
   id: number;
   userId: number;
   userName: string | null;
+  status: OnboardingStatus;
   checklist: OnboardingChecklistEntry[];
   checkedCount: number;
   totalCount: number;
@@ -596,6 +599,8 @@ export const api = {
     get: (userId: number) => apiFetch<OnboardingRecord>(`/users/${userId}/onboarding`),
     setChecklistItem: (onboardingId: number, key: string, checked: boolean) =>
       apiFetch<OnboardingRecord>(`/onboarding/${onboardingId}/checklist`, { method: "PATCH", body: JSON.stringify({ key, checked }) }),
+    updateStatus: (onboardingId: number, status: OnboardingStatus) =>
+      apiFetch<OnboardingRecord>(`/onboarding/${onboardingId}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
     listDocuments: (userId: number) => apiFetch<OnboardingDocument[]>(`/users/${userId}/onboarding-documents`),
     addDocument: (userId: number, data: { documentType: DocumentType; label?: string; filename?: string; fileDataUrl?: string; expiryDate?: string }) =>
       apiFetch<OnboardingDocument>(`/users/${userId}/onboarding-documents`, { method: "POST", body: JSON.stringify(data) }),
