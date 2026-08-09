@@ -11,6 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Building2 } from "lucide-react";
 import { VENUE_TYPES, ENVIRONMENT_TYPES } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
+import { LocationSearch } from "@/components/location-search";
+
+const SHADCN_INPUT_CLASSES =
+  "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm";
 
 export default function VenueNew() {
   const [, navigate] = useLocation();
@@ -21,6 +25,7 @@ export default function VenueNew() {
     name: "", venueType: "other", address: "", city: "", country: "",
     lat: "", lng: "", googleMapsUrl: "", district: "", environmentType: "urban", notes: "",
   });
+  const [locationQuery, setLocationQuery] = useState("");
 
   const mutation = useMutation({
     mutationFn: () => api.venues.create({
@@ -84,6 +89,28 @@ export default function VenueNew() {
       <Card>
         <CardHeader><CardTitle className="text-base">Location</CardTitle></CardHeader>
         <CardContent className="space-y-4">
+          <div>
+            <Label>Search for a location</Label>
+            <LocationSearch
+              value={locationQuery}
+              onChange={setLocationQuery}
+              placeholder="Search for an address or place…"
+              className={SHADCN_INPUT_CLASSES}
+              onSelect={(result) => {
+                setForm((f) => ({
+                  ...f,
+                  address: [result.street, result.housenumber].filter(Boolean).join(" ") || f.address,
+                  city: result.city ?? f.city,
+                  country: result.country ?? f.country,
+                  district: result.district ?? f.district,
+                  lat: result.lat != null ? String(result.lat) : f.lat,
+                  lng: result.lng != null ? String(result.lng) : f.lng,
+                }));
+                setLocationQuery("");
+              }}
+            />
+            <p className="text-xs text-slate-400 mt-1">Search to auto-fill the fields below, or type them in manually.</p>
+          </div>
           <div>
             <Label>Street Address *</Label>
             <Input placeholder="123 Main Street" value={form.address} onChange={e => set("address", e.target.value)} />

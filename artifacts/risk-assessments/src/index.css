@@ -1152,7 +1152,8 @@
   color: rgba(255, 255, 255, 0.45);
 }
 
-.venue-assessment-field textarea {
+.venue-assessment-field textarea,
+.venue-assessment-field-input {
   padding: 8px 10px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
@@ -1164,6 +1165,7 @@
   letter-spacing: normal;
   font-family: inherit;
   resize: vertical;
+  width: 100%;
 }
 
 .venue-assessment-status {
@@ -2136,4 +2138,58 @@ a.country-panel-advisory:hover {
 .country-panel-health-critical {
   background: rgba(248, 113, 113, 0.28);
   color: #fff;
+}
+
+/* LocationSearch (components/location-search.tsx) - the address/place
+   search box used on the Risk Assessment Location field and the Venue
+   form. Self-contained, fixed light-card colors for the suggestions
+   dropdown so it reads correctly whether it's floating over a light
+   admin page or the dark Operational Canvas - the input itself takes
+   its look entirely from the caller's className. */
+.location-search {
+  position: relative;
+}
+
+.location-search-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+}
+
+.location-search-empty {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.5);
+}
+
+.location-search-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: rgba(15, 23, 42, 0.85);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.location-search-result:hover {
+  background: rgba(15, 23, 42, 0.05);
+}
+
+.location-search-result-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: rgba(15, 23, 42, 0.4);
 }

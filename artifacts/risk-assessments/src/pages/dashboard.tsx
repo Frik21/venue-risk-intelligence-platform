@@ -32,6 +32,7 @@ import type {
   Plan,
   VenueRiskAssessment,
 } from "@/lib/api";
+import { LocationSearch } from "@/components/location-search";
 
 // Background tone for the outer page wrapper (behind MapLayer).
 const OCEAN_COLOR = "#00081a";
@@ -453,12 +454,24 @@ function VenueRiskAssessmentForm({
             </div>
           </div>
 
-          {ASSESSMENT_TEXT_FIELDS.map(({ key, label }) => (
-            <label key={key} className="venue-assessment-field">
-              <span>{label}</span>
-              <textarea value={form[key]} onChange={(event) => onFieldChange(key, event.target.value)} rows={3} />
-            </label>
-          ))}
+          {ASSESSMENT_TEXT_FIELDS.map(({ key, label }) =>
+            key === "location" ? (
+              <label key={key} className="venue-assessment-field">
+                <span>{label}</span>
+                <LocationSearch
+                  value={form[key]}
+                  onChange={(value) => onFieldChange(key, value)}
+                  className="venue-assessment-field-input"
+                  placeholder="Search for an address or place…"
+                />
+              </label>
+            ) : (
+              <label key={key} className="venue-assessment-field">
+                <span>{label}</span>
+                <textarea value={form[key]} onChange={(event) => onFieldChange(key, event.target.value)} rows={3} />
+              </label>
+            ),
+          )}
 
           <div className="venue-assessment-meta">
             <div className="venue-assessment-meta-row">
