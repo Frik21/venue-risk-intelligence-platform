@@ -31,10 +31,13 @@ import type {
   TaskStatus,
   Plan,
   VenueRiskAssessment,
+  Alert,
+  AlertPriority,
 } from "@/lib/api";
 import { LocationSearch } from "@/components/location-search";
 import type { LocationSearchResult } from "@/components/location-search";
 import { projectToOperationalGeometry } from "@/lib/map-projection";
+import { timeAgo } from "@/lib/display-utils";
 
 // Background tone for the outer page wrapper (behind MapLayer).
 const OCEAN_COLOR = "#00081a";
@@ -1108,7 +1111,6 @@ function OperationalCanvas() {
     location: instruction.from,
     timestamp: instruction.sentAt,
   }));
-  const combinedAlerts = [...instructionAlerts, ...OPERATIONAL_ALERTS];
   const [cpoUsers, setCpoUsers] = useState<User[]>([]);
   const [viewingAsCpoId, setViewingAsCpoId] = useState<number | null>(null);
   const [cpoTasks, setCpoTasks] = useState<Task[]>([]);
@@ -1212,6 +1214,45 @@ function OperationalCanvas() {
     () => displayedTasks.filter((t) => taskAcceptance[t.id] === "accepted"),
     [displayedTasks, taskAcceptance],
   );
+
+  // Real Alerts (OSINT/GDELT findings promoted by a Manager, plus any
+  // other alert source) - fetched once and scoped down to venues this
+  // CPO actually has an accepted task at, same reasoning as Risk
+  // Assessments > Venues: an alert for a venue this CPO has nothing to
+  // do with isn't operationally relevant to them. Falls back to the
+  // OPERATIONAL_ALERTS demo feed when there's nothing real to show yet -
+  // same "disappears once real data exists" convention as MOCK_TASK.
+  const [realAlerts, setRealAlerts] = useState<Alert[]>([]);
+
+  useEffect(() => {
+    api.alerts.list().then(setRealAlerts).catch((err) => console.error("Failed to load alerts:", err));
+  }, []);
+
+  const ALERT_PRIORITY_SEVERITY: Record<AlertPriority, AlertSeverity> = {
+    critical: "critical",
+    high: "warning",
+    medium: "warning",
+    low: "info",
+  };
+
+  const scopedRealAlerts = useMemo(() => {
+    const venueIds = new Set(acceptedTasksList.map((t) => t.venueId));
+    return realAlerts.filter((a) => venueIds.has(a.venueId) && a.status !== "dismissed");
+  }, [realAlerts, acceptedTasksList]);
+
+  const feedAlerts: OperationalAlert[] =
+    scopedRealAlerts.length > 0
+      ? scopedRealAlerts.map((a) => ({
+          id: `alert-${a.id}`,
+          severity: ALERT_PRIORITY_SEVERITY[a.priority],
+          title: a.title,
+          description: a.summary,
+          location: a.venueName ?? "Unknown venue",
+          timestamp: timeAgo(a.createdAt),
+        }))
+      : OPERATIONAL_ALERTS;
+
+  const combinedAlerts = [...instructionAlerts, ...feedAlerts];
 
   // Each accepted task can be expanded to reveal its detail and Risk
   // Assessment slots - demo/local-only expand state, same as the rest
