@@ -1020,6 +1020,7 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .venue-assessment-add-btn:hover:not(:disabled) {
@@ -1514,9 +1515,10 @@
   transform: translateX(0);
 }
 
-/* Download Task panel - empty placeholder for now (per direct
-   product direction), same base panel styling as Route Planning/
-   Layers. */
+/* Download Task panel - one accepted task per row, each with a link to
+   its PDF (task name/date/time/operator plus Task Planning, Risk
+   Assessments and Route Planning - see routes/task-pdf.ts on the
+   backend). Same base panel styling as Route Planning/Layers. */
 .download-task-panel {
   position: absolute;
   top: 0;
@@ -1540,6 +1542,26 @@
 
 .download-task-panel-open {
   transform: translateX(0);
+}
+
+.download-task-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.download-task-row-text {
+  min-width: 0;
+}
+
+.download-task-row-disabled-note {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: right;
 }
 
 /* One route slot's Start/End fields + Calculate result, inside an

@@ -3260,7 +3260,28 @@ function OperationalCanvas({
           <ArrowLeft className="w-3.5 h-3.5" /> Back to Menu
         </button>
 
-        <p className="tasks-panel-empty">Coming soon.</p>
+        {acceptedTasksList.length === 0 ? (
+          <p className="tasks-panel-empty">No tasks yet - accept a task to get started.</p>
+        ) : (
+          <div className="tasks-panel-list">
+            {acceptedTasksList.map((task) => (
+              <div key={task.id} className="download-task-row">
+                <div className="download-task-row-text">
+                  <p className="task-row-title">{task.title}</p>
+                  {task.venueName && <p className="task-row-venue">{task.venueName}</p>}
+                </div>
+                {task.id === MOCK_TASK_ID ? (
+                  <span className="download-task-row-disabled-note">Accept a real task to download.</span>
+                ) : (
+                  <a className="venue-assessment-add-btn" href={`/api/tasks/${task.id}/download`} download>
+                    <Download className="w-3.5 h-3.5" />
+                    Download PDF
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div

@@ -100,6 +100,10 @@ async function buildAll() {
       "puppeteer",
       "puppeteer-core",
       "electron",
+      // Loads its standard-font .afm files via a path relative to its own
+      // package directory at runtime (fs + __dirname) - bundling it would
+      // resolve that path against dist/ instead of node_modules/pdfkit/.
+      "pdfkit",
     ],
     sourcemap: "linked",
     plugins: [
