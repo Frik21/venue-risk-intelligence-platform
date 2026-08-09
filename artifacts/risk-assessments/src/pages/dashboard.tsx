@@ -33,7 +33,6 @@ import type {
   VenueRiskAssessment,
   Alert,
   AlertPriority,
-  WeatherSeverity,
 } from "@/lib/api";
 import { LocationSearch, resolveCurrentLocation } from "@/components/location-search";
 import type { LocationSearchResult } from "@/components/location-search";
@@ -61,15 +60,6 @@ const OPERATIONAL_BRIEF = {
   summary:
     "Current operating conditions remain suitable for planned activities. Increased traffic, forecast weather, and recent local activity suggest additional planning before deployment.",
   advisories: ["Traffic congestion expected", "Weather may affect movement", "Public activity under review"],
-};
-
-// Labels for the Brief's "Current Operating Conditions" tile when fed a
-// real weather finding (see useMyLocationForBrief) - moderate maps to
-// the same "Elevated" wording the demo content already uses.
-const WEATHER_SEVERITY_LABELS: Record<WeatherSeverity, string> = {
-  moderate: "Elevated",
-  high: "High",
-  critical: "Critical",
 };
 
 type AlertSeverity = "critical" | "warning" | "info";
@@ -203,12 +193,12 @@ export default function Dashboard() {
 
       if (result.lat != null && result.lng != null) {
         try {
-          const { finding } = await api.weather.check(result.lat, result.lng);
-          setBriefCondition(
-            finding
-              ? { condition: WEATHER_SEVERITY_LABELS[finding.severity], conditionNote: finding.summary }
-              : { condition: "Normal", conditionNote: "No elevated weather risk detected at your location." },
-          );
+          const { temperatureC, conditions, finding } = await api.weather.check(result.lat, result.lng);
+          const tempLabel = temperatureC != null ? `${Math.round(temperatureC)}°C` : null;
+          setBriefCondition({
+            condition: [tempLabel, conditions].filter(Boolean).join(" · ") || "Unknown",
+            conditionNote: finding ? finding.summary : "No elevated weather risk detected at your location.",
+          });
         } catch (err) {
           console.error("Failed to check weather for the Brief:", err);
         }

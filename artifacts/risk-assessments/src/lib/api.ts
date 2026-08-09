@@ -321,7 +321,10 @@ export const api = {
     submit: (id: number) => apiFetch<VenueRiskAssessment>(`/risk-assessments/${id}/submit`, { method: "POST" }),
   },
   weather: {
-    check: (lat: number, lng: number) => apiFetch<{ finding: WeatherFinding | null }>(`/weather?lat=${lat}&lng=${lng}`),
+    check: (lat: number, lng: number) =>
+      apiFetch<{ temperatureC: number | null; conditions: string; finding: WeatherFinding | null }>(
+        `/weather?lat=${lat}&lng=${lng}`,
+      ),
   },
   assessments: {
     list: () => apiFetch<AssessmentSummary[]>("/assessments"),
