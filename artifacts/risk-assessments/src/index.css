@@ -872,6 +872,29 @@
   margin: 2px 0 0;
 }
 
+.brief-panel-locate-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(125, 211, 252, 0.85);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.brief-panel-locate-btn:hover:not(:disabled) {
+  color: rgba(125, 211, 252, 1);
+}
+
+.brief-panel-locate-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .brief-panel-section h3 {
   font-size: 14px;
   font-weight: 600;

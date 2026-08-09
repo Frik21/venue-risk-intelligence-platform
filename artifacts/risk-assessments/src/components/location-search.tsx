@@ -104,6 +104,38 @@ function getCurrentPosition(): Promise<GeolocationPosition> {
   });
 }
 
+// Shared "use my current location" capture - the device's GPS position,
+// reverse-geocoded into a real address. Exported so callers that want a
+// plain button (no search box) can trigger the same capture the
+// LocationSearch input's own locate button does, e.g. the Operational
+// Brief's "Current Area". Throws on genuine geolocation failure
+// (permission denied, unavailable, timeout) - falls back to raw
+// coordinates only when the position itself was captured fine but
+// reverse geocoding specifically failed or found nothing.
+export async function resolveCurrentLocation(): Promise<LocationSearchResult> {
+  const position = await getCurrentPosition();
+  const { latitude, longitude } = position.coords;
+  const result = await reverseGeocode(latitude, longitude).catch((err) => {
+    console.error("Reverse geocoding failed:", err);
+    return null;
+  });
+  if (result) return result;
+  return {
+    label: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
+    name: null,
+    lat: latitude,
+    lng: longitude,
+    street: null,
+    housenumber: null,
+    city: null,
+    district: null,
+    state: null,
+    country: null,
+    countrycode: null,
+    postcode: null,
+  };
+}
+
 // Controlled like a normal text input (value/onChange always work, so
 // typing without ever picking a suggestion is a fully valid way to use
 // this) - onSelect additionally fires when a suggestion is picked, for
@@ -173,32 +205,8 @@ export function LocationSearch({
     setLocating(true);
     setLocationError(null);
     try {
-      const position = await getCurrentPosition();
-      const { latitude, longitude } = position.coords;
-      const result = await reverseGeocode(latitude, longitude).catch((err) => {
-        console.error("Reverse geocoding failed:", err);
-        return null;
-      });
-      if (result) {
-        handleSelect(result);
-      } else {
-        // Reverse geocoding found nothing (or failed) - the coordinates
-        // themselves are still a real, usable result.
-        handleSelect({
-          label: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
-          name: null,
-          lat: latitude,
-          lng: longitude,
-          street: null,
-          housenumber: null,
-          city: null,
-          district: null,
-          state: null,
-          country: null,
-          countrycode: null,
-          postcode: null,
-        });
-      }
+      const result = await resolveCurrentLocation();
+      handleSelect(result);
     } catch (err) {
       console.error("Failed to get current location:", err);
       setLocationError(

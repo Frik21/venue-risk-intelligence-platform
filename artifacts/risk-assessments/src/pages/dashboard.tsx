@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
-import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ListChecks, MessageSquare, Check, Building2, Plus } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2 } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -34,7 +34,7 @@ import type {
   Alert,
   AlertPriority,
 } from "@/lib/api";
-import { LocationSearch } from "@/components/location-search";
+import { LocationSearch, resolveCurrentLocation } from "@/components/location-search";
 import type { LocationSearchResult } from "@/components/location-search";
 import { projectToOperationalGeometry } from "@/lib/map-projection";
 import { timeAgo } from "@/lib/display-utils";
@@ -169,6 +169,30 @@ const MOCK_CHECKLIST_ITEMS = [
 export default function Dashboard() {
   const [step, setStep] = useState<Step>("login");
 
+  // Current Area starts as the demo default and can be overridden with
+  // the operator's real position - shared between the mandatory
+  // pre-entry Brief screen and the in-canvas Brief panel (passed down to
+  // OperationalCanvas), same "single source of truth" as OPERATIONAL_BRIEF
+  // itself. Only Current Area is real; Operating Conditions/summary/
+  // advisories stay the demo content for now.
+  const [briefArea, setBriefArea] = useState({ area: OPERATIONAL_BRIEF.area, areaRadius: OPERATIONAL_BRIEF.areaRadius });
+  const [locatingBrief, setLocatingBrief] = useState(false);
+
+  async function useMyLocationForBrief() {
+    setLocatingBrief(true);
+    try {
+      const result = await resolveCurrentLocation();
+      setBriefArea({
+        area: result.name ?? result.city ?? result.label,
+        areaRadius: "Based on your current location",
+      });
+    } catch (err) {
+      console.error("Failed to get current location for the Brief:", err);
+    } finally {
+      setLocatingBrief(false);
+    }
+  }
+
   function signIn() {
     setStep("preparing");
     setTimeout(() => setStep("brief"), 1400);
@@ -222,8 +246,17 @@ export default function Dashboard() {
             <div className="rounded-2xl bg-white/10 border border-white/10 p-5">
               <MapPin className="w-5 h-5 text-sky-300 mb-4" />
               <p className="text-sm text-slate-400">Current Area</p>
-              <p className="text-xl font-semibold">{OPERATIONAL_BRIEF.area}</p>
-              <p className="text-sm text-slate-400 mt-1">{OPERATIONAL_BRIEF.areaRadius}</p>
+              <p className="text-xl font-semibold">{briefArea.area}</p>
+              <p className="text-sm text-slate-400 mt-1">{briefArea.areaRadius}</p>
+              <button
+                type="button"
+                onClick={useMyLocationForBrief}
+                disabled={locatingBrief}
+                className="mt-3 inline-flex items-center gap-1.5 text-xs text-sky-300 hover:text-sky-200 disabled:opacity-60"
+              >
+                {locatingBrief ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Crosshair className="w-3.5 h-3.5" />}
+                Use my current location
+              </button>
             </div>
 
             <div className="rounded-2xl bg-white/10 border border-white/10 p-5">
@@ -270,7 +303,7 @@ export default function Dashboard() {
     <div className="fixed inset-0 z-50 overflow-hidden text-white flex flex-col" style={{ backgroundColor: OCEAN_COLOR }}>
       <TopBanner onSignOut={() => setStep("login")} />
       <div className="flex-1 min-h-0 relative">
-        <OperationalCanvas />
+        <OperationalCanvas briefArea={briefArea} onUseMyLocationForBrief={useMyLocationForBrief} locatingBrief={locatingBrief} />
       </div>
     </div>
   );
@@ -1049,7 +1082,15 @@ function buildFocusClipPath(svgPath: string, scale: number): string {
 // it does not, and cannot, persist to disk by itself.
 type CountryAdjustment = { status: "review-required"; notes: string };
 
-function OperationalCanvas() {
+function OperationalCanvas({
+  briefArea,
+  onUseMyLocationForBrief,
+  locatingBrief,
+}: {
+  briefArea: { area: string; areaRadius: string };
+  onUseMyLocationForBrief: () => void;
+  locatingBrief: boolean;
+}) {
   const showDebugLayerNumbers = false;
   const [calibrationPoint, setCalibrationPoint] = useState<{ x: number; y: number } | null>(null);
   const [activeCountry, setActiveCountry] = useState<ActiveCountry | null>(null);
@@ -2283,8 +2324,17 @@ function OperationalCanvas() {
           <div className="brief-panel-stat">
             <MapPin className="w-4 h-4 text-sky-300" />
             <p className="brief-panel-stat-label">Current Area</p>
-            <p className="brief-panel-stat-value">{OPERATIONAL_BRIEF.area}</p>
-            <p className="brief-panel-stat-note">{OPERATIONAL_BRIEF.areaRadius}</p>
+            <p className="brief-panel-stat-value">{briefArea.area}</p>
+            <p className="brief-panel-stat-note">{briefArea.areaRadius}</p>
+            <button
+              type="button"
+              onClick={onUseMyLocationForBrief}
+              disabled={locatingBrief}
+              className="brief-panel-locate-btn"
+            >
+              {locatingBrief ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Crosshair className="w-3.5 h-3.5" />}
+              Use my current location
+            </button>
           </div>
           <div className="brief-panel-stat">
             <ShieldCheck className="w-4 h-4 text-amber-300" />
