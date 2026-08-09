@@ -35,6 +35,7 @@ import type {
   Venue,
   Alert,
   AlertPriority,
+  WeatherFinding,
 } from "@/lib/api";
 import { LocationSearch, resolveCurrentLocation } from "@/components/location-search";
 import type { LocationSearchResult } from "@/components/location-search";
@@ -85,14 +86,6 @@ interface OperationalAlert {
 // daily Operational Brief: alerts are individual, timestamped events
 // rather than a single standing summary.
 const OPERATIONAL_ALERTS: OperationalAlert[] = [
-  {
-    id: "alert-2",
-    severity: "warning",
-    title: "Severe weather advisory issued",
-    description: "Local authority has issued a wind advisory affecting outdoor operations.",
-    location: "Cape Town",
-    timestamp: "22 min ago",
-  },
   {
     id: "alert-3",
     severity: "warning",
@@ -185,6 +178,12 @@ export default function Dashboard() {
     trafficNote: "Use your current location to check traffic.",
   });
   const [locatingBrief, setLocatingBrief] = useState(false);
+  // The raw weather finding behind briefCondition.conditionNote above -
+  // briefCondition only keeps display strings, but the Alerts panel's
+  // "Severe weather advisory issued" entry needs the real severity too
+  // (and needs to not exist at all when there's nothing notable, per
+  // direct product direction - see weatherAlert in OperationalCanvas).
+  const [weatherFinding, setWeatherFinding] = useState<WeatherFinding | null>(null);
 
   async function useMyLocationForBrief() {
     setLocatingBrief(true);
@@ -203,6 +202,7 @@ export default function Dashboard() {
             condition: [tempLabel, conditions].filter(Boolean).join(" · ") || "Unknown",
             conditionNote: finding ? finding.summary : "No elevated weather risk detected at your location.",
           });
+          setWeatherFinding(finding);
         } catch (err) {
           console.error("Failed to check weather for the Brief:", err);
         }
@@ -366,6 +366,7 @@ export default function Dashboard() {
           briefArea={briefArea}
           briefCondition={briefCondition}
           briefTraffic={briefTraffic}
+          weatherFinding={weatherFinding}
           onUseMyLocationForBrief={useMyLocationForBrief}
           locatingBrief={locatingBrief}
         />
@@ -1398,12 +1399,14 @@ function OperationalCanvas({
   briefArea,
   briefCondition,
   briefTraffic,
+  weatherFinding,
   onUseMyLocationForBrief,
   locatingBrief,
 }: {
   briefArea: { area: string; areaRadius: string };
   briefCondition: { condition: string; conditionNote: string };
   briefTraffic: { traffic: string; trafficNote: string };
+  weatherFinding: WeatherFinding | null;
   onUseMyLocationForBrief: () => void;
   locatingBrief: boolean;
 }) {
@@ -1622,14 +1625,31 @@ function OperationalCanvas({
         }))
       : OPERATIONAL_ALERTS;
 
+  // "Severe weather advisory issued" - real, driven by the same weather
+  // engine as the Operational Brief (fetchWeatherFinding on the
+  // backend, via weatherFinding above), not a static demo entry. Only
+  // exists at all when that engine actually found something notable
+  // at the CPO's current location - no finding means no alert, per
+  // direct product direction, rather than showing a placeholder.
+  const weatherAlert: OperationalAlert | null = weatherFinding
+    ? {
+        id: "alert-weather-current",
+        severity: weatherFinding.severity === "critical" ? "critical" : "warning",
+        title: "Severe weather advisory issued",
+        description: weatherFinding.summary,
+        location: briefArea.area,
+        timestamp: "Live",
+      }
+    : null;
+
   // Dismiss/Mark Reviewed for entries with no backing Alert record
-  // (instructionAlerts, the OPERATIONAL_ALERTS demo feed) - there's
-  // nothing to PATCH, so the action just hides/flags it locally,
+  // (instructionAlerts, weatherAlert, the OPERATIONAL_ALERTS demo feed) -
+  // there's nothing to PATCH, so the action just hides/flags it locally,
   // same "local-only" convention as MOCK_TASK elsewhere in this file.
   const [locallyDismissedAlertIds, setLocallyDismissedAlertIds] = useState<Set<string>>(new Set());
   const [locallyReviewedAlertIds, setLocallyReviewedAlertIds] = useState<Set<string>>(new Set());
 
-  const combinedAlerts = [...instructionAlerts, ...feedAlerts]
+  const combinedAlerts = [...instructionAlerts, ...(weatherAlert ? [weatherAlert] : []), ...feedAlerts]
     .filter((alert) => !locallyDismissedAlertIds.has(alert.id))
     .map((alert) => ({ ...alert, reviewed: alert.reviewed || locallyReviewedAlertIds.has(alert.id) }));
 
