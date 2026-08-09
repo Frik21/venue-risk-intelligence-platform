@@ -22,7 +22,7 @@ export const ONBOARDING_CHECKLIST_ITEMS: OnboardingChecklistItem[] = [
 ];
 
 export const DOCUMENT_TYPES = [
-  { value: "id_document", label: "ID Document" },
+  { value: "id_document", label: "ID Document or Passport" },
   { value: "psira_registration", label: "PSIRA Registration" },
   { value: "firearm_competency", label: "Firearm Competency Certificate" },
   { value: "drivers_license", label: "Driver's License" },

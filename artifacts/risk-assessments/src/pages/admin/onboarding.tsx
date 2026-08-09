@@ -24,7 +24,7 @@ const STATUS_CONFIG: Record<OnboardingStatus, { label: string; color: string }> 
 };
 
 const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
-  { value: "id_document", label: "ID Document" },
+  { value: "id_document", label: "ID Document or Passport" },
   { value: "psira_registration", label: "PSIRA Registration" },
   { value: "firearm_competency", label: "Firearm Competency Certificate" },
   { value: "drivers_license", label: "Driver's License" },
