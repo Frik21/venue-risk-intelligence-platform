@@ -263,6 +263,48 @@ export interface PersonnelCostLine {
   cost: number;
 }
 
+export interface OnboardingChecklistEntry {
+  key: string;
+  label: string;
+  checked: boolean;
+}
+
+// Operator Onboarding - one per CPO, exists implicitly (auto-created
+// server-side on first fetch, same pattern as Plan).
+export interface OnboardingRecord {
+  id: number;
+  userId: number;
+  userName: string | null;
+  checklist: OnboardingChecklistEntry[];
+  checkedCount: number;
+  totalCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OnboardingOverviewRecord extends OnboardingRecord {
+  documentCount: number;
+}
+
+export type DocumentType =
+  | "id_document" | "psira_registration" | "firearm_competency"
+  | "drivers_license" | "medical_certificate" | "background_check_report" | "other";
+
+// fileDataUrl is a base64 data: URL (this app has no cloud file
+// storage) - same pattern as Expenses receipts.
+export interface OnboardingDocument {
+  id: number;
+  userId: number;
+  documentType: DocumentType;
+  label: string;
+  filename: string | null;
+  fileDataUrl: string | null;
+  expiryDate: string | null;
+  verified: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type ExpenseCategory = "fuel" | "accommodation" | "food" | "parking" | "tolls" | "equipment" | "other";
 
 // One expense logged against a task - Profile > Expenses. receiptDataUrl
@@ -548,6 +590,18 @@ export const api = {
   },
   personnelCosts: {
     list: () => apiFetch<PersonnelCostLine[]>("/personnel-costs"),
+  },
+  onboarding: {
+    listAll: () => apiFetch<OnboardingOverviewRecord[]>("/onboarding"),
+    get: (userId: number) => apiFetch<OnboardingRecord>(`/users/${userId}/onboarding`),
+    setChecklistItem: (onboardingId: number, key: string, checked: boolean) =>
+      apiFetch<OnboardingRecord>(`/onboarding/${onboardingId}/checklist`, { method: "PATCH", body: JSON.stringify({ key, checked }) }),
+    listDocuments: (userId: number) => apiFetch<OnboardingDocument[]>(`/users/${userId}/onboarding-documents`),
+    addDocument: (userId: number, data: { documentType: DocumentType; label?: string; filename?: string; fileDataUrl?: string; expiryDate?: string }) =>
+      apiFetch<OnboardingDocument>(`/users/${userId}/onboarding-documents`, { method: "POST", body: JSON.stringify(data) }),
+    updateDocument: (id: number, data: Partial<{ label: string; expiryDate: string; verified: boolean }>) =>
+      apiFetch<OnboardingDocument>(`/onboarding-documents/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    deleteDocument: (id: number) => apiFetch<void>(`/onboarding-documents/${id}`, { method: "DELETE" }),
   },
   expenses: {
     list: (taskId: number) => apiFetch<Expense[]>(`/tasks/${taskId}/expenses`),

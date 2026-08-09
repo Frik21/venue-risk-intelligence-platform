@@ -12,6 +12,7 @@ import {
   ArrowLeftRight,
   UserCog,
   DollarSign,
+  UserPlus,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ const navGroups = [
       { href: "/admin", label: "Dashboard", icon: Gauge },
       { href: "/tasks", label: "Tasks", icon: ListChecks },
       { href: "/admin/cpo-deployment", label: "CPO Deployment", icon: UserCog },
+      { href: "/admin/onboarding", label: "Operator Onboarding", icon: UserPlus },
       { href: "/admin/offices", label: "Offices", icon: Building2 },
       { href: "/admin/costs", label: "Costs", icon: DollarSign },
       { href: "/admin/users", label: "Users", icon: Users },

@@ -32,6 +32,7 @@ import CpoDeployment from "@/pages/admin/cpo-deployment";
 import SchedulePage from "@/pages/admin/schedule";
 import CostsPage from "@/pages/admin/costs";
 import OfficesPage from "@/pages/admin/offices";
+import OnboardingPage from "@/pages/admin/onboarding";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -82,6 +83,7 @@ function Router() {
         <Route path="/admin/schedule" component={SchedulePage} />
         <Route path="/admin/costs" component={CostsPage} />
         <Route path="/admin/offices" component={OfficesPage} />
+        <Route path="/admin/onboarding" component={OnboardingPage} />
 
         <Route component={NotFound} />
       </Switch>

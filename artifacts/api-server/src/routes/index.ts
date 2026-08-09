@@ -25,6 +25,7 @@ import expensesRouter from "./expenses";
 import officesRouter from "./offices";
 import settingsRouter from "./settings";
 import personnelCostsRouter from "./personnel-costs";
+import onboardingRouter from "./onboarding";
 
 const router: IRouter = Router();
 
@@ -54,5 +55,6 @@ router.use(expensesRouter);
 router.use(officesRouter);
 router.use(settingsRouter);
 router.use(personnelCostsRouter);
+router.use(onboardingRouter);
 
 export default router;
