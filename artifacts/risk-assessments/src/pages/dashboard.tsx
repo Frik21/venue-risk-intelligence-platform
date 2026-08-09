@@ -86,14 +86,6 @@ interface OperationalAlert {
 // rather than a single standing summary.
 const OPERATIONAL_ALERTS: OperationalAlert[] = [
   {
-    id: "alert-1",
-    severity: "critical",
-    title: "Crowd density threshold exceeded",
-    description: "Entrance queue has surpassed planned capacity for the current time slot.",
-    location: "Cape Town",
-    timestamp: "4 min ago",
-  },
-  {
     id: "alert-2",
     severity: "warning",
     title: "Severe weather advisory issued",
