@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, tasksTable, venuesTable, usersTable, plansTable, venueRiskAssessmentsTable, taskRoutesTable } from "@workspace/db";
+import { db, tasksTable, venuesTable, usersTable, plansTable, venueRiskAssessmentsTable, taskRoutesTable, expensesTable, timesheetEntriesTable } from "@workspace/db";
 import { PLAN_CHECKLIST_ITEMS } from "../lib/plan-checklist";
 import { buildTaskPdf } from "../lib/task-pdf";
 
@@ -42,6 +42,21 @@ router.get("/tasks/:taskId/download", async (req, res): Promise<void> => {
     .where(eq(taskRoutesTable.taskId, taskId))
     .orderBy(taskRoutesTable.slotIndex);
 
+  const expenseRows = await db
+    .select()
+    .from(expensesTable)
+    .where(eq(expensesTable.taskId, taskId))
+    .orderBy(expensesTable.incurredOn);
+
+  // Not scoped to this task - the operator's full timesheet, per
+  // direct product direction (Timesheet is a per-operator log, not a
+  // task-scoped feature).
+  const timesheetRows = await db
+    .select()
+    .from(timesheetEntriesTable)
+    .where(eq(timesheetEntriesTable.userId, task.assignedTo))
+    .orderBy(timesheetEntriesTable.date);
+
   const doc = buildTaskPdf({
     task: {
       title: task.title,
@@ -77,6 +92,19 @@ router.get("/tasks/:taskId/download", async (req, res): Promise<void> => {
       trafficCheckedAt: r.trafficCheckedAt?.toISOString() ?? null,
       nearestHospitals: (r.nearestHospitalsJson as { name: string; distanceMeters: number }[] | null) ?? [],
       nearestPoliceStations: (r.nearestPoliceStationsJson as { name: string; distanceMeters: number }[] | null) ?? [],
+    })),
+    expenses: expenseRows.map((e) => ({
+      category: e.category,
+      amount: e.amount,
+      currency: e.currency,
+      description: e.description,
+      incurredOn: e.incurredOn,
+      receiptFilename: e.receiptFilename ?? null,
+    })),
+    timesheetEntries: timesheetRows.map((t) => ({
+      date: t.date,
+      hoursWorked: t.hoursWorked,
+      notes: t.notes,
     })),
   });
 

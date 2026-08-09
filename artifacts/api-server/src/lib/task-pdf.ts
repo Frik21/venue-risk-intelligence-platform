@@ -43,7 +43,35 @@ export interface TaskPdfData {
     nearestHospitals: { name: string; distanceMeters: number }[];
     nearestPoliceStations: { name: string; distanceMeters: number }[];
   }[];
+  expenses: {
+    category: string;
+    amount: number;
+    currency: string;
+    description: string;
+    incurredOn: string;
+    receiptFilename: string | null;
+  }[];
+  // Every entry logged by this task's assigned operator - not scoped
+  // to this task specifically, since Timesheet is a per-operator log,
+  // not a task-scoped feature (per direct product direction: show the
+  // operator's full timesheet in the report, not just entries dated
+  // near this task).
+  timesheetEntries: {
+    date: string;
+    hoursWorked: number;
+    notes: string;
+  }[];
 }
+
+const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
+  fuel: "Fuel",
+  accommodation: "Accommodation",
+  food: "Food",
+  parking: "Parking",
+  tolls: "Tolls",
+  equipment: "Equipment",
+  other: "Other",
+};
 
 const STATUS_LABELS: Record<string, string> = {
   not_completed: "Not Completed",
@@ -184,6 +212,52 @@ export function buildTaskPdf(data: TaskPdfData): PDFKit.PDFDocument {
       }
       doc.moveDown(0.5);
     }
+  }
+
+  drawSectionRule(doc);
+  doc.fontSize(14).font("Helvetica-Bold").text("Expenses");
+  doc.moveDown(0.3);
+  doc.fontSize(10).font("Helvetica");
+  if (data.expenses.length === 0) {
+    doc.text("No expenses logged for this task.");
+  } else {
+    const totalsByCurrency: Record<string, number> = {};
+    for (const expense of data.expenses) {
+      const label = EXPENSE_CATEGORY_LABELS[expense.category] ?? expense.category;
+      doc
+        .font("Helvetica-Bold")
+        .text(`${label} — ${expense.currency} ${expense.amount.toFixed(2)}`, { continued: true })
+        .font("Helvetica")
+        .text(`  (${new Date(`${expense.incurredOn}T00:00:00`).toLocaleDateString()})`);
+      if (expense.description) doc.text(expense.description);
+      doc.text(expense.receiptFilename ? `Receipt: ${expense.receiptFilename}` : "No receipt attached");
+      doc.moveDown(0.3);
+      totalsByCurrency[expense.currency] = (totalsByCurrency[expense.currency] ?? 0) + expense.amount;
+    }
+    const totalLine = Object.entries(totalsByCurrency)
+      .map(([currency, amount]) => `${currency} ${amount.toFixed(2)}`)
+      .join(", ");
+    doc.font("Helvetica-Bold").text("Total: ", { continued: true }).font("Helvetica").text(totalLine);
+  }
+
+  drawSectionRule(doc);
+  doc.fontSize(14).font("Helvetica-Bold").text("Timesheet");
+  doc.moveDown(0.3);
+  doc.fontSize(10).font("Helvetica");
+  if (data.timesheetEntries.length === 0) {
+    doc.text("No hours logged yet.");
+  } else {
+    let totalHours = 0;
+    for (const entry of data.timesheetEntries) {
+      doc
+        .font("Helvetica-Bold")
+        .text(`${new Date(`${entry.date}T00:00:00`).toLocaleDateString()}: `, { continued: true })
+        .font("Helvetica")
+        .text(`${entry.hoursWorked}h${entry.notes ? ` — ${entry.notes}` : ""}`);
+      totalHours += entry.hoursWorked;
+    }
+    doc.moveDown(0.3);
+    doc.font("Helvetica-Bold").text(`Total Hours: ${totalHours}`);
   }
 
   return doc;
