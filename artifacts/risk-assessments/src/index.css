@@ -2092,9 +2092,45 @@ a.country-panel-advisory:hover {
   width: 100%;
 }
 
-.location-search-input {
+.location-search-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
   width: 100%;
+}
+
+.location-search-input {
+  flex: 1;
+  min-width: 0;
   box-sizing: border-box;
+}
+
+.location-search-locate-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  border-radius: 8px;
+  background: rgba(128, 128, 128, 0.12);
+  color: inherit;
+  cursor: pointer;
+}
+
+.location-search-locate-btn:hover:not(:disabled) {
+  background: rgba(128, 128, 128, 0.22);
+}
+
+.location-search-locate-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.location-search-error {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: rgb(220, 90, 90);
 }
 
 .location-search-results {
