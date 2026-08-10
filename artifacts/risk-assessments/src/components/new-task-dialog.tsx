@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -243,6 +244,7 @@ export function NewTaskDialog({
     clientContact: "",
     clientRequirements: "",
     operatorsRequired: "1",
+    armedRequired: false,
     vehiclesRequired: "0",
   });
   const qc = useQueryClient();
@@ -262,6 +264,7 @@ export function NewTaskDialog({
         clientContact: form.clientContact,
         clientRequirements: form.clientRequirements,
         operatorsRequired: Number(form.operatorsRequired) || 1,
+        armedRequired: form.armedRequired,
         vehiclesRequired: Number(form.vehiclesRequired) || 0,
       }),
     onSuccess: () => {
@@ -340,6 +343,13 @@ export function NewTaskDialog({
           <div>
             <Label>Operators Needed</Label>
             <Input type="number" min={0} value={form.operatorsRequired} onChange={(e) => set("operatorsRequired", e.target.value)} />
+            <label className="flex items-center gap-2 text-xs text-slate-600 mt-1.5 cursor-pointer">
+              <Checkbox
+                checked={form.armedRequired}
+                onCheckedChange={(v) => setForm((f) => ({ ...f, armedRequired: v === true }))}
+              />
+              Armed
+            </label>
           </div>
           <div>
             <Label>Vehicles Needed</Label>

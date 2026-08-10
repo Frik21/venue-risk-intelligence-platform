@@ -97,6 +97,7 @@ export interface Task {
   clientContact: string;
   clientRequirements: string;
   operatorsRequired: number;
+  armedRequired: boolean;
   vehiclesRequired: number;
   estimatedCost: number | null;
   estimatedCostCurrency: string;
@@ -542,7 +543,7 @@ export const api = {
       venueId?: number | null; assigneeIds?: number[]; assignedBy: number; title?: string;
       dueDate?: string; endDate?: string; priority?: TaskPriority; quotationStatus?: QuotationStatus;
       clientName?: string; clientContact?: string; clientRequirements?: string;
-      operatorsRequired?: number; vehiclesRequired?: number;
+      operatorsRequired?: number; armedRequired?: boolean; vehiclesRequired?: number;
       estimatedCost?: number | null; estimatedCostCurrency?: string;
     }) => apiFetch<Task>("/tasks", { method: "POST", body: JSON.stringify(data) }),
     updateStatus: (id: number, data: { status: TaskStatus; completionNote?: string }) =>
@@ -552,7 +553,7 @@ export const api = {
       dueDate: string | null; endDate: string | null; status: TaskStatus; priority: TaskPriority; archived: boolean;
       clientConfirmed: boolean; quotationStatus: QuotationStatus;
       clientName: string; clientContact: string; clientRequirements: string;
-      operatorsRequired: number; vehiclesRequired: number;
+      operatorsRequired: number; armedRequired: boolean; vehiclesRequired: number;
       estimatedCost: number | null; estimatedCostCurrency: string;
       alertReviewedBucket: string | null; alertReviewedBy: number | null;
     }>) => apiFetch<Task>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data) }),

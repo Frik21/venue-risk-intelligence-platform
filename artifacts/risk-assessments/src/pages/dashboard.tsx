@@ -2311,6 +2311,7 @@ function OperationalCanvas({
     clientContact: "",
     clientRequirements: "",
     operatorsRequired: 1,
+    armedRequired: false,
     vehiclesRequired: 0,
     estimatedCost: null,
     estimatedCostCurrency: "ZAR",

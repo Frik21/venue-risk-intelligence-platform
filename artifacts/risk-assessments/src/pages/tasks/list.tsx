@@ -5,13 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
-import { ListChecks, Plus, ClipboardCheck, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, Search } from "lucide-react";
+import { ListChecks, Plus, ClipboardCheck, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, Search, Shield } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -44,6 +45,7 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
     clientContact: task.clientContact,
     clientRequirements: task.clientRequirements,
     operatorsRequired: String(task.operatorsRequired),
+    armedRequired: task.armedRequired,
     vehiclesRequired: String(task.vehiclesRequired),
   });
   const qc = useQueryClient();
@@ -63,6 +65,7 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
         clientContact: form.clientContact,
         clientRequirements: form.clientRequirements,
         operatorsRequired: Number(form.operatorsRequired) || 0,
+        armedRequired: form.armedRequired,
         vehiclesRequired: Number(form.vehiclesRequired) || 0,
       }),
     onSuccess: () => {
@@ -115,6 +118,13 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
           <div>
             <Label>Operators Needed</Label>
             <Input type="number" min={0} value={form.operatorsRequired} onChange={(e) => set("operatorsRequired", e.target.value)} />
+            <label className="flex items-center gap-2 text-xs text-slate-600 mt-1.5 cursor-pointer">
+              <Checkbox
+                checked={form.armedRequired}
+                onCheckedChange={(v) => setForm((f) => ({ ...f, armedRequired: v === true }))}
+              />
+              Armed
+            </label>
           </div>
           <div>
             <Label>Vehicles Needed</Label>
@@ -493,6 +503,11 @@ export default function TasksList() {
                             {` (${task.assignedToIds.length}/${task.operatorsRequired})`}
                           </span>
                         </div>
+                        {task.armedRequired && (
+                          <div className="flex items-center gap-1 text-xs text-red-700">
+                            <Shield className="w-3 h-3" /> Armed
+                          </div>
+                        )}
                         {task.vehiclesRequired > 0 && (
                           <div className="flex items-center gap-1 text-xs text-slate-500">
                             <Car className="w-3 h-3 text-slate-400" /> {task.vehiclesRequired} vehicle{task.vehiclesRequired !== 1 ? "s" : ""}

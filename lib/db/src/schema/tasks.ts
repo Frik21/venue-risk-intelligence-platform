@@ -62,6 +62,10 @@ export const tasksTable = pgTable("tasks", {
   clientContact: text("client_contact").notNull().default(""),
   clientRequirements: text("client_requirements").notNull().default(""),
   operatorsRequired: integer("operators_required").notNull().default(1),
+  // Whether the client's request calls for armed operators - a single
+  // flag for the whole task, not per-operator, set on the intake form
+  // alongside Operators Needed.
+  armedRequired: boolean("armed_required").notNull().default(false),
   vehiclesRequired: integer("vehicles_required").notNull().default(0),
   estimatedCost: real("estimated_cost"),
   estimatedCostCurrency: text("estimated_cost_currency").notNull().default("ZAR"),
