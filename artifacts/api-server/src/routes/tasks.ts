@@ -6,6 +6,7 @@ import { z } from "zod";
 const router: IRouter = Router();
 
 const TASK_PRIORITIES = ["low", "medium", "high", "urgent"] as const;
+const QUOTATION_STATUSES = ["approved", "awaiting_approval", "denied"] as const;
 
 function taskNumber(id: number) {
   return `T-${String(id).padStart(4, "0")}`;
@@ -37,6 +38,7 @@ function formatTask(
     archived: row.archived,
     completionNote: row.completionNote ?? null,
     clientConfirmedAt: row.clientConfirmedAt?.toISOString() ?? null,
+    quotationStatus: row.quotationStatus as "approved" | "awaiting_approval" | "denied",
     clientName: row.clientName,
     clientContact: row.clientContact,
     clientRequirements: row.clientRequirements,
@@ -116,6 +118,7 @@ const TaskInputSchema = z.object({
   dueDate: z.string().optional(),
   endDate: z.string().optional(),
   priority: z.enum(TASK_PRIORITIES).optional(),
+  quotationStatus: z.enum(QUOTATION_STATUSES).optional(),
   clientName: z.string().max(200).optional(),
   clientContact: z.string().max(200).optional(),
   clientRequirements: z.string().max(2000).optional(),
@@ -159,6 +162,7 @@ router.post("/tasks", async (req, res): Promise<void> => {
       dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : undefined,
       endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : undefined,
       priority: parsed.data.priority ?? "medium",
+      quotationStatus: parsed.data.quotationStatus ?? "awaiting_approval",
       clientName: parsed.data.clientName ?? "",
       clientContact: parsed.data.clientContact ?? "",
       clientRequirements: parsed.data.clientRequirements ?? "",

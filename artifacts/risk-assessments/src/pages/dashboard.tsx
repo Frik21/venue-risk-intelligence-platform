@@ -2306,6 +2306,7 @@ function OperationalCanvas({
     archived: false,
     completionNote: null,
     clientConfirmedAt: null,
+    quotationStatus: "awaiting_approval",
     clientName: "",
     clientContact: "",
     clientRequirements: "",

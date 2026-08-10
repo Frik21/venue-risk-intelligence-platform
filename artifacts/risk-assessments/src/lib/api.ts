@@ -53,6 +53,7 @@ export interface SearchPhrase {
 
 export type TaskStatus = "not_completed" | "in_progress" | "completed";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
+export type QuotationStatus = "approved" | "awaiting_approval" | "denied";
 
 // Task Assignment - a Manager assigns CPOs a specific piece of
 // structured work already in the platform, tied to a venue. The CPO
@@ -86,6 +87,9 @@ export interface Task {
   // lib/db/src/schema/tasks.ts. null until a Manager confirms with the
   // client (PATCH .../tasks with clientConfirmed: true).
   clientConfirmedAt: string | null;
+  // Where the client's quotation stands, set by hand on the task form -
+  // independent of clientConfirmedAt/status, nothing derives from it yet.
+  quotationStatus: QuotationStatus;
   clientName: string;
   clientContact: string;
   clientRequirements: string;
@@ -524,7 +528,7 @@ export const api = {
     },
     create: (data: {
       venueId: number; assigneeIds?: number[]; assignedBy: number; title: string;
-      dueDate?: string; endDate?: string; priority?: TaskPriority;
+      dueDate?: string; endDate?: string; priority?: TaskPriority; quotationStatus?: QuotationStatus;
       clientName?: string; clientContact?: string; clientRequirements?: string;
       operatorsRequired?: number; vehiclesRequired?: number;
       estimatedCost?: number | null; estimatedCostCurrency?: string;
@@ -534,7 +538,7 @@ export const api = {
     update: (id: number, data: Partial<{
       venueId: number; assigneeIds: number[]; assignedTo: number | null; assignedBy: number; title: string;
       dueDate: string | null; endDate: string | null; status: TaskStatus; priority: TaskPriority; archived: boolean;
-      clientConfirmed: boolean;
+      clientConfirmed: boolean; quotationStatus: QuotationStatus;
       clientName: string; clientContact: string; clientRequirements: string;
       operatorsRequired: number; vehiclesRequired: number;
       estimatedCost: number | null; estimatedCostCurrency: string;

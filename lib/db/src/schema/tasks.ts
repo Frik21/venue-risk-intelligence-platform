@@ -53,6 +53,10 @@ export const tasksTable = pgTable("tasks", {
   // confirmation yet = Pending, confirmed but not done = Running,
   // status = completed = Completed regardless of this field.
   clientConfirmedAt: timestamp("client_confirmed_at", { withTimezone: true }),
+  // Where the client's quotation stands - "approved" | "awaiting_approval"
+  // | "denied", set by hand by a Manager on the task form. Independent of
+  // clientConfirmedAt/status; nothing derives from it yet.
+  quotationStatus: text("quotation_status").notNull().default("awaiting_approval"),
   clientName: text("client_name").notNull().default(""),
   clientContact: text("client_contact").notNull().default(""),
   clientRequirements: text("client_requirements").notNull().default(""),

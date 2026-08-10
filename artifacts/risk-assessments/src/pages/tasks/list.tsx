@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Task, type TaskStatus, type TaskPriority, type Venue, type User, type TimesheetEntry } from "@/lib/api";
+import { api, type Task, type TaskStatus, type TaskPriority, type QuotationStatus, type Venue, type User, type TimesheetEntry } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,7 +15,7 @@ import { ListChecks, Plus, ClipboardCheck, MoreVertical, Pencil, Copy, Archive, 
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { NewTaskDialog, LocationCombobox } from "@/components/new-task-dialog";
+import { NewTaskDialog, LocationCombobox, QuotationStatusPicker } from "@/components/new-task-dialog";
 import { type TaskBucket, BUCKET_CONFIG, taskBucket } from "@/lib/task-bucket";
 
 const STATUS_CONFIG: Record<TaskStatus, { label: string; color: string }> = {
@@ -39,6 +39,7 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
     dueDate: task.dueDate ? task.dueDate.slice(0, 16) : "",
     endDate: task.endDate ? task.endDate.slice(0, 16) : "",
     priority: task.priority,
+    quotationStatus: task.quotationStatus,
     clientName: task.clientName,
     clientContact: task.clientContact,
     clientRequirements: task.clientRequirements,
@@ -59,6 +60,7 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
         dueDate: form.dueDate || null,
         endDate: form.endDate || null,
         priority: form.priority as TaskPriority,
+        quotationStatus: form.quotationStatus,
         clientName: form.clientName,
         clientContact: form.clientContact,
         clientRequirements: form.clientRequirements,
@@ -140,6 +142,13 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
             <Input type="number" min={0} step="0.01" value={form.estimatedCost} onChange={(e) => set("estimatedCost", e.target.value)} className="flex-1" />
             <Input value={form.estimatedCostCurrency} onChange={(e) => set("estimatedCostCurrency", e.target.value)} className="w-20" />
           </div>
+        </div>
+        <div>
+          <Label>Quotation Status</Label>
+          <QuotationStatusPicker
+            value={form.quotationStatus}
+            onChange={(v) => setForm((f) => ({ ...f, quotationStatus: v }))}
+          />
         </div>
         <div className="flex gap-3 pt-2">
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !form.venueId || !form.title.trim()}>

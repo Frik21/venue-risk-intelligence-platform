@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Venue, type User, type TaskPriority } from "@/lib/api";
+import { api, type Venue, type User, type TaskPriority, type QuotationStatus } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,35 @@ import { searchPhoton, type LocationSearchResult } from "@/components/location-s
 
 const ADDRESS_SEARCH_DEBOUNCE_MS = 350;
 const ADDRESS_SEARCH_MIN_LENGTH = 3;
+
+const QUOTATION_STATUS_OPTIONS: { value: QuotationStatus; label: string; activeClass: string }[] = [
+  { value: "approved", label: "Quotation Approved", activeClass: "bg-green-600 text-white border-green-600" },
+  { value: "awaiting_approval", label: "Quotation Awaiting Approval", activeClass: "bg-amber-500 text-white border-amber-500" },
+  { value: "denied", label: "Quotation Denied", activeClass: "bg-red-600 text-white border-red-600" },
+];
+
+// Three-button picker (not a dropdown) so all three quotation states are
+// visible at a glance on the task form, shared by New Task Request and
+// Edit Task.
+export function QuotationStatusPicker({ value, onChange }: { value: QuotationStatus; onChange: (v: QuotationStatus) => void }) {
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {QUOTATION_STATUS_OPTIONS.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onChange(opt.value)}
+          className={cn(
+            "rounded-md border px-2 py-2 text-xs font-medium text-center transition-colors",
+            value === opt.value ? opt.activeClass : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50",
+          )}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 // One field to find or add a task's location - no separate window.
 // Typing filters existing venues AND (after a moment) searches real
@@ -210,6 +239,7 @@ export function NewTaskDialog({
     dueDate: "",
     endDate: "",
     priority: "medium",
+    quotationStatus: "awaiting_approval" as QuotationStatus,
     clientName: "",
     clientContact: "",
     clientRequirements: "",
@@ -231,6 +261,7 @@ export function NewTaskDialog({
         dueDate: form.dueDate || undefined,
         endDate: form.endDate || undefined,
         priority: form.priority as TaskPriority,
+        quotationStatus: form.quotationStatus,
         clientName: form.clientName,
         clientContact: form.clientContact,
         clientRequirements: form.clientRequirements,
@@ -332,6 +363,14 @@ export function NewTaskDialog({
             <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.estimatedCost} onChange={(e) => set("estimatedCost", e.target.value)} className="flex-1" />
             <Input value={form.estimatedCostCurrency} onChange={(e) => set("estimatedCostCurrency", e.target.value)} className="w-20" />
           </div>
+        </div>
+
+        <div>
+          <Label>Quotation Status</Label>
+          <QuotationStatusPicker
+            value={form.quotationStatus}
+            onChange={(v) => setForm((f) => ({ ...f, quotationStatus: v }))}
+          />
         </div>
 
         <div>
