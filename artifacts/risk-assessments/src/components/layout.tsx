@@ -16,6 +16,7 @@ import {
   CalendarDays,
   Archive,
   Bell,
+  Radio,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -39,6 +40,7 @@ const navGroups = [
       { href: "/admin/task-archive", label: "Task Archived", icon: Archive },
       { href: "/admin/cpo-deployment", label: "Operator Deployment", icon: UserCog },
       { href: "/admin/onboarding", label: "Operator Onboarding", icon: UserPlus },
+      { href: "/osint", label: "OSINT", icon: Radio },
       { href: "/admin/offices", label: "Offices", icon: Building2 },
       { href: "/admin/costs", label: "Costs", icon: DollarSign },
       { href: "/admin/users", label: "Users", icon: Users },
