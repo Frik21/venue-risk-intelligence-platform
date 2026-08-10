@@ -100,6 +100,13 @@ export interface Task {
   estimatedCost: number | null;
   estimatedCostCurrency: string;
   planSubmittedAt: string | null;
+  // Task-lifecycle flagging on the Alerts page - see alertReviewedBucket
+  // in lib/db/src/schema/tasks.ts. alertReviewedBucket is the bucket name
+  // (from lib/task-bucket.ts) that was last marked reviewed; stale once
+  // the task moves to a different bucket.
+  alertReviewedBucket: string | null;
+  alertReviewedAt: string | null;
+  alertReviewedByName: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -544,6 +551,7 @@ export const api = {
       clientName: string; clientContact: string; clientRequirements: string;
       operatorsRequired: number; vehiclesRequired: number;
       estimatedCost: number | null; estimatedCostCurrency: string;
+      alertReviewedBucket: string | null; alertReviewedBy: number | null;
     }>) => apiFetch<Task>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     duplicate: (id: number) => apiFetch<Task>(`/tasks/${id}/duplicate`, { method: "POST" }),
   },

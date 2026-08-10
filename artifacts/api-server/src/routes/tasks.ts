@@ -18,6 +18,7 @@ function formatTask(
   assignedByName: string | null,
   planSubmittedAt: string | null,
   roster: { id: number; name: string }[],
+  alertReviewedByName: string | null = null,
 ) {
   return {
     id: row.id,
@@ -50,6 +51,9 @@ function formatTask(
     // to the Manager (see POST /plans/:id/submit) - null if never
     // submitted, or no Plan exists yet at all.
     planSubmittedAt: planSubmittedAt ?? null,
+    alertReviewedBucket: row.alertReviewedBucket ?? null,
+    alertReviewedAt: row.alertReviewedAt?.toISOString() ?? null,
+    alertReviewedByName: alertReviewedByName ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -101,7 +105,14 @@ router.get("/tasks", async (req, res): Promise<void> => {
 
   res.json(
     filtered.map((r) =>
-      formatTask(r, (r.venueId != null ? venueMap[r.venueId] : undefined) ?? null, userMap[r.assignedBy] ?? null, planSubmittedMap[r.id] ?? null, rosters[r.id] ?? []),
+      formatTask(
+        r,
+        (r.venueId != null ? venueMap[r.venueId] : undefined) ?? null,
+        userMap[r.assignedBy] ?? null,
+        planSubmittedMap[r.id] ?? null,
+        rosters[r.id] ?? [],
+        (r.alertReviewedBy != null ? userMap[r.alertReviewedBy] : undefined) ?? null,
+      ),
     ),
   );
 });
@@ -146,8 +157,16 @@ async function loadTaskContext(task: typeof tasksTable.$inferSelect) {
     ? (await db.select({ name: venuesTable.name }).from(venuesTable).where(eq(venuesTable.id, task.venueId)))[0]
     : undefined;
   const [assignedByUser] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, task.assignedBy));
+  const [alertReviewedByUser] = task.alertReviewedBy != null
+    ? await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, task.alertReviewedBy))
+    : [undefined];
   const roster = (await rosterMap([task.id]))[task.id] ?? [];
-  return { venueName: venue?.name ?? null, assignedByName: assignedByUser?.name ?? null, roster };
+  return {
+    venueName: venue?.name ?? null,
+    assignedByName: assignedByUser?.name ?? null,
+    alertReviewedByName: alertReviewedByUser?.name ?? null,
+    roster,
+  };
 }
 
 router.post("/tasks", async (req, res): Promise<void> => {
@@ -185,7 +204,7 @@ router.post("/tasks", async (req, res): Promise<void> => {
   await setRoster(task.id, assigneeIds);
 
   const ctx = await loadTaskContext(task);
-  res.status(201).json(formatTask(task, ctx.venueName, ctx.assignedByName, null, ctx.roster));
+  res.status(201).json(formatTask(task, ctx.venueName, ctx.assignedByName, null, ctx.roster, ctx.alertReviewedByName));
 });
 
 // General task edit - covers status updates (the original purpose of
@@ -215,6 +234,11 @@ const TaskUpdateSchema = z.object({
   vehiclesRequired: z.number().int().min(0).optional(),
   estimatedCost: z.number().min(0).nullable().optional(),
   estimatedCostCurrency: z.string().min(1).max(10).optional(),
+  // Marks the task reviewed on the Alerts page for its current bucket
+  // (see alertReviewedBucket in schema/tasks.ts) - pass the bucket name
+  // to mark reviewed, or null to clear it. alertReviewedBy is who did it.
+  alertReviewedBucket: z.string().nullable().optional(),
+  alertReviewedBy: z.number().int().nullable().optional(),
 });
 
 router.patch("/tasks/:id", async (req, res): Promise<void> => {
@@ -224,7 +248,7 @@ router.patch("/tasks/:id", async (req, res): Promise<void> => {
   const parsed = TaskUpdateSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const { dueDate, endDate, assigneeIds, assignedTo, clientConfirmed, ...rest } = parsed.data;
+  const { dueDate, endDate, assigneeIds, assignedTo, clientConfirmed, alertReviewedBucket, alertReviewedBy, ...rest } = parsed.data;
   const nextRoster = assigneeIds ?? (assignedTo !== undefined ? (assignedTo !== null ? [assignedTo] : []) : undefined);
 
   const [task] = await db
@@ -235,6 +259,13 @@ router.patch("/tasks/:id", async (req, res): Promise<void> => {
       ...(endDate !== undefined ? { endDate: endDate ? new Date(endDate) : null } : {}),
       ...(nextRoster !== undefined ? { assignedTo: nextRoster[0] ?? null } : {}),
       ...(clientConfirmed !== undefined ? { clientConfirmedAt: clientConfirmed ? new Date() : null } : {}),
+      ...(alertReviewedBucket !== undefined
+        ? {
+            alertReviewedBucket,
+            alertReviewedBy: alertReviewedBucket ? (alertReviewedBy ?? null) : null,
+            alertReviewedAt: alertReviewedBucket ? new Date() : null,
+          }
+        : {}),
     })
     .where(eq(tasksTable.id, id))
     .returning();
@@ -244,7 +275,7 @@ router.patch("/tasks/:id", async (req, res): Promise<void> => {
 
   const ctx = await loadTaskContext(task);
   const [plan] = await db.select({ submittedAt: plansTable.submittedAt }).from(plansTable).where(eq(plansTable.taskId, task.id));
-  res.json(formatTask(task, ctx.venueName, ctx.assignedByName, plan?.submittedAt?.toISOString() ?? null, ctx.roster));
+  res.json(formatTask(task, ctx.venueName, ctx.assignedByName, plan?.submittedAt?.toISOString() ?? null, ctx.roster, ctx.alertReviewedByName));
 });
 
 // Duplicate - same venue/roster/assignedBy/priority/client details,

@@ -2315,6 +2315,9 @@ function OperationalCanvas({
     estimatedCost: null,
     estimatedCostCurrency: "ZAR",
     planSubmittedAt: null,
+    alertReviewedBucket: null,
+    alertReviewedAt: null,
+    alertReviewedByName: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };

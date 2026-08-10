@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Alert, type AlertStatus, type Venue } from "@/lib/api";
+import { api, type Alert, type AlertStatus, type Venue, type Task, type User } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -7,10 +7,106 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
-import { Bell, CheckCheck, EyeOff, ArrowUpRight, X, Search } from "lucide-react";
+import { Bell, CheckCheck, EyeOff, ArrowUpRight, X, Search, ClipboardList, Check } from "lucide-react";
 import { getPriorityColor, timeAgo } from "@/lib/display-utils";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { type TaskBucket, BUCKET_CONFIG, taskBucket } from "@/lib/task-bucket";
+
+// Buckets that get flagged here for a Manager's attention - Running
+// isn't included, it's just "in progress as expected", nothing to flag.
+const FLAG_BUCKETS: TaskBucket[] = ["pending_details", "pending_allocation", "completed"];
+
+// Task-lifecycle flags, separate from the OSINT/GDELT-driven alerts
+// below - per direct product direction ("this alert page needs to be
+// used to flag tasks pending details and pending allocation as well as
+// completed tasks"). Reviewed state is tracked per-bucket on the task
+// itself (see alertReviewedBucket in lib/api.ts) so a task that gets
+// reviewed in Pending Details shows up unreviewed again once it moves
+// to Pending Allocation. Notification frequency/timing is deliberately
+// not built yet - parameters TBD.
+function TaskFlagsPanel() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: tasks = [], isLoading } = useQuery<Task[]>({ queryKey: ["tasks"], queryFn: () => api.tasks.list() });
+  const { data: users = [] } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list });
+  // No real login/session in this app - same "default to the first
+  // manager/admin found" convention used elsewhere.
+  const currentManagerId = users.find((u) => u.role === "manager" || u.role === "admin")?.id;
+
+  const reviewMutation = useMutation({
+    mutationFn: ({ taskId, bucket }: { taskId: number; bucket: TaskBucket }) =>
+      api.tasks.update(taskId, { alertReviewedBucket: bucket, alertReviewedBy: currentManagerId ?? null }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      toast({ title: "Marked reviewed" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const flagged = tasks
+    .filter((t) => !t.archived)
+    .map((t) => ({ task: t, bucket: taskBucket(t) }))
+    .filter((x): x is { task: Task; bucket: TaskBucket } => FLAG_BUCKETS.includes(x.bucket));
+
+  const unreviewedCount = flagged.filter(({ task, bucket }) => task.alertReviewedBucket !== bucket).length;
+
+  if (isLoading) return <Skeleton className="h-24" />;
+  if (flagged.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <ClipboardList className="w-4 h-4 text-slate-400" /> Task Flags
+          {unreviewedCount > 0 && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-amber-700 bg-amber-50 border-amber-200">
+              {unreviewedCount} need review
+            </span>
+          )}
+        </CardTitle>
+        <p className="text-slate-500 text-xs mt-0.5">
+          Tasks sitting in Pending Details, Pending Allocation, or newly Completed.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {flagged.map(({ task, bucket }) => {
+          const reviewed = task.alertReviewedBucket === bucket;
+          const bc = BUCKET_CONFIG[bucket];
+          return (
+            <div key={`${task.id}-${bucket}`} className="flex items-center gap-3 py-2 border-b border-slate-100 last:border-0">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                  <span className="text-[10px] font-mono text-slate-400 border border-slate-200 px-1.5 py-0.5 rounded">{task.taskNumber}</span>
+                  <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase", bc.color)}>{bc.label}</span>
+                </div>
+                <div className="font-medium text-slate-900 text-sm truncate">{task.title || "Untitled task"}</div>
+                {task.clientName && <p className="text-xs text-slate-500 truncate">Client: {task.clientName}</p>}
+              </div>
+              {reviewed ? (
+                <div className="text-[11px] text-green-600 flex items-center gap-1 shrink-0">
+                  <Check className="w-3.5 h-3.5" />
+                  Reviewed{task.alertReviewedByName && ` by ${task.alertReviewedByName}`}{task.alertReviewedAt && ` · ${timeAgo(task.alertReviewedAt)}`}
+                </div>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs h-7 shrink-0"
+                  onClick={() => reviewMutation.mutate({ taskId: task.id, bucket })}
+                  disabled={reviewMutation.isPending}
+                >
+                  <CheckCheck className="w-3 h-3 mr-1" /> Mark as reviewed
+                </Button>
+              )}
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
 
 const STATUS_CONFIG: Record<AlertStatus, { label: string; color: string }> = {
   pending:   { label: "Pending",   color: "text-amber-700 bg-amber-50 border-amber-200" },
@@ -162,6 +258,8 @@ export default function AlertsList() {
           </SelectContent>
         </Select>
       </div>
+
+      <TaskFlagsPanel />
 
       <SearchPhrasesPanel />
 

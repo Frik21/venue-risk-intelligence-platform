@@ -65,6 +65,16 @@ export const tasksTable = pgTable("tasks", {
   vehiclesRequired: integer("vehicles_required").notNull().default(0),
   estimatedCost: real("estimated_cost"),
   estimatedCostCurrency: text("estimated_cost_currency").notNull().default("ZAR"),
+  // Task-lifecycle flagging on the Alerts page (Pending Details / Pending
+  // Allocation / Completed - see lib/task-bucket.ts on the frontend),
+  // separate from the OSINT/GDELT-driven alertsTable. Scoped to a bucket
+  // name rather than a plain boolean so a task that's already been
+  // reviewed in one bucket (e.g. Pending Details) shows up unreviewed
+  // again once it moves to the next one (e.g. Pending Allocation) -
+  // each bucket is its own thing to look at.
+  alertReviewedBucket: text("alert_reviewed_bucket"),
+  alertReviewedAt: timestamp("alert_reviewed_at", { withTimezone: true }),
+  alertReviewedBy: integer("alert_reviewed_by").references(() => usersTable.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
