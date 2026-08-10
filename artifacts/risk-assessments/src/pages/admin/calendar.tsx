@@ -46,7 +46,12 @@ export default function CalendarPage() {
   const gridEnd = endOfWeek(endOfMonth(month));
   const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
 
-  const datedTasks = [...tasks].filter((t) => t.dueDate).sort((a, b) => a.dueDate!.localeCompare(b.dueDate!));
+  // Cancelled tasks are already excluded - api.tasks.list() defaults to
+  // archived:false. Completed tasks are filtered here too, since a
+  // finished engagement no longer needs to occupy a calendar slot.
+  const datedTasks = [...tasks]
+    .filter((t) => t.dueDate && t.status !== "completed")
+    .sort((a, b) => a.dueDate!.localeCompare(b.dueDate!));
 
   const tasksByDay = new Map<string, Task[]>();
   for (const t of datedTasks) {
