@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { api, type GlobalExpense, type PersonnelCostLine, type CompanySettings } from "@/lib/api";
+import { api, type GlobalExpense, type PersonnelCostLine, type CompanySettings, type Task, type QuotationStatus } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DollarSign, Wallet, Users as UsersIcon, Settings, Pencil } from "lucide-react";
+import { DollarSign, Wallet, Users as UsersIcon, Settings, Pencil, Car, FileText } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { QuotationStatusPicker } from "@/components/new-task-dialog";
 
 const CATEGORY_LABELS: Record<string, string> = {
   fuel: "Fuel", accommodation: "Accommodation", food: "Food", parking: "Parking",
@@ -82,6 +83,135 @@ function OvertimeSettingsPanel({ settings }: { settings: CompanySettings }) {
       <Button size="sm" className="h-8 text-xs" onClick={() => mutation.mutate()} disabled={mutation.isPending}>Save</Button>
       <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setEditing(false)}>Cancel</Button>
     </div>
+  );
+}
+
+// One task's row in the Quotation Workspace - the request details
+// (operators/armed/vehicles/requirements) came straight off that
+// task's intake form, shown here so working out a number and setting
+// the quotation status both happen with that context in view rather
+// than requiring a manager to cross-reference the Tasks list.
+function QuoteRow({ task }: { task: Task }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [amount, setAmount] = useState(task.estimatedCost != null ? String(task.estimatedCost) : "");
+  const [currency, setCurrency] = useState(task.estimatedCostCurrency);
+
+  const quotationMutation = useMutation({
+    mutationFn: (quotationStatus: QuotationStatus) => api.tasks.update(task.id, { quotationStatus }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      toast({ title: "Quotation status updated" });
+    },
+  });
+
+  const amountMutation = useMutation({
+    mutationFn: () =>
+      api.tasks.update(task.id, {
+        estimatedCost: amount.trim() === "" ? null : Number(amount),
+        estimatedCostCurrency: currency.trim() || "ZAR",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      toast({ title: "Quote amount saved" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  // Saves on blur, but only if the amount or currency actually changed -
+  // avoids re-saving (and re-toasting) every time a field is merely
+  // tabbed through.
+  const saveIfChanged = () => {
+    const nextAmount = amount.trim() === "" ? null : Number(amount);
+    const nextCurrency = currency.trim() || "ZAR";
+    if (nextAmount !== task.estimatedCost || nextCurrency !== task.estimatedCostCurrency) {
+      amountMutation.mutate();
+    }
+  };
+
+  return (
+    <div className="py-3 border-b border-slate-100 last:border-0">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+            <span className="text-[10px] font-mono text-slate-400 border border-slate-200 px-1.5 py-0.5 rounded">{task.taskNumber}</span>
+            <span className="font-semibold text-slate-900 text-sm">{task.title || "Untitled task"}</span>
+          </div>
+          <p className="text-xs text-slate-500">
+            {task.venueName ?? "No venue"} · {task.clientName || "No client"}
+            {task.dueDate && ` · Due ${formatDate(task.dueDate)}`}
+          </p>
+          <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+            <span className="flex items-center gap-1">
+              <UsersIcon className="w-3 h-3 text-slate-400" />
+              {task.operatorsRequired} operator{task.operatorsRequired !== 1 ? "s" : ""}
+              {task.armedRequired ? " (Armed)" : ""}
+            </span>
+            {task.vehiclesRequired > 0 && (
+              <span className="flex items-center gap-1">
+                <Car className="w-3 h-3 text-slate-400" /> {task.vehiclesRequired} vehicle{task.vehiclesRequired !== 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
+          {task.clientRequirements && (
+            <p className="text-xs text-slate-400 mt-1 max-w-md truncate" title={task.clientRequirements}>
+              {task.clientRequirements}
+            </p>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Input
+            type="number"
+            min={0}
+            step="0.01"
+            placeholder="Amount"
+            className="h-8 w-28 text-xs"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            onBlur={saveIfChanged}
+          />
+          <Input
+            type="text"
+            maxLength={10}
+            className="h-8 w-16 text-xs uppercase"
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+            onBlur={saveIfChanged}
+          />
+        </div>
+      </div>
+
+      <div className="mt-2 max-w-sm">
+        <QuotationStatusPicker value={task.quotationStatus} onChange={(v) => quotationMutation.mutate(v)} />
+      </div>
+    </div>
+  );
+}
+
+function QuotationWorkspace() {
+  const { data: tasks = [], isLoading } = useQuery<Task[]>({ queryKey: ["tasks"], queryFn: () => api.tasks.list() });
+
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <h2 className="font-semibold text-slate-900 flex items-center gap-2 mb-1">
+          <FileText className="w-4 h-4 text-slate-400" /> Quotation Workspace
+        </h2>
+        <p className="text-xs text-slate-400 mb-4">
+          Work out and record the quoted amount for every task, right alongside what the client actually requested.
+        </p>
+        {isLoading ? (
+          <Skeleton className="h-32" />
+        ) : tasks.length === 0 ? (
+          <p className="text-sm text-slate-400">No tasks yet.</p>
+        ) : (
+          <div>
+            {tasks.map((t) => <QuoteRow key={t.id} task={t} />)}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -181,9 +311,12 @@ export default function CostsPage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Quotations</h1>
         <p className="text-slate-500 text-sm mt-0.5">
-          Task expenses and personnel costs across the platform. See <Link href="/admin/documents" className="text-blue-600 hover:underline">Documents</Link> for receipts.
+          Work out quoted amounts per task below. Expenses and personnel costs across the platform follow -
+          see <Link href="/admin/documents" className="text-blue-600 hover:underline">Documents</Link> for receipts.
         </p>
       </div>
+
+      <QuotationWorkspace />
 
       {expensesLoading ? (
         <div className="grid grid-cols-2 gap-4">{Array(2).fill(0).map((_, i) => <Skeleton key={i} className="h-24" />)}</div>
