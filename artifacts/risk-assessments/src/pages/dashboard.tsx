@@ -173,7 +173,12 @@ const MOCK_CHECKLIST_ITEMS = [
 ];
 
 export default function Dashboard() {
-  const [step, setStep] = useState<Step>("login");
+  // Skips the login screen for now - there's no real authentication
+  // behind it yet (just cosmetic email/password inputs, see the
+  // "login" step's JSX below), so it's just an extra click with
+  // nothing to actually check. Left in place, just bypassed, so it's
+  // easy to wire up real auth later without rebuilding this screen.
+  const [step, setStep] = useState<Step>("brief");
 
   // Current Area and Operating Conditions start as the demo defaults and
   // can be overridden with the operator's real position/weather -
@@ -379,7 +384,10 @@ export default function Dashboard() {
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden text-white flex flex-col" style={{ backgroundColor: OCEAN_COLOR }}>
-      <TopBanner onSignOut={() => setStep("login")} />
+      {/* Login is bypassed for now (see the step state comment above) - */}
+      {/* Sign Out matches that by staying on the Brief rather than */}
+      {/* dead-ending at a login screen with nothing behind it. */}
+      <TopBanner onSignOut={() => setStep("brief")} />
       <div className="flex-1 min-h-0 relative">
         <OperationalCanvas
           briefArea={briefArea}
