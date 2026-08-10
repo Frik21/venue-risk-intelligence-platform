@@ -45,8 +45,6 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
     clientRequirements: task.clientRequirements,
     operatorsRequired: String(task.operatorsRequired),
     vehiclesRequired: String(task.vehiclesRequired),
-    estimatedCost: task.estimatedCost != null ? String(task.estimatedCost) : "",
-    estimatedCostCurrency: task.estimatedCostCurrency,
   });
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -66,8 +64,6 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
         clientRequirements: form.clientRequirements,
         operatorsRequired: Number(form.operatorsRequired) || 0,
         vehiclesRequired: Number(form.vehiclesRequired) || 0,
-        estimatedCost: form.estimatedCost ? Number(form.estimatedCost) : null,
-        estimatedCostCurrency: form.estimatedCostCurrency,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tasks"] });
@@ -134,13 +130,6 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
                 ))}
               </SelectContent>
             </Select>
-          </div>
-        </div>
-        <div>
-          <Label>Estimated Cost</Label>
-          <div className="flex gap-2">
-            <Input type="number" min={0} step="0.01" value={form.estimatedCost} onChange={(e) => set("estimatedCost", e.target.value)} className="flex-1" />
-            <Input value={form.estimatedCostCurrency} onChange={(e) => set("estimatedCostCurrency", e.target.value)} className="w-20" />
           </div>
         </div>
         <div>

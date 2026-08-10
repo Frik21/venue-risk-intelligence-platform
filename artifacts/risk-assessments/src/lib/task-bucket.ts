@@ -23,6 +23,8 @@ export const BUCKET_CONFIG: Record<TaskBucket, { label: string; color: string }>
   completed: { label: "Completed", color: "text-green-700 bg-green-50 border-green-200" },
 };
 
+// Estimated Cost is deliberately not checked here - it's off both task
+// forms for now (coming back later), so it can never be satisfied.
 function detailsComplete(task: Task): boolean {
   return (
     task.title.trim() !== "" &&
@@ -31,8 +33,7 @@ function detailsComplete(task: Task): boolean {
     task.clientContact.trim() !== "" &&
     task.clientRequirements.trim() !== "" &&
     task.dueDate != null &&
-    task.endDate != null &&
-    task.estimatedCost != null
+    task.endDate != null
   );
 }
 

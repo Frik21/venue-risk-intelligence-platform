@@ -245,8 +245,6 @@ export function NewTaskDialog({
     clientRequirements: "",
     operatorsRequired: "1",
     vehiclesRequired: "0",
-    estimatedCost: "",
-    estimatedCostCurrency: "ZAR",
   });
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -267,8 +265,6 @@ export function NewTaskDialog({
         clientRequirements: form.clientRequirements,
         operatorsRequired: Number(form.operatorsRequired) || 1,
         vehiclesRequired: Number(form.vehiclesRequired) || 0,
-        estimatedCost: form.estimatedCost ? Number(form.estimatedCost) : null,
-        estimatedCostCurrency: form.estimatedCostCurrency,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tasks"] });
@@ -285,10 +281,11 @@ export function NewTaskDialog({
   // Operator Onboarding's "Assign User" flow) and picked up later.
   //
   // Required to create at all: client name/contact/requirements + who's
-  // assigning it. Everything else (title, location, dates, cost,
-  // quotation status) can be filled in later - a task missing any of
-  // those just sits in Pending Details until it's complete (see
-  // lib/task-bucket.ts), per direct product direction.
+  // assigning it. Everything else (title, location, dates, quotation
+  // status) can be filled in later - a task missing any of those just
+  // sits in Pending Details until it's complete (see lib/task-bucket.ts),
+  // per direct product direction. Estimated Cost is off both task forms
+  // for now (coming back later) - not part of that completeness check.
   const canSubmit =
     form.clientName.trim() && form.clientContact.trim() && form.clientRequirements.trim() && form.assignedBy;
 
@@ -361,14 +358,6 @@ export function NewTaskDialog({
                 <SelectItem value="urgent">Urgent</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-        </div>
-
-        <div>
-          <Label>Estimated Cost</Label>
-          <div className="flex gap-2">
-            <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.estimatedCost} onChange={(e) => set("estimatedCost", e.target.value)} className="flex-1" />
-            <Input value={form.estimatedCostCurrency} onChange={(e) => set("estimatedCostCurrency", e.target.value)} className="w-20" />
           </div>
         </div>
 
