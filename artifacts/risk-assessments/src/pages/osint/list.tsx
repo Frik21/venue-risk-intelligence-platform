@@ -21,13 +21,12 @@ import { useToast } from "@/hooks/use-toast";
 // an afterthought bolted on top of it. Lives here (not Alert Queue)
 // since this is where monitoring gets configured; Alert Queue only
 // shows alerts for venues that have at least one phrase set up here.
-function SearchPhrasesPanel() {
-  const [venueId, setVenueId] = useState<number | null>(null);
+// Takes the venue already chosen by the page's own venue picker below -
+// this panel is about phrases, not a second place to pick a venue.
+function SearchPhrasesPanel({ venueId }: { venueId: number | null }) {
   const [newPhrase, setNewPhrase] = useState("");
   const qc = useQueryClient();
   const { toast } = useToast();
-
-  const { data: venues = [] } = useQuery<Venue[]>({ queryKey: ["venues"], queryFn: api.venues.list });
 
   const { data: phrases = [], isLoading: phrasesLoading } = useQuery({
     queryKey: ["search-phrases", venueId],
@@ -66,18 +65,13 @@ function SearchPhrasesPanel() {
           <Search className="w-4 h-4 text-slate-400" /> Search Phrases
         </CardTitle>
         <p className="text-slate-500 text-xs mt-0.5">
-          Choose the phrases GDELT news monitoring watches for at each venue - e.g. "mass shooting", "stabbing", "bombing", or anything venue-specific. Only venues with at least one phrase show up on the Alert Queue.
+          Choose the phrases GDELT news monitoring watches for at this venue - e.g. "mass shooting", "stabbing", "bombing", or anything venue-specific. Only venues with at least one phrase show up on the Alert Queue.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Select value={venueId != null ? String(venueId) : undefined} onValueChange={(v) => setVenueId(Number(v))}>
-          <SelectTrigger className="w-full sm:w-72"><SelectValue placeholder="Select a venue" /></SelectTrigger>
-          <SelectContent>
-            {venues.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-
-        {venueId != null && (
+        {venueId == null ? (
+          <p className="text-xs text-slate-400">Select a venue above to manage its search phrases.</p>
+        ) : (
           <>
             <div className="flex gap-2">
               <Input
@@ -215,8 +209,6 @@ export default function OsintList() {
         <p className="text-slate-500 text-sm mt-0.5">Open-source intelligence events for venue threat assessment</p>
       </div>
 
-      <SearchPhrasesPanel />
-
       <div className="flex gap-3 flex-wrap">
         <Select value={selectedVenue} onValueChange={setSelectedVenue}>
           <SelectTrigger className="w-64">
@@ -239,6 +231,8 @@ export default function OsintList() {
           </SelectContent>
         </Select>
       </div>
+
+      <SearchPhrasesPanel venueId={selectedVenue ? Number(selectedVenue) : null} />
 
       {!selectedVenue ? (
         <Card>
