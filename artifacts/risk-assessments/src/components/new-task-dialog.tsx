@@ -239,7 +239,6 @@ export function NewTaskDialog({
     dueDate: "",
     endDate: "",
     priority: "medium",
-    quotationStatus: "awaiting_approval" as QuotationStatus,
     clientName: "",
     clientContact: "",
     clientRequirements: "",
@@ -259,7 +258,6 @@ export function NewTaskDialog({
         dueDate: form.dueDate || undefined,
         endDate: form.endDate || undefined,
         priority: form.priority as TaskPriority,
-        quotationStatus: form.quotationStatus,
         clientName: form.clientName,
         clientContact: form.clientContact,
         clientRequirements: form.clientRequirements,
@@ -359,14 +357,6 @@ export function NewTaskDialog({
               </SelectContent>
             </Select>
           </div>
-        </div>
-
-        <div>
-          <Label>Quotation Status</Label>
-          <QuotationStatusPicker
-            value={form.quotationStatus}
-            onChange={(v) => setForm((f) => ({ ...f, quotationStatus: v }))}
-          />
         </div>
 
         <div>
