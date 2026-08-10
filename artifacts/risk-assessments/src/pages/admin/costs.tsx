@@ -1,17 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { api, type GlobalExpense, type PersonnelCostLine, type CompanySettings, type Task, type QuotationStatus } from "@/lib/api";
+import { api, type GlobalExpense, type PersonnelCostLine, type CompanySettings, type Task, type QuotationStatus, type ExpenseCategory, type Venue, type User } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DollarSign, Wallet, CheckCircle2, Clock, XCircle, Users as UsersIcon, Settings, Pencil, Car, FileText, Plus, X, ChevronDown, ChevronUp } from "lucide-react";
+import { DollarSign, Wallet, CheckCircle2, Clock, XCircle, Users as UsersIcon, Settings, Pencil, Car, FileText, Plus, X, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { QuotationStatusPicker } from "@/components/new-task-dialog";
+import { QuotationStatusPicker, NewTaskDialog } from "@/components/new-task-dialog";
 import { cn } from "@/lib/utils";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -369,6 +370,111 @@ function QuotationWorkspace({ tasks, isLoading }: { tasks: Task[]; isLoading: bo
   );
 }
 
+// Add/edit an expense straight from the Quotations page, instead of
+// only ever being able to view the rollups - per direct product
+// direction ("add and remove" expense entries here). Creating reuses
+// the existing "blank row via POST, then fill in via PATCH" flow
+// (routes/expenses.ts) - only tasks with a CPO already assigned can
+// take an expense, same rule the backend already enforces.
+function ExpenseDialog({ expense, tasks, onClose }: { expense: GlobalExpense | null; tasks: Task[]; onClose: () => void }) {
+  const assignableTasks = tasks.filter((t) => t.assignedToIds.length > 0 && !t.archived);
+  const [taskId, setTaskId] = useState(expense ? String(expense.taskId) : "");
+  const [category, setCategory] = useState<ExpenseCategory>(expense?.category ?? "other");
+  const [amount, setAmount] = useState(expense ? String(expense.amount) : "");
+  const [currency, setCurrency] = useState(expense?.currency ?? "ZAR");
+  const [description, setDescription] = useState(expense?.description ?? "");
+  const [incurredOn, setIncurredOn] = useState(expense?.incurredOn ?? new Date().toISOString().slice(0, 10));
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const patch = {
+        category,
+        amount: Number(amount) || 0,
+        currency: currency.trim() || "ZAR",
+        description,
+        incurredOn,
+      };
+      if (expense) return api.expenses.update(expense.id, patch);
+      const created = await api.expenses.create(Number(taskId));
+      return api.expenses.update(created.id, patch);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["expenses-all"] });
+      toast({ title: expense ? "Expense updated" : "Expense added" });
+      onClose();
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const canSubmit = (expense != null || taskId !== "") && amount.trim() !== "";
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
+        <h2 className="text-lg font-bold">{expense ? "Edit Expense" : "Add Expense"}</h2>
+
+        {!expense && (
+          <div>
+            <Label>Task *</Label>
+            <Select value={taskId} onValueChange={setTaskId}>
+              <SelectTrigger><SelectValue placeholder="Select a task" /></SelectTrigger>
+              <SelectContent>
+                {assignableTasks.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-slate-400">No tasks with a CPO assigned yet</div>
+                ) : (
+                  assignableTasks.map((t) => (
+                    <SelectItem key={t.id} value={String(t.id)}>{t.taskNumber} · {t.title || "Untitled task"}</SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        <div>
+          <Label>Category</Label>
+          <Select value={category} onValueChange={(v) => setCategory(v as ExpenseCategory)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {Object.entries(CATEGORY_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Amount</Label>
+            <Input type="number" min={0} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </div>
+          <div>
+            <Label>Currency</Label>
+            <Input maxLength={10} value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} />
+          </div>
+        </div>
+
+        <div>
+          <Label>Description</Label>
+          <Textarea value={description} onChange={(e) => setDescription(e.target.value)} />
+        </div>
+
+        <div>
+          <Label>Date</Label>
+          <Input type="date" value={incurredOn} onChange={(e) => setIncurredOn(e.target.value)} />
+        </div>
+
+        <div className="flex gap-3 pt-2">
+          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !canSubmit}>
+            {mutation.isPending ? "Saving..." : expense ? "Save Changes" : "Add Expense"}
+          </Button>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Costs - Task Costs / Budget Overview from Expenses, and Personnel
 // Costs (rate x hours, including overtime) from Timesheet + CPO pay
 // rates - both real. The overtime rule is a Manager-editable setting
@@ -379,7 +485,15 @@ function QuotationWorkspace({ tasks, isLoading }: { tasks: Task[]; isLoading: bo
 // for every breakdown below - per direct product direction ("user
 // friendly but also like an accounting page").
 export default function CostsPage() {
+  const [showExpenseDialog, setShowExpenseDialog] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<GlobalExpense | null>(null);
+  const [showNewTask, setShowNewTask] = useState(false);
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
   const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({ queryKey: ["tasks"], queryFn: () => api.tasks.list() });
+  const { data: venues = [] } = useQuery<Venue[]>({ queryKey: ["venues"], queryFn: api.venues.list });
+  const { data: users = [] } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list });
   const { data: expenses = [], isLoading: expensesLoading } = useQuery<GlobalExpense[]>({
     queryKey: ["expenses-all"],
     queryFn: api.expenses.listAll,
@@ -389,6 +503,14 @@ export default function CostsPage() {
     queryFn: api.personnelCosts.list,
   });
   const { data: settings } = useQuery<CompanySettings>({ queryKey: ["settings"], queryFn: api.settings.get });
+
+  const deleteExpenseMutation = useMutation({
+    mutationFn: (id: number) => api.expenses.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["expenses-all"] });
+      toast({ title: "Expense removed" });
+    },
+  });
 
   // Quoted/Approved/Pending/Denied - rolled up from every non-archived
   // task's estimatedCost, bucketed by quotationStatus then currency.
@@ -478,12 +600,26 @@ export default function CostsPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Quotations</h1>
-        <p className="text-slate-500 text-sm mt-0.5">
-          Work out quoted amounts per task below. Expenses and personnel costs across the platform follow -
-          see <Link href="/admin/documents" className="text-blue-600 hover:underline">Documents</Link> for receipts.
-        </p>
+      {showNewTask && <NewTaskDialog venues={venues} users={users} onClose={() => setShowNewTask(false)} />}
+      {showExpenseDialog && <ExpenseDialog expense={null} tasks={tasks} onClose={() => setShowExpenseDialog(false)} />}
+      {editingExpense && <ExpenseDialog expense={editingExpense} tasks={tasks} onClose={() => setEditingExpense(null)} />}
+
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Quotations</h1>
+          <p className="text-slate-500 text-sm mt-0.5">
+            Work out quoted amounts per task below. Expenses and personnel costs across the platform follow -
+            see <Link href="/admin/documents" className="text-blue-600 hover:underline">Documents</Link> for receipts.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button variant="outline" onClick={() => setShowExpenseDialog(true)}>
+            <Plus className="w-4 h-4 mr-1.5" /> Add Expense
+          </Button>
+          <Button onClick={() => setShowNewTask(true)}>
+            <Plus className="w-4 h-4 mr-1.5" /> Create Quote
+          </Button>
+        </div>
       </div>
 
       {tasksLoading ? (
@@ -676,7 +812,12 @@ export default function CostsPage() {
       {!expensesLoading && expenses.length > 0 && (
         <Card>
           <CardContent className="p-5">
-            <h2 className="font-semibold text-slate-900 mb-3">Recent Expenses</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold text-slate-900">Recent Expenses</h2>
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowExpenseDialog(true)}>
+                <Plus className="w-3 h-3 mr-1" /> Add Expense
+              </Button>
+            </div>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -684,15 +825,36 @@ export default function CostsPage() {
                   <th className="text-left py-1.5">Task</th>
                   <th className="text-left py-1.5">Date</th>
                   <th className="text-right py-1.5">Amount</th>
+                  <th className="w-16"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {expenses.slice(0, 10).map((e) => (
-                  <tr key={e.id}>
+                  <tr key={e.id} className="group">
                     <td className="py-2 font-medium text-slate-900">{e.description || CATEGORY_LABELS[e.category] || e.category}</td>
                     <td className="py-2 text-slate-500 truncate max-w-0">{e.taskTitle ?? "Unknown task"}</td>
                     <td className="py-2 text-slate-500 whitespace-nowrap">{formatDate(e.incurredOn)}</td>
                     <td className="py-2 text-right font-mono tabular-nums text-slate-900">{formatMoney(e.amount, e.currency)}</td>
+                    <td className="py-2 text-right">
+                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100">
+                        <button
+                          type="button"
+                          onClick={() => setEditingExpense(e)}
+                          className="text-slate-400 hover:text-blue-600 p-1"
+                          aria-label="Edit expense"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteExpenseMutation.mutate(e.id)}
+                          className="text-slate-400 hover:text-red-600 p-1"
+                          aria-label="Delete expense"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
