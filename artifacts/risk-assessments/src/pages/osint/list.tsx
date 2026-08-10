@@ -12,6 +12,7 @@ import { Radio, CheckCircle2, XCircle, ExternalLink, Globe } from "lucide-react"
 import { timeAgo } from "@/lib/display-utils";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { SearchPhrasesPanel } from "@/pages/alerts/list";
 
 const EVENT_COLORS: Record<string, string> = {
   crime:        "text-red-700 bg-red-50 border-red-200",
@@ -107,6 +108,8 @@ export default function OsintList() {
         <h1 className="text-2xl font-bold text-slate-900">OSINT Monitor</h1>
         <p className="text-slate-500 text-sm mt-0.5">Open-source intelligence events for venue threat assessment</p>
       </div>
+
+      <SearchPhrasesPanel />
 
       <div className="flex gap-3 flex-wrap">
         <Select value={selectedVenue} onValueChange={setSelectedVenue}>

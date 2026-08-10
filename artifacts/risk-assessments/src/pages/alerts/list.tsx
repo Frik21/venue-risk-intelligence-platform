@@ -112,7 +112,7 @@ const STATUS_CONFIG: Record<AlertStatus, { label: string; color: string }> = {
 // for, per venue - an operator picking specific phrases ("mass
 // shooting", "stabbing", a venue-specific term) is the noise filter
 // itself, not an afterthought bolted on top of it.
-function SearchPhrasesPanel() {
+export function SearchPhrasesPanel() {
   const [venueId, setVenueId] = useState<number | null>(null);
   const [newPhrase, setNewPhrase] = useState("");
   const qc = useQueryClient();
