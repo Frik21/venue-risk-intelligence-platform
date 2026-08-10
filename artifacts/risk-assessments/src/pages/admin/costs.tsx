@@ -179,7 +179,7 @@ export default function CostsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Costs</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Quotations</h1>
         <p className="text-slate-500 text-sm mt-0.5">
           Task expenses and personnel costs across the platform. See <Link href="/admin/documents" className="text-blue-600 hover:underline">Documents</Link> for receipts.
         </p>
