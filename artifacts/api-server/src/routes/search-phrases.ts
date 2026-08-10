@@ -14,12 +14,28 @@ function formatPhrase(row: typeof venueSearchPhrasesTable.$inferSelect) {
   };
 }
 
-// All phrases across every venue - used by the Alert Queue to figure
-// out which venues are actually being monitored, so it can show only
-// alerts connected to a venue with at least one search phrase set up.
+// All phrases - a flat, venue-less list for now (see venueId comment in
+// schema/monitoring.ts). Also used by the Alert Queue to figure out
+// which venues are being monitored, back when phrases were venue-scoped.
 router.get("/search-phrases", async (_req, res): Promise<void> => {
   const phrases = await db.select().from(venueSearchPhrasesTable).orderBy(venueSearchPhrasesTable.createdAt);
   res.json(phrases.map(formatPhrase));
+});
+
+const GlobalPhraseInputSchema = z.object({
+  phrase: z.string().trim().min(2).max(100),
+});
+
+router.post("/search-phrases", async (req, res): Promise<void> => {
+  const parsed = GlobalPhraseInputSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [phrase] = await db
+    .insert(venueSearchPhrasesTable)
+    .values({ venueId: null, phrase: parsed.data.phrase })
+    .returning();
+
+  res.status(201).json(formatPhrase(phrase));
 });
 
 router.get("/venues/:id/search-phrases", async (req, res): Promise<void> => {

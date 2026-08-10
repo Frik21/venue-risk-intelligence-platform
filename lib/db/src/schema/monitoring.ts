@@ -41,17 +41,18 @@ export const insertOsintEventSchema = createInsertSchema(osintEventsTable).omit(
 export type InsertOsintEvent = z.infer<typeof insertOsintEventSchema>;
 export type OsintEvent = typeof osintEventsTable.$inferSelect;
 
-// Per-venue keyword list driving the GDELT news-monitoring OSINT source
-// (see artifacts/api-server/src/lib/gdelt.ts) - an operator picks the
-// specific phrases worth watching for a venue (e.g. "mass shooting",
-// "stabbing", a venue-specific term), rather than the system guessing
-// what's relevant. No phrases configured for a venue means the GDELT
-// check simply doesn't run for it - deliberate, not a bug: unscoped
-// monitoring for every venue by default would just reintroduce the
-// noise problem this whole feature exists to avoid.
+// Keyword list driving the GDELT news-monitoring OSINT source (see
+// artifacts/api-server/src/lib/gdelt.ts) - an operator picks the
+// specific phrases worth watching (e.g. "mass shooting", "stabbing")
+// rather than the system guessing what's relevant. venueId is nullable
+// and currently unused by the UI - phrases are a flat, global list for
+// now (per direct product direction, "we don't need the venue... just
+// the search bar for OSINT phrases"); the column stays so a phrase can
+// be tied back to a specific venue again later without another
+// migration.
 export const venueSearchPhrasesTable = pgTable("venue_search_phrases", {
   id: serial("id").primaryKey(),
-  venueId: integer("venue_id").notNull().references(() => venuesTable.id, { onDelete: "cascade" }),
+  venueId: integer("venue_id").references(() => venuesTable.id, { onDelete: "cascade" }),
   phrase: text("phrase").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

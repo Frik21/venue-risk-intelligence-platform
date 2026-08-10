@@ -3,41 +3,35 @@ import { api, type OsintEvent, type Venue } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { useSearch } from "wouter";
-import { Radio, CheckCircle2, XCircle, ExternalLink, Globe, Search, X } from "lucide-react";
+import { Radio, CheckCircle2, XCircle, ExternalLink, Search, X } from "lucide-react";
 import { timeAgo } from "@/lib/display-utils";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
 // Search phrases are what the GDELT news-monitoring OSINT source (see
-// artifacts/api-server/src/lib/gdelt.ts) actually queries for, per
-// venue - an operator picking specific phrases ("mass shooting",
-// "stabbing", a venue-specific term) is the noise filter itself, not
-// an afterthought bolted on top of it. Lives here (not Alert Queue)
-// since this is where monitoring gets configured; Alert Queue only
-// shows alerts for venues that have at least one phrase set up here.
-// Takes the venue already chosen by the page's own venue picker below -
-// this panel is about phrases, not a second place to pick a venue.
-function SearchPhrasesPanel({ venueId }: { venueId: number | null }) {
+// artifacts/api-server/src/lib/gdelt.ts) actually queries for - a flat,
+// global list for now (no venue picker here, per direct product
+// direction: "we don't need the venue... just the search bar for
+// OSINT phrases"; see venueId comment in lib/db/src/schema/
+// monitoring.ts for how that could reconnect to venues later).
+function SearchPhrasesPanel() {
   const [newPhrase, setNewPhrase] = useState("");
   const qc = useQueryClient();
   const { toast } = useToast();
 
   const { data: phrases = [], isLoading: phrasesLoading } = useQuery({
-    queryKey: ["search-phrases", venueId],
-    queryFn: () => api.searchPhrases.list(venueId as number),
-    enabled: venueId != null,
+    queryKey: ["search-phrases-all"],
+    queryFn: api.searchPhrases.listAll,
   });
 
   const addMutation = useMutation({
-    mutationFn: (phrase: string) => api.searchPhrases.create(venueId as number, phrase),
+    mutationFn: (phrase: string) => api.searchPhrases.createGlobal(phrase),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["search-phrases", venueId] });
       qc.invalidateQueries({ queryKey: ["search-phrases-all"] });
       setNewPhrase("");
     },
@@ -46,15 +40,12 @@ function SearchPhrasesPanel({ venueId }: { venueId: number | null }) {
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.searchPhrases.delete(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["search-phrases", venueId] });
-      qc.invalidateQueries({ queryKey: ["search-phrases-all"] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["search-phrases-all"] }),
   });
 
   const submitPhrase = () => {
     const trimmed = newPhrase.trim();
-    if (trimmed.length < 2 || venueId == null) return;
+    if (trimmed.length < 2) return;
     addMutation.mutate(trimmed);
   };
 
@@ -65,49 +56,43 @@ function SearchPhrasesPanel({ venueId }: { venueId: number | null }) {
           <Search className="w-4 h-4 text-slate-400" /> Search Phrases
         </CardTitle>
         <p className="text-slate-500 text-xs mt-0.5">
-          Choose the phrases GDELT news monitoring watches for at this venue - e.g. "mass shooting", "stabbing", "bombing", or anything venue-specific. Only venues with at least one phrase show up on the Alert Queue.
+          Choose the phrases GDELT news monitoring watches for - e.g. "mass shooting", "stabbing", "bombing".
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        {venueId == null ? (
-          <p className="text-xs text-slate-400">Select a venue above to manage its search phrases.</p>
-        ) : (
-          <>
-            <div className="flex gap-2">
-              <Input
-                placeholder='e.g. "mass shooting"'
-                value={newPhrase}
-                onChange={(e) => setNewPhrase(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && submitPhrase()}
-                className="max-w-xs"
-              />
-              <Button size="sm" onClick={submitPhrase} disabled={addMutation.isPending || newPhrase.trim().length < 2}>
-                Add
-              </Button>
-            </div>
+        <div className="flex gap-2">
+          <Input
+            placeholder='e.g. "mass shooting"'
+            value={newPhrase}
+            onChange={(e) => setNewPhrase(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submitPhrase()}
+            className="max-w-xs"
+          />
+          <Button size="sm" onClick={submitPhrase} disabled={addMutation.isPending || newPhrase.trim().length < 2}>
+            Add
+          </Button>
+        </div>
 
-            {phrasesLoading ? (
-              <Skeleton className="h-8 w-48" />
-            ) : phrases.length === 0 ? (
-              <p className="text-xs text-slate-400">No phrases yet - this venue isn't being monitored until you add at least one.</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {phrases.map((p) => (
-                  <Badge key={p.id} variant="secondary" className="gap-1.5 pr-1.5">
-                    {p.phrase}
-                    <button
-                      type="button"
-                      onClick={() => deleteMutation.mutate(p.id)}
-                      className="text-slate-400 hover:text-slate-700"
-                      aria-label={`Remove "${p.phrase}"`}
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
-          </>
+        {phrasesLoading ? (
+          <Skeleton className="h-8 w-48" />
+        ) : phrases.length === 0 ? (
+          <p className="text-xs text-slate-400">No phrases yet.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {phrases.map((p) => (
+              <Badge key={p.id} variant="secondary" className="gap-1.5 pr-1.5">
+                {p.phrase}
+                <button
+                  type="button"
+                  onClick={() => deleteMutation.mutate(p.id)}
+                  className="text-slate-400 hover:text-slate-700"
+                  aria-label={`Remove "${p.phrase}"`}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </Badge>
+            ))}
+          </div>
         )}
       </CardContent>
     </Card>
@@ -186,18 +171,21 @@ export default function OsintList() {
   const params = new URLSearchParams(searchStr);
   const preVenueId = params.get("venueId");
 
-  const [selectedVenue, setSelectedVenue] = useState(preVenueId ?? "");
-  const [statusFilter, setStatusFilter] = useState("pending");
   const [reviewing, setReviewing] = useState<OsintEvent | null>(null);
 
-  const { data: venues = [] } = useQuery<Venue[]>({ queryKey: ["venues"], queryFn: api.venues.list });
+  // Browsing/reviewing events for a specific venue is still reachable
+  // via the "View OSINT for this venue" link on a Venue's detail page
+  // (?venueId=...) - just no standalone venue/status pickers on this
+  // page by default, per direct product direction.
+  const { data: venues = [] } = useQuery<Venue[]>({ queryKey: ["venues"], queryFn: api.venues.list, enabled: !!preVenueId });
   const { data: events = [], isLoading } = useQuery<OsintEvent[]>({
-    queryKey: ["osint", selectedVenue],
-    queryFn: () => api.venues.osint(Number(selectedVenue)),
-    enabled: !!selectedVenue,
+    queryKey: ["osint", preVenueId],
+    queryFn: () => api.venues.osint(Number(preVenueId)),
+    enabled: !!preVenueId,
   });
 
-  const filtered = statusFilter === "all" ? events : events.filter(e => e.status === statusFilter);
+  const venueName = venues.find(v => String(v.id) === preVenueId)?.name;
+  const pending = events.filter(e => e.status === "pending");
   const eventColor = (type: string) => EVENT_COLORS[type] ?? EVENT_COLORS.default;
 
   return (
@@ -209,51 +197,21 @@ export default function OsintList() {
         <p className="text-slate-500 text-sm mt-0.5">Open-source intelligence events for venue threat assessment</p>
       </div>
 
-      <div className="flex gap-3 flex-wrap">
-        <Select value={selectedVenue} onValueChange={setSelectedVenue}>
-          <SelectTrigger className="w-64">
-            <Globe className="w-4 h-4 mr-2 text-slate-400" />
-            <SelectValue placeholder="Select a venue" />
-          </SelectTrigger>
-          <SelectContent>
-            {venues.map(v => (
-              <SelectItem key={v.id} value={String(v.id)}>{v.name} — {v.city}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="accepted">Accepted</SelectItem>
-            <SelectItem value="rejected">Rejected</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <SearchPhrasesPanel />
 
-      <SearchPhrasesPanel venueId={selectedVenue ? Number(selectedVenue) : null} />
-
-      {!selectedVenue ? (
-        <Card>
-          <CardContent className="py-16 text-center">
-            <Radio className="w-10 h-10 mx-auto mb-3 text-slate-300" />
-            <h3 className="font-medium text-slate-600">Select a venue</h3>
-            <p className="text-sm text-slate-400 mt-1">Choose a venue to load OSINT events for that location</p>
-          </CardContent>
-        </Card>
-      ) : isLoading ? (
+      {!preVenueId ? null : isLoading ? (
         <div className="space-y-3">{Array(5).fill(0).map((_, i) => <Skeleton key={i} className="h-20" />)}</div>
-      ) : filtered.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Radio className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-            <p className="text-sm text-slate-400">No {statusFilter !== "all" ? statusFilter : ""} events found</p>
-          </CardContent>
-        </Card>
       ) : (
         <div className="space-y-3">
-          {filtered.map((ev) => (
+          {venueName && <h2 className="text-sm font-semibold text-slate-700">Pending events for {venueName}</h2>}
+          {pending.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Radio className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                <p className="text-sm text-slate-400">No pending events found</p>
+              </CardContent>
+            </Card>
+          ) : pending.map((ev) => (
             <Card key={ev.id}>
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
@@ -279,20 +237,9 @@ export default function OsintList() {
                     )}
                   </div>
                   <div className="shrink-0">
-                    {ev.status === "pending" ? (
-                      <Button size="sm" variant="outline" onClick={() => setReviewing(ev)}>
-                        Review
-                      </Button>
-                    ) : (
-                      <span className={cn(
-                        "text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase",
-                        ev.status === "accepted"
-                          ? "text-green-700 bg-green-50 border-green-200"
-                          : "text-slate-500 bg-slate-100 border-slate-200"
-                      )}>
-                        {ev.status}
-                      </span>
-                    )}
+                    <Button size="sm" variant="outline" onClick={() => setReviewing(ev)}>
+                      Review
+                    </Button>
                   </div>
                 </div>
               </CardContent>

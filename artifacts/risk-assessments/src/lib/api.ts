@@ -41,12 +41,13 @@ export interface VenueDetail extends Venue {
   recentIncidents: Incident[];
 }
 
-// Drives the GDELT news-monitoring OSINT source for a venue - see
-// artifacts/api-server/src/lib/gdelt.ts. A venue with no phrases simply
-// isn't monitored.
+// Drives the GDELT news-monitoring OSINT source - see
+// artifacts/api-server/src/lib/gdelt.ts. venueId is currently unused by
+// the UI (a flat, global phrase list for now - see venueId comment in
+// lib/db/src/schema/monitoring.ts).
 export interface SearchPhrase {
   id: number;
-  venueId: number;
+  venueId: number | null;
   phrase: string;
   createdAt: string;
 }
@@ -523,6 +524,7 @@ export const api = {
   },
   searchPhrases: {
     listAll: () => apiFetch<SearchPhrase[]>("/search-phrases"),
+    createGlobal: (phrase: string) => apiFetch<SearchPhrase>("/search-phrases", { method: "POST", body: JSON.stringify({ phrase }) }),
     list: (venueId: number) => apiFetch<SearchPhrase[]>(`/venues/${venueId}/search-phrases`),
     create: (venueId: number, phrase: string) =>
       apiFetch<SearchPhrase>(`/venues/${venueId}/search-phrases`, { method: "POST", body: JSON.stringify({ phrase }) }),

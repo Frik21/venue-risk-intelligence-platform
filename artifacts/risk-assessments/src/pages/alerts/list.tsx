@@ -114,10 +114,6 @@ export default function AlertsList() {
     queryKey: ["alerts"],
     queryFn: api.alerts.list,
   });
-  // Search Phrases now lives on the OSINT page - a venue only shows up
-  // here once it's actually being monitored (at least one phrase
-  // configured), per direct product direction.
-  const { data: phrases = [] } = useQuery({ queryKey: ["search-phrases-all"], queryFn: api.searchPhrases.listAll });
 
   const mutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: AlertStatus }) =>
@@ -129,10 +125,13 @@ export default function AlertsList() {
     },
   });
 
-  const monitoredVenueIds = new Set(phrases.map((p) => p.venueId));
-  const monitoredAlerts = alerts.filter((a) => monitoredVenueIds.has(a.venueId));
-  const filtered = statusFilter === "all" ? monitoredAlerts : monitoredAlerts.filter(a => a.status === statusFilter);
-  const pending = monitoredAlerts.filter(a => a.status === "pending").length;
+  // Used to filter this down to only "monitored" venues (ones with a
+  // search phrase configured), but Search Phrases is now a flat,
+  // venue-less list (see venueId comment in lib/db/src/schema/
+  // monitoring.ts), so there's no venue to filter by right now - shows
+  // every alert until phrases are venue-scoped again.
+  const filtered = statusFilter === "all" ? alerts : alerts.filter(a => a.status === statusFilter);
+  const pending = alerts.filter(a => a.status === "pending").length;
 
   return (
     <div className="space-y-5">
