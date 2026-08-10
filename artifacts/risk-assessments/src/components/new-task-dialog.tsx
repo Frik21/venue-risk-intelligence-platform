@@ -7,7 +7,70 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
+import { Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+// Quick location creation, opened from the Task Request form when the
+// location a Manager needs isn't in the list yet - just the fields
+// POST /venues actually requires, not the full Venues > Add New Venue
+// page's location-search/lat-lng/notes fields. Still creates a Venue
+// record under the hood (that's what tasks link to), just labelled
+// "Location" here since that's what a Manager taking a phone-in
+// request is actually thinking in terms of. Selects the new one in
+// the parent form on success.
+export function AddVenueDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (venueId: number) => void }) {
+  const [name, setName] = useState("");
+  const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
+  const [country, setCountry] = useState("");
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const mutation = useMutation({
+    mutationFn: () => api.venues.create({ name, address, city, country }),
+    onSuccess: (venue) => {
+      qc.invalidateQueries({ queryKey: ["venues"] });
+      toast({ title: "Location added" });
+      onCreated(venue.id);
+      onClose();
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const canSubmit = name.trim() && address.trim() && city.trim() && country.trim();
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
+        <h2 className="text-lg font-bold">Add Location</h2>
+        <div>
+          <Label>Location Name *</Label>
+          <Input placeholder="e.g. Grand Hyatt Dubai" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div>
+          <Label>Street Address *</Label>
+          <Input placeholder="123 Main Street" value={address} onChange={(e) => setAddress(e.target.value)} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>City *</Label>
+            <Input placeholder="Dubai" value={city} onChange={(e) => setCity(e.target.value)} />
+          </div>
+          <div>
+            <Label>Country *</Label>
+            <Input placeholder="United Arab Emirates" value={country} onChange={(e) => setCountry(e.target.value)} />
+          </div>
+        </div>
+        <div className="flex gap-3 pt-2">
+          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !canSubmit}>
+            {mutation.isPending ? "Adding..." : "Add Location"}
+          </Button>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // Task Request - shared by the Management Dashboard's primary action
 // and the full Tasks list page. Modelled as an intake form for a
@@ -32,6 +95,7 @@ export function NewTaskDialog({
 }) {
   const managers = users.filter((u) => u.role === "manager" || u.role === "admin");
   const cpos = users.filter((u) => u.role === "cpo");
+  const [showAddVenue, setShowAddVenue] = useState(false);
   const [form, setForm] = useState({
     venueId: "",
     assigneeIds: initialAssigneeId != null ? [initialAssigneeId] : [] as number[],
@@ -102,9 +166,18 @@ export function NewTaskDialog({
         </div>
 
         <div>
-          <Label>Venue *</Label>
+          <div className="flex items-center justify-between">
+            <Label>Location *</Label>
+            <button
+              type="button"
+              onClick={() => setShowAddVenue(true)}
+              className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
+            >
+              <Plus className="w-3 h-3" /> Add Location
+            </button>
+          </div>
           <Select value={form.venueId} onValueChange={(v) => set("venueId", v)}>
-            <SelectTrigger><SelectValue placeholder="Select a venue" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Select a location" /></SelectTrigger>
             <SelectContent>
               {venues.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
             </SelectContent>
@@ -211,6 +284,13 @@ export function NewTaskDialog({
           <Button variant="outline" onClick={onClose}>Cancel</Button>
         </div>
       </div>
+
+      {showAddVenue && (
+        <AddVenueDialog
+          onClose={() => setShowAddVenue(false)}
+          onCreated={(venueId) => set("venueId", String(venueId))}
+        />
+      )}
     </div>
   );
 }
