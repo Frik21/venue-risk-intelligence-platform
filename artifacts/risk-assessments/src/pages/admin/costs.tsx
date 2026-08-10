@@ -2,17 +2,17 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { api, type GlobalExpense, type PersonnelCostLine, type CompanySettings, type Task, type QuotationStatus } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DollarSign, Wallet, Users as UsersIcon, Settings, Pencil, Car, FileText, Plus, X, ChevronDown, ChevronUp } from "lucide-react";
+import { DollarSign, Wallet, CheckCircle2, Clock, XCircle, Users as UsersIcon, Settings, Pencil, Car, FileText, Plus, X, ChevronDown, ChevronUp } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { QuotationStatusPicker } from "@/components/new-task-dialog";
+import { cn } from "@/lib/utils";
 
 const CATEGORY_LABELS: Record<string, string> = {
   fuel: "Fuel", accommodation: "Accommodation", food: "Food", parking: "Parking",
@@ -21,6 +21,46 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 function formatMoney(amount: number, currency: string) {
   return `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+}
+
+// One currency-bucketed amount per line, stacked when a set of records
+// spans more than one currency - same currency-naive convention as
+// totalCostByTask below.
+function CurrencyStack({ byCurrency, className }: { byCurrency: Record<string, number>; className?: string }) {
+  const entries = Object.entries(byCurrency);
+  if (entries.length === 0) return <span className="text-slate-300">—</span>;
+  return (
+    <div className="flex flex-col">
+      {entries.map(([cur, amt]) => (
+        <span key={cur} className={cn("font-mono tabular-nums", className)}>{formatMoney(amt, cur)}</span>
+      ))}
+    </div>
+  );
+}
+
+// A small financial statement tile - formal/muted rather than a
+// dashboard-bright stat card, per direct product direction ("like an
+// accounting page").
+function StatTile({ icon: Icon, label, byCurrency, tone = "default" }: {
+  icon: typeof DollarSign;
+  label: string;
+  byCurrency: Record<string, number>;
+  tone?: "default" | "positive" | "warning" | "negative";
+}) {
+  const toneClass = {
+    default: "text-slate-900",
+    positive: "text-green-700",
+    warning: "text-amber-700",
+    negative: "text-red-700",
+  }[tone];
+  return (
+    <div className="border border-slate-200 rounded-lg bg-white px-4 py-3">
+      <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1.5">
+        <Icon className="w-3.5 h-3.5" /> {label}
+      </div>
+      <CurrencyStack byCurrency={byCurrency} className={cn("text-base font-semibold", toneClass)} />
+    </div>
+  );
 }
 
 function OvertimeSettingsPanel({ settings }: { settings: CompanySettings }) {
@@ -143,7 +183,7 @@ function QuoteBuilder({ task }: { task: Task }) {
             type="number"
             step="0.01"
             placeholder="Amount"
-            className="h-8 w-28 text-xs"
+            className="h-8 w-28 text-xs font-mono tabular-nums"
             value={item.amount}
             onChange={(e) => updateItem(idx, "amount", e.target.value)}
           />
@@ -163,7 +203,7 @@ function QuoteBuilder({ task }: { task: Task }) {
           <Plus className="w-3 h-3" /> Add Line Item
         </button>
         <span className="text-xs text-slate-500">
-          Total: <span className="font-semibold text-slate-900">{formatMoney(total, task.estimatedCostCurrency)}</span>
+          Total: <span className="font-mono tabular-nums font-semibold text-slate-900">{formatMoney(total, task.estimatedCostCurrency)}</span>
         </span>
       </div>
 
@@ -272,7 +312,7 @@ function QuoteRow({ task }: { task: Task }) {
             min={0}
             step="0.01"
             placeholder="Amount"
-            className="h-8 w-28 text-xs"
+            className="h-8 w-28 text-xs font-mono tabular-nums"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             onBlur={saveIfChanged}
@@ -305,9 +345,7 @@ function QuoteRow({ task }: { task: Task }) {
   );
 }
 
-function QuotationWorkspace() {
-  const { data: tasks = [], isLoading } = useQuery<Task[]>({ queryKey: ["tasks"], queryFn: () => api.tasks.list() });
-
+function QuotationWorkspace({ tasks, isLoading }: { tasks: Task[]; isLoading: boolean }) {
   return (
     <Card>
       <CardContent className="p-5">
@@ -335,7 +373,13 @@ function QuotationWorkspace() {
 // Costs (rate x hours, including overtime) from Timesheet + CPO pay
 // rates - both real. The overtime rule is a Manager-editable setting
 // rather than a hardcoded number since it's company-specific.
+//
+// Laid out like an accounting statement - a top summary of quoted/
+// approved/pending/denied totals, then data-dense tables (not cards)
+// for every breakdown below - per direct product direction ("user
+// friendly but also like an accounting page").
 export default function CostsPage() {
+  const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({ queryKey: ["tasks"], queryFn: () => api.tasks.list() });
   const { data: expenses = [], isLoading: expensesLoading } = useQuery<GlobalExpense[]>({
     queryKey: ["expenses-all"],
     queryFn: api.expenses.listAll,
@@ -345,6 +389,16 @@ export default function CostsPage() {
     queryFn: api.personnelCosts.list,
   });
   const { data: settings } = useQuery<CompanySettings>({ queryKey: ["settings"], queryFn: api.settings.get });
+
+  // Quoted/Approved/Pending/Denied - rolled up from every non-archived
+  // task's estimatedCost, bucketed by quotationStatus then currency.
+  const quoteTotals: Record<QuotationStatus, Record<string, number>> = { approved: {}, awaiting_approval: {}, denied: {} };
+  const allQuoted: Record<string, number> = {};
+  for (const t of tasks) {
+    if (t.archived || t.estimatedCost == null) continue;
+    quoteTotals[t.quotationStatus][t.estimatedCostCurrency] = (quoteTotals[t.quotationStatus][t.estimatedCostCurrency] ?? 0) + t.estimatedCost;
+    allQuoted[t.estimatedCostCurrency] = (allQuoted[t.estimatedCostCurrency] ?? 0) + t.estimatedCost;
+  }
 
   const totalsByCurrency = expenses.reduce<Record<string, number>>((acc, e) => {
     acc[e.currency] = (acc[e.currency] ?? 0) + e.amount;
@@ -432,7 +486,18 @@ export default function CostsPage() {
         </p>
       </div>
 
-      <QuotationWorkspace />
+      {tasksLoading ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">{Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-16" />)}</div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <StatTile icon={DollarSign} label="Total Quoted" byCurrency={allQuoted} />
+          <StatTile icon={CheckCircle2} label="Approved" byCurrency={quoteTotals.approved} tone="positive" />
+          <StatTile icon={Clock} label="Pending" byCurrency={quoteTotals.awaiting_approval} tone="warning" />
+          <StatTile icon={XCircle} label="Denied" byCurrency={quoteTotals.denied} tone="negative" />
+        </div>
+      )}
+
+      <QuotationWorkspace tasks={tasks} isLoading={tasksLoading} />
 
       {expensesLoading ? (
         <div className="grid grid-cols-2 gap-4">{Array(2).fill(0).map((_, i) => <Skeleton key={i} className="h-24" />)}</div>
@@ -440,27 +505,25 @@ export default function CostsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card>
             <CardContent className="p-4">
-              <DollarSign className="w-5 h-5 text-blue-600 mb-2" />
-              <p className="text-xs text-slate-500 mb-1">Total Expenses (All Time)</p>
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1.5">
+                <DollarSign className="w-3.5 h-3.5" /> Total Expenses (All Time)
+              </div>
               {Object.keys(totalsByCurrency).length === 0 ? (
                 <p className="text-sm text-slate-400">No expenses logged yet.</p>
               ) : (
-                Object.entries(totalsByCurrency).map(([cur, total]) => (
-                  <p key={cur} className="text-lg font-bold text-slate-900">{formatMoney(total, cur)}</p>
-                ))
+                <CurrencyStack byCurrency={totalsByCurrency} className="text-lg font-semibold text-slate-900" />
               )}
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
-              <Wallet className="w-5 h-5 text-blue-600 mb-2" />
-              <p className="text-xs text-slate-500 mb-1">This Month (Expenses)</p>
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1.5">
+                <Wallet className="w-3.5 h-3.5" /> This Month (Expenses)
+              </div>
               {Object.keys(monthTotalsByCurrency).length === 0 ? (
                 <p className="text-sm text-slate-400">Nothing logged this month.</p>
               ) : (
-                Object.entries(monthTotalsByCurrency).map(([cur, total]) => (
-                  <p key={cur} className="text-lg font-bold text-slate-900">{formatMoney(total, cur)}</p>
-                ))
+                <CurrencyStack byCurrency={monthTotalsByCurrency} className="text-lg font-semibold text-slate-900" />
               )}
             </CardContent>
           </Card>
@@ -470,42 +533,58 @@ export default function CostsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardContent className="p-5">
-            <h2 className="font-semibold text-slate-900 mb-4">Expenses by Task</h2>
+            <h2 className="font-semibold text-slate-900 mb-3">Expenses by Task</h2>
             {expensesLoading ? (
               <Skeleton className="h-32" />
             ) : byTask.length === 0 ? (
               <p className="text-sm text-slate-400">No expenses yet.</p>
             ) : (
-              <div className="space-y-2.5">
-                {byTask.map((t, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm">
-                    <span className="text-slate-600 truncate">{t.taskTitle}</span>
-                    <Badge variant="secondary">{formatMoney(t.total, t.currency)}</Badge>
-                  </div>
-                ))}
-              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    <th className="text-left py-1.5">Task</th>
+                    <th className="text-right py-1.5">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {byTask.map((t, i) => (
+                    <tr key={i}>
+                      <td className="py-2 text-slate-700 truncate max-w-0">{t.taskTitle}</td>
+                      <td className="py-2 text-right font-mono tabular-nums text-slate-900">{formatMoney(t.total, t.currency)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="p-5">
-            <h2 className="font-semibold text-slate-900 mb-4">Expenses by Category</h2>
+            <h2 className="font-semibold text-slate-900 mb-3">Expenses by Category</h2>
             {expensesLoading ? (
               <Skeleton className="h-32" />
             ) : Object.keys(byCategory).length === 0 ? (
               <p className="text-sm text-slate-400">No expenses yet.</p>
             ) : (
-              <div className="space-y-2.5">
-                {Object.entries(byCategory)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([cat, total]) => (
-                    <div key={cat} className="flex items-center justify-between text-sm">
-                      <span className="text-slate-600">{CATEGORY_LABELS[cat] ?? cat}</span>
-                      <span className="text-slate-500 font-mono text-xs">{total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </div>
-                  ))}
-              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    <th className="text-left py-1.5">Category</th>
+                    <th className="text-right py-1.5">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {Object.entries(byCategory)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([cat, total]) => (
+                      <tr key={cat}>
+                        <td className="py-2 text-slate-700">{CATEGORY_LABELS[cat] ?? cat}</td>
+                        <td className="py-2 text-right font-mono tabular-nums text-slate-900">{total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
             )}
           </CardContent>
         </Card>
@@ -517,7 +596,7 @@ export default function CostsPage() {
             <h2 className="font-semibold text-slate-900 flex items-center gap-2">
               <UsersIcon className="w-4 h-4 text-slate-400" /> Personnel Costs
             </h2>
-            <span className="text-lg font-bold text-slate-900">{totalPersonnelCost.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+            <span className="text-lg font-mono tabular-nums font-semibold text-slate-900">{totalPersonnelCost.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
           </div>
           <p className="text-xs text-slate-400 mb-4">Rate x hours logged in Timesheet, including overtime. Set a CPO's rate from Users.</p>
 
@@ -536,25 +615,29 @@ export default function CostsPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
                 <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">By CPO</p>
-                <div className="space-y-2">
-                  {personnelByCpo.map((p, i) => (
-                    <div key={i} className="flex items-center justify-between text-sm">
-                      <span className="text-slate-600">{p.name} <span className="text-slate-400 text-xs">({p.hours.toFixed(1)}h)</span></span>
-                      <Badge variant="secondary">{p.cost.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Badge>
-                    </div>
-                  ))}
-                </div>
+                <table className="w-full text-sm">
+                  <tbody className="divide-y divide-slate-100">
+                    {personnelByCpo.map((p, i) => (
+                      <tr key={i}>
+                        <td className="py-2 text-slate-700">{p.name} <span className="text-slate-400 text-xs">({p.hours.toFixed(1)}h)</span></td>
+                        <td className="py-2 text-right font-mono tabular-nums text-slate-900">{p.cost.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
               <div>
                 <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">By Task</p>
-                <div className="space-y-2">
-                  {personnelByTask.slice(0, 8).map((t, i) => (
-                    <div key={i} className="flex items-center justify-between text-sm">
-                      <span className="text-slate-600 truncate">{t.title}</span>
-                      <Badge variant="secondary">{t.cost.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Badge>
-                    </div>
-                  ))}
-                </div>
+                <table className="w-full text-sm">
+                  <tbody className="divide-y divide-slate-100">
+                    {personnelByTask.slice(0, 8).map((t, i) => (
+                      <tr key={i}>
+                        <td className="py-2 text-slate-700 truncate max-w-0">{t.title}</td>
+                        <td className="py-2 text-right font-mono tabular-nums text-slate-900">{t.cost.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -565,18 +648,27 @@ export default function CostsPage() {
         <Card>
           <CardContent className="p-5">
             <h2 className="font-semibold text-slate-900 mb-1">Total Cost by Task</h2>
-            <p className="text-xs text-slate-400 mb-4">Personnel cost plus expenses, combined per task.</p>
-            <div className="space-y-2.5">
-              {totalCostByTask.map((t, i) => (
-                <div key={i} className="flex items-center justify-between text-sm">
-                  <span className="text-slate-600 truncate">{t.title}</span>
-                  <span className="text-right">
-                    <span className="font-semibold text-slate-900">{t.total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-                    <span className="text-xs text-slate-400 ml-1.5">({t.personnel.toLocaleString(undefined, { maximumFractionDigits: 0 })} personnel + {t.expense.toLocaleString(undefined, { maximumFractionDigits: 0 })} expenses)</span>
-                  </span>
-                </div>
-              ))}
-            </div>
+            <p className="text-xs text-slate-400 mb-3">Personnel cost plus expenses, combined per task.</p>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-xs font-medium uppercase tracking-wide text-slate-500">
+                  <th className="text-left py-1.5">Task</th>
+                  <th className="text-right py-1.5">Personnel</th>
+                  <th className="text-right py-1.5">Expenses</th>
+                  <th className="text-right py-1.5">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {totalCostByTask.map((t, i) => (
+                  <tr key={i}>
+                    <td className="py-2 text-slate-700 truncate max-w-0">{t.title}</td>
+                    <td className="py-2 text-right font-mono tabular-nums text-slate-500">{t.personnel.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                    <td className="py-2 text-right font-mono tabular-nums text-slate-500">{t.expense.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                    <td className="py-2 text-right font-mono tabular-nums font-semibold text-slate-900">{t.total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </CardContent>
         </Card>
       )}
@@ -584,18 +676,27 @@ export default function CostsPage() {
       {!expensesLoading && expenses.length > 0 && (
         <Card>
           <CardContent className="p-5">
-            <h2 className="font-semibold text-slate-900 mb-4">Recent Expenses</h2>
-            <div className="divide-y divide-slate-100">
-              {expenses.slice(0, 10).map((e) => (
-                <div key={e.id} className="py-2.5 flex items-center justify-between text-sm">
-                  <div className="min-w-0">
-                    <span className="font-medium text-slate-900">{e.description || CATEGORY_LABELS[e.category] || e.category}</span>
-                    <p className="text-xs text-slate-400">{e.taskTitle ?? "Unknown task"} · {formatDate(e.incurredOn)}</p>
-                  </div>
-                  <span className="font-mono text-xs text-slate-600 shrink-0">{formatMoney(e.amount, e.currency)}</span>
-                </div>
-              ))}
-            </div>
+            <h2 className="font-semibold text-slate-900 mb-3">Recent Expenses</h2>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-xs font-medium uppercase tracking-wide text-slate-500">
+                  <th className="text-left py-1.5">Description</th>
+                  <th className="text-left py-1.5">Task</th>
+                  <th className="text-left py-1.5">Date</th>
+                  <th className="text-right py-1.5">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {expenses.slice(0, 10).map((e) => (
+                  <tr key={e.id}>
+                    <td className="py-2 font-medium text-slate-900">{e.description || CATEGORY_LABELS[e.category] || e.category}</td>
+                    <td className="py-2 text-slate-500 truncate max-w-0">{e.taskTitle ?? "Unknown task"}</td>
+                    <td className="py-2 text-slate-500 whitespace-nowrap">{formatDate(e.incurredOn)}</td>
+                    <td className="py-2 text-right font-mono tabular-nums text-slate-900">{formatMoney(e.amount, e.currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </CardContent>
         </Card>
       )}
