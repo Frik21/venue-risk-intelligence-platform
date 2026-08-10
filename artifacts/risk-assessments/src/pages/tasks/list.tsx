@@ -223,14 +223,6 @@ export default function TasksList() {
   // resolution on the CPO side).
   const currentManagerId = users.find((u) => u.role === "manager" || u.role === "admin")?.id;
 
-  const statusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: TaskStatus }) => api.tasks.updateStatus(id, { status }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tasks"] });
-      toast({ title: "Task updated" });
-    },
-  });
-
   const addAssigneeMutation = useMutation({
     mutationFn: ({ task, cpoId }: { task: Task; cpoId: number }) =>
       api.tasks.update(task.id, { assigneeIds: [...task.assignedToIds, cpoId] }),
@@ -422,14 +414,6 @@ export default function TasksList() {
                         <TaskHoursPanel taskId={task.id} currentManagerId={currentManagerId} />
                       )}
                     </div>
-                    <Select value={task.status} onValueChange={(v) => statusMutation.mutate({ id: task.id, status: v as TaskStatus })}>
-                      <SelectTrigger className="w-40 shrink-0"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="not_completed">Not Completed</SelectItem>
-                        <SelectItem value="in_progress">In Progress</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                      </SelectContent>
-                    </Select>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="shrink-0"><MoreVertical className="w-4 h-4" /></Button>
