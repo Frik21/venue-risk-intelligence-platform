@@ -522,6 +522,7 @@ export const api = {
     osint: (id: number) => apiFetch<OsintEvent[]>(`/venues/${id}/osint`),
   },
   searchPhrases: {
+    listAll: () => apiFetch<SearchPhrase[]>("/search-phrases"),
     list: (venueId: number) => apiFetch<SearchPhrase[]>(`/venues/${venueId}/search-phrases`),
     create: (venueId: number, phrase: string) =>
       apiFetch<SearchPhrase>(`/venues/${venueId}/search-phrases`, { method: "POST", body: JSON.stringify({ phrase }) }),

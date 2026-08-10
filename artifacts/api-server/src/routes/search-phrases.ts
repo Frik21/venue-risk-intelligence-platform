@@ -14,6 +14,14 @@ function formatPhrase(row: typeof venueSearchPhrasesTable.$inferSelect) {
   };
 }
 
+// All phrases across every venue - used by the Alert Queue to figure
+// out which venues are actually being monitored, so it can show only
+// alerts connected to a venue with at least one search phrase set up.
+router.get("/search-phrases", async (_req, res): Promise<void> => {
+  const phrases = await db.select().from(venueSearchPhrasesTable).orderBy(venueSearchPhrasesTable.createdAt);
+  res.json(phrases.map(formatPhrase));
+});
+
 router.get("/venues/:id/search-phrases", async (req, res): Promise<void> => {
   const venueId = Number(req.params.id);
   if (isNaN(venueId)) { res.status(400).json({ error: "Invalid id" }); return; }
