@@ -34,7 +34,7 @@ router.get("/expenses", async (_req, res): Promise<void> => {
   const tasks = taskIds.length
     ? await db.select({ id: tasksTable.id, title: tasksTable.title, venueId: tasksTable.venueId }).from(tasksTable)
     : [];
-  const taskMap: Record<number, { title: string; venueId: number }> = {};
+  const taskMap: Record<number, { title: string; venueId: number | null }> = {};
   for (const t of tasks) taskMap[t.id] = { title: t.title, venueId: t.venueId };
 
   const venues = await db.select({ id: venuesTable.id, name: venuesTable.name, country: venuesTable.country }).from(venuesTable);
@@ -44,7 +44,7 @@ router.get("/expenses", async (_req, res): Promise<void> => {
   res.json(
     rows.map((r) => {
       const task = taskMap[r.taskId];
-      const venue = task ? venueMap[task.venueId] : undefined;
+      const venue = task?.venueId != null ? venueMap[task.venueId] : undefined;
       return {
         ...formatExpense(r),
         taskTitle: task?.title ?? null,

@@ -68,7 +68,9 @@ export type QuotationStatus = "approved" | "awaiting_approval" | "denied";
 export interface Task {
   id: number;
   taskNumber: string;
-  venueId: number;
+  // Nullable - a task can be created before a location is picked; see
+  // Pending Details in lib/task-bucket.ts.
+  venueId: number | null;
   venueName: string | null;
   assignedTo: number | null;
   assignedToName: string | null;
@@ -527,7 +529,7 @@ export const api = {
       return apiFetch<Task[]>(`/tasks${qs ? `?${qs}` : ""}`);
     },
     create: (data: {
-      venueId: number; assigneeIds?: number[]; assignedBy: number; title: string;
+      venueId?: number | null; assigneeIds?: number[]; assignedBy: number; title?: string;
       dueDate?: string; endDate?: string; priority?: TaskPriority; quotationStatus?: QuotationStatus;
       clientName?: string; clientContact?: string; clientRequirements?: string;
       operatorsRequired?: number; vehiclesRequired?: number;
@@ -536,7 +538,7 @@ export const api = {
     updateStatus: (id: number, data: { status: TaskStatus; completionNote?: string }) =>
       apiFetch<Task>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     update: (id: number, data: Partial<{
-      venueId: number; assigneeIds: number[]; assignedTo: number | null; assignedBy: number; title: string;
+      venueId: number | null; assigneeIds: number[]; assignedTo: number | null; assignedBy: number; title: string;
       dueDate: string | null; endDate: string | null; status: TaskStatus; priority: TaskPriority; archived: boolean;
       clientConfirmed: boolean; quotationStatus: QuotationStatus;
       clientName: string; clientContact: string; clientRequirements: string;

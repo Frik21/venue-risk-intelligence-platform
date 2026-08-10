@@ -33,7 +33,7 @@ const PRIORITY_CONFIG: Record<TaskPriority, { label: string; color: string }> = 
 
 function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]; onClose: () => void }) {
   const [form, setForm] = useState({
-    venueId: String(task.venueId),
+    venueId: task.venueId != null ? String(task.venueId) : "",
     assigneeIds: task.assignedToIds,
     title: task.title,
     dueDate: task.dueDate ? task.dueDate.slice(0, 16) : "",
@@ -54,7 +54,7 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
   const mutation = useMutation({
     mutationFn: () =>
       api.tasks.update(task.id, {
-        venueId: Number(form.venueId),
+        venueId: form.venueId ? Number(form.venueId) : null,
         assigneeIds: form.assigneeIds,
         title: form.title,
         dueDate: form.dueDate || null,
@@ -84,25 +84,25 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg my-8 p-6 space-y-4">
         <h2 className="text-lg font-bold">Edit {task.taskNumber}</h2>
         <div>
-          <Label>Task *</Label>
+          <Label>Task</Label>
           <Input value={form.title} onChange={(e) => set("title", e.target.value)} />
         </div>
         <div>
-          <Label>Location *</Label>
+          <Label>Location</Label>
           <LocationCombobox venues={venues} value={form.venueId} onChange={(v) => set("venueId", v)} />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label>Client Name</Label>
+            <Label>Client Name *</Label>
             <Input value={form.clientName} onChange={(e) => set("clientName", e.target.value)} />
           </div>
           <div>
-            <Label>Client Contact</Label>
+            <Label>Client Contact *</Label>
             <Input value={form.clientContact} onChange={(e) => set("clientContact", e.target.value)} />
           </div>
         </div>
         <div>
-          <Label>Client Requirements / Special Requests</Label>
+          <Label>Client Requirements / Special Requests *</Label>
           <Textarea value={form.clientRequirements} onChange={(e) => set("clientRequirements", e.target.value)} />
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -151,7 +151,7 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
           />
         </div>
         <div className="flex gap-3 pt-2">
-          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !form.venueId || !form.title.trim()}>
+          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
             {mutation.isPending ? "Saving..." : "Save Changes"}
           </Button>
           <Button variant="outline" onClick={onClose}>Cancel</Button>

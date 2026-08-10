@@ -2,15 +2,18 @@ import type { Task } from "@/lib/api";
 
 // Data-completeness / allocation bucket - independent of Task.status
 // (that's the CPO's own work progress). Precedence, most to least
-// "done": Completed (status) > Pending Details (Client Name and/or
-// Client Contact still blank - a task is intentionally allowed to be
-// created without these, per direct product direction: "i should be
-// able to not fill in all the details and still create the task") >
-// Pending Allocation (details filled in, just needs a CPO - see
-// Operator Deployment's Assign Task dropdown) > Running (details filled
-// in and staffed). Shared between the Tasks list (badges/filters) and
-// Operator Deployment (Assign Task's task options) so both always agree
-// on what counts as needing allocation.
+// "done": Completed (status) > Pending Details (any of the fields below
+// still blank - a task is intentionally allowed to be created with only
+// client name/contact/requirements + assigned by filled in, per direct
+// product direction: "not all the details are required only those that
+// I shared with you... if all the other details are not filled in it
+// will then go into Pending Details... I have to fill in all the
+// remaining details for the task to move to Pending Allocation") >
+// Pending Allocation (every field below is filled in, just needs a CPO
+// - see Operator Deployment's Assign Task dropdown) > Running (details
+// complete and staffed). Shared between the Tasks list (badges/filters)
+// and Operator Deployment (Assign Task's task options) so both always
+// agree on what counts as needing allocation.
 export type TaskBucket = "pending_details" | "pending_allocation" | "running" | "completed";
 
 export const BUCKET_CONFIG: Record<TaskBucket, { label: string; color: string }> = {
@@ -20,8 +23,21 @@ export const BUCKET_CONFIG: Record<TaskBucket, { label: string; color: string }>
   completed: { label: "Completed", color: "text-green-700 bg-green-50 border-green-200" },
 };
 
+function detailsComplete(task: Task): boolean {
+  return (
+    task.title.trim() !== "" &&
+    task.venueId != null &&
+    task.clientName.trim() !== "" &&
+    task.clientContact.trim() !== "" &&
+    task.clientRequirements.trim() !== "" &&
+    task.dueDate != null &&
+    task.endDate != null &&
+    task.estimatedCost != null
+  );
+}
+
 export function taskBucket(task: Task): TaskBucket {
   if (task.status === "completed") return "completed";
-  if (!task.clientName.trim() || !task.clientContact.trim()) return "pending_details";
+  if (!detailsComplete(task)) return "pending_details";
   return task.assignedToIds.length === 0 ? "pending_allocation" : "running";
 }

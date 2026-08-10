@@ -101,20 +101,25 @@ router.get("/tasks", async (req, res): Promise<void> => {
 
   res.json(
     filtered.map((r) =>
-      formatTask(r, venueMap[r.venueId] ?? null, userMap[r.assignedBy] ?? null, planSubmittedMap[r.id] ?? null, rosters[r.id] ?? []),
+      formatTask(r, (r.venueId != null ? venueMap[r.venueId] : undefined) ?? null, userMap[r.assignedBy] ?? null, planSubmittedMap[r.id] ?? null, rosters[r.id] ?? []),
     ),
   );
 });
 
 const TaskInputSchema = z.object({
-  venueId: z.number().int(),
+  // Optional - a task can be created before a location is picked (see
+  // Pending Details in the frontend's lib/task-bucket.ts).
+  venueId: z.number().int().nullable().optional(),
   // The actual roster of CPOs assigned, if any decided yet - can be
   // empty ("unassigned", Task Assignment Board) or several (a request
   // for multiple operators). First entry becomes the legacy primary
   // assignedTo.
   assigneeIds: z.array(z.number().int()).optional(),
   assignedBy: z.number().int(),
-  title: z.string().trim().min(1).max(200),
+  // Optional for the same reason as venueId - required to create per
+  // the UI (client name/contact/requirements + assigned by), title/
+  // location/dates/cost all fill in later.
+  title: z.string().trim().max(200).optional(),
   dueDate: z.string().optional(),
   endDate: z.string().optional(),
   priority: z.enum(TASK_PRIORITIES).optional(),
@@ -137,7 +142,9 @@ async function setRoster(taskId: number, assigneeIds: number[]) {
 }
 
 async function loadTaskContext(task: typeof tasksTable.$inferSelect) {
-  const [venue] = await db.select({ name: venuesTable.name }).from(venuesTable).where(eq(venuesTable.id, task.venueId));
+  const venue = task.venueId != null
+    ? (await db.select({ name: venuesTable.name }).from(venuesTable).where(eq(venuesTable.id, task.venueId)))[0]
+    : undefined;
   const [assignedByUser] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, task.assignedBy));
   const roster = (await rosterMap([task.id]))[task.id] ?? [];
   return { venueName: venue?.name ?? null, assignedByName: assignedByUser?.name ?? null, roster };
@@ -147,18 +154,20 @@ router.post("/tasks", async (req, res): Promise<void> => {
   const parsed = TaskInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const [venue] = await db.select({ name: venuesTable.name }).from(venuesTable).where(eq(venuesTable.id, parsed.data.venueId));
-  if (!venue) { res.status(404).json({ error: "Venue not found" }); return; }
+  if (parsed.data.venueId != null) {
+    const [venue] = await db.select({ name: venuesTable.name }).from(venuesTable).where(eq(venuesTable.id, parsed.data.venueId));
+    if (!venue) { res.status(404).json({ error: "Venue not found" }); return; }
+  }
 
   const assigneeIds = parsed.data.assigneeIds ?? [];
 
   const [task] = await db
     .insert(tasksTable)
     .values({
-      venueId: parsed.data.venueId,
+      venueId: parsed.data.venueId ?? null,
       assignedTo: assigneeIds[0] ?? null,
       assignedBy: parsed.data.assignedBy,
-      title: parsed.data.title,
+      title: parsed.data.title ?? "",
       dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : undefined,
       endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : undefined,
       priority: parsed.data.priority ?? "medium",
@@ -183,13 +192,13 @@ router.post("/tasks", async (req, res): Promise<void> => {
 // this route), plus editing any other field, reassigning the CPO
 // roster, changing priority, and archiving/cancelling (archived=true).
 const TaskUpdateSchema = z.object({
-  venueId: z.number().int().optional(),
+  venueId: z.number().int().nullable().optional(),
   assigneeIds: z.array(z.number().int()).optional(),
   // Legacy single-assignee convenience - equivalent to assigneeIds:
   // [id] (or [] when null). Ignored if assigneeIds is also given.
   assignedTo: z.number().int().nullable().optional(),
   assignedBy: z.number().int().optional(),
-  title: z.string().trim().min(1).max(200).optional(),
+  title: z.string().trim().max(200).optional(),
   dueDate: z.string().nullable().optional(),
   endDate: z.string().nullable().optional(),
   status: z.enum(["not_completed", "in_progress", "completed"]).optional(),

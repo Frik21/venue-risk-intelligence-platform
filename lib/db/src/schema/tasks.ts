@@ -35,7 +35,11 @@ import { usersTable } from "./users";
 // assignee - per direct product direction.
 export const tasksTable = pgTable("tasks", {
   id: serial("id").primaryKey(),
-  venueId: integer("venue_id").notNull().references(() => venuesTable.id, { onDelete: "cascade" }),
+  // Nullable - a task can be created before a location is picked (see
+  // Pending Details in lib/task-bucket.ts on the frontend: a task with
+  // no venueId, blank title, no dates, or no estimated cost stays
+  // Pending Details until every one of those is filled in).
+  venueId: integer("venue_id").references(() => venuesTable.id, { onDelete: "cascade" }),
   assignedTo: integer("assigned_to").references(() => usersTable.id, { onDelete: "cascade" }),
   assignedBy: integer("assigned_by").notNull().references(() => usersTable.id),
   title: text("title").notNull(),
@@ -45,13 +49,10 @@ export const tasksTable = pgTable("tasks", {
   priority: text("priority").notNull().default("medium"),
   archived: boolean("archived").notNull().default(false),
   completionNote: text("completion_note"),
-  // Client confirmation - independent of status above (status tracks
-  // the CPO's own work progress; this tracks whether the client has
-  // actually confirmed the request). A Manager sets this by hand once
-  // the client confirms (see PATCH /tasks/:id, clientConfirmed) - not
-  // derived from anything else. Tasks list buckets on this: no
-  // confirmation yet = Pending, confirmed but not done = Running,
-  // status = completed = Completed regardless of this field.
+  // No longer drives Tasks list bucketing (see venueId comment above and
+  // lib/task-bucket.ts - that's now based on field completeness). Kept
+  // as manually-settable state via PATCH /tasks/:id, clientConfirmed,
+  // in case it's needed again later.
   clientConfirmedAt: timestamp("client_confirmed_at", { withTimezone: true }),
   // Where the client's quotation stands - "approved" | "awaiting_approval"
   // | "denied", set by hand by a Manager on the task form. Independent of

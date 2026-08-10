@@ -4273,7 +4273,7 @@ function OperationalCanvas({
                             route={route}
                             index={index}
                             venues={venues}
-                            taskVenueId={task.venueId > 0 ? task.venueId : null}
+                            taskVenueId={task.venueId != null && task.venueId > 0 ? task.venueId : null}
                             onUpdatePoint={updateRoutePoint}
                             onCalculate={calculateRoute}
                             calculating={calculatingRouteId === route.id}

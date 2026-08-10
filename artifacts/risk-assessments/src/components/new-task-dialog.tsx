@@ -254,10 +254,10 @@ export function NewTaskDialog({
   const mutation = useMutation({
     mutationFn: () =>
       api.tasks.create({
-        venueId: Number(form.venueId),
+        venueId: form.venueId ? Number(form.venueId) : undefined,
         assigneeIds: form.assigneeIds,
         assignedBy: Number(form.assignedBy),
-        title: form.title,
+        title: form.title || undefined,
         dueDate: form.dueDate || undefined,
         endDate: form.endDate || undefined,
         priority: form.priority as TaskPriority,
@@ -283,7 +283,14 @@ export function NewTaskDialog({
   // No CPO picker on this form - assignment happens elsewhere. Requests
   // are created unassigned (or pre-assigned via initialAssigneeId, e.g.
   // Operator Onboarding's "Assign User" flow) and picked up later.
-  const canSubmit = form.venueId && form.assignedBy && form.title.trim().length > 0;
+  //
+  // Required to create at all: client name/contact/requirements + who's
+  // assigning it. Everything else (title, location, dates, cost,
+  // quotation status) can be filled in later - a task missing any of
+  // those just sits in Pending Details until it's complete (see
+  // lib/task-bucket.ts), per direct product direction.
+  const canSubmit =
+    form.clientName.trim() && form.clientContact.trim() && form.clientRequirements.trim() && form.assignedBy;
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
@@ -294,28 +301,28 @@ export function NewTaskDialog({
         </div>
 
         <div>
-          <Label>Task *</Label>
+          <Label>Task</Label>
           <Input placeholder='e.g. "Close protection for venue X"' value={form.title} onChange={(e) => set("title", e.target.value)} />
         </div>
 
         <div>
-          <Label>Location *</Label>
+          <Label>Location</Label>
           <LocationCombobox venues={venues} value={form.venueId} onChange={(v) => set("venueId", v)} />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label>Client Name</Label>
+            <Label>Client Name *</Label>
             <Input placeholder="Who's requesting this" value={form.clientName} onChange={(e) => set("clientName", e.target.value)} />
           </div>
           <div>
-            <Label>Client Contact</Label>
+            <Label>Client Contact *</Label>
             <Input placeholder="Phone / email" value={form.clientContact} onChange={(e) => set("clientContact", e.target.value)} />
           </div>
         </div>
 
         <div>
-          <Label>Client Requirements / Special Requests</Label>
+          <Label>Client Requirements / Special Requests *</Label>
           <Textarea
             placeholder="Anything specific the client asked for..."
             value={form.clientRequirements}

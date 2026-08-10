@@ -18,7 +18,9 @@ router.get("/tasks/:taskId/download", async (req, res): Promise<void> => {
   const [task] = await db.select().from(tasksTable).where(eq(tasksTable.id, taskId));
   if (!task) { res.status(404).json({ error: "Task not found" }); return; }
 
-  const [venue] = await db.select({ name: venuesTable.name }).from(venuesTable).where(eq(venuesTable.id, task.venueId));
+  const [venue] = task.venueId !== null
+    ? await db.select({ name: venuesTable.name }).from(venuesTable).where(eq(venuesTable.id, task.venueId))
+    : [undefined];
   const [assignedToUser] = task.assignedTo !== null
     ? await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, task.assignedTo))
     : [undefined];
