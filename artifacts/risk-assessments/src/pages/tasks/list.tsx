@@ -7,7 +7,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
@@ -49,8 +48,7 @@ function taskBucket(task: Task): TaskBucket {
   return task.clientConfirmedAt ? "running" : "pending";
 }
 
-function EditTaskDialog({ task, venues, users, onClose }: { task: Task; venues: Venue[]; users: User[]; onClose: () => void }) {
-  const cpos = users.filter((u) => u.role === "cpo");
+function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]; onClose: () => void }) {
   const [form, setForm] = useState({
     venueId: String(task.venueId),
     assigneeIds: task.assignedToIds,
@@ -95,11 +93,6 @@ function EditTaskDialog({ task, venues, users, onClose }: { task: Task; venues: 
   });
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
-  const toggleAssignee = (id: number) =>
-    setForm((f) => ({
-      ...f,
-      assigneeIds: f.assigneeIds.includes(id) ? f.assigneeIds.filter((x) => x !== id) : [...f.assigneeIds, id],
-    }));
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
@@ -164,21 +157,6 @@ function EditTaskDialog({ task, venues, users, onClose }: { task: Task; venues: 
             <Input type="number" min={0} step="0.01" value={form.estimatedCost} onChange={(e) => set("estimatedCost", e.target.value)} className="flex-1" />
             <Input value={form.estimatedCostCurrency} onChange={(e) => set("estimatedCostCurrency", e.target.value)} className="w-20" />
           </div>
-        </div>
-        <div>
-          <Label>Assign CPO(s)</Label>
-          {cpos.length === 0 ? (
-            <p className="text-sm text-slate-400 mt-1">No CPO users yet</p>
-          ) : (
-            <div className="border border-slate-200 rounded-md max-h-36 overflow-y-auto divide-y divide-slate-100 mt-1">
-              {cpos.map((u) => (
-                <label key={u.id} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-slate-50">
-                  <Checkbox checked={form.assigneeIds.includes(u.id)} onCheckedChange={() => toggleAssignee(u.id)} />
-                  {u.name}
-                </label>
-              ))}
-            </div>
-          )}
         </div>
         <div className="flex gap-3 pt-2">
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !form.venueId || !form.title.trim()}>
@@ -320,7 +298,7 @@ export default function TasksList() {
   return (
     <div className="space-y-5">
       {showNew && <NewTaskDialog venues={venues} users={users} onClose={() => setShowNew(false)} />}
-      {editingTask && <EditTaskDialog task={editingTask} venues={venues} users={users} onClose={() => setEditingTask(null)} />}
+      {editingTask && <EditTaskDialog task={editingTask} venues={venues} onClose={() => setEditingTask(null)} />}
 
       <div className="flex items-center justify-between gap-4">
         <div>

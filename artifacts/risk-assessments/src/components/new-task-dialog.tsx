@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -203,7 +202,6 @@ export function NewTaskDialog({
   initialAssigneeId?: number;
 }) {
   const managers = users.filter((u) => u.role === "manager" || u.role === "admin");
-  const cpos = users.filter((u) => u.role === "cpo");
   const [form, setForm] = useState({
     venueId: "",
     assigneeIds: initialAssigneeId != null ? [initialAssigneeId] : [] as number[],
@@ -251,13 +249,9 @@ export function NewTaskDialog({
   });
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
-  const toggleAssignee = (id: number) =>
-    setForm((f) => ({
-      ...f,
-      assigneeIds: f.assigneeIds.includes(id) ? f.assigneeIds.filter((x) => x !== id) : [...f.assigneeIds, id],
-    }));
-  // CPOs are deliberately optional - leaving everyone unchecked keeps
-  // the request unassigned until a Manager picks who covers it.
+  // No CPO picker on this form - assignment happens elsewhere. Requests
+  // are created unassigned (or pre-assigned via initialAssigneeId, e.g.
+  // Operator Onboarding's "Assign User" flow) and picked up later.
   const canSubmit = form.venueId && form.assignedBy && form.title.trim().length > 0;
 
   return (
@@ -338,23 +332,6 @@ export function NewTaskDialog({
             <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.estimatedCost} onChange={(e) => set("estimatedCost", e.target.value)} className="flex-1" />
             <Input value={form.estimatedCostCurrency} onChange={(e) => set("estimatedCostCurrency", e.target.value)} className="w-20" />
           </div>
-        </div>
-
-        <div>
-          <Label>Assign CPO(s)</Label>
-          {cpos.length === 0 ? (
-            <p className="text-sm text-slate-400 mt-1">No CPO users yet - add one from Admin &gt; Users</p>
-          ) : (
-            <div className="border border-slate-200 rounded-md max-h-36 overflow-y-auto divide-y divide-slate-100 mt-1">
-              {cpos.map((u) => (
-                <label key={u.id} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-slate-50">
-                  <Checkbox checked={form.assigneeIds.includes(u.id)} onCheckedChange={() => toggleAssignee(u.id)} />
-                  {u.name}
-                </label>
-              ))}
-            </div>
-          )}
-          <p className="text-xs text-slate-400 mt-1">Leave everyone unchecked to leave this request unassigned for now.</p>
         </div>
 
         <div>
