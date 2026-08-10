@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { venuesTable } from "./venues";
 import { usersTable } from "./users";
+import { clientsTable } from "./clients";
 
 // Task Assignment - a Manager assigns a CPO a specific piece of
 // structured work already in the platform ("complete the assessment
@@ -58,6 +59,13 @@ export const tasksTable = pgTable("tasks", {
   // | "denied", set by hand by a Manager on the task form. Independent of
   // clientConfirmedAt/status; nothing derives from it yet.
   quotationStatus: text("quotation_status").notNull().default("awaiting_approval"),
+  // Optional link to a saved Client record (see schema/clients.ts) - a
+  // task can still be created for a one-off client with no record here,
+  // per direct product direction ("add a client picker, keep free text
+  // as fallback"). clientName/clientContact stay the actual freeform
+  // fields on the task even when linked, since picking a client just
+  // pre-fills them rather than replacing them.
+  clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "set null" }),
   clientName: text("client_name").notNull().default(""),
   clientContact: text("client_contact").notNull().default(""),
   clientRequirements: text("client_requirements").notNull().default(""),

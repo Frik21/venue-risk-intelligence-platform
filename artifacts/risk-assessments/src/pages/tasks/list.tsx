@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Task, type TaskStatus, type TaskPriority, type QuotationStatus, type Venue, type User, type TimesheetEntry } from "@/lib/api";
+import { api, type Task, type TaskStatus, type TaskPriority, type QuotationStatus, type Venue, type User, type Client, type TimesheetEntry } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,7 +16,7 @@ import { ListChecks, Plus, ClipboardCheck, MoreVertical, Pencil, Copy, Archive, 
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { NewTaskDialog, LocationCombobox, QuotationStatusPicker } from "@/components/new-task-dialog";
+import { NewTaskDialog, LocationCombobox, QuotationStatusPicker, ClientCombobox } from "@/components/new-task-dialog";
 import { type TaskBucket, BUCKET_CONFIG, taskBucket } from "@/lib/task-bucket";
 
 const STATUS_CONFIG: Record<TaskStatus, { label: string; color: string }> = {
@@ -41,6 +41,7 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
     endDate: task.endDate ? task.endDate.slice(0, 16) : "",
     priority: task.priority,
     quotationStatus: task.quotationStatus,
+    clientId: task.clientId,
     clientName: task.clientName,
     clientContact: task.clientContact,
     clientRequirements: task.clientRequirements,
@@ -50,6 +51,7 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
   });
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { data: clients = [] } = useQuery<Client[]>({ queryKey: ["clients"], queryFn: api.clients.list });
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -61,6 +63,7 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
         endDate: form.endDate || null,
         priority: form.priority as TaskPriority,
         quotationStatus: form.quotationStatus,
+        clientId: form.clientId,
         clientName: form.clientName,
         clientContact: form.clientContact,
         clientRequirements: form.clientRequirements,
@@ -89,6 +92,21 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
         <div>
           <Label>Location</Label>
           <LocationCombobox venues={venues} value={form.venueId} onChange={(v) => set("venueId", v)} />
+        </div>
+        <div>
+          <Label>Client</Label>
+          <ClientCombobox
+            clients={clients}
+            clientId={form.clientId}
+            onSelect={(c) =>
+              setForm((f) => ({
+                ...f,
+                clientId: c?.id ?? null,
+                clientName: c ? c.name : f.clientName,
+                clientContact: c ? c.contact : f.clientContact,
+              }))
+            }
+          />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>

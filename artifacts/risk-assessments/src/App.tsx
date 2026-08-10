@@ -35,6 +35,7 @@ import SchedulePage from "@/pages/admin/schedule";
 import CalendarPage from "@/pages/admin/calendar";
 import CostsPage from "@/pages/admin/costs";
 import OfficesPage from "@/pages/admin/offices";
+import ClientsPage from "@/pages/admin/clients";
 import OnboardingPage from "@/pages/admin/onboarding";
 
 const queryClient = new QueryClient({
@@ -89,6 +90,7 @@ function Router() {
         <Route path="/admin/calendar" component={CalendarPage} />
         <Route path="/admin/costs" component={CostsPage} />
         <Route path="/admin/offices" component={OfficesPage} />
+        <Route path="/admin/clients" component={ClientsPage} />
         <Route path="/admin/onboarding" component={OnboardingPage} />
 
         <Route component={NotFound} />

@@ -93,6 +93,11 @@ export interface Task {
   // Where the client's quotation stands, set by hand on the task form -
   // independent of clientConfirmedAt/status, nothing derives from it yet.
   quotationStatus: QuotationStatus;
+  // Optional link to a saved Client record (see Client above) - picking
+  // one on the task form pre-fills clientName/clientContact but those
+  // stay the real freeform fields, so this can be null for a one-off
+  // client with no record.
+  clientId: number | null;
   clientName: string;
   clientContact: string;
   clientRequirements: string;
@@ -125,6 +130,17 @@ export interface Office {
   country: string;
   managerId: number | null;
   managerName: string | null;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Client {
+  id: number;
+  name: string;
+  contact: string;
+  dayRate: number | null;
+  nightRate: number | null;
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -546,7 +562,7 @@ export const api = {
     create: (data: {
       venueId?: number | null; assigneeIds?: number[]; assignedBy: number; title?: string;
       dueDate?: string; endDate?: string; priority?: TaskPriority; quotationStatus?: QuotationStatus;
-      clientName?: string; clientContact?: string; clientRequirements?: string;
+      clientId?: number | null; clientName?: string; clientContact?: string; clientRequirements?: string;
       operatorsRequired?: number; armedRequired?: boolean; vehiclesRequired?: number;
       estimatedCost?: number | null; estimatedCostCurrency?: string;
     }) => apiFetch<Task>("/tasks", { method: "POST", body: JSON.stringify(data) }),
@@ -556,7 +572,7 @@ export const api = {
       venueId: number | null; assigneeIds: number[]; assignedTo: number | null; assignedBy: number; title: string;
       dueDate: string | null; endDate: string | null; status: TaskStatus; priority: TaskPriority; archived: boolean;
       clientConfirmed: boolean; quotationStatus: QuotationStatus;
-      clientName: string; clientContact: string; clientRequirements: string;
+      clientId: number | null; clientName: string; clientContact: string; clientRequirements: string;
       operatorsRequired: number; armedRequired: boolean; vehiclesRequired: number;
       estimatedCost: number | null; estimatedCostCurrency: string;
       quotationLineItems: { description: string; amount: number }[];
@@ -571,6 +587,14 @@ export const api = {
     update: (id: number, data: Partial<{ name: string; address: string; city: string; country: string; managerId: number | null; notes: string }>) =>
       apiFetch<Office>(`/offices/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     delete: (id: number) => apiFetch<void>(`/offices/${id}`, { method: "DELETE" }),
+  },
+  clients: {
+    list: () => apiFetch<Client[]>("/clients"),
+    create: (data: { name: string; contact?: string; dayRate?: number | null; nightRate?: number | null; notes?: string }) =>
+      apiFetch<Client>("/clients", { method: "POST", body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<{ name: string; contact: string; dayRate: number | null; nightRate: number | null; notes: string }>) =>
+      apiFetch<Client>(`/clients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    delete: (id: number) => apiFetch<void>(`/clients/${id}`, { method: "DELETE" }),
   },
   plans: {
     forTask: (taskId: number) => apiFetch<Plan>(`/tasks/${taskId}/plan`),

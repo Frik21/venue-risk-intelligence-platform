@@ -1,5 +1,5 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Venue, type User, type TaskPriority, type QuotationStatus } from "@/lib/api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, type Venue, type User, type Client, type TaskPriority, type QuotationStatus } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -210,6 +210,79 @@ export function LocationCombobox({
   );
 }
 
+// Optional link to a saved Client record (see /admin/clients) -
+// picking one pre-fills Client Name/Contact below but doesn't lock
+// them; typing a name that doesn't match any client just leaves this
+// unlinked, same freeform behaviour as before there was a Clients
+// database at all. Per direct product direction: "add a client
+// picker, keep free text as fallback".
+export function ClientCombobox({
+  clients,
+  clientId,
+  onSelect,
+}: {
+  clients: Client[];
+  clientId: number | null;
+  onSelect: (client: Client | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = clients.find((c) => c.id === clientId);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          role="combobox"
+          aria-expanded={open}
+          className="flex w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+        >
+          <span className={selected ? "" : "text-slate-400"}>
+            {selected ? selected.name : "Link an existing client (optional)..."}
+          </span>
+          <ChevronsUpDown className="w-4 h-4 opacity-50 shrink-0" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Search clients..." />
+          <CommandList>
+            <CommandEmpty>No matching clients - just type below instead.</CommandEmpty>
+            {selected && (
+              <CommandGroup>
+                <CommandItem
+                  value="__clear__"
+                  onSelect={() => {
+                    onSelect(null);
+                    setOpen(false);
+                  }}
+                >
+                  Clear selection
+                </CommandItem>
+              </CommandGroup>
+            )}
+            <CommandGroup heading="Clients">
+              {clients.map((c) => (
+                <CommandItem
+                  key={c.id}
+                  value={c.name}
+                  onSelect={() => {
+                    onSelect(c);
+                    setOpen(false);
+                  }}
+                >
+                  <Check className={cn("w-4 h-4", c.id === clientId ? "opacity-100" : "opacity-0")} />
+                  {c.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // Task Request - shared by the Management Dashboard's primary action
 // and the full Tasks list page. Modelled as an intake form for a
 // phone-in request (per direct product direction: "someone calls to
@@ -232,6 +305,7 @@ export function NewTaskDialog({
   initialAssigneeId?: number;
 }) {
   const managers = users.filter((u) => u.role === "manager" || u.role === "admin");
+  const { data: clients = [] } = useQuery<Client[]>({ queryKey: ["clients"], queryFn: api.clients.list });
   const [form, setForm] = useState({
     venueId: "",
     assigneeIds: initialAssigneeId != null ? [initialAssigneeId] : [] as number[],
@@ -240,6 +314,7 @@ export function NewTaskDialog({
     dueDate: "",
     endDate: "",
     priority: "medium",
+    clientId: null as number | null,
     clientName: "",
     clientContact: "",
     clientRequirements: "",
@@ -260,6 +335,7 @@ export function NewTaskDialog({
         dueDate: form.dueDate || undefined,
         endDate: form.endDate || undefined,
         priority: form.priority as TaskPriority,
+        clientId: form.clientId,
         clientName: form.clientName,
         clientContact: form.clientContact,
         clientRequirements: form.clientRequirements,
@@ -306,6 +382,22 @@ export function NewTaskDialog({
         <div>
           <Label>Location</Label>
           <LocationCombobox venues={venues} value={form.venueId} onChange={(v) => set("venueId", v)} />
+        </div>
+
+        <div>
+          <Label>Client</Label>
+          <ClientCombobox
+            clients={clients}
+            clientId={form.clientId}
+            onSelect={(c) =>
+              setForm((f) => ({
+                ...f,
+                clientId: c?.id ?? null,
+                clientName: c ? c.name : f.clientName,
+                clientContact: c ? c.contact : f.clientContact,
+              }))
+            }
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
