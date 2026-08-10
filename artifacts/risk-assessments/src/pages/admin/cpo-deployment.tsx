@@ -19,10 +19,14 @@ const STATUS_CONFIG: Record<DeployStatus, { label: string; color: string }> = {
 };
 
 // CPO Deployment - status is computed, not a field anyone sets by
-// hand: Deployed = has a task in progress right now, Off Duty =
-// inactive user account, Available = active with nothing in progress.
-// Qualifications/certifications aren't tracked anywhere in the schema
-// yet, so they're not shown here rather than faked.
+// hand: Deployed = has at least one Running task (see lib/task-bucket.ts
+// - assigned to this CPO, details complete, not yet completed), Off
+// Duty = inactive user account, Available = active with no Running
+// task. Assigning a CPO via Assign Task moves that task straight from
+// Pending Allocation to Running, which is what flips this CPO to
+// Deployed - no separate step. Qualifications/certifications aren't
+// tracked anywhere in the schema yet, so they're not shown here rather
+// than faked.
 export default function CpoDeployment() {
   const [statusFilter, setStatusFilter] = useState<DeployStatus | null>(null);
   const { data: users = [], isLoading: usersLoading } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list });
@@ -47,11 +51,12 @@ export default function CpoDeployment() {
   const pendingAllocationTasks = tasks.filter((t) => taskBucket(t) === "pending_allocation");
 
   const rows = cpos.map((cpo) => {
-    const cpoTasks = tasks.filter((t) => t.assignedToIds.includes(cpo.id));
-    const current = cpoTasks.find((t) => t.status === "in_progress");
-    const upcoming = cpoTasks
-      .filter((t) => t.status === "not_completed")
+    const cpoTasks = tasks.filter((t) => t.assignedToIds.includes(cpo.id) && !t.archived);
+    const runningTasks = cpoTasks
+      .filter((t) => taskBucket(t) === "running")
       .sort((a, b) => (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999"));
+    const current = runningTasks[0];
+    const upcoming = runningTasks.slice(1);
 
     const status: DeployStatus = !cpo.active ? "off_duty" : current ? "deployed" : "available";
 
