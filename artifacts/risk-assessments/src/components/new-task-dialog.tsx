@@ -12,6 +12,10 @@ import { useState } from "react";
 import { Plus, Check, ChevronsUpDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { LocationSearch } from "@/components/location-search";
+
+const SHADCN_INPUT_CLASSES =
+  "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm";
 
 // Quick location creation, opened from the Task Request form when the
 // location a Manager needs isn't in the list yet - just the fields
@@ -34,11 +38,14 @@ export function AddVenueDialog({
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
+  const [lat, setLat] = useState<number | undefined>(undefined);
+  const [lng, setLng] = useState<number | undefined>(undefined);
+  const [locationQuery, setLocationQuery] = useState("");
   const qc = useQueryClient();
   const { toast } = useToast();
 
   const mutation = useMutation({
-    mutationFn: () => api.venues.create({ name, address, city, country }),
+    mutationFn: () => api.venues.create({ name, address, city, country, lat, lng }),
     onSuccess: (venue) => {
       qc.invalidateQueries({ queryKey: ["venues"] });
       toast({ title: "Location added" });
@@ -57,6 +64,24 @@ export function AddVenueDialog({
         <div>
           <Label>Location Name *</Label>
           <Input placeholder="e.g. Grand Hyatt Dubai" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div>
+          <Label>Search for a real address</Label>
+          <LocationSearch
+            value={locationQuery}
+            onChange={setLocationQuery}
+            placeholder="Search for an address or place…"
+            className={SHADCN_INPUT_CLASSES}
+            onSelect={(result) => {
+              setAddress([result.street, result.housenumber].filter(Boolean).join(" ") || address);
+              setCity(result.city ?? city);
+              setCountry(result.country ?? country);
+              setLat(result.lat ?? lat);
+              setLng(result.lng ?? lng);
+              setLocationQuery("");
+            }}
+          />
+          <p className="text-xs text-slate-400 mt-1">Search to auto-fill the fields below, or type them in manually.</p>
         </div>
         <div>
           <Label>Street Address *</Label>
