@@ -1,11 +1,11 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Task, type TaskStatus, type TaskPriority } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { api, type Task, type TaskStatus, type TaskPriority, type QuotationStatus } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Archive, ArchiveRestore, Users } from "lucide-react";
+import { Archive, Eye, Users, Car, DollarSign } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
-import { useToast } from "@/hooks/use-toast";
 
 const STATUS_CONFIG: Record<TaskStatus, { label: string; color: string }> = {
   not_completed: { label: "Not Completed", color: "text-red-700 bg-red-50 border-red-200" },
@@ -20,28 +20,99 @@ const PRIORITY_CONFIG: Record<TaskPriority, { label: string; color: string }> = 
   urgent: { label: "Urgent", color: "text-red-700 bg-red-50 border-red-200" },
 };
 
+const QUOTATION_LABEL: Record<QuotationStatus, string> = {
+  approved: "Quotation Approved",
+  awaiting_approval: "Quotation Awaiting Approval",
+  denied: "Quotation Denied",
+};
+
+function ViewTaskDialog({ task, onClose }: { task: Task; onClose: () => void }) {
+  const sc = STATUS_CONFIG[task.status];
+  const pc = PRIORITY_CONFIG[task.priority];
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg my-8 p-6 space-y-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h2 className="text-lg font-bold">{task.taskNumber}</h2>
+          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase ${sc.color}`}>{sc.label}</span>
+          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase ${pc.color}`}>{pc.label}</span>
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-slate-500 bg-slate-100 border-slate-200">Archived</span>
+        </div>
+
+        <div>
+          <div className="font-semibold text-slate-900">{task.title || "Untitled task"}</div>
+          {task.venueName && <p className="text-sm text-slate-500">{task.venueName}</p>}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <div className="text-xs text-slate-400">Start</div>
+            <div>{task.dueDate ? formatDate(task.dueDate) : "—"}</div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-400">End</div>
+            <div>{task.endDate ? formatDate(task.endDate) : "—"}</div>
+          </div>
+        </div>
+
+        <div className="text-sm space-y-1">
+          <div><span className="text-xs text-slate-400">Client:</span> {task.clientName || "—"}{task.clientContact && ` (${task.clientContact})`}</div>
+          {task.clientRequirements && (
+            <div><span className="text-xs text-slate-400">Requirements:</span> {task.clientRequirements}</div>
+          )}
+          <div><span className="text-xs text-slate-400">Assigned by:</span> {task.assignedByName || "—"}</div>
+        </div>
+
+        <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-1">
+            <Users className="w-3.5 h-3.5 text-slate-400" />
+            {task.assignedToNames.length > 0 ? task.assignedToNames.join(", ") : "Unassigned"} ({task.assignedToIds.length}/{task.operatorsRequired})
+          </div>
+          {task.vehiclesRequired > 0 && (
+            <div className="flex items-center gap-1">
+              <Car className="w-3.5 h-3.5 text-slate-400" /> {task.vehiclesRequired} vehicle{task.vehiclesRequired !== 1 ? "s" : ""}
+            </div>
+          )}
+        </div>
+
+        {task.estimatedCost != null && (
+          <div className="flex items-center gap-1 text-sm">
+            <DollarSign className="w-3.5 h-3.5 text-slate-400" /> {task.estimatedCost.toLocaleString()} {task.estimatedCostCurrency}
+          </div>
+        )}
+
+        <div className="text-sm text-slate-600">{QUOTATION_LABEL[task.quotationStatus]}</div>
+
+        {task.completionNote && (
+          <div className="text-sm">
+            <div className="text-xs text-slate-400">Completion note</div>
+            <div>{task.completionNote}</div>
+          </div>
+        )}
+
+        <div className="pt-2">
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TaskArchive() {
-  const qc = useQueryClient();
-  const { toast } = useToast();
+  const [viewingTask, setViewingTask] = useState<Task | null>(null);
 
   const { data: tasks = [], isLoading } = useQuery<Task[]>({
     queryKey: ["tasks", { includeArchived: true }],
     queryFn: () => api.tasks.list({ includeArchived: true }),
   });
 
-  const restoreMutation = useMutation({
-    mutationFn: (id: number) => api.tasks.update(id, { archived: false }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tasks"] });
-      toast({ title: "Task restored" });
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
-
   const archivedTasks = tasks.filter((t) => t.archived);
 
   return (
     <div className="space-y-5">
+      {viewingTask && <ViewTaskDialog task={viewingTask} onClose={() => setViewingTask(null)} />}
+
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Task Archive</h1>
         <p className="text-slate-500 text-sm mt-0.5">Tasks that have been archived / cancelled</p>
@@ -94,10 +165,9 @@ export default function TaskArchive() {
                       variant="outline"
                       size="sm"
                       className="shrink-0"
-                      onClick={() => restoreMutation.mutate(task.id)}
-                      disabled={restoreMutation.isPending}
+                      onClick={() => setViewingTask(task)}
                     >
-                      <ArchiveRestore className="w-3.5 h-3.5 mr-1.5" /> Restore
+                      <Eye className="w-3.5 h-3.5 mr-1.5" /> View
                     </Button>
                   </div>
                 </CardContent>
