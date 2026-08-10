@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  api, type Quote, type Venue, type User, type Client, type TaskPriority,
+  api, type Quote, type Task, type Venue, type User, type Client, type TaskPriority,
   type QuoteStatus, type QuoteMarkupType, type QuoteCostCategory, QUOTE_COST_CATEGORIES,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -42,9 +42,13 @@ function formatMoney(amount: number, currency: string) {
 // Task-level quotationStatus mechanism. Costs are manual line items,
 // no rate auto-calculation, also per direct product direction.
 export function QuoteDialog({
-  quote, venues, users, clients, onClose,
+  quote, initialTask, venues, users, clients, onClose,
 }: {
   quote: Quote | null;
+  // Prefills the form from a Task Request when creating a quote from
+  // Quotations > Task Pending Quotation - the task drops off that list
+  // once its quote is saved (see taskId on schema/quotes.ts).
+  initialTask?: Task | null;
   venues: Venue[];
   users: User[];
   clients: Client[];
@@ -56,28 +60,29 @@ export function QuoteDialog({
   const [quoteNumber, setQuoteNumber] = useState(quote?.quoteNumber ?? null);
   const [status, setStatus] = useState<QuoteStatus>(quote?.status ?? "draft");
   const [createdAt] = useState(quote?.createdAt ?? null);
+  const taskId = quote?.taskId ?? initialTask?.id ?? null;
 
   const [form, setForm] = useState({
-    title: quote?.title ?? "",
+    title: quote?.title ?? initialTask?.title ?? "",
     validUntil: quote?.validUntil ? quote.validUntil.slice(0, 10) : "",
-    clientId: quote?.clientId ?? null as number | null,
-    clientName: quote?.clientName ?? "",
-    clientContact: quote?.clientContact ?? "",
+    clientId: quote?.clientId ?? initialTask?.clientId ?? null as number | null,
+    clientName: quote?.clientName ?? initialTask?.clientName ?? "",
+    clientContact: quote?.clientContact ?? initialTask?.clientContact ?? "",
     billingDetails: quote?.billingDetails ?? "",
-    venueId: quote?.venueId != null ? String(quote.venueId) : "",
-    clientRequirements: quote?.clientRequirements ?? "",
-    startDate: quote?.startDate ? quote.startDate.slice(0, 16) : "",
-    endDate: quote?.endDate ? quote.endDate.slice(0, 16) : "",
-    priority: (quote?.priority ?? "medium") as TaskPriority,
-    operatorsRequired: String(quote?.operatorsRequired ?? 1),
-    armedRequired: quote?.armedRequired ?? false,
-    vehiclesRequired: String(quote?.vehiclesRequired ?? 0),
+    venueId: quote?.venueId != null ? String(quote.venueId) : initialTask?.venueId != null ? String(initialTask.venueId) : "",
+    clientRequirements: quote?.clientRequirements ?? initialTask?.clientRequirements ?? "",
+    startDate: quote?.startDate ? quote.startDate.slice(0, 16) : initialTask?.dueDate ? initialTask.dueDate.slice(0, 16) : "",
+    endDate: quote?.endDate ? quote.endDate.slice(0, 16) : initialTask?.endDate ? initialTask.endDate.slice(0, 16) : "",
+    priority: (quote?.priority ?? initialTask?.priority ?? "medium") as TaskPriority,
+    operatorsRequired: String(quote?.operatorsRequired ?? initialTask?.operatorsRequired ?? 1),
+    armedRequired: quote?.armedRequired ?? initialTask?.armedRequired ?? false,
+    vehiclesRequired: String(quote?.vehiclesRequired ?? initialTask?.vehiclesRequired ?? 0),
     additionalEquipment: quote?.additionalEquipment ?? "",
     markupType: (quote?.markupType ?? "percent") as QuoteMarkupType,
     markupValue: String(quote?.markupValue ?? 0),
     taxRatePercent: String(quote?.taxRatePercent ?? 0),
     currency: quote?.currency ?? "ZAR",
-    assignedBy: quote?.assignedBy != null ? String(quote.assignedBy) : "",
+    assignedBy: quote?.assignedBy != null ? String(quote.assignedBy) : initialTask?.assignedBy != null ? String(initialTask.assignedBy) : "",
   });
 
   const [costLineItems, setCostLineItems] = useState<{ category: QuoteCostCategory; description: string; amount: string }[]>(
@@ -110,6 +115,7 @@ export function QuoteDialog({
   const saveMutation = useMutation({
     mutationFn: async (nextStatus?: QuoteStatus) => {
       const payload = {
+        taskId,
         title: form.title,
         validUntil: form.validUntil ? new Date(form.validUntil).toISOString() : null,
         clientId: form.clientId,
@@ -163,6 +169,7 @@ export function QuoteDialog({
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
             {createdAt ? `Created ${new Date(createdAt).toLocaleDateString()}` : "Auto-generated quote number is assigned on first save."}
+            {initialTask && ` · From ${initialTask.taskNumber}`}
           </p>
           <div className="grid grid-cols-2 gap-3 mt-3">
             <div className="col-span-2">

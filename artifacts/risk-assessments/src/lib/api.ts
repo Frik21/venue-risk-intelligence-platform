@@ -162,6 +162,7 @@ export type QuoteCostCategory = (typeof QUOTE_COST_CATEGORIES)[number];
 export interface Quote {
   id: number;
   quoteNumber: string;
+  taskId: number | null;
   title: string;
   status: QuoteStatus;
   validUntil: string | null;
@@ -650,6 +651,7 @@ export const api = {
   quotes: {
     list: () => apiFetch<Quote[]>("/quotes"),
     create: (data: Partial<{
+      taskId: number | null;
       title: string; status: QuoteStatus; validUntil: string | null;
       clientId: number | null; clientName: string; clientContact: string; billingDetails: string;
       venueId: number | null; clientRequirements: string; startDate: string | null; endDate: string | null;
@@ -660,6 +662,7 @@ export const api = {
       assignedBy: number;
     }> & { assignedBy: number }) => apiFetch<Quote>("/quotes", { method: "POST", body: JSON.stringify(data) }),
     update: (id: number, data: Partial<{
+      taskId: number | null;
       title: string; status: QuoteStatus; validUntil: string | null;
       clientId: number | null; clientName: string; clientContact: string; billingDetails: string;
       venueId: number | null; clientRequirements: string; startDate: string | null; endDate: string | null;

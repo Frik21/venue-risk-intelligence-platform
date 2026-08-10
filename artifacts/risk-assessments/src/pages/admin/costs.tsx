@@ -497,6 +497,7 @@ export default function CostsPage() {
   const [editingExpense, setEditingExpense] = useState<GlobalExpense | null>(null);
   const [showQuoteDialog, setShowQuoteDialog] = useState(false);
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
+  const [quotingTask, setQuotingTask] = useState<Task | null>(null);
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -530,6 +531,12 @@ export default function CostsPage() {
       toast({ title: "Quote removed" });
     },
   });
+
+  // Tasks with no formal Quote linked to them yet (see taskId on
+  // schema/quotes.ts) - these drop off the list the moment a Quote is
+  // saved against them, whether that quote is still a draft or not.
+  const quotedTaskIds = new Set(quotes.map((q) => q.taskId).filter((id): id is number => id != null));
+  const tasksPendingQuotation = tasks.filter((t) => !t.archived && !quotedTaskIds.has(t.id));
 
   // Quoted/Approved/Pending/Denied - rolled up from every non-archived
   // task's estimatedCost, bucketed by quotationStatus then currency.
@@ -621,6 +628,16 @@ export default function CostsPage() {
     <div className="space-y-5">
       {showQuoteDialog && <QuoteDialog quote={null} venues={venues} users={users} clients={clients} onClose={() => setShowQuoteDialog(false)} />}
       {editingQuote && <QuoteDialog quote={editingQuote} venues={venues} users={users} clients={clients} onClose={() => setEditingQuote(null)} />}
+      {quotingTask && (
+        <QuoteDialog
+          quote={null}
+          initialTask={quotingTask}
+          venues={venues}
+          users={users}
+          clients={clients}
+          onClose={() => setQuotingTask(null)}
+        />
+      )}
       {showExpenseDialog && <ExpenseDialog expense={null} tasks={tasks} onClose={() => setShowExpenseDialog(false)} />}
       {editingExpense && <ExpenseDialog expense={editingExpense} tasks={tasks} onClose={() => setEditingExpense(null)} />}
 
@@ -715,14 +732,51 @@ export default function CostsPage() {
         </CardContent>
       </Card>
 
-      {/* Placeholder per direct product direction - left blank for now,
-          scope to be defined later. */}
       <Card>
         <CardContent className="p-5">
-          <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+          <h2 className="font-semibold text-slate-900 flex items-center gap-2 mb-1">
             <FileText className="w-4 h-4 text-slate-400" /> Task Pending Quotation
           </h2>
-          <p className="text-sm text-slate-400 mt-2">Coming soon.</p>
+          <p className="text-xs text-slate-400 mb-4">
+            Task requests with no formal Quote created yet. Create one straight from the request details below.
+          </p>
+          {tasksLoading ? (
+            <Skeleton className="h-32" />
+          ) : tasksPendingQuotation.length === 0 ? (
+            <p className="text-sm text-slate-400">Nothing pending - every task has a quote.</p>
+          ) : (
+            <div>
+              {tasksPendingQuotation.map((t) => (
+                <div key={t.id} className="py-3 border-b border-slate-100 last:border-0 flex items-start justify-between gap-4 flex-wrap">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                      <span className="text-[10px] font-mono text-slate-400 border border-slate-200 px-1.5 py-0.5 rounded">{t.taskNumber}</span>
+                      <span className="font-semibold text-slate-900 text-sm">{t.title || "Untitled task"}</span>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      {t.venueName ?? "No venue"} · {t.clientName || "No client"}
+                      {t.dueDate && ` · Due ${formatDate(t.dueDate)}`}
+                    </p>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                      <span className="flex items-center gap-1">
+                        <UsersIcon className="w-3 h-3 text-slate-400" />
+                        {t.operatorsRequired} operator{t.operatorsRequired !== 1 ? "s" : ""}
+                        {t.armedRequired ? " (Armed)" : ""}
+                      </span>
+                      {t.vehiclesRequired > 0 && (
+                        <span className="flex items-center gap-1">
+                          <Car className="w-3 h-3 text-slate-400" /> {t.vehiclesRequired} vehicle{t.vehiclesRequired !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <Button size="sm" className="h-8 text-xs shrink-0" onClick={() => setQuotingTask(t)}>
+                    <Plus className="w-3 h-3 mr-1" /> Create Quote
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 import { clientsTable } from "./clients";
 import { venuesTable } from "./venues";
 import { usersTable } from "./users";
+import { tasksTable } from "./tasks";
 
 // A formal sales quote - its own record with its own number/status
 // lifecycle (Draft -> Sent -> Approved/Rejected), independent of
@@ -16,6 +17,12 @@ import { usersTable } from "./users";
 // CPO assignment at quotation stage").
 export const quotesTable = pgTable("quotes", {
   id: serial("id").primaryKey(),
+
+  // Optional link back to the Task Request this quote was created
+  // from (Quotations > Task Pending Quotation) - a Quote can still be
+  // created with no Task at all, this is just how a task drops off
+  // that pending list once it has one.
+  taskId: integer("task_id").references(() => tasksTable.id, { onDelete: "set null" }),
 
   // 1. Quote Details
   title: text("title").notNull().default(""),
