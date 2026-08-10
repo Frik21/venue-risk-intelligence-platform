@@ -37,7 +37,11 @@ export default function SchedulePage() {
   const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
   const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate() + 7);
 
-  const withDates = tasks.filter((t) => t.dueDate);
+  // Cancelled tasks are already excluded - api.tasks.list() defaults to
+  // archived:false. Completed ones are filtered here too, same
+  // reasoning as the Calendar page - a finished task doesn't need to
+  // keep occupying a schedule slot.
+  const withDates = tasks.filter((t) => t.dueDate && t.status !== "completed");
   const todayTasks = withDates.filter((t) => startOfDay(new Date(t.dueDate!)).getTime() === today.getTime());
   const tomorrowTasks = withDates.filter((t) => startOfDay(new Date(t.dueDate!)).getTime() === tomorrow.getTime());
   const thisWeekTasks = withDates
