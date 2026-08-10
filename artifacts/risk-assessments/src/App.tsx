@@ -6,6 +6,7 @@ import NotFound from "@/pages/not-found";
 
 import Layout from "@/components/layout";
 import Dashboard from "@/pages/dashboard";
+import RoleSelect from "@/pages/role-select";
 
 import AssessmentsList from "@/pages/assessments/list";
 import AssessmentNew from "@/pages/assessments/new";
@@ -48,7 +49,8 @@ function Router() {
   return (
     <Layout>
       <Switch>
-        <Route path="/" component={Dashboard} />
+        <Route path="/" component={RoleSelect} />
+        <Route path="/cpo" component={Dashboard} />
 
         {/* Venues */}
         <Route path="/venues" component={VenuesList} />

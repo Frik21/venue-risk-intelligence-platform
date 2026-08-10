@@ -53,14 +53,16 @@ useEffect(() => {
     sessionStorage.setItem("venueguard-show-shell", "true");
     setShowShell(true);
   };
-const hideShell = location === "/" && !showShell;
   window.addEventListener("venueguard-show-shell", handler);
 
   return () => {
     window.removeEventListener("venueguard-show-shell", handler);
   };
 }, []);
-const hideShell = location === "/" && !showShell;
+// "/" is the quick-access chooser (CPO vs Admin) and "/cpo" is the
+// CPO's own full-screen Operational Canvas - neither wants this
+// Manager sidebar/header chrome around it.
+const hideShell = (location === "/" || location === "/cpo") && !showShell;
   // "/admin" needs the same exact-match treatment as "/" - otherwise
   // it'd also read as active on "/admin/users" (a real, distinct nav
   // item), since that path also starts with "/admin".
@@ -115,7 +117,7 @@ const hideShell = location === "/" && !showShell;
             no persistent sidebar) - the reverse direction lives in
             that flow's own operator menu ("Admin Dashboard"). */}
         <Link
-          href="/"
+          href="/cpo"
           onClick={() => setMobileOpen(false)}
           className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors border border-slate-800"
         >
