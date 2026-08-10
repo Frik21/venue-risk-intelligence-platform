@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { api, type Task, type User } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Users, Mail, ClipboardList } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { taskBucket } from "@/lib/task-bucket";
 
 type DeployStatus = "deployed" | "available" | "off_duty";
 
@@ -25,9 +27,24 @@ export default function CpoDeployment() {
   const [statusFilter, setStatusFilter] = useState<DeployStatus | null>(null);
   const { data: users = [], isLoading: usersLoading } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list });
   const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({ queryKey: ["tasks"], queryFn: () => api.tasks.list() });
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const assignMutation = useMutation({
+    mutationFn: ({ taskId, cpoId }: { taskId: number; cpoId: number }) => api.tasks.update(taskId, { assigneeIds: [cpoId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      toast({ title: "Task assigned" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
 
   const cpos = users.filter((u) => u.role === "cpo");
   const isLoading = usersLoading || tasksLoading;
+  // Same pool for every CPO - Pending Allocation tasks are unassigned by
+  // definition (see taskBucket), so there's no "already covered" case to
+  // filter out here, unlike CPO options on an understaffed task.
+  const pendingAllocationTasks = tasks.filter((t) => taskBucket(t) === "pending_allocation");
 
   const rows = cpos.map((cpo) => {
     const cpoTasks = tasks.filter((t) => t.assignedToIds.includes(cpo.id));
@@ -135,13 +152,23 @@ export default function CpoDeployment() {
                       <ClipboardList className="w-3.5 h-3.5" />
                       <span>{taskCount} task{taskCount !== 1 ? "s" : ""} total</span>
                     </div>
-                    {/* Task list to select from is still to come - shell only for now, per direct product direction. */}
-                    <Select>
-                      <SelectTrigger className="h-7 w-36 text-xs ml-auto">
+                    <Select
+                      onValueChange={(v) => assignMutation.mutate({ taskId: Number(v), cpoId: cpo.id })}
+                      disabled={assignMutation.isPending}
+                    >
+                      <SelectTrigger className="h-7 w-44 text-xs ml-auto">
                         <ClipboardList className="w-3.5 h-3.5 shrink-0" />
                         <SelectValue placeholder="Assign Task" />
                       </SelectTrigger>
-                      <SelectContent />
+                      <SelectContent>
+                        {pendingAllocationTasks.length === 0 ? (
+                          <div className="px-2 py-1.5 text-xs text-slate-400">No tasks pending allocation</div>
+                        ) : (
+                          pendingAllocationTasks.map((t) => (
+                            <SelectItem key={t.id} value={String(t.id)}>{t.taskNumber} · {t.title}</SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
                     </Select>
                   </div>
                 </div>
