@@ -157,24 +157,26 @@ export default function CpoDeployment() {
                       <ClipboardList className="w-3.5 h-3.5" />
                       <span>{taskCount} task{taskCount !== 1 ? "s" : ""} total</span>
                     </div>
-                    <Select
-                      onValueChange={(v) => assignMutation.mutate({ taskId: Number(v), cpoId: cpo.id })}
-                      disabled={assignMutation.isPending}
-                    >
-                      <SelectTrigger className="h-7 w-44 text-xs ml-auto">
-                        <ClipboardList className="w-3.5 h-3.5 shrink-0" />
-                        <SelectValue placeholder="Assign Task" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {pendingAllocationTasks.length === 0 ? (
-                          <div className="px-2 py-1.5 text-xs text-slate-400">No tasks pending allocation</div>
-                        ) : (
-                          pendingAllocationTasks.map((t) => (
-                            <SelectItem key={t.id} value={String(t.id)}>{t.taskNumber} · {t.title}</SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
+                    {status === "available" && (
+                      <Select
+                        onValueChange={(v) => assignMutation.mutate({ taskId: Number(v), cpoId: cpo.id })}
+                        disabled={assignMutation.isPending}
+                      >
+                        <SelectTrigger className="h-7 w-44 text-xs ml-auto">
+                          <ClipboardList className="w-3.5 h-3.5 shrink-0" />
+                          <SelectValue placeholder="Assign Task" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {pendingAllocationTasks.length === 0 ? (
+                            <div className="px-2 py-1.5 text-xs text-slate-400">No tasks pending allocation</div>
+                          ) : (
+                            pendingAllocationTasks.map((t) => (
+                              <SelectItem key={t.id} value={String(t.id)}>{t.taskNumber} · {t.title}</SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                 </div>
               </CardContent>
