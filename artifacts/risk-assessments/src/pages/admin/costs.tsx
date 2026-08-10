@@ -715,6 +715,17 @@ export default function CostsPage() {
         </CardContent>
       </Card>
 
+      {/* Placeholder per direct product direction - left blank for now,
+          scope to be defined later. */}
+      <Card>
+        <CardContent className="p-5">
+          <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+            <FileText className="w-4 h-4 text-slate-400" /> Task Pending Quotation
+          </h2>
+          <p className="text-sm text-slate-400 mt-2">Coming soon.</p>
+        </CardContent>
+      </Card>
+
       <QuotationWorkspace tasks={tasks} isLoading={tasksLoading} />
 
       {expensesLoading ? (
