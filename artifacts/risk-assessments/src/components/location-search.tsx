@@ -69,7 +69,10 @@ function parseFeature(feature: { properties?: Record<string, unknown>; geometry?
   };
 }
 
-async function searchPhoton(query: string, signal: AbortSignal): Promise<LocationSearchResult[]> {
+// Exported so callers that want raw results inline (e.g. a combobox
+// listing them alongside other suggestions) can search without pulling
+// in the full LocationSearch input UI below.
+export async function searchPhoton(query: string, signal: AbortSignal): Promise<LocationSearchResult[]> {
   const url = `${PHOTON_SEARCH_ENDPOINT}?q=${encodeURIComponent(query)}&limit=6`;
   const res = await fetch(url, { signal });
   if (!res.ok) throw new Error(`Location search failed (${res.status})`);

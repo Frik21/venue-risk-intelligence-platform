@@ -8,112 +8,24 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useState } from "react";
-import { Plus, Check, ChevronsUpDown } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Plus, Check, ChevronsUpDown, MapPin, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { LocationSearch } from "@/components/location-search";
+import { searchPhoton, type LocationSearchResult } from "@/components/location-search";
 
-const SHADCN_INPUT_CLASSES =
-  "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm";
+const ADDRESS_SEARCH_DEBOUNCE_MS = 350;
+const ADDRESS_SEARCH_MIN_LENGTH = 3;
 
-// Quick location creation, opened from the Task Request form when the
-// location a Manager needs isn't in the list yet - just the fields
-// POST /venues actually requires, not the full Venues > Add New Venue
-// page's location-search/lat-lng/notes fields. Still creates a Venue
-// record under the hood (that's what tasks link to), just labelled
-// "Location" here since that's what a Manager taking a phone-in
-// request is actually thinking in terms of. Selects the new one in
-// the parent form on success.
-export function AddVenueDialog({
-  initialName = "",
-  onClose,
-  onCreated,
-}: {
-  initialName?: string;
-  onClose: () => void;
-  onCreated: (venueId: number) => void;
-}) {
-  const [name, setName] = useState(initialName);
-  const [address, setAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [country, setCountry] = useState("");
-  const [lat, setLat] = useState<number | undefined>(undefined);
-  const [lng, setLng] = useState<number | undefined>(undefined);
-  const [locationQuery, setLocationQuery] = useState("");
-  const qc = useQueryClient();
-  const { toast } = useToast();
-
-  const mutation = useMutation({
-    mutationFn: () => api.venues.create({ name, address, city, country, lat, lng }),
-    onSuccess: (venue) => {
-      qc.invalidateQueries({ queryKey: ["venues"] });
-      toast({ title: "Location added" });
-      onCreated(venue.id);
-      onClose();
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
-
-  const canSubmit = name.trim() && address.trim() && city.trim() && country.trim();
-
-  return (
-    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
-        <h2 className="text-lg font-bold">Add Location</h2>
-        <div>
-          <Label>Location Name *</Label>
-          <Input placeholder="e.g. Grand Hyatt Dubai" value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
-        <div>
-          <Label>Search for a real address</Label>
-          <LocationSearch
-            value={locationQuery}
-            onChange={setLocationQuery}
-            placeholder="Search for an address or place…"
-            className={SHADCN_INPUT_CLASSES}
-            onSelect={(result) => {
-              setAddress([result.street, result.housenumber].filter(Boolean).join(" ") || address);
-              setCity(result.city ?? city);
-              setCountry(result.country ?? country);
-              setLat(result.lat ?? lat);
-              setLng(result.lng ?? lng);
-              setLocationQuery("");
-            }}
-          />
-          <p className="text-xs text-slate-400 mt-1">Search to auto-fill the fields below, or type them in manually.</p>
-        </div>
-        <div>
-          <Label>Street Address *</Label>
-          <Input placeholder="123 Main Street" value={address} onChange={(e) => setAddress(e.target.value)} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label>City *</Label>
-            <Input placeholder="Dubai" value={city} onChange={(e) => setCity(e.target.value)} />
-          </div>
-          <div>
-            <Label>Country *</Label>
-            <Input placeholder="United Arab Emirates" value={country} onChange={(e) => setCountry(e.target.value)} />
-          </div>
-        </div>
-        <div className="flex gap-3 pt-2">
-          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !canSubmit}>
-            {mutation.isPending ? "Adding..." : "Add Location"}
-          </Button>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Single search-or-create field for picking a task's location - typing
-// filters the existing venue list, and if nothing matches, a
-// "Create '<query>'" row opens AddVenueDialog pre-filled with what was
-// typed (address/city/country still get collected there since POST
-// /venues requires them - a single text field can't capture those).
-// Replaces the old separate dropdown + "+ Add Location" link.
+// One field to find or add a task's location - no separate window.
+// Typing filters existing venues AND (after a moment) searches real
+// addresses/places (Photon/OpenStreetMap, same free service as the
+// full Venues > Add New Venue page) in the same dropdown. Picking a
+// real place creates the venue from its actual address/coordinates
+// and selects it immediately. If nothing real-world matches either
+// (e.g. a private venue not on the map), a plain "Add as new location"
+// row still creates one from just the typed name - address/city/
+// country can be filled in later from the full Venues page.
 export function LocationCombobox({
   venues,
   value,
@@ -125,41 +37,99 @@ export function LocationCombobox({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [addVenueName, setAddVenueName] = useState<string | null>(null);
+  const [addressResults, setAddressResults] = useState<LocationSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const qc = useQueryClient();
+  const { toast } = useToast();
 
   const selected = venues.find((v) => String(v.id) === value);
   const trimmedQuery = query.trim();
-  const filtered = trimmedQuery
+  const filteredVenues = trimmedQuery
     ? venues.filter((v) => v.name.toLowerCase().includes(trimmedQuery.toLowerCase()))
     : venues;
   const exactMatch = venues.some((v) => v.name.toLowerCase() === trimmedQuery.toLowerCase());
 
+  useEffect(() => {
+    if (trimmedQuery.length < ADDRESS_SEARCH_MIN_LENGTH) {
+      setAddressResults([]);
+      setSearching(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      setSearching(true);
+      searchPhoton(trimmedQuery, controller.signal)
+        .then(setAddressResults)
+        .catch((err) => {
+          if (err instanceof DOMException && err.name === "AbortError") return;
+          console.error("Address search failed:", err);
+          setAddressResults([]);
+        })
+        .finally(() => setSearching(false));
+    }, ADDRESS_SEARCH_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [trimmedQuery]);
+
+  const createMutation = useMutation({
+    mutationFn: (input: { name: string; address: string; city: string; country: string; lat?: number; lng?: number }) =>
+      api.venues.create(input),
+    onSuccess: (venue) => {
+      qc.invalidateQueries({ queryKey: ["venues"] });
+      toast({ title: "Location added" });
+      onChange(String(venue.id));
+      setQuery("");
+      setOpen(false);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  function createFromAddress(result: LocationSearchResult) {
+    const streetLine = [result.street, result.housenumber].filter(Boolean).join(" ");
+    createMutation.mutate({
+      name: result.name ?? result.label,
+      address: streetLine || result.label,
+      city: result.city ?? result.district ?? result.state ?? "Unknown",
+      country: result.country ?? "Unknown",
+      lat: result.lat ?? undefined,
+      lng: result.lng ?? undefined,
+    });
+  }
+
+  function createBare(name: string) {
+    createMutation.mutate({ name, address: "Address to be confirmed", city: "Unknown", country: "Unknown" });
+  }
+
   return (
-    <>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            role="combobox"
-            aria-expanded={open}
-            className="flex w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-          >
-            <span className={selected ? "" : "text-slate-400"}>
-              {selected ? selected.name : "Search or add a location..."}
-            </span>
-            <ChevronsUpDown className="w-4 h-4 opacity-50 shrink-0" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-          <Command shouldFilter={false}>
-            <CommandInput placeholder="Search locations..." value={query} onValueChange={setQuery} />
-            <CommandList>
-              <CommandEmpty>No locations found.</CommandEmpty>
-              <CommandGroup>
-                {filtered.map((v) => (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          role="combobox"
+          aria-expanded={open}
+          className="flex w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+        >
+          <span className={selected ? "" : "text-slate-400"}>
+            {selected ? selected.name : "Search or add a location..."}
+          </span>
+          <ChevronsUpDown className="w-4 h-4 opacity-50 shrink-0" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <Command shouldFilter={false}>
+          <CommandInput placeholder="Search locations or addresses..." value={query} onValueChange={setQuery} />
+          <CommandList>
+            {filteredVenues.length === 0 && addressResults.length === 0 && !searching && !trimmedQuery && (
+              <CommandEmpty>No locations yet.</CommandEmpty>
+            )}
+            {filteredVenues.length > 0 && (
+              <CommandGroup heading="Your Locations">
+                {filteredVenues.map((v) => (
                   <CommandItem
                     key={v.id}
-                    value={String(v.id)}
+                    value={`venue-${v.id}`}
                     onSelect={() => {
                       onChange(String(v.id));
                       setQuery("");
@@ -170,35 +140,44 @@ export function LocationCombobox({
                     {v.name}
                   </CommandItem>
                 ))}
-                {trimmedQuery && !exactMatch && (
-                  <CommandItem
-                    value={`__create__${trimmedQuery}`}
-                    onSelect={() => {
-                      setAddVenueName(trimmedQuery);
-                      setOpen(false);
-                    }}
-                  >
-                    <Plus className="w-4 h-4" />
-                    Create "{trimmedQuery}"
-                  </CommandItem>
-                )}
               </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-
-      {addVenueName !== null && (
-        <AddVenueDialog
-          initialName={addVenueName}
-          onClose={() => setAddVenueName(null)}
-          onCreated={(venueId) => {
-            onChange(String(venueId));
-            setQuery("");
-          }}
-        />
-      )}
-    </>
+            )}
+            {trimmedQuery.length >= ADDRESS_SEARCH_MIN_LENGTH && (searching || addressResults.length > 0) && (
+              <CommandGroup heading="Real Places">
+                {searching && (
+                  <div className="flex items-center gap-2 px-3 py-2 text-xs text-slate-400">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Searching…
+                  </div>
+                )}
+                {addressResults.map((r, i) => (
+                  <CommandItem
+                    key={`${r.label}-${i}`}
+                    value={`addr-${i}-${r.label}`}
+                    disabled={createMutation.isPending}
+                    onSelect={() => createFromAddress(r)}
+                  >
+                    <MapPin className="w-4 h-4" />
+                    {r.label}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {trimmedQuery && !exactMatch && (
+              <CommandGroup>
+                <CommandItem
+                  value={`create-${trimmedQuery}`}
+                  disabled={createMutation.isPending}
+                  onSelect={() => createBare(trimmedQuery)}
+                >
+                  <Plus className="w-4 h-4" />
+                  Add "{trimmedQuery}" as a new location
+                </CommandItem>
+              </CommandGroup>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 
