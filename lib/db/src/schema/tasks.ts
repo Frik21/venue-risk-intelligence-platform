@@ -45,6 +45,14 @@ export const tasksTable = pgTable("tasks", {
   priority: text("priority").notNull().default("medium"),
   archived: boolean("archived").notNull().default(false),
   completionNote: text("completion_note"),
+  // Client confirmation - independent of status above (status tracks
+  // the CPO's own work progress; this tracks whether the client has
+  // actually confirmed the request). A Manager sets this by hand once
+  // the client confirms (see PATCH /tasks/:id, clientConfirmed) - not
+  // derived from anything else. Tasks list buckets on this: no
+  // confirmation yet = Pending, confirmed but not done = Running,
+  // status = completed = Completed regardless of this field.
+  clientConfirmedAt: timestamp("client_confirmed_at", { withTimezone: true }),
   clientName: text("client_name").notNull().default(""),
   clientContact: text("client_contact").notNull().default(""),
   clientRequirements: text("client_requirements").notNull().default(""),

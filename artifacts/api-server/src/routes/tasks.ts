@@ -36,6 +36,7 @@ function formatTask(
     priority: row.priority as "low" | "medium" | "high" | "urgent",
     archived: row.archived,
     completionNote: row.completionNote ?? null,
+    clientConfirmedAt: row.clientConfirmedAt?.toISOString() ?? null,
     clientName: row.clientName,
     clientContact: row.clientContact,
     clientRequirements: row.clientRequirements,
@@ -191,6 +192,9 @@ const TaskUpdateSchema = z.object({
   priority: z.enum(TASK_PRIORITIES).optional(),
   archived: z.boolean().optional(),
   completionNote: z.string().max(500).optional(),
+  // Manager-set client confirmation - see clientConfirmedAt in
+  // schema/tasks.ts. true stamps the current time, false clears it.
+  clientConfirmed: z.boolean().optional(),
   clientName: z.string().max(200).optional(),
   clientContact: z.string().max(200).optional(),
   clientRequirements: z.string().max(2000).optional(),
@@ -207,7 +211,7 @@ router.patch("/tasks/:id", async (req, res): Promise<void> => {
   const parsed = TaskUpdateSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const { dueDate, endDate, assigneeIds, assignedTo, ...rest } = parsed.data;
+  const { dueDate, endDate, assigneeIds, assignedTo, clientConfirmed, ...rest } = parsed.data;
   const nextRoster = assigneeIds ?? (assignedTo !== undefined ? (assignedTo !== null ? [assignedTo] : []) : undefined);
 
   const [task] = await db
@@ -217,6 +221,7 @@ router.patch("/tasks/:id", async (req, res): Promise<void> => {
       ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
       ...(endDate !== undefined ? { endDate: endDate ? new Date(endDate) : null } : {}),
       ...(nextRoster !== undefined ? { assignedTo: nextRoster[0] ?? null } : {}),
+      ...(clientConfirmed !== undefined ? { clientConfirmedAt: clientConfirmed ? new Date() : null } : {}),
     })
     .where(eq(tasksTable.id, id))
     .returning();

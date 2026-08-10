@@ -2305,6 +2305,7 @@ function OperationalCanvas({
     priority: "medium",
     archived: false,
     completionNote: null,
+    clientConfirmedAt: null,
     clientName: "",
     clientContact: "",
     clientRequirements: "",

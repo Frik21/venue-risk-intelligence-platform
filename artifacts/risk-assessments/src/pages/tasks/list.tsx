@@ -12,7 +12,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
-import { ListChecks, Plus, ClipboardCheck, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check } from "lucide-react";
+import { ListChecks, Plus, ClipboardCheck, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, CheckCircle2, UserCheck } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -30,6 +30,24 @@ const PRIORITY_CONFIG: Record<TaskPriority, { label: string; color: string }> = 
   high: { label: "High", color: "text-orange-700 bg-orange-50 border-orange-200" },
   urgent: { label: "Urgent", color: "text-red-700 bg-red-50 border-red-200" },
 };
+
+// Client-confirmation bucket - independent of the Status field above
+// (that's the CPO's own work progress; this is whether the client has
+// actually confirmed the request, set by hand by a Manager). Completed
+// takes priority over confirmation state since a finished task doesn't
+// need chasing regardless of how it got there.
+type TaskBucket = "pending" | "running" | "completed";
+
+const BUCKET_CONFIG: Record<TaskBucket, { label: string; color: string }> = {
+  pending: { label: "Pending", color: "text-amber-700 bg-amber-50 border-amber-200" },
+  running: { label: "Running", color: "text-blue-700 bg-blue-50 border-blue-200" },
+  completed: { label: "Completed", color: "text-green-700 bg-green-50 border-green-200" },
+};
+
+function taskBucket(task: Task): TaskBucket {
+  if (task.status === "completed") return "completed";
+  return task.clientConfirmedAt ? "running" : "pending";
+}
 
 function EditTaskDialog({ task, venues, users, onClose }: { task: Task; venues: Venue[]; users: User[]; onClose: () => void }) {
   const cpos = users.filter((u) => u.role === "cpo");
@@ -230,6 +248,7 @@ export default function TasksList() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [expandedHoursTaskId, setExpandedHoursTaskId] = useState<number | null>(null);
+  const [bucketFilter, setBucketFilter] = useState<TaskBucket | null>(null);
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -278,6 +297,26 @@ export default function TasksList() {
     },
   });
 
+  const confirmMutation = useMutation({
+    mutationFn: ({ id, confirmed }: { id: number; confirmed: boolean }) => api.tasks.update(id, { clientConfirmed: confirmed }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      toast({ title: vars.confirmed ? "Confirmed with client - now Running" : "Marked back to Pending" });
+    },
+  });
+
+  // Bucket counts/filtering deliberately ignore archived tasks
+  // regardless of the "Show archived" toggle, same reasoning as CPO
+  // Deployment's status counts - archived tasks are cancelled/dead,
+  // not part of the live Pending/Running/Completed picture.
+  const activeTasks = tasks.filter((t) => !t.archived);
+  const bucketCounts: Record<TaskBucket, number> = {
+    pending: activeTasks.filter((t) => taskBucket(t) === "pending").length,
+    running: activeTasks.filter((t) => taskBucket(t) === "running").length,
+    completed: activeTasks.filter((t) => taskBucket(t) === "completed").length,
+  };
+  const visibleTasks = bucketFilter == null ? tasks : activeTasks.filter((t) => taskBucket(t) === bucketFilter);
+
   return (
     <div className="space-y-5">
       {showNew && <NewTaskDialog venues={venues} users={users} onClose={() => setShowNew(false)} />}
@@ -293,12 +332,38 @@ export default function TasksList() {
         </Button>
       </div>
 
-      <button
-        onClick={() => setShowArchived((s) => !s)}
-        className="text-xs text-slate-500 hover:text-slate-700 underline underline-offset-2"
-      >
-        {showArchived ? "Hide archived tasks" : "Show archived tasks"}
-      </button>
+      <div className="grid grid-cols-3 gap-4">
+        {(["pending", "running", "completed"] as const).map((b) => (
+          <button
+            key={b}
+            onClick={() => setBucketFilter((current) => (current === b ? null : b))}
+            className="text-left"
+            disabled={isLoading}
+          >
+            <Card className={cn("transition-colors", bucketFilter === b && "ring-2 ring-blue-500 border-blue-500")}>
+              <CardContent className="p-4">
+                <div className="text-2xl font-bold text-slate-900">{isLoading ? "—" : bucketCounts[b]}</div>
+                <div className="text-xs text-slate-500">{BUCKET_CONFIG[b].label}</div>
+              </CardContent>
+            </Card>
+          </button>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-3">
+        {bucketFilter != null && (
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            Showing only {BUCKET_CONFIG[bucketFilter].label.toLowerCase()} tasks
+            <button onClick={() => setBucketFilter(null)} className="text-blue-600 hover:underline">Clear filter</button>
+          </div>
+        )}
+        <button
+          onClick={() => setShowArchived((s) => !s)}
+          className="text-xs text-slate-500 hover:text-slate-700 underline underline-offset-2"
+        >
+          {showArchived ? "Hide archived tasks" : "Show archived tasks"}
+        </button>
+      </div>
 
       {isLoading ? (
         <div className="space-y-3">{Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-20" />)}</div>
@@ -310,11 +375,19 @@ export default function TasksList() {
             <Button onClick={() => setShowNew(true)} className="mt-2"><Plus className="w-4 h-4 mr-1.5" />New Task Request</Button>
           </CardContent>
         </Card>
+      ) : visibleTasks.length === 0 ? (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <ListChecks className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+            <h3 className="font-medium text-slate-600">No {BUCKET_CONFIG[bucketFilter!].label.toLowerCase()} tasks</h3>
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-3">
-          {tasks.map((task) => {
+          {visibleTasks.map((task) => {
             const sc = STATUS_CONFIG[task.status];
             const pc = PRIORITY_CONFIG[task.priority];
+            const bc = BUCKET_CONFIG[taskBucket(task)];
             const understaffed = task.assignedToIds.length < task.operatorsRequired;
             const availableToAdd = cpos.filter((u) => !task.assignedToIds.includes(u.id));
             return (
@@ -330,6 +403,9 @@ export default function TasksList() {
                         <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase", pc.color)}>
                           {pc.label}
                         </span>
+                        <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase", bc.color)}>
+                          {bc.label}
+                        </span>
                         {task.archived && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-slate-500 bg-slate-100 border-slate-200">Archived</span>}
                         {task.venueName && <span className="text-xs text-slate-500">{task.venueName}</span>}
                         {task.dueDate && <span className="text-xs text-slate-400 ml-auto">Due {formatDate(task.dueDate)}</span>}
@@ -337,6 +413,26 @@ export default function TasksList() {
                       <div className="font-semibold text-slate-900 text-sm mb-0.5">{task.title}</div>
                       {task.clientName && (
                         <p className="text-xs text-slate-500">Client: {task.clientName}{task.clientContact && ` (${task.clientContact})`}</p>
+                      )}
+
+                      {task.status !== "completed" && (
+                        task.clientConfirmedAt ? (
+                          <button
+                            onClick={() => confirmMutation.mutate({ id: task.id, confirmed: false })}
+                            disabled={confirmMutation.isPending}
+                            className="flex items-center gap-1 text-xs text-green-600 hover:underline mt-1"
+                          >
+                            <CheckCircle2 className="w-3 h-3" /> Confirmed with client - mark as pending
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => confirmMutation.mutate({ id: task.id, confirmed: true })}
+                            disabled={confirmMutation.isPending}
+                            className="flex items-center gap-1 text-xs text-amber-600 hover:underline mt-1"
+                          >
+                            <UserCheck className="w-3 h-3" /> Confirm with client
+                          </button>
+                        )
                       )}
 
                       <div className="flex items-center gap-3 flex-wrap mt-1.5">
