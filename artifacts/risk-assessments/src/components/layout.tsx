@@ -15,6 +15,7 @@ import {
   UserPlus,
   CalendarDays,
   Archive,
+  Bell,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ const navGroups = [
   {
     label: "Management",
     items: [
+      { href: "/alerts", label: "Alerts", icon: Bell },
       { href: "/admin", label: "Dashboard", icon: Gauge },
       { href: "/admin/calendar", label: "Calendar", icon: CalendarDays },
       { href: "/tasks", label: "Tasks", icon: ListChecks },
