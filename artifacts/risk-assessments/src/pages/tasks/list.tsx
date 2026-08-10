@@ -30,22 +30,27 @@ const PRIORITY_CONFIG: Record<TaskPriority, { label: string; color: string }> = 
   urgent: { label: "Urgent", color: "text-red-700 bg-red-50 border-red-200" },
 };
 
-// Client-confirmation bucket - independent of the Status field above
-// (that's the CPO's own work progress; this is whether the client has
-// actually confirmed the request, set by hand by a Manager). Completed
-// takes priority over confirmation state since a finished task doesn't
-// need chasing regardless of how it got there.
-type TaskBucket = "pending" | "running" | "completed";
+// Client-confirmation / allocation bucket - independent of the Status
+// field above (that's the CPO's own work progress). Precedence, most to
+// least "done": Completed (status) > Pending Details (not yet
+// client-confirmed - covers both incomplete details and awaiting
+// confirmation, since a Manager wouldn't confirm either of those) >
+// Pending Allocation (confirmed, details are in order, just needs a CPO
+// - see Operator Deployment's Assign Task) > Running (confirmed and
+// staffed).
+type TaskBucket = "pending_details" | "pending_allocation" | "running" | "completed";
 
 const BUCKET_CONFIG: Record<TaskBucket, { label: string; color: string }> = {
-  pending: { label: "Pending", color: "text-amber-700 bg-amber-50 border-amber-200" },
+  pending_details: { label: "Pending Details", color: "text-amber-700 bg-amber-50 border-amber-200" },
+  pending_allocation: { label: "Pending Allocation", color: "text-purple-700 bg-purple-50 border-purple-200" },
   running: { label: "Running", color: "text-blue-700 bg-blue-50 border-blue-200" },
   completed: { label: "Completed", color: "text-green-700 bg-green-50 border-green-200" },
 };
 
 function taskBucket(task: Task): TaskBucket {
   if (task.status === "completed") return "completed";
-  return task.clientConfirmedAt ? "running" : "pending";
+  if (!task.clientConfirmedAt) return "pending_details";
+  return task.assignedToIds.length === 0 ? "pending_allocation" : "running";
 }
 
 function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]; onClose: () => void }) {
@@ -289,7 +294,8 @@ export default function TasksList() {
   // not part of the live Pending/Running/Completed picture.
   const activeTasks = tasks.filter((t) => !t.archived);
   const bucketCounts: Record<TaskBucket, number> = {
-    pending: activeTasks.filter((t) => taskBucket(t) === "pending").length,
+    pending_details: activeTasks.filter((t) => taskBucket(t) === "pending_details").length,
+    pending_allocation: activeTasks.filter((t) => taskBucket(t) === "pending_allocation").length,
     running: activeTasks.filter((t) => taskBucket(t) === "running").length,
     completed: activeTasks.filter((t) => taskBucket(t) === "completed").length,
   };
@@ -310,8 +316,8 @@ export default function TasksList() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        {(["pending", "running", "completed"] as const).map((b) => (
+      <div className="grid grid-cols-4 gap-4">
+        {(["pending_details", "pending_allocation", "running", "completed"] as const).map((b) => (
           <button
             key={b}
             onClick={() => setBucketFilter((current) => (current === b ? null : b))}
