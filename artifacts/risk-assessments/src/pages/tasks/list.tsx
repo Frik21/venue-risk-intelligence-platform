@@ -16,7 +16,7 @@ import { ListChecks, Plus, ClipboardCheck, MoreVertical, Pencil, Copy, Archive, 
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { NewTaskDialog, AddVenueDialog } from "@/components/new-task-dialog";
+import { NewTaskDialog, LocationCombobox } from "@/components/new-task-dialog";
 
 const STATUS_CONFIG: Record<TaskStatus, { label: string; color: string }> = {
   not_completed: { label: "Not Completed", color: "text-red-700 bg-red-50 border-red-200" },
@@ -33,7 +33,6 @@ const PRIORITY_CONFIG: Record<TaskPriority, { label: string; color: string }> = 
 
 function EditTaskDialog({ task, venues, users, onClose }: { task: Task; venues: Venue[]; users: User[]; onClose: () => void }) {
   const cpos = users.filter((u) => u.role === "cpo");
-  const [showAddVenue, setShowAddVenue] = useState(false);
   const [form, setForm] = useState({
     venueId: String(task.venueId),
     assigneeIds: task.assignedToIds,
@@ -93,22 +92,8 @@ function EditTaskDialog({ task, venues, users, onClose }: { task: Task; venues: 
           <Input value={form.title} onChange={(e) => set("title", e.target.value)} />
         </div>
         <div>
-          <div className="flex items-center justify-between">
-            <Label>Location *</Label>
-            <button
-              type="button"
-              onClick={() => setShowAddVenue(true)}
-              className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
-            >
-              <Plus className="w-3 h-3" /> Add Location
-            </button>
-          </div>
-          <Select value={form.venueId} onValueChange={(v) => set("venueId", v)}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {venues.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <Label>Location *</Label>
+          <LocationCombobox venues={venues} value={form.venueId} onChange={(v) => set("venueId", v)} />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -184,13 +169,6 @@ function EditTaskDialog({ task, venues, users, onClose }: { task: Task; venues: 
           <Button variant="outline" onClick={onClose}>Cancel</Button>
         </div>
       </div>
-
-      {showAddVenue && (
-        <AddVenueDialog
-          onClose={() => setShowAddVenue(false)}
-          onCreated={(venueId) => set("venueId", String(venueId))}
-        />
-      )}
     </div>
   );
 }

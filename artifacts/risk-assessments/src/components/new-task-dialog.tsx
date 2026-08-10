@@ -6,9 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Check, ChevronsUpDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 // Quick location creation, opened from the Task Request form when the
 // location a Manager needs isn't in the list yet - just the fields
@@ -18,8 +21,16 @@ import { useToast } from "@/hooks/use-toast";
 // "Location" here since that's what a Manager taking a phone-in
 // request is actually thinking in terms of. Selects the new one in
 // the parent form on success.
-export function AddVenueDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (venueId: number) => void }) {
-  const [name, setName] = useState("");
+export function AddVenueDialog({
+  initialName = "",
+  onClose,
+  onCreated,
+}: {
+  initialName?: string;
+  onClose: () => void;
+  onCreated: (venueId: number) => void;
+}) {
+  const [name, setName] = useState(initialName);
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
@@ -72,6 +83,100 @@ export function AddVenueDialog({ onClose, onCreated }: { onClose: () => void; on
   );
 }
 
+// Single search-or-create field for picking a task's location - typing
+// filters the existing venue list, and if nothing matches, a
+// "Create '<query>'" row opens AddVenueDialog pre-filled with what was
+// typed (address/city/country still get collected there since POST
+// /venues requires them - a single text field can't capture those).
+// Replaces the old separate dropdown + "+ Add Location" link.
+export function LocationCombobox({
+  venues,
+  value,
+  onChange,
+}: {
+  venues: Venue[];
+  value: string;
+  onChange: (venueId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [addVenueName, setAddVenueName] = useState<string | null>(null);
+
+  const selected = venues.find((v) => String(v.id) === value);
+  const trimmedQuery = query.trim();
+  const filtered = trimmedQuery
+    ? venues.filter((v) => v.name.toLowerCase().includes(trimmedQuery.toLowerCase()))
+    : venues;
+  const exactMatch = venues.some((v) => v.name.toLowerCase() === trimmedQuery.toLowerCase());
+
+  return (
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            role="combobox"
+            aria-expanded={open}
+            className="flex w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+          >
+            <span className={selected ? "" : "text-slate-400"}>
+              {selected ? selected.name : "Search or add a location..."}
+            </span>
+            <ChevronsUpDown className="w-4 h-4 opacity-50 shrink-0" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+          <Command shouldFilter={false}>
+            <CommandInput placeholder="Search locations..." value={query} onValueChange={setQuery} />
+            <CommandList>
+              <CommandEmpty>No locations found.</CommandEmpty>
+              <CommandGroup>
+                {filtered.map((v) => (
+                  <CommandItem
+                    key={v.id}
+                    value={String(v.id)}
+                    onSelect={() => {
+                      onChange(String(v.id));
+                      setQuery("");
+                      setOpen(false);
+                    }}
+                  >
+                    <Check className={cn("w-4 h-4", String(v.id) === value ? "opacity-100" : "opacity-0")} />
+                    {v.name}
+                  </CommandItem>
+                ))}
+                {trimmedQuery && !exactMatch && (
+                  <CommandItem
+                    value={`__create__${trimmedQuery}`}
+                    onSelect={() => {
+                      setAddVenueName(trimmedQuery);
+                      setOpen(false);
+                    }}
+                  >
+                    <Plus className="w-4 h-4" />
+                    Create "{trimmedQuery}"
+                  </CommandItem>
+                )}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+
+      {addVenueName !== null && (
+        <AddVenueDialog
+          initialName={addVenueName}
+          onClose={() => setAddVenueName(null)}
+          onCreated={(venueId) => {
+            onChange(String(venueId));
+            setQuery("");
+          }}
+        />
+      )}
+    </>
+  );
+}
+
 // Task Request - shared by the Management Dashboard's primary action
 // and the full Tasks list page. Modelled as an intake form for a
 // phone-in request (per direct product direction: "someone calls to
@@ -95,7 +200,6 @@ export function NewTaskDialog({
 }) {
   const managers = users.filter((u) => u.role === "manager" || u.role === "admin");
   const cpos = users.filter((u) => u.role === "cpo");
-  const [showAddVenue, setShowAddVenue] = useState(false);
   const [form, setForm] = useState({
     venueId: "",
     assigneeIds: initialAssigneeId != null ? [initialAssigneeId] : [] as number[],
@@ -166,22 +270,8 @@ export function NewTaskDialog({
         </div>
 
         <div>
-          <div className="flex items-center justify-between">
-            <Label>Location *</Label>
-            <button
-              type="button"
-              onClick={() => setShowAddVenue(true)}
-              className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
-            >
-              <Plus className="w-3 h-3" /> Add Location
-            </button>
-          </div>
-          <Select value={form.venueId} onValueChange={(v) => set("venueId", v)}>
-            <SelectTrigger><SelectValue placeholder="Select a location" /></SelectTrigger>
-            <SelectContent>
-              {venues.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <Label>Location *</Label>
+          <LocationCombobox venues={venues} value={form.venueId} onChange={(v) => set("venueId", v)} />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -284,13 +374,6 @@ export function NewTaskDialog({
           <Button variant="outline" onClick={onClose}>Cancel</Button>
         </div>
       </div>
-
-      {showAddVenue && (
-        <AddVenueDialog
-          onClose={() => setShowAddVenue(false)}
-          onCreated={(venueId) => set("venueId", String(venueId))}
-        />
-      )}
     </div>
   );
 }
