@@ -11,7 +11,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
-import { ListChecks, Plus, ClipboardCheck, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check } from "lucide-react";
+import { ListChecks, Plus, ClipboardCheck, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, Search } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -208,6 +208,7 @@ export default function TasksList() {
   const [showArchived, setShowArchived] = useState(false);
   const [expandedHoursTaskId, setExpandedHoursTaskId] = useState<number | null>(null);
   const [bucketFilter, setBucketFilter] = useState<TaskBucket | null>(null);
+  const [search, setSearch] = useState("");
   const [extendingTaskId, setExtendingTaskId] = useState<number | null>(null);
   const [extendDate, setExtendDate] = useState("");
   const qc = useQueryClient();
@@ -289,7 +290,17 @@ export default function TasksList() {
     running: activeTasks.filter((t) => taskBucket(t) === "running").length,
     completed: activeTasks.filter((t) => taskBucket(t) === "completed").length,
   };
-  const visibleTasks = bucketFilter == null ? tasks : activeTasks.filter((t) => taskBucket(t) === bucketFilter);
+  const bucketFiltered = bucketFilter == null ? tasks : activeTasks.filter((t) => taskBucket(t) === bucketFilter);
+  const query = search.trim().toLowerCase();
+  const visibleTasks = query === ""
+    ? bucketFiltered
+    : bucketFiltered.filter((t) =>
+        t.taskNumber.toLowerCase().includes(query) ||
+        t.title.toLowerCase().includes(query) ||
+        t.clientName.toLowerCase().includes(query) ||
+        (t.venueName ?? "").toLowerCase().includes(query) ||
+        t.assignedToNames.some((n) => n.toLowerCase().includes(query))
+      );
 
   return (
     <div className="space-y-5">
@@ -324,6 +335,16 @@ export default function TasksList() {
         ))}
       </div>
 
+      <div className="relative max-w-sm">
+        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search tasks..."
+          className="pl-9"
+        />
+      </div>
+
       <div className="flex items-center gap-3">
         {bucketFilter != null && (
           <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -353,7 +374,11 @@ export default function TasksList() {
         <Card>
           <CardContent className="py-16 text-center">
             <ListChecks className="w-10 h-10 mx-auto mb-3 text-slate-300" />
-            <h3 className="font-medium text-slate-600">No {BUCKET_CONFIG[bucketFilter!].label.toLowerCase()} tasks</h3>
+            <h3 className="font-medium text-slate-600">
+              {query !== ""
+                ? `No tasks match "${search}"`
+                : `No ${BUCKET_CONFIG[bucketFilter!].label.toLowerCase()} tasks`}
+            </h3>
           </CardContent>
         </Card>
       ) : (
