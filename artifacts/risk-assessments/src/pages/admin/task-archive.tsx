@@ -4,7 +4,8 @@ import { api, type Task, type TaskStatus, type TaskPriority, type QuotationStatu
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Archive, Eye, Users, Car, DollarSign } from "lucide-react";
+import { Archive, Eye, Users, Car, DollarSign, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { formatDate } from "@/lib/display-utils";
 
 const STATUS_CONFIG: Record<TaskStatus, { label: string; color: string }> = {
@@ -101,6 +102,7 @@ function ViewTaskDialog({ task, onClose }: { task: Task; onClose: () => void }) 
 
 export default function TaskArchive() {
   const [viewingTask, setViewingTask] = useState<Task | null>(null);
+  const [search, setSearch] = useState("");
 
   const { data: tasks = [], isLoading } = useQuery<Task[]>({
     queryKey: ["tasks", { includeArchived: true }],
@@ -108,6 +110,15 @@ export default function TaskArchive() {
   });
 
   const archivedTasks = tasks.filter((t) => t.archived);
+  const query = search.trim().toLowerCase();
+  const visibleTasks = query === ""
+    ? archivedTasks
+    : archivedTasks.filter((t) =>
+        t.taskNumber.toLowerCase().includes(query) ||
+        t.title.toLowerCase().includes(query) ||
+        t.clientName.toLowerCase().includes(query) ||
+        (t.venueName ?? "").toLowerCase().includes(query)
+      );
 
   return (
     <div className="space-y-5">
@@ -117,6 +128,18 @@ export default function TaskArchive() {
         <h1 className="text-2xl font-bold text-slate-900">Task Archive</h1>
         <p className="text-slate-500 text-sm mt-0.5">Tasks that have been archived / cancelled</p>
       </div>
+
+      {archivedTasks.length > 0 && (
+        <div className="relative max-w-sm">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search archived tasks..."
+            className="pl-9"
+          />
+        </div>
+      )}
 
       {isLoading ? (
         <div className="space-y-3">{Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-20" />)}</div>
@@ -128,9 +151,16 @@ export default function TaskArchive() {
             <p className="text-sm text-slate-400 mt-1">Tasks you archive from the Tasks page will show up here.</p>
           </CardContent>
         </Card>
+      ) : visibleTasks.length === 0 ? (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <Search className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+            <h3 className="font-medium text-slate-600">No archived tasks match "{search}"</h3>
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-3">
-          {archivedTasks.map((task) => {
+          {visibleTasks.map((task) => {
             const sc = STATUS_CONFIG[task.status];
             const pc = PRIORITY_CONFIG[task.priority];
             return (
