@@ -51,7 +51,6 @@ export function QuoteDialog({
   onClose: () => void;
 }) {
   const managers = users.filter((u) => u.role === "manager" || u.role === "admin");
-  const cpos = users.filter((u) => u.role === "cpo");
 
   const [savedId, setSavedId] = useState<number | null>(quote?.id ?? null);
   const [quoteNumber, setQuoteNumber] = useState(quote?.quoteNumber ?? null);
@@ -79,7 +78,6 @@ export function QuoteDialog({
     taxRatePercent: String(quote?.taxRatePercent ?? 0),
     currency: quote?.currency ?? "ZAR",
     assignedBy: quote?.assignedBy != null ? String(quote.assignedBy) : "",
-    proposedCpoIds: quote?.proposedCpoIds ?? ([] as number[]),
   });
 
   const [costLineItems, setCostLineItems] = useState<{ category: QuoteCostCategory; description: string; amount: string }[]>(
@@ -97,12 +95,6 @@ export function QuoteDialog({
   };
   const addLineItem = () => setCostLineItems((prev) => [...prev, { category: "misc", description: "", amount: "" }]);
   const removeLineItem = (idx: number) => setCostLineItems((prev) => prev.filter((_, i) => i !== idx));
-  const toggleCpo = (id: number) => {
-    setForm((f) => ({
-      ...f,
-      proposedCpoIds: f.proposedCpoIds.includes(id) ? f.proposedCpoIds.filter((x) => x !== id) : [...f.proposedCpoIds, id],
-    }));
-  };
 
   // Live-computed Commercials, same formula as computeCommercials() on
   // the backend (routes/quotes.ts) - kept in sync so the preview here
@@ -141,7 +133,6 @@ export function QuoteDialog({
         taxRatePercent: Number(form.taxRatePercent) || 0,
         currency: form.currency.trim() || "ZAR",
         assignedBy: Number(form.assignedBy),
-        proposedCpoIds: form.proposedCpoIds,
         ...(nextStatus ? { status: nextStatus } : {}),
       };
       return savedId != null ? api.quotes.update(savedId, payload) : api.quotes.create({ ...payload, assignedBy: Number(form.assignedBy) });
@@ -359,35 +350,18 @@ export function QuoteDialog({
         {/* 7. Assignment / Ownership */}
         <div className="pt-4 border-t border-slate-100">
           <h3 className="text-sm font-semibold text-slate-900 mb-2">6. Assignment / Ownership</h3>
-          <div className="space-y-3">
-            <div>
-              <Label>Responsible Manager *</Label>
-              <Select value={form.assignedBy} onValueChange={(v) => set("assignedBy", v)}>
-                <SelectTrigger><SelectValue placeholder="Select a Manager" /></SelectTrigger>
-                <SelectContent>
-                  {managers.length === 0 ? (
-                    <div className="px-3 py-2 text-sm text-slate-400">No Manager/Admin users yet</div>
-                  ) : (
-                    managers.map((u) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Proposed CPOs (optional - not a final assignment)</Label>
-              {cpos.length === 0 ? (
-                <p className="text-xs text-slate-400">No CPO users yet.</p>
-              ) : (
-                <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-1">
-                  {cpos.map((c) => (
-                    <label key={c.id} className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
-                      <Checkbox checked={form.proposedCpoIds.includes(c.id)} onCheckedChange={() => toggleCpo(c.id)} />
-                      {c.name}
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
+          <div>
+            <Label>Responsible Manager *</Label>
+            <Select value={form.assignedBy} onValueChange={(v) => set("assignedBy", v)}>
+              <SelectTrigger><SelectValue placeholder="Select a Manager" /></SelectTrigger>
+              <SelectContent>
+                {managers.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-slate-400">No Manager/Admin users yet</div>
+                ) : (
+                  managers.map((u) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)
+                )}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 

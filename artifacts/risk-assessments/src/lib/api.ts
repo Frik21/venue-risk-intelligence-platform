@@ -186,8 +186,6 @@ export interface Quote {
   currency: string;
   assignedBy: number;
   assignedByName: string | null;
-  proposedCpoIds: number[];
-  proposedCpoNames: string[];
   sentAt: string | null;
   decidedAt: string | null;
   createdAt: string;
@@ -659,7 +657,7 @@ export const api = {
       additionalEquipment: string;
       costLineItems: { category: QuoteCostCategory; description: string; amount: number }[];
       markupType: QuoteMarkupType; markupValue: number; taxRatePercent: number; currency: string;
-      assignedBy: number; proposedCpoIds: number[];
+      assignedBy: number;
     }> & { assignedBy: number }) => apiFetch<Quote>("/quotes", { method: "POST", body: JSON.stringify(data) }),
     update: (id: number, data: Partial<{
       title: string; status: QuoteStatus; validUntil: string | null;
@@ -669,7 +667,7 @@ export const api = {
       additionalEquipment: string;
       costLineItems: { category: QuoteCostCategory; description: string; amount: number }[];
       markupType: QuoteMarkupType; markupValue: number; taxRatePercent: number; currency: string;
-      assignedBy: number; proposedCpoIds: number[];
+      assignedBy: number;
     }>) => apiFetch<Quote>(`/quotes/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     delete: (id: number) => apiFetch<void>(`/quotes/${id}`, { method: "DELETE" }),
   },

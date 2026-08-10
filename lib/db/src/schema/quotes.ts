@@ -62,11 +62,10 @@ export const quotesTable = pgTable("quotes", {
   taxRatePercent: real("tax_rate_percent").notNull().default(0),
   currency: text("currency").notNull().default("ZAR"),
 
-  // 7. Assignment / Ownership - proposedCpoIds is a non-binding
-  // shortlist, not a real roster assignment (that only happens once
-  // an actual Task exists - see task-assignments.ts).
+  // 7. Assignment / Ownership - responsible manager only. Real CPO
+  // assignment happens once an actual Task exists (see
+  // task-assignments.ts), not at quotation stage.
   assignedBy: integer("assigned_by").notNull().references(() => usersTable.id),
-  proposedCpoIds: jsonb("proposed_cpo_ids").notNull().default([]).$type<number[]>(),
 
   sentAt: timestamp("sent_at", { withTimezone: true }),
   decidedAt: timestamp("decided_at", { withTimezone: true }),

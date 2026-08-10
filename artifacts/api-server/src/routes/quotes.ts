@@ -35,7 +35,6 @@ function formatQuote(
   row: typeof quotesTable.$inferSelect,
   venueName: string | null,
   assignedByName: string | null,
-  proposedCpoNames: string[],
 ) {
   return {
     id: row.id,
@@ -64,8 +63,6 @@ function formatQuote(
     currency: row.currency,
     assignedBy: row.assignedBy,
     assignedByName: assignedByName ?? null,
-    proposedCpoIds: row.proposedCpoIds,
-    proposedCpoNames,
     sentAt: row.sentAt?.toISOString() ?? null,
     decidedAt: row.decidedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
@@ -79,13 +76,7 @@ async function loadContext(row: typeof quotesTable.$inferSelect) {
     ? await db.select({ name: venuesTable.name }).from(venuesTable).where(eq(venuesTable.id, row.venueId))
     : [undefined];
   const [assignedByUser] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, row.assignedBy));
-  const cpoUsers = row.proposedCpoIds.length
-    ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable)
-    : [];
-  const cpoMap: Record<number, string> = {};
-  for (const u of cpoUsers) cpoMap[u.id] = u.name;
-  const proposedCpoNames = row.proposedCpoIds.map((id) => cpoMap[id] ?? `User #${id}`);
-  return { venueName: venue?.name ?? null, assignedByName: assignedByUser?.name ?? null, proposedCpoNames };
+  return { venueName: venue?.name ?? null, assignedByName: assignedByUser?.name ?? null };
 }
 
 router.get("/quotes", async (_req, res): Promise<void> => {
@@ -103,7 +94,6 @@ router.get("/quotes", async (_req, res): Promise<void> => {
         r,
         r.venueId != null ? (venueMap[r.venueId] ?? null) : null,
         userMap[r.assignedBy] ?? null,
-        r.proposedCpoIds.map((id) => userMap[id] ?? `User #${id}`),
       ),
     ),
   );
@@ -137,7 +127,6 @@ const QuoteFieldsSchema = {
   markupValue: z.number().optional(),
   taxRatePercent: z.number().min(0).optional(),
   currency: z.string().min(1).max(10).optional(),
-  proposedCpoIds: z.array(z.number().int()).optional(),
 };
 
 const QuoteInputSchema = z.object({ ...QuoteFieldsSchema, assignedBy: z.number().int() });
@@ -172,12 +161,11 @@ router.post("/quotes", async (req, res): Promise<void> => {
       taxRatePercent: parsed.data.taxRatePercent ?? 0,
       currency: parsed.data.currency ?? "ZAR",
       assignedBy: parsed.data.assignedBy,
-      proposedCpoIds: parsed.data.proposedCpoIds ?? [],
     })
     .returning();
 
   const ctx = await loadContext(quote);
-  res.status(201).json(formatQuote(quote, ctx.venueName, ctx.assignedByName, ctx.proposedCpoNames));
+  res.status(201).json(formatQuote(quote, ctx.venueName, ctx.assignedByName));
 });
 
 router.patch("/quotes/:id", async (req, res): Promise<void> => {
@@ -216,7 +204,7 @@ router.patch("/quotes/:id", async (req, res): Promise<void> => {
     .returning();
 
   const ctx = await loadContext(quote);
-  res.json(formatQuote(quote, ctx.venueName, ctx.assignedByName, ctx.proposedCpoNames));
+  res.json(formatQuote(quote, ctx.venueName, ctx.assignedByName));
 });
 
 router.delete("/quotes/:id", async (req, res): Promise<void> => {
@@ -236,7 +224,7 @@ router.get("/quotes/:id/pdf", async (req, res): Promise<void> => {
   if (!quote) { res.status(404).json({ error: "Quote not found" }); return; }
 
   const ctx = await loadContext(quote);
-  const formatted = formatQuote(quote, ctx.venueName, ctx.assignedByName, ctx.proposedCpoNames);
+  const formatted = formatQuote(quote, ctx.venueName, ctx.assignedByName);
   const doc = buildQuotePdf(formatted);
 
   const filenameSafeTitle = quote.title.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "quote";

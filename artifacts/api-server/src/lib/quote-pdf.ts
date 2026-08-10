@@ -29,7 +29,6 @@ export interface QuotePdfData {
   taxRatePercent: number;
   currency: string;
   assignedByName: string | null;
-  proposedCpoNames: string[];
   internalCost: number;
   markupAmount: number;
   clientPrice: number;
@@ -220,10 +219,7 @@ export function buildQuotePdf(data: QuotePdfData): PDFKit.PDFDocument {
   drawSectionRule(doc);
   doc.fontSize(12).font("Helvetica-Bold").text("Assignment / Ownership");
   doc.moveDown(0.3);
-  drawMetaRows(doc, [
-    ["Responsible Manager", data.assignedByName ?? "—"],
-    ["Proposed CPOs", data.proposedCpoNames.length ? data.proposedCpoNames.join(", ") : "Not yet proposed"],
-  ]);
+  drawMetaRows(doc, [["Responsible Manager", data.assignedByName ?? "—"]]);
 
   // 8. Quote Summary (closing recap - scope, dates, resources, cost, margin)
   drawSectionRule(doc);
