@@ -699,6 +699,7 @@ export const api = {
   },
   osint: {
     review: (id: number, data: { status: "accepted" | "rejected"; analystNote?: string }) => apiFetch<OsintEvent>(`/osint/${id}/review`, { method: "PATCH", body: JSON.stringify(data) }),
+    monitoredVenues: () => apiFetch<{ venueId: number; venueName: string }[]>("/osint/monitored-venues"),
   },
   routes: {
     list: (params?: { assessmentId?: number; venueId?: number }) => {

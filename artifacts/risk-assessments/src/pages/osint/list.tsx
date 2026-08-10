@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
-import { useSearch } from "wouter";
+import { useSearch, Link } from "wouter";
 import { Radio, CheckCircle2, XCircle, ExternalLink, Search, X } from "lucide-react";
 import { timeAgo } from "@/lib/display-utils";
 import { cn } from "@/lib/utils";
@@ -91,6 +91,55 @@ function SearchPhrasesPanel() {
                   <X className="w-3 h-3" />
                 </button>
               </Badge>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Venues GDELT is actively watching right now - any venue with a task
+// in the Running bucket (see getRunningVenues in the API server's
+// lib/gdelt-monitor.ts), checked against the phrases above on a
+// recurring schedule while the server's up, no manual per-venue check
+// required. Falls off this list on its own once that task is no
+// longer Running (completed, cancelled, or unassigned) - per direct
+// product direction: "when the task is marked as completed then
+// monitoring must automatically stop."
+function MonitoredVenuesPanel() {
+  const { data: venues = [], isLoading } = useQuery({
+    queryKey: ["osint-monitored-venues"],
+    queryFn: api.osint.monitoredVenues,
+    refetchInterval: 60_000,
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Radio className="w-4 h-4 text-slate-400" /> Currently Monitored
+          {venues.length > 0 && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-blue-700 bg-blue-50 border-blue-200">
+              {venues.length}
+            </span>
+          )}
+        </CardTitle>
+        <p className="text-slate-500 text-xs mt-0.5">
+          GDELT automatically watches these venues using the phrases above, for as long as a task there is Running.
+        </p>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <Skeleton className="h-8 w-48" />
+        ) : venues.length === 0 ? (
+          <p className="text-xs text-slate-400">No venues currently monitored - a venue shows up here once it has a Running task.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {venues.map((v) => (
+              <Link key={v.venueId} href={`/osint?venueId=${v.venueId}`}>
+                <Badge variant="secondary" className="cursor-pointer hover:bg-slate-200">{v.venueName}</Badge>
+              </Link>
             ))}
           </div>
         )}
@@ -198,6 +247,8 @@ export default function OsintList() {
       </div>
 
       <SearchPhrasesPanel />
+
+      <MonitoredVenuesPanel />
 
       {!preVenueId ? null : isLoading ? (
         <div className="space-y-3">{Array(5).fill(0).map((_, i) => <Skeleton key={i} className="h-20" />)}</div>

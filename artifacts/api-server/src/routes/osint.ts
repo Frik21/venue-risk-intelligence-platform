@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
-import { db, osintEventsTable, venuesTable, venueSearchPhrasesTable, alertsTable } from "@workspace/db";
+import { db, osintEventsTable, venuesTable, alertsTable } from "@workspace/db";
 import { z } from "zod";
 import { fetchWeatherFinding, weatherEventType, weatherAlertPriority } from "../lib/weather";
-import { fetchGdeltFindings, gdeltEventType, gdeltAlertPriority } from "../lib/gdelt";
+import { gdeltAlertPriority } from "../lib/gdelt";
+import { getRunningVenues, runGdeltCheckForVenue } from "../lib/gdelt-monitor";
 
 const router: IRouter = Router();
 
@@ -42,6 +43,15 @@ const OSINT_TEMPLATES = [
   { eventType: "protest", summary: "Planned demonstration scheduled in vicinity next week", sourceName: "Protest Monitor", confidenceLevel: "medium" },
   { eventType: "road_closure", summary: "Temporary road closure affecting primary access route", sourceName: "Traffic Authority", confidenceLevel: "high" },
 ];
+
+// Venues GDELT is actively watching right now - any venue with a task
+// in the Running bucket (see getRunningVenues in lib/gdelt-monitor.ts).
+// Drops off this list on its own the moment that task is completed,
+// cancelled, or reassigned away from Running - nothing to clean up.
+router.get("/osint/monitored-venues", async (_req, res): Promise<void> => {
+  const venues = await getRunningVenues();
+  res.json(venues);
+});
 
 router.get("/venues/:id/osint", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
@@ -106,34 +116,13 @@ router.get("/venues/:id/osint", async (req, res): Promise<void> => {
     }
   }
 
-  // Live GDELT news check - only runs if this venue has search phrases
-  // configured (see venueSearchPhrasesTable's own comment for why that's
-  // deliberate). Deduped against existing rows by sourceUrl so the same
-  // article isn't inserted again on every page load.
+  // Live GDELT news check - deduped against existing rows by sourceUrl
+  // so the same article isn't inserted again on every page load. Same
+  // check the background monitor (lib/gdelt-monitor.ts) runs on its own
+  // schedule for every venue with a Running task - viewing a venue's
+  // OSINT feed directly just triggers an on-demand check too.
   try {
-    const phrases = await db
-      .select({ phrase: venueSearchPhrasesTable.phrase })
-      .from(venueSearchPhrasesTable)
-      .where(eq(venueSearchPhrasesTable.venueId, id));
-
-    if (phrases.length > 0) {
-      const findings = await fetchGdeltFindings(phrases.map((p) => p.phrase));
-      const existingUrls = new Set(existing.map((row) => row.sourceUrl).filter((url): url is string => Boolean(url)));
-      const fresh = findings.filter((f) => !existingUrls.has(f.sourceUrl));
-
-      if (fresh.length > 0) {
-        await db.insert(osintEventsTable).values(
-          fresh.map((f) => ({
-            venueId: id,
-            eventType: gdeltEventType(f.severity),
-            summary: f.summary,
-            sourceName: f.sourceName,
-            sourceUrl: f.sourceUrl,
-            status: "pending" as const,
-          })),
-        );
-      }
-    }
+    await runGdeltCheckForVenue(id);
   } catch (err) {
     console.error(`GDELT OSINT check failed for venue ${id}:`, err);
   }
