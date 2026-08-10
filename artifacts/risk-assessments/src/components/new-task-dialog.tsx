@@ -18,7 +18,7 @@ const ADDRESS_SEARCH_MIN_LENGTH = 3;
 
 const QUOTATION_STATUS_OPTIONS: { value: QuotationStatus; label: string; activeClass: string }[] = [
   { value: "approved", label: "Quotation Approved", activeClass: "bg-green-600 text-white border-green-600" },
-  { value: "awaiting_approval", label: "Quotation Awaiting Approval", activeClass: "bg-amber-500 text-white border-amber-500" },
+  { value: "awaiting_approval", label: "Quotation Pending", activeClass: "bg-amber-500 text-white border-amber-500" },
   { value: "denied", label: "Quotation Denied", activeClass: "bg-red-600 text-white border-red-600" },
 ];
 

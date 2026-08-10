@@ -232,6 +232,15 @@ export default function TasksList() {
     },
   });
 
+  const quotationMutation = useMutation({
+    mutationFn: ({ id, quotationStatus }: { id: number; quotationStatus: QuotationStatus }) =>
+      api.tasks.update(id, { quotationStatus }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      toast({ title: "Quotation status updated" });
+    },
+  });
+
   const duplicateMutation = useMutation({
     mutationFn: (id: number) => api.tasks.duplicate(id),
     onSuccess: () => {
@@ -358,6 +367,15 @@ export default function TasksList() {
                       <div className="font-semibold text-slate-900 text-sm mb-0.5">{task.title}</div>
                       {task.clientName && (
                         <p className="text-xs text-slate-500">Client: {task.clientName}{task.clientContact && ` (${task.clientContact})`}</p>
+                      )}
+
+                      {taskBucket(task) === "quotation" && (
+                        <div className="mt-1.5 max-w-sm">
+                          <QuotationStatusPicker
+                            value={task.quotationStatus}
+                            onChange={(v) => quotationMutation.mutate({ id: task.id, quotationStatus: v })}
+                          />
+                        </div>
                       )}
 
                       <div className="flex items-center gap-3 flex-wrap mt-1.5">

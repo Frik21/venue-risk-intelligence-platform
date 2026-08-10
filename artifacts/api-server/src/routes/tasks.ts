@@ -222,6 +222,7 @@ const TaskUpdateSchema = z.object({
   endDate: z.string().nullable().optional(),
   status: z.enum(["not_completed", "in_progress", "completed"]).optional(),
   priority: z.enum(TASK_PRIORITIES).optional(),
+  quotationStatus: z.enum(QUOTATION_STATUSES).optional(),
   archived: z.boolean().optional(),
   completionNote: z.string().max(500).optional(),
   // Manager-set client confirmation - see clientConfirmedAt in
