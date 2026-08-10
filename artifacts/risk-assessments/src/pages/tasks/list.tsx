@@ -11,7 +11,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
-import { ListChecks, Plus, ClipboardCheck, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, CheckCircle2, UserCheck } from "lucide-react";
+import { ListChecks, Plus, ClipboardCheck, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -267,14 +267,6 @@ export default function TasksList() {
     },
   });
 
-  const confirmMutation = useMutation({
-    mutationFn: ({ id, confirmed }: { id: number; confirmed: boolean }) => api.tasks.update(id, { clientConfirmed: confirmed }),
-    onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ["tasks"] });
-      toast({ title: vars.confirmed ? "Confirmed with client - now Running" : "Marked back to Pending" });
-    },
-  });
-
   // Bucket counts/filtering deliberately ignore archived tasks
   // regardless of the "Show archived" toggle, same reasoning as CPO
   // Deployment's status counts - archived tasks are cancelled/dead,
@@ -384,26 +376,6 @@ export default function TasksList() {
                       <div className="font-semibold text-slate-900 text-sm mb-0.5">{task.title}</div>
                       {task.clientName && (
                         <p className="text-xs text-slate-500">Client: {task.clientName}{task.clientContact && ` (${task.clientContact})`}</p>
-                      )}
-
-                      {task.status !== "completed" && (
-                        task.clientConfirmedAt ? (
-                          <button
-                            onClick={() => confirmMutation.mutate({ id: task.id, confirmed: false })}
-                            disabled={confirmMutation.isPending}
-                            className="flex items-center gap-1 text-xs text-green-600 hover:underline mt-1"
-                          >
-                            <CheckCircle2 className="w-3 h-3" /> Confirmed with client - mark as pending
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => confirmMutation.mutate({ id: task.id, confirmed: true })}
-                            disabled={confirmMutation.isPending}
-                            className="flex items-center gap-1 text-xs text-amber-600 hover:underline mt-1"
-                          >
-                            <UserCheck className="w-3 h-3" /> Confirm with client
-                          </button>
-                        )
                       )}
 
                       <div className="flex items-center gap-3 flex-wrap mt-1.5">
