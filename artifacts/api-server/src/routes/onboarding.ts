@@ -52,7 +52,9 @@ const CreateOnboardingSchema = z.object({
 // Creates a pending onboarding candidate - deliberately does NOT
 // create a real user account yet (see the schema comment on
 // operatorOnboardingTable for why). The account only gets created
-// once a Manager approves them via PATCH /onboarding/:id/status.
+// once a Manager grants operational access via
+// PATCH /onboarding/:id/operational-access (which itself requires
+// Approved status first - see that route).
 router.post("/onboarding", async (req, res): Promise<void> => {
   const parsed = CreateOnboardingSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
@@ -70,10 +72,11 @@ router.post("/onboarding", async (req, res): Promise<void> => {
 
 // Every operator's onboarding progress, most recently added first -
 // powers the Operator Onboarding overview page. Also auto-provisions
-// onboarding rows (defaulted to Approved) for any CPO user that
-// somehow has none yet - e.g. one created directly from the Users
-// page rather than through Add Operator, which already has a real
-// account so the Pending gate doesn't apply to them.
+// onboarding rows (defaulted to Approved + operational access already
+// granted) for any CPO user that somehow has none yet - e.g. one
+// created directly from the Users page rather than through Add
+// Operator, which already has a real, active account so neither gate
+// applies to them.
 router.get("/onboarding", async (_req, res): Promise<void> => {
   const cpos = await db.select().from(usersTable).where(eq(usersTable.role, "cpo"));
   let records = await db.select().from(operatorOnboardingTable);
@@ -83,7 +86,14 @@ router.get("/onboarding", async (_req, res): Promise<void> => {
   if (unlinked.length > 0) {
     const inserted = await db
       .insert(operatorOnboardingTable)
-      .values(unlinked.map((c) => ({ userId: c.id, candidateName: c.name, candidateEmail: c.email, checklist: {}, status: "onboarded" as const })))
+      .values(unlinked.map((c) => ({
+        userId: c.id,
+        candidateName: c.name,
+        candidateEmail: c.email,
+        checklist: {},
+        status: "onboarded" as const,
+        operationalAccessGrantedAt: new Date(),
+      })))
       .returning();
     records = [...records, ...inserted];
   }
@@ -155,14 +165,11 @@ const StatusUpdateSchema = z.object({
   status: z.enum(ONBOARDING_STATUSES),
 });
 
-// Manager-set decision. Approving a Pending candidate for the first
-// time creates their real operational account here - see the schema
-// comment on operatorOnboardingTable for why account creation is
-// gated on approval rather than immediate. Moving an already-approved
-// operator to Pending/Denied deactivates (not deletes) their account,
-// preserving their task/timesheet history while pulling them out of
-// Operator View, task assignment, etc. (all filtered on users.active
-// elsewhere) - re-approving reactivates the same account.
+// Manager-set decision - purely the vetting outcome, NOT what creates
+// or activates the account (see PATCH .../operational-access for
+// that). Denying is the one exception: it always cuts off access
+// immediately, revoking any operational access grant and deactivating
+// the account if one exists, regardless of how it got there.
 router.patch("/onboarding/:id/status", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -173,10 +180,53 @@ router.patch("/onboarding/:id/status", async (req, res): Promise<void> => {
   const [existing] = await db.select().from(operatorOnboardingTable).where(eq(operatorOnboardingTable.id, id));
   if (!existing) { res.status(404).json({ error: "Onboarding record not found" }); return; }
 
-  let userId = existing.userId;
-  const approving = parsed.data.status === "onboarded";
+  const denying = parsed.data.status === "denied";
+  if (denying && existing.userId != null) {
+    await db.update(usersTable).set({ active: false }).where(eq(usersTable.id, existing.userId));
+  }
 
-  if (approving && userId == null) {
+  const [updated] = await db
+    .update(operatorOnboardingTable)
+    .set({ status: parsed.data.status, operationalAccessGrantedAt: denying ? null : existing.operationalAccessGrantedAt })
+    .where(eq(operatorOnboardingTable.id, id))
+    .returning();
+
+  const userName = existing.userId != null
+    ? (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, existing.userId)))[0]?.name ?? null
+    : null;
+
+  res.json(formatOnboarding(updated, userName));
+});
+
+const OperationalAccessSchema = z.object({
+  granted: z.boolean(),
+});
+
+// This is the actual gate on being usable as a CPO - Operator View,
+// task assignment, etc. all read from the users table, so this is
+// where the real account gets created (on first grant) and
+// activated/deactivated (on every later toggle). Deliberately
+// separate from the Approved/Pending/Denied decision above: an
+// operator can be fully vetted and Approved but still have no real
+// access until a Manager takes this explicit second step.
+router.patch("/onboarding/:id/operational-access", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const parsed = OperationalAccessSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [existing] = await db.select().from(operatorOnboardingTable).where(eq(operatorOnboardingTable.id, id));
+  if (!existing) { res.status(404).json({ error: "Onboarding record not found" }); return; }
+
+  if (parsed.data.granted && existing.status !== "onboarded") {
+    res.status(400).json({ error: "Operator must be Approved before granting operational access" });
+    return;
+  }
+
+  let userId = existing.userId;
+
+  if (parsed.data.granted && userId == null) {
     const [dupe] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, existing.candidateEmail));
     if (dupe) { res.status(409).json({ error: `A user with email "${existing.candidateEmail}" already exists` }); return; }
 
@@ -187,48 +237,18 @@ router.patch("/onboarding/:id/status", async (req, res): Promise<void> => {
       .returning();
     userId = user.id;
   } else if (userId != null) {
-    await db.update(usersTable).set({ active: approving }).where(eq(usersTable.id, userId));
+    await db.update(usersTable).set({ active: parsed.data.granted }).where(eq(usersTable.id, userId));
   }
 
   const [updated] = await db
     .update(operatorOnboardingTable)
-    .set({ status: parsed.data.status, userId })
+    .set({ operationalAccessGrantedAt: parsed.data.granted ? new Date() : null, userId })
     .where(eq(operatorOnboardingTable.id, id))
     .returning();
 
   const userName = userId != null
     ? (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, userId)))[0]?.name ?? null
     : null;
-
-  res.json(formatOnboarding(updated, userName));
-});
-
-const OperationalAccessSchema = z.object({
-  granted: z.boolean(),
-});
-
-// Independent of status - see the schema comment on
-// operatorOnboardingTable. Doesn't touch the user account.
-router.patch("/onboarding/:id/operational-access", async (req, res): Promise<void> => {
-  const id = Number(req.params.id);
-  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-
-  const parsed = OperationalAccessSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-
-  const [updated] = await db
-    .update(operatorOnboardingTable)
-    .set({ operationalAccessGrantedAt: parsed.data.granted ? new Date() : null })
-    .where(eq(operatorOnboardingTable.id, id))
-    .returning();
-
-  if (!updated) { res.status(404).json({ error: "Onboarding record not found" }); return; }
-
-  let userName: string | null = null;
-  if (updated.userId != null) {
-    const [user] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, updated.userId));
-    userName = user?.name ?? null;
-  }
 
   res.json(formatOnboarding(updated, userName));
 });

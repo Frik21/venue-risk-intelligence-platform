@@ -51,12 +51,17 @@ function DocumentUploadForm({
   onboardingId,
   onAdded,
   operationalAccessGranted,
+  operationalAccessAvailable,
   onToggleOperationalAccess,
   togglingOperationalAccess,
 }: {
   onboardingId: number;
   onAdded: () => void;
   operationalAccessGranted: boolean;
+  // Granting is only allowed once the operator is Approved - the
+  // server enforces this too, this just disables the button early
+  // with an explanation instead of letting the request fail.
+  operationalAccessAvailable: boolean;
   onToggleOperationalAccess: () => void;
   togglingOperationalAccess: boolean;
 }) {
@@ -115,12 +120,15 @@ function DocumentUploadForm({
       <button
         type="button"
         onClick={onToggleOperationalAccess}
-        disabled={togglingOperationalAccess}
+        disabled={togglingOperationalAccess || (!operationalAccessGranted && !operationalAccessAvailable)}
+        title={!operationalAccessGranted && !operationalAccessAvailable ? "Approve this operator first" : undefined}
         className={cn(
           "h-8 px-3 flex items-center gap-1.5 rounded-md border text-xs font-medium",
           operationalAccessGranted
             ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
-            : "border-slate-200 hover:bg-slate-50",
+            : operationalAccessAvailable
+              ? "border-slate-200 hover:bg-slate-50"
+              : "border-slate-100 text-slate-300 cursor-not-allowed",
         )}
       >
         {operationalAccessGranted && <CheckCircle2 className="w-3.5 h-3.5" />}
@@ -249,8 +257,12 @@ function CpoOnboardingDetail({ onboardingId }: { onboardingId: number }) {
                 ))}
               </SelectContent>
             </Select>
-            {record?.userId == null && (
-              <p className="text-xs text-slate-400 mt-1.5">No CPO account exists yet - approving them creates one.</p>
+            {record?.operationalAccessGrantedAt == null && (
+              <p className="text-xs text-slate-400 mt-1.5">
+                {record?.status === "onboarded"
+                  ? "Approved, but no CPO account exists yet - use “Assign Operational Access” below to create one."
+                  : "No CPO account exists yet - approve them, then grant operational access to create one."}
+              </p>
             )}
           </>
         )}
@@ -325,6 +337,7 @@ function CpoOnboardingDetail({ onboardingId }: { onboardingId: number }) {
           onboardingId={onboardingId}
           onAdded={() => qc.invalidateQueries({ queryKey: ["onboarding-documents", onboardingId] })}
           operationalAccessGranted={record?.operationalAccessGrantedAt != null}
+          operationalAccessAvailable={record?.status === "onboarded"}
           onToggleOperationalAccess={() => record && operationalAccessMutation.mutate(record.operationalAccessGrantedAt == null)}
           togglingOperationalAccess={operationalAccessMutation.isPending || recordLoading}
         />
@@ -466,6 +479,11 @@ export default function OnboardingPage() {
                         <Badge variant="secondary" className={cn("text-[10px] uppercase", STATUS_CONFIG[r.status].color)}>
                           {STATUS_CONFIG[r.status].label}
                         </Badge>
+                        {r.operationalAccessGrantedAt != null && (
+                          <span className="flex items-center gap-1 text-[10px] font-medium uppercase text-green-600">
+                            <CheckCircle2 className="w-3 h-3" /> Access Granted
+                          </span>
+                        )}
                         <span className="text-xs text-slate-400">{r.documentCount} document{r.documentCount !== 1 ? "s" : ""}</span>
                       </div>
                       <div className="flex items-center gap-2">

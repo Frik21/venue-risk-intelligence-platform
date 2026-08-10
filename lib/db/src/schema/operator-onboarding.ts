@@ -6,21 +6,17 @@ import { usersTable } from "./users";
 // Operator Onboarding - one record per candidate/CPO, created the
 // moment a Manager adds an operator (POST /onboarding) - *before* any
 // real user account exists. candidateName/candidateEmail hold their
-// details until they're Approved; userId is only set once approved,
-// which is also the moment their real account gets created (see
-// PATCH /onboarding/:id/status in routes/onboarding.ts). This is
-// deliberate: an operator can't be assigned tasks, log in as a CPO,
-// etc. while Pending or Denied, because until Approved there's no
-// user account for any of that to point at. The checklist itself is a
+// details until an account gets created. The checklist itself is a
 // fixed, ordered list of items (see
 // artifacts/api-server/src/lib/onboarding-checklist.ts) - stored here
 // as a { [itemKey]: boolean } map rather than one row per item, same
 // reasoning as plans.ts: the list is defined in code, not
 // user-managed, so it can change without a data migration.
-// status is a Manager-set decision, deliberately not derived from
-// checklist completion - a fully-checked checklist doesn't
-// automatically mean "Approved" (the Manager still confirms it), and
-// "Denied" is a terminal decision the checklist alone can't express.
+// status is a Manager-set vetting decision, deliberately not derived
+// from checklist completion (a fully-checked checklist doesn't
+// automatically mean "Approved" - the Manager still confirms it) and
+// deliberately NOT what creates the account either - see
+// operationalAccessGrantedAt below, which is the real gate.
 export const operatorOnboardingTable = pgTable("operator_onboarding", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").unique().references(() => usersTable.id, { onDelete: "set null" }),
@@ -28,10 +24,13 @@ export const operatorOnboardingTable = pgTable("operator_onboarding", {
   candidateEmail: text("candidate_email").notNull().default(""),
   checklist: jsonb("checklist").notNull().default({}),
   status: text("status").notNull().default("in_progress"),
-  // Independent of status/account creation above - a Manager-set
-  // record of when operational access (credentials handed over,
-  // briefed, etc.) was actually given, toggled via the "Assign
-  // Operational Access" button. Doesn't touch the user account itself.
+  // The actual gate on being usable as a CPO (Operator View, task
+  // assignment, etc.) - userId only gets set and the account only
+  // gets created/activated once this is granted (requires Approved
+  // status first), and gets deactivated when it's revoked. Denial
+  // always forces this back to null - see PATCH
+  // /onboarding/:id/operational-access and PATCH
+  // /onboarding/:id/status in routes/onboarding.ts.
   operationalAccessGrantedAt: timestamp("operational_access_granted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
