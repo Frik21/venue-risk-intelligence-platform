@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
-import { Bell, CheckCheck, EyeOff, ArrowUpRight, X, Search, ClipboardList, Check } from "lucide-react";
+import { Bell, CheckCheck, EyeOff, ArrowUpRight, X, Search, ClipboardList } from "lucide-react";
 import { getPriorityColor, timeAgo } from "@/lib/display-utils";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -45,12 +45,14 @@ function TaskFlagsPanel() {
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  // Reviewed tasks fall away entirely rather than sticking around with
+  // a "Reviewed" badge - once you've dealt with a flag, it's off the
+  // list, per direct product direction.
   const flagged = tasks
     .filter((t) => !t.archived)
     .map((t) => ({ task: t, bucket: taskBucket(t) }))
-    .filter((x): x is { task: Task; bucket: TaskBucket } => FLAG_BUCKETS.includes(x.bucket));
-
-  const unreviewedCount = flagged.filter(({ task, bucket }) => task.alertReviewedBucket !== bucket).length;
+    .filter((x): x is { task: Task; bucket: TaskBucket } => FLAG_BUCKETS.includes(x.bucket))
+    .filter(({ task, bucket }) => task.alertReviewedBucket !== bucket);
 
   if (isLoading) return <Skeleton className="h-24" />;
   if (flagged.length === 0) return null;
@@ -60,11 +62,9 @@ function TaskFlagsPanel() {
       <CardHeader>
         <CardTitle className="text-base flex items-center gap-2">
           <ClipboardList className="w-4 h-4 text-slate-400" /> Task Flags
-          {unreviewedCount > 0 && (
-            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-amber-700 bg-amber-50 border-amber-200">
-              {unreviewedCount} need review
-            </span>
-          )}
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-amber-700 bg-amber-50 border-amber-200">
+            {flagged.length} need review
+          </span>
         </CardTitle>
         <p className="text-slate-500 text-xs mt-0.5">
           Tasks sitting in Pending Details, Pending Allocation, or newly Completed.
@@ -72,7 +72,6 @@ function TaskFlagsPanel() {
       </CardHeader>
       <CardContent className="space-y-2">
         {flagged.map(({ task, bucket }) => {
-          const reviewed = task.alertReviewedBucket === bucket;
           const bc = BUCKET_CONFIG[bucket];
           return (
             <div key={`${task.id}-${bucket}`} className="flex items-center gap-3 py-2 border-b border-slate-100 last:border-0">
@@ -84,22 +83,15 @@ function TaskFlagsPanel() {
                 <div className="font-medium text-slate-900 text-sm truncate">{task.title || "Untitled task"}</div>
                 {task.clientName && <p className="text-xs text-slate-500 truncate">Client: {task.clientName}</p>}
               </div>
-              {reviewed ? (
-                <div className="text-[11px] text-green-600 flex items-center gap-1 shrink-0">
-                  <Check className="w-3.5 h-3.5" />
-                  Reviewed{task.alertReviewedByName && ` by ${task.alertReviewedByName}`}{task.alertReviewedAt && ` · ${timeAgo(task.alertReviewedAt)}`}
-                </div>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-xs h-7 shrink-0"
-                  onClick={() => reviewMutation.mutate({ taskId: task.id, bucket })}
-                  disabled={reviewMutation.isPending}
-                >
-                  <CheckCheck className="w-3 h-3 mr-1" /> Mark as reviewed
-                </Button>
-              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs h-7 shrink-0"
+                onClick={() => reviewMutation.mutate({ taskId: task.id, bucket })}
+                disabled={reviewMutation.isPending}
+              >
+                <CheckCheck className="w-3 h-3 mr-1" /> Mark as reviewed
+              </Button>
             </div>
           );
         })}
