@@ -255,6 +255,7 @@ export default function TasksList() {
   const activeTasks = tasks.filter((t) => !t.archived);
   const bucketCounts: Record<TaskBucket, number> = {
     pending_details: activeTasks.filter((t) => taskBucket(t) === "pending_details").length,
+    quotation: activeTasks.filter((t) => taskBucket(t) === "quotation").length,
     pending_allocation: activeTasks.filter((t) => taskBucket(t) === "pending_allocation").length,
     running: activeTasks.filter((t) => taskBucket(t) === "running").length,
     completed: activeTasks.filter((t) => taskBucket(t) === "completed").length,
@@ -276,8 +277,8 @@ export default function TasksList() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
-        {(["pending_details", "pending_allocation", "running", "completed"] as const).map((b) => (
+      <div className="grid grid-cols-5 gap-4">
+        {(["pending_details", "quotation", "pending_allocation", "running", "completed"] as const).map((b) => (
           <button
             key={b}
             onClick={() => setBucketFilter((current) => (current === b ? null : b))}
