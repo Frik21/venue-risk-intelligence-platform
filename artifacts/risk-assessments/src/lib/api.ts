@@ -146,6 +146,59 @@ export interface Client {
   updatedAt: string;
 }
 
+export type QuoteStatus = "draft" | "sent" | "approved" | "rejected";
+export type QuoteMarkupType = "percent" | "fixed";
+export const QUOTE_COST_CATEGORIES = [
+  "cpo_rate", "overtime", "vehicles", "fuel_mileage", "accommodation",
+  "flights_travel", "equipment", "subcontractors", "allowances", "misc",
+] as const;
+export type QuoteCostCategory = (typeof QUOTE_COST_CATEGORIES)[number];
+
+// A formal sales quote - its own entity/lifecycle, separate from a
+// Task's lighter quotationStatus/quotationLineItems price gate (see
+// schema/quotes.ts on the backend for why). internalCost/markupAmount/
+// clientPrice/taxAmount/totalQuoteValue are all computed server-side on
+// every read, never stored.
+export interface Quote {
+  id: number;
+  quoteNumber: string;
+  title: string;
+  status: QuoteStatus;
+  validUntil: string | null;
+  clientId: number | null;
+  clientName: string;
+  clientContact: string;
+  billingDetails: string;
+  venueId: number | null;
+  venueName: string | null;
+  clientRequirements: string;
+  startDate: string | null;
+  endDate: string | null;
+  priority: TaskPriority;
+  operatorsRequired: number;
+  armedRequired: boolean;
+  vehiclesRequired: number;
+  additionalEquipment: string;
+  costLineItems: { category: QuoteCostCategory; description: string; amount: number }[];
+  markupType: QuoteMarkupType;
+  markupValue: number;
+  taxRatePercent: number;
+  currency: string;
+  assignedBy: number;
+  assignedByName: string | null;
+  proposedCpoIds: number[];
+  proposedCpoNames: string[];
+  sentAt: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  internalCost: number;
+  markupAmount: number;
+  clientPrice: number;
+  taxAmount: number;
+  totalQuoteValue: number;
+}
+
 // Operational Planning (Planner, Step 1: the pre-op readiness
 // checklist) - one Plan per Task, going deeper than the task's own
 // title. The checklist is a fixed, ordered list defined server-side
@@ -595,6 +648,30 @@ export const api = {
     update: (id: number, data: Partial<{ name: string; contact: string; dayRate: number | null; nightRate: number | null; notes: string }>) =>
       apiFetch<Client>(`/clients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     delete: (id: number) => apiFetch<void>(`/clients/${id}`, { method: "DELETE" }),
+  },
+  quotes: {
+    list: () => apiFetch<Quote[]>("/quotes"),
+    create: (data: Partial<{
+      title: string; status: QuoteStatus; validUntil: string | null;
+      clientId: number | null; clientName: string; clientContact: string; billingDetails: string;
+      venueId: number | null; clientRequirements: string; startDate: string | null; endDate: string | null;
+      priority: TaskPriority; operatorsRequired: number; armedRequired: boolean; vehiclesRequired: number;
+      additionalEquipment: string;
+      costLineItems: { category: QuoteCostCategory; description: string; amount: number }[];
+      markupType: QuoteMarkupType; markupValue: number; taxRatePercent: number; currency: string;
+      assignedBy: number; proposedCpoIds: number[];
+    }> & { assignedBy: number }) => apiFetch<Quote>("/quotes", { method: "POST", body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<{
+      title: string; status: QuoteStatus; validUntil: string | null;
+      clientId: number | null; clientName: string; clientContact: string; billingDetails: string;
+      venueId: number | null; clientRequirements: string; startDate: string | null; endDate: string | null;
+      priority: TaskPriority; operatorsRequired: number; armedRequired: boolean; vehiclesRequired: number;
+      additionalEquipment: string;
+      costLineItems: { category: QuoteCostCategory; description: string; amount: number }[];
+      markupType: QuoteMarkupType; markupValue: number; taxRatePercent: number; currency: string;
+      assignedBy: number; proposedCpoIds: number[];
+    }>) => apiFetch<Quote>(`/quotes/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    delete: (id: number) => apiFetch<void>(`/quotes/${id}`, { method: "DELETE" }),
   },
   plans: {
     forTask: (taskId: number) => apiFetch<Plan>(`/tasks/${taskId}/plan`),

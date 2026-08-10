@@ -1,6 +1,7 @@
 export * from "./users";
 export * from "./venues";
 export * from "./clients";
+export * from "./quotes";
 export * from "./assessments";
 export * from "./incidents";
 export * from "./evidence";

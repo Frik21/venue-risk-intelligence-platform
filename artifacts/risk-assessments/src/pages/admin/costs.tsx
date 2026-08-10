@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { api, type GlobalExpense, type PersonnelCostLine, type CompanySettings, type Task, type QuotationStatus, type ExpenseCategory, type Venue, type User } from "@/lib/api";
+import { api, type GlobalExpense, type PersonnelCostLine, type CompanySettings, type Task, type QuotationStatus, type ExpenseCategory, type Venue, type User, type Client, type Quote } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +12,16 @@ import { DollarSign, Wallet, CheckCircle2, Clock, XCircle, Users as UsersIcon, S
 import { formatDate } from "@/lib/display-utils";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { QuotationStatusPicker, NewTaskDialog } from "@/components/new-task-dialog";
+import { QuotationStatusPicker } from "@/components/new-task-dialog";
+import { QuoteDialog } from "@/components/quote-dialog";
 import { cn } from "@/lib/utils";
+
+const QUOTE_STATUS_CONFIG: Record<Quote["status"], { label: string; color: string }> = {
+  draft: { label: "Draft", color: "text-slate-600 bg-slate-100 border-slate-200" },
+  sent: { label: "Sent", color: "text-amber-700 bg-amber-50 border-amber-200" },
+  approved: { label: "Approved", color: "text-green-700 bg-green-50 border-green-200" },
+  rejected: { label: "Rejected", color: "text-red-700 bg-red-50 border-red-200" },
+};
 
 const CATEGORY_LABELS: Record<string, string> = {
   fuel: "Fuel", accommodation: "Accommodation", food: "Food", parking: "Parking",
@@ -487,13 +495,16 @@ function ExpenseDialog({ expense, tasks, onClose }: { expense: GlobalExpense | n
 export default function CostsPage() {
   const [showExpenseDialog, setShowExpenseDialog] = useState(false);
   const [editingExpense, setEditingExpense] = useState<GlobalExpense | null>(null);
-  const [showNewTask, setShowNewTask] = useState(false);
+  const [showQuoteDialog, setShowQuoteDialog] = useState(false);
+  const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
   const qc = useQueryClient();
   const { toast } = useToast();
 
   const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({ queryKey: ["tasks"], queryFn: () => api.tasks.list() });
   const { data: venues = [] } = useQuery<Venue[]>({ queryKey: ["venues"], queryFn: api.venues.list });
   const { data: users = [] } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list });
+  const { data: clients = [] } = useQuery<Client[]>({ queryKey: ["clients"], queryFn: api.clients.list });
+  const { data: quotes = [], isLoading: quotesLoading } = useQuery<Quote[]>({ queryKey: ["quotes"], queryFn: api.quotes.list });
   const { data: expenses = [], isLoading: expensesLoading } = useQuery<GlobalExpense[]>({
     queryKey: ["expenses-all"],
     queryFn: api.expenses.listAll,
@@ -509,6 +520,14 @@ export default function CostsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["expenses-all"] });
       toast({ title: "Expense removed" });
+    },
+  });
+
+  const deleteQuoteMutation = useMutation({
+    mutationFn: (id: number) => api.quotes.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["quotes"] });
+      toast({ title: "Quote removed" });
     },
   });
 
@@ -600,7 +619,8 @@ export default function CostsPage() {
 
   return (
     <div className="space-y-5">
-      {showNewTask && <NewTaskDialog venues={venues} users={users} onClose={() => setShowNewTask(false)} />}
+      {showQuoteDialog && <QuoteDialog quote={null} venues={venues} users={users} clients={clients} onClose={() => setShowQuoteDialog(false)} />}
+      {editingQuote && <QuoteDialog quote={editingQuote} venues={venues} users={users} clients={clients} onClose={() => setEditingQuote(null)} />}
       {showExpenseDialog && <ExpenseDialog expense={null} tasks={tasks} onClose={() => setShowExpenseDialog(false)} />}
       {editingExpense && <ExpenseDialog expense={editingExpense} tasks={tasks} onClose={() => setEditingExpense(null)} />}
 
@@ -616,7 +636,7 @@ export default function CostsPage() {
           <Button variant="outline" onClick={() => setShowExpenseDialog(true)}>
             <Plus className="w-4 h-4 mr-1.5" /> Add Expense
           </Button>
-          <Button onClick={() => setShowNewTask(true)}>
+          <Button onClick={() => setShowQuoteDialog(true)}>
             <Plus className="w-4 h-4 mr-1.5" /> Create Quote
           </Button>
         </div>
@@ -632,6 +652,68 @@ export default function CostsPage() {
           <StatTile icon={XCircle} label="Denied" byCurrency={quoteTotals.denied} tone="negative" />
         </div>
       )}
+
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-slate-400" /> Quotes
+            </h2>
+            <Button size="sm" className="h-7 text-xs" onClick={() => setShowQuoteDialog(true)}>
+              <Plus className="w-3 h-3 mr-1" /> Create Quote
+            </Button>
+          </div>
+          <p className="text-xs text-slate-400 mb-4">
+            Formal sales quotes - number, client, cost build-up, markup and VAT - separate from the per-task Quotation Workspace below.
+          </p>
+          {quotesLoading ? (
+            <Skeleton className="h-32" />
+          ) : quotes.length === 0 ? (
+            <p className="text-sm text-slate-400">No quotes yet.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-xs font-medium uppercase tracking-wide text-slate-500">
+                  <th className="text-left py-1.5">Quote</th>
+                  <th className="text-left py-1.5">Client</th>
+                  <th className="text-left py-1.5">Status</th>
+                  <th className="text-right py-1.5">Total</th>
+                  <th className="w-24"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {quotes.map((q) => (
+                  <tr key={q.id} className="group">
+                    <td className="py-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-slate-400 border border-slate-200 px-1.5 py-0.5 rounded">{q.quoteNumber}</span>
+                        <span className="font-medium text-slate-900">{q.title || "Untitled quote"}</span>
+                      </div>
+                    </td>
+                    <td className="py-2 text-slate-500">{q.clientName || "—"}</td>
+                    <td className="py-2">
+                      <span className={cn("text-xs font-medium border rounded-full px-2 py-0.5", QUOTE_STATUS_CONFIG[q.status].color)}>
+                        {QUOTE_STATUS_CONFIG[q.status].label}
+                      </span>
+                    </td>
+                    <td className="py-2 text-right font-mono tabular-nums text-slate-900">{formatMoney(q.totalQuoteValue, q.currency)}</td>
+                    <td className="py-2 text-right">
+                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100">
+                        <button type="button" onClick={() => setEditingQuote(q)} className="text-slate-400 hover:text-blue-600 p-1" aria-label="Edit quote">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button type="button" onClick={() => deleteQuoteMutation.mutate(q.id)} className="text-slate-400 hover:text-red-600 p-1" aria-label="Delete quote">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </CardContent>
+      </Card>
 
       <QuotationWorkspace tasks={tasks} isLoading={tasksLoading} />
 
