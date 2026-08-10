@@ -208,6 +208,8 @@ export default function TasksList() {
   const [showArchived, setShowArchived] = useState(false);
   const [expandedHoursTaskId, setExpandedHoursTaskId] = useState<number | null>(null);
   const [bucketFilter, setBucketFilter] = useState<TaskBucket | null>(null);
+  const [extendingTaskId, setExtendingTaskId] = useState<number | null>(null);
+  const [extendDate, setExtendDate] = useState("");
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -255,6 +257,24 @@ export default function TasksList() {
       qc.invalidateQueries({ queryKey: ["tasks"] });
       toast({ title: vars.archived ? "Task archived" : "Task restored" });
     },
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: (id: number) => api.tasks.update(id, { status: "completed" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      toast({ title: "Task marked completed" });
+    },
+  });
+
+  const extendMutation = useMutation({
+    mutationFn: ({ id, endDate }: { id: number; endDate: string }) => api.tasks.update(id, { endDate }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      toast({ title: "Service extended" });
+      setExtendingTaskId(null);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   // Bucket counts/filtering deliberately ignore archived tasks
@@ -375,6 +395,68 @@ export default function TasksList() {
                             value={task.quotationStatus}
                             onChange={(v) => quotationMutation.mutate({ id: task.id, quotationStatus: v })}
                           />
+                        </div>
+                      )}
+
+                      {taskBucket(task) === "running" && (
+                        <div className="mt-1.5">
+                          <div className="grid grid-cols-3 gap-2 max-w-sm">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-8 border-green-200 text-green-700 hover:bg-green-50"
+                              onClick={() => completeMutation.mutate(task.id)}
+                              disabled={completeMutation.isPending}
+                            >
+                              Mark Completed
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-8"
+                              onClick={() => {
+                                setExtendingTaskId(task.id);
+                                setExtendDate(task.endDate ? task.endDate.slice(0, 16) : "");
+                              }}
+                            >
+                              Extend Service
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-8 border-red-200 text-red-600 hover:bg-red-50"
+                              onClick={() => archiveMutation.mutate({ id: task.id, archived: true })}
+                              disabled={archiveMutation.isPending}
+                            >
+                              Cancel Task
+                            </Button>
+                          </div>
+                          {extendingTaskId === task.id && (
+                            <div className="flex items-center gap-2 mt-2 max-w-sm">
+                              <Input
+                                type="datetime-local"
+                                className="h-8 text-xs"
+                                value={extendDate}
+                                onChange={(e) => setExtendDate(e.target.value)}
+                              />
+                              <Button
+                                size="sm"
+                                className="h-8 text-xs shrink-0"
+                                onClick={() => extendMutation.mutate({ id: task.id, endDate: extendDate })}
+                                disabled={extendMutation.isPending || !extendDate}
+                              >
+                                Save
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 text-xs shrink-0"
+                                onClick={() => setExtendingTaskId(null)}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       )}
 
