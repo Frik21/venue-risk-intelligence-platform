@@ -1,6 +1,6 @@
 import { eq, and, ne, isNotNull } from "drizzle-orm";
-import { db, tasksTable, venuesTable, taskAssignmentsTable, venueSearchPhrasesTable, osintEventsTable } from "@workspace/db";
-import { fetchGdeltFindings, gdeltEventType } from "./gdelt";
+import { db, tasksTable, venuesTable, taskAssignmentsTable, venueSearchPhrasesTable, osintEventsTable, alertsTable } from "@workspace/db";
+import { fetchGdeltFindings, gdeltEventType, gdeltAlertPriority } from "./gdelt";
 import { logger } from "./logger";
 
 // Server-side mirror of the frontend's taskBucket() "running" case (see
@@ -34,12 +34,21 @@ export async function getRunningVenues(): Promise<{ venueId: number; venueName: 
 }
 
 // Runs a GDELT check for one venue using the current global phrase list
-// (see venueId comment on venueSearchPhrasesTable) and inserts any new
-// findings as pending OSINT events, deduped by sourceUrl against what's
-// already there for that venue - same insert shape the manual
-// per-venue check on GET /venues/:id/osint already used. Returns how
+// (see venueId comment on venueSearchPhrasesTable), deduped by
+// sourceUrl against what's already there for that venue. Returns how
 // many new events were added.
-export async function runGdeltCheckForVenue(venueId: number): Promise<number> {
+//
+// autoAlert distinguishes the two ways this runs:
+// - Manual/on-demand (a manager viewing GET /venues/:id/osint): stays
+//   "pending" so an analyst reviews and accepts it, per the existing
+//   OSINT workflow.
+// - The background monitor watching a Running task (see
+//   checkAllRunningVenues below): raises straight to the Alerts panel
+//   per direct product direction ("should the OSINT pick up any of the
+//   phrases on the task it is monitoring, it needs to show on the
+//   alerts panel") - a phrase match on an active engagement is
+//   time-sensitive enough not to wait on manual review.
+export async function runGdeltCheckForVenue(venueId: number, opts?: { autoAlert?: boolean }): Promise<number> {
   const phrases = await db.select({ phrase: venueSearchPhrasesTable.phrase }).from(venueSearchPhrasesTable);
   if (phrases.length === 0) return 0;
 
@@ -54,16 +63,33 @@ export async function runGdeltCheckForVenue(venueId: number): Promise<number> {
   const fresh = findings.filter((f) => !existingUrls.has(f.sourceUrl));
   if (fresh.length === 0) return 0;
 
-  await db.insert(osintEventsTable).values(
-    fresh.map((f) => ({
-      venueId,
-      eventType: gdeltEventType(f.severity),
-      summary: f.summary,
-      sourceName: f.sourceName,
-      sourceUrl: f.sourceUrl,
-      status: "pending" as const,
-    })),
-  );
+  const autoAlert = opts?.autoAlert ?? false;
+  const inserted = await db
+    .insert(osintEventsTable)
+    .values(
+      fresh.map((f) => ({
+        venueId,
+        eventType: gdeltEventType(f.severity),
+        summary: f.summary,
+        sourceName: f.sourceName,
+        sourceUrl: f.sourceUrl,
+        status: autoAlert ? ("accepted" as const) : ("pending" as const),
+      })),
+    )
+    .returning();
+
+  if (autoAlert) {
+    await db.insert(alertsTable).values(
+      inserted.map((row) => ({
+        venueId: row.venueId,
+        priority: gdeltAlertPriority(row.eventType),
+        title: `OSINT Alert: ${row.eventType.replace(/_/g, " ")}`,
+        summary: row.summary,
+        status: "pending" as const,
+      })),
+    );
+  }
+
   return fresh.length;
 }
 
@@ -76,9 +102,9 @@ async function checkAllRunningVenues() {
   logger.info({ count: venues.length }, "GDELT monitor: checking Running-task venues");
   for (const v of venues) {
     try {
-      const added = await runGdeltCheckForVenue(v.venueId);
+      const added = await runGdeltCheckForVenue(v.venueId, { autoAlert: true });
       if (added > 0) {
-        logger.info({ venueId: v.venueId, venueName: v.venueName, added }, "GDELT monitor: new findings");
+        logger.info({ venueId: v.venueId, venueName: v.venueName, added }, "GDELT monitor: new findings raised as alerts");
       }
     } catch (err) {
       logger.error({ err, venueId: v.venueId }, "GDELT monitor: check failed for venue");
