@@ -46,6 +46,7 @@ function formatTask(
     operatorsRequired: row.operatorsRequired,
     armedRequired: row.armedRequired,
     vehiclesRequired: row.vehiclesRequired,
+    quotationLineItems: row.quotationLineItems,
     estimatedCost: row.estimatedCost,
     estimatedCostCurrency: row.estimatedCostCurrency,
     // Whether this task's Operational Plan checklist has been submitted
@@ -239,6 +240,9 @@ const TaskUpdateSchema = z.object({
   vehiclesRequired: z.number().int().min(0).optional(),
   estimatedCost: z.number().min(0).nullable().optional(),
   estimatedCostCurrency: z.string().min(1).max(10).optional(),
+  // Manual quotation line items built on the Quotations page - see
+  // quotationLineItems in schema/tasks.ts.
+  quotationLineItems: z.array(z.object({ description: z.string().max(200), amount: z.number() })).optional(),
   // Marks the task reviewed on the Alerts page for its current bucket
   // (see alertReviewedBucket in schema/tasks.ts) - pass the bucket name
   // to mark reviewed, or null to clear it. alertReviewedBy is who did it.

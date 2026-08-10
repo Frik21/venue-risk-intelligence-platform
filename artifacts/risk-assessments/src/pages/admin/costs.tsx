@@ -8,9 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DollarSign, Wallet, Users as UsersIcon, Settings, Pencil, Car, FileText } from "lucide-react";
+import { DollarSign, Wallet, Users as UsersIcon, Settings, Pencil, Car, FileText, Plus, X, ChevronDown, ChevronUp } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { QuotationStatusPicker } from "@/components/new-task-dialog";
 
@@ -86,6 +86,102 @@ function OvertimeSettingsPanel({ settings }: { settings: CompanySettings }) {
   );
 }
 
+// The quotation-building engine itself - a manual, freeform list of
+// line items (description + amount) a Manager builds up to work out
+// the total, per direct product direction: "let's do it manually, we
+// will automate it later, now I just need the engine build first" (no
+// CPO-rate/vehicle/armed-premium lookups yet). Saving writes the line
+// items and syncs estimatedCost to their sum, so the summary Amount
+// field on the row above always reflects the built-up total. The two
+// PDF links render the exact same saved line items as a client-facing
+// quotation document (see lib/quotation-pdf.ts).
+function QuoteBuilder({ task }: { task: Task }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [items, setItems] = useState<{ description: string; amount: string }[]>(
+    task.quotationLineItems.length > 0
+      ? task.quotationLineItems.map((i) => ({ description: i.description, amount: String(i.amount) }))
+      : [{ description: "", amount: "" }],
+  );
+
+  const total = items.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      const cleaned = items
+        .filter((i) => i.description.trim() !== "" || i.amount.trim() !== "")
+        .map((i) => ({ description: i.description.trim(), amount: Number(i.amount) || 0 }));
+      return api.tasks.update(task.id, {
+        quotationLineItems: cleaned,
+        estimatedCost: cleaned.reduce((sum, i) => sum + i.amount, 0),
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      toast({ title: "Quote saved" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const updateItem = (idx: number, field: "description" | "amount", value: string) => {
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
+  };
+  const addItem = () => setItems((prev) => [...prev, { description: "", amount: "" }]);
+  const removeItem = (idx: number) => setItems((prev) => prev.filter((_, i) => i !== idx));
+
+  return (
+    <div className="mt-3 pl-3 border-l-2 border-slate-100 space-y-2">
+      {items.map((item, idx) => (
+        <div key={idx} className="flex items-center gap-2">
+          <Input
+            placeholder="Line item description"
+            className="h-8 text-xs flex-1"
+            value={item.description}
+            onChange={(e) => updateItem(idx, "description", e.target.value)}
+          />
+          <Input
+            type="number"
+            step="0.01"
+            placeholder="Amount"
+            className="h-8 w-28 text-xs"
+            value={item.amount}
+            onChange={(e) => updateItem(idx, "amount", e.target.value)}
+          />
+          <button
+            type="button"
+            onClick={() => removeItem(idx)}
+            className="text-slate-400 hover:text-red-600 shrink-0"
+            aria-label="Remove line item"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ))}
+
+      <div className="flex items-center justify-between pt-1">
+        <button type="button" onClick={addItem} className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+          <Plus className="w-3 h-3" /> Add Line Item
+        </button>
+        <span className="text-xs text-slate-500">
+          Total: <span className="font-semibold text-slate-900">{formatMoney(total, task.estimatedCostCurrency)}</span>
+        </span>
+      </div>
+
+      <div className="flex items-center gap-3 pt-1">
+        <Button size="sm" className="h-8 text-xs" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+          Save Quote
+        </Button>
+        <a href={`/api/tasks/${task.id}/quotation-pdf?preview=1`} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">
+          Preview PDF
+        </a>
+        <a href={`/api/tasks/${task.id}/quotation-pdf`} download className="text-xs text-blue-600 hover:underline">
+          Download PDF
+        </a>
+      </div>
+    </div>
+  );
+}
+
 // One task's row in the Quotation Workspace - the request details
 // (operators/armed/vehicles/requirements) came straight off that
 // task's intake form, shown here so working out a number and setting
@@ -96,6 +192,16 @@ function QuoteRow({ task }: { task: Task }) {
   const { toast } = useToast();
   const [amount, setAmount] = useState(task.estimatedCost != null ? String(task.estimatedCost) : "");
   const [currency, setCurrency] = useState(task.estimatedCostCurrency);
+  const [showBuilder, setShowBuilder] = useState(task.quotationLineItems.length > 0);
+
+  // The Quote Builder below can change estimatedCost out from under
+  // this row (it syncs the total on save) - re-sync the summary
+  // fields whenever the task's saved values change, since this
+  // component doesn't remount between saves.
+  useEffect(() => {
+    setAmount(task.estimatedCost != null ? String(task.estimatedCost) : "");
+    setCurrency(task.estimatedCostCurrency);
+  }, [task.estimatedCost, task.estimatedCostCurrency]);
 
   const quotationMutation = useMutation({
     mutationFn: (quotationStatus: QuotationStatus) => api.tasks.update(task.id, { quotationStatus }),
@@ -185,6 +291,16 @@ function QuoteRow({ task }: { task: Task }) {
       <div className="mt-2 max-w-sm">
         <QuotationStatusPicker value={task.quotationStatus} onChange={(v) => quotationMutation.mutate(v)} />
       </div>
+
+      <button
+        type="button"
+        onClick={() => setShowBuilder((s) => !s)}
+        className="flex items-center gap-1 text-xs text-blue-600 hover:underline mt-2"
+      >
+        {showBuilder ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        {showBuilder ? "Hide Quote Builder" : "Build Quote"}
+      </button>
+      {showBuilder && <QuoteBuilder task={task} />}
     </div>
   );
 }

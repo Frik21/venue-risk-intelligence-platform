@@ -2315,6 +2315,7 @@ function OperationalCanvas({
     vehiclesRequired: 0,
     estimatedCost: null,
     estimatedCostCurrency: "ZAR",
+    quotationLineItems: [],
     planSubmittedAt: null,
     alertReviewedBucket: null,
     alertReviewedAt: null,

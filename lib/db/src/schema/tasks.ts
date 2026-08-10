@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, boolean, real } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, boolean, real, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { venuesTable } from "./venues";
@@ -69,6 +69,13 @@ export const tasksTable = pgTable("tasks", {
   vehiclesRequired: integer("vehicles_required").notNull().default(0),
   estimatedCost: real("estimated_cost"),
   estimatedCostCurrency: text("estimated_cost_currency").notNull().default("ZAR"),
+  // Manual line items (description + amount) a Manager builds up on the
+  // Quotations page's Quotation Workspace to work out estimatedCost -
+  // per direct product direction: "let's do it manually, we will
+  // automate it later, now I just need the engine build first". Feeds
+  // the client-facing quotation PDF (see lib/quotation-pdf.ts); doesn't
+  // look up CPO rates or vehicle/armed pricing yet.
+  quotationLineItems: jsonb("quotation_line_items").notNull().default([]).$type<{ description: string; amount: number }[]>(),
   // Task-lifecycle flagging on the Alerts page (Pending Details / Pending
   // Allocation / Completed - see lib/task-bucket.ts on the frontend),
   // separate from the OSINT/GDELT-driven alertsTable. Scoped to a bucket

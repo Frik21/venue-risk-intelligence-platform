@@ -101,6 +101,10 @@ export interface Task {
   vehiclesRequired: number;
   estimatedCost: number | null;
   estimatedCostCurrency: string;
+  // Manual line items a Manager builds up on the Quotations page to
+  // work out estimatedCost - feeds the client-facing quotation PDF
+  // (GET /tasks/:id/quotation-pdf). No rate lookups yet.
+  quotationLineItems: { description: string; amount: number }[];
   planSubmittedAt: string | null;
   // Task-lifecycle flagging on the Alerts page - see alertReviewedBucket
   // in lib/db/src/schema/tasks.ts. alertReviewedBucket is the bucket name
@@ -555,6 +559,7 @@ export const api = {
       clientName: string; clientContact: string; clientRequirements: string;
       operatorsRequired: number; armedRequired: boolean; vehiclesRequired: number;
       estimatedCost: number | null; estimatedCostCurrency: string;
+      quotationLineItems: { description: string; amount: number }[];
       alertReviewedBucket: string | null; alertReviewedBy: number | null;
     }>) => apiFetch<Task>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     duplicate: (id: number) => apiFetch<Task>(`/tasks/${id}/duplicate`, { method: "POST" }),
