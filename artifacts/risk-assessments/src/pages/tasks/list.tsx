@@ -12,7 +12,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
-import { ListChecks, Plus, ClipboardCheck, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, Search, Shield } from "lucide-react";
+import { ListChecks, Plus, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, Search, Shield } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -509,28 +509,20 @@ export default function TasksList() {
                         )}
                       </div>
 
-                      {task.planSubmittedAt ? (
-                        <p className="text-xs text-green-600 flex items-center gap-1 mt-1.5">
-                          <ClipboardCheck className="w-3 h-3" />
-                          Plan submitted {new Date(task.planSubmittedAt).toLocaleString()}
-                        </p>
-                      ) : (
-                        <p className="text-xs text-slate-400 flex items-center gap-1 mt-1.5">
-                          <ClipboardCheck className="w-3 h-3" />
-                          Plan not submitted yet
-                        </p>
-                      )}
-
-                      <button
-                        onClick={() => setExpandedHoursTaskId((id) => (id === task.id ? null : task.id))}
-                        className="flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1.5"
-                      >
-                        <Clock className="w-3 h-3" />
-                        Hours logged
-                        {expandedHoursTaskId === task.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                      </button>
-                      {expandedHoursTaskId === task.id && (
-                        <TaskHoursPanel taskId={task.id} currentManagerId={currentManagerId} />
+                      {task.status === "completed" && (
+                        <>
+                          <button
+                            onClick={() => setExpandedHoursTaskId((id) => (id === task.id ? null : task.id))}
+                            className="flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1.5"
+                          >
+                            <Clock className="w-3 h-3" />
+                            Hours logged
+                            {expandedHoursTaskId === task.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          </button>
+                          {expandedHoursTaskId === task.id && (
+                            <TaskHoursPanel taskId={task.id} currentManagerId={currentManagerId} />
+                          )}
+                        </>
                       )}
                     </div>
                     <DropdownMenu>
