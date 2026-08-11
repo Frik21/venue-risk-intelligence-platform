@@ -19,6 +19,7 @@ import {
   Radio,
   Briefcase,
   Store,
+  MessageSquare,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -39,6 +40,7 @@ const navGroups = [
       { href: "/admin", label: "Dashboard", icon: Gauge },
       { href: "/admin/calendar", label: "Calendar", icon: CalendarDays },
       { href: "/tasks", label: "Tasks", icon: ListChecks },
+      { href: "/admin/communications", label: "Communications", icon: MessageSquare },
       { href: "/admin/clients", label: "Clients", icon: Briefcase },
       { href: "/admin/costs", label: "Quotations", icon: DollarSign },
       { href: "/admin/cpo-deployment", label: "Operator Deployment", icon: UserCog },
