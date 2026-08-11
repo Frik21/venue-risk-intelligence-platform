@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type ErrorRequestHandler } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
@@ -42,5 +42,19 @@ app.use(express.static(frontendPath));
 app.get("/{*splat}", (_req, res) => {
   res.sendFile(path.join(frontendPath, "index.html"));
 });
+
+// Catches anything thrown/rejected in a route (Express 5 auto-forwards
+// async errors here) - logs the real error server-side but only ever
+// sends a generic message to the browser. Without this, Express's
+// default handler dumps the raw error (which for a DB error can
+// include the failed query, column names, and literal parameter
+// values like client names/phone numbers) straight into the response
+// body.
+const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
+  if (res.headersSent) { next(err); return; }
+  req.log.error({ err }, "Unhandled error");
+  res.status(500).json({ error: "Internal server error" });
+};
+app.use(errorHandler);
 
 export default app;

@@ -7,7 +7,17 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `HTTP ${res.status}`);
+    let message = text || `HTTP ${res.status}`;
+    // Error responses are JSON ({ error: "..." }) from both zod
+    // validation (400s) and the server's catch-all handler (500s) -
+    // pull out just the message rather than showing the raw body.
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed.error === "string") message = parsed.error;
+    } catch {
+      // Not JSON - fall back to the raw text as-is.
+    }
+    throw new Error(message);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
