@@ -1,11 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { api, type Client, type Task } from "@/lib/api";
+import { api, type Client, type ClientStatus, type Task } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -19,13 +19,30 @@ function formatMoney(amount: number, currency: string) {
   return `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
 }
 
-function ClientDialog({ client, onClose }: { client: Client | null; onClose: () => void }) {
+export const CLIENT_STATUS_CONFIG: Record<ClientStatus, { label: string; color: string }> = {
+  lead: { label: "Lead", color: "text-amber-700 bg-amber-50 border-amber-200" },
+  active: { label: "Active", color: "text-blue-700 bg-blue-50 border-blue-200" },
+  vip: { label: "VIP", color: "text-purple-700 bg-purple-50 border-purple-200" },
+  inactive: { label: "Inactive", color: "text-slate-600 bg-slate-100 border-slate-200" },
+};
+
+// CRM-style profile fields per direct product direction - a
+// structured primary contact person plus status/industry, rather
+// than one freeform "contact" string. Notes live on the client's
+// detail page now as a dated activity log (client_activities), not
+// here - a brand new client just doesn't have any log entries yet.
+export function ClientDialog({ client, onClose }: { client: Client | null; onClose: () => void }) {
   const [form, setForm] = useState({
     name: client?.name ?? "",
-    contact: client?.contact ?? "",
+    status: (client?.status ?? "active") as ClientStatus,
+    industry: client?.industry ?? "",
+    primaryContactName: client?.primaryContactName ?? "",
+    primaryContactRole: client?.primaryContactRole ?? "",
+    email: client?.email ?? "",
+    phone: client?.phone ?? "",
+    address: client?.address ?? "",
     dayRate: client?.dayRate != null ? String(client.dayRate) : "",
     nightRate: client?.nightRate != null ? String(client.nightRate) : "",
-    notes: client?.notes ?? "",
   });
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -34,10 +51,15 @@ function ClientDialog({ client, onClose }: { client: Client | null; onClose: () 
     mutationFn: () => {
       const data = {
         name: form.name,
-        contact: form.contact,
+        status: form.status,
+        industry: form.industry,
+        primaryContactName: form.primaryContactName,
+        primaryContactRole: form.primaryContactRole,
+        email: form.email,
+        phone: form.phone,
+        address: form.address,
         dayRate: form.dayRate.trim() === "" ? null : Number(form.dayRate),
         nightRate: form.nightRate.trim() === "" ? null : Number(form.nightRate),
-        notes: form.notes,
       };
       return client ? api.clients.update(client.id, data) : api.clients.create(data);
     },
@@ -56,15 +78,55 @@ function ClientDialog({ client, onClose }: { client: Client | null; onClose: () 
     <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md my-8 p-6 space-y-4">
         <h2 className="text-lg font-bold">{client ? "Edit Client" : "Add Client"}</h2>
-        <div>
-          <Label>Client Name *</Label>
-          <Input placeholder="e.g. Acme Events" value={form.name} onChange={(e) => set("name", e.target.value)} />
-        </div>
-        <div>
-          <Label>Contact</Label>
-          <Input placeholder="Phone / email" value={form.contact} onChange={(e) => set("contact", e.target.value)} />
-        </div>
         <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <Label>Client / Organization Name *</Label>
+            <Input placeholder="e.g. Acme Events" value={form.name} onChange={(e) => set("name", e.target.value)} />
+          </div>
+          <div>
+            <Label>Status</Label>
+            <Select value={form.status} onValueChange={(v) => set("status", v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {(Object.keys(CLIENT_STATUS_CONFIG) as ClientStatus[]).map((s) => (
+                  <SelectItem key={s} value={s}>{CLIENT_STATUS_CONFIG[s].label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Industry</Label>
+            <Input placeholder="e.g. Corporate Events" value={form.industry} onChange={(e) => set("industry", e.target.value)} />
+          </div>
+        </div>
+
+        <div className="pt-2 border-t border-slate-100">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Primary Contact</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Contact Name</Label>
+              <Input value={form.primaryContactName} onChange={(e) => set("primaryContactName", e.target.value)} />
+            </div>
+            <div>
+              <Label>Role</Label>
+              <Input placeholder="e.g. Event Manager" value={form.primaryContactRole} onChange={(e) => set("primaryContactRole", e.target.value)} />
+            </div>
+            <div>
+              <Label>Email</Label>
+              <Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
+            </div>
+            <div>
+              <Label>Phone</Label>
+              <Input value={form.phone} onChange={(e) => set("phone", e.target.value)} />
+            </div>
+            <div className="col-span-2">
+              <Label>Address</Label>
+              <Input value={form.address} onChange={(e) => set("address", e.target.value)} />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
           <div>
             <Label>Day Rate</Label>
             <Input type="number" min={0} step="0.01" value={form.dayRate} onChange={(e) => set("dayRate", e.target.value)} />
@@ -74,10 +136,7 @@ function ClientDialog({ client, onClose }: { client: Client | null; onClose: () 
             <Input type="number" min={0} step="0.01" value={form.nightRate} onChange={(e) => set("nightRate", e.target.value)} />
           </div>
         </div>
-        <div>
-          <Label>Notes</Label>
-          <Textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} />
-        </div>
+
         <div className="flex gap-3 pt-2">
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !canSubmit}>
             {mutation.isPending ? "Saving..." : client ? "Save Changes" : "Add Client"}
@@ -104,17 +163,20 @@ function CurrencyStack({ byCurrency }: { byCurrency: Record<string, number> }) {
   );
 }
 
-// Clients - the organizations/people requesting CPO services, kept
-// separate from the freeform clientName/clientContact still typed on
-// each task (see clientId in lib/db/src/schema/tasks.ts), since quotes
-// and daily rates differ from client to client, per direct product
-// direction. A task can still be created for a one-off client with no
-// record here at all - the picker on the task form is optional.
+// Clients - a CRM-style record of the organizations/people requesting
+// CPO services, per direct product direction. Kept separate from the
+// freeform clientName/clientContact still typed on each task (see
+// clientId in lib/db/src/schema/tasks.ts), since quotes and daily
+// rates differ from client to client. A task can still be created for
+// a one-off client with no record here at all - the picker on the
+// task form is optional.
 //
 // Ledger-table layout rather than a card grid - per direct product
 // direction ("user friendly but also like an accounting page") - with
 // each client's quoted/approved totals rolled up from their linked
-// tasks, and a totals row across the whole book.
+// tasks, and a totals row across the whole book. Clicking a client's
+// name opens their full CRM detail page (profile, linked Tasks/
+// Quotes, activity log).
 export default function ClientsPage() {
   const [showDialog, setShowDialog] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -192,7 +254,8 @@ export default function ClientsPage() {
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500">
                   <th className="text-left px-4 py-2.5">Client</th>
-                  <th className="text-left px-4 py-2.5">Contact</th>
+                  <th className="text-left px-4 py-2.5">Status</th>
+                  <th className="text-left px-4 py-2.5">Primary Contact</th>
                   <th className="text-right px-4 py-2.5">Day Rate</th>
                   <th className="text-right px-4 py-2.5">Night Rate</th>
                   <th className="text-right px-4 py-2.5">Tasks</th>
@@ -204,10 +267,18 @@ export default function ClientsPage() {
               <tbody className="divide-y divide-slate-100">
                 {clients.map((client) => {
                   const { quoted, approved, count } = rollup(tasksByClient.get(client.id) ?? []);
+                  const sc = CLIENT_STATUS_CONFIG[client.status];
                   return (
                     <tr key={client.id} className="hover:bg-slate-50/60">
-                      <td className="px-4 py-2.5 font-medium text-slate-900">{client.name}</td>
-                      <td className="px-4 py-2.5 text-slate-500">{client.contact || "—"}</td>
+                      <td className="px-4 py-2.5 font-medium text-slate-900">
+                        <Link href={`/admin/clients/${client.id}`} className="hover:underline hover:text-blue-600">{client.name}</Link>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase", sc.color)}>{sc.label}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-500">
+                        {client.primaryContactName || client.email || client.phone || "—"}
+                      </td>
                       <td className="px-4 py-2.5 text-right font-mono tabular-nums text-slate-600">
                         {client.dayRate != null ? client.dayRate.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "—"}
                       </td>
@@ -244,7 +315,7 @@ export default function ClientsPage() {
               </tbody>
               <tfoot>
                 <tr className={cn("border-t-2 border-slate-300 font-semibold text-slate-900")}>
-                  <td className="px-4 py-2.5" colSpan={4}>Book Total</td>
+                  <td className="px-4 py-2.5" colSpan={5}>Book Total</td>
                   <td className="px-4 py-2.5 text-right font-mono tabular-nums">{tasksByClient.size > 0 ? [...tasksByClient.values()].reduce((s, t) => s + t.length, 0) : 0}</td>
                   <td className="px-4 py-2.5 text-right"><CurrencyStack byCurrency={bookTotalQuoted} /></td>
                   <td className="px-4 py-2.5 text-right text-green-700"><CurrencyStack byCurrency={bookTotalApproved} /></td>

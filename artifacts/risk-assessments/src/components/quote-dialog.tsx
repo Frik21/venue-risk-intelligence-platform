@@ -195,7 +195,7 @@ export function QuoteDialog({
                   ...f,
                   clientId: c?.id ?? null,
                   clientName: c ? c.name : f.clientName,
-                  clientContact: c ? c.contact : f.clientContact,
+                  clientContact: c ? (c.email || c.phone) : f.clientContact,
                 }))
               }
             />

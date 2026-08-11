@@ -145,15 +145,33 @@ export interface Office {
   updatedAt: string;
 }
 
+export type ClientStatus = "lead" | "active" | "inactive" | "vip";
+
 export interface Client {
   id: number;
   name: string;
-  contact: string;
+  status: ClientStatus;
+  industry: string;
+  primaryContactName: string;
+  primaryContactRole: string;
+  email: string;
+  phone: string;
+  address: string;
   dayRate: number | null;
   nightRate: number | null;
-  notes: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// A dated activity/communication log entry against a Client - see
+// clientActivitiesTable in schema/client-activities.ts.
+export interface ClientActivity {
+  id: number;
+  clientId: number;
+  note: string;
+  createdBy: number | null;
+  createdByName: string | null;
+  createdAt: string;
 }
 
 export type QuoteStatus = "draft" | "sent" | "approved" | "rejected";
@@ -652,11 +670,25 @@ export const api = {
   },
   clients: {
     list: () => apiFetch<Client[]>("/clients"),
-    create: (data: { name: string; contact?: string; dayRate?: number | null; nightRate?: number | null; notes?: string }) =>
-      apiFetch<Client>("/clients", { method: "POST", body: JSON.stringify(data) }),
-    update: (id: number, data: Partial<{ name: string; contact: string; dayRate: number | null; nightRate: number | null; notes: string }>) =>
-      apiFetch<Client>(`/clients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    create: (data: {
+      name: string; status?: ClientStatus; industry?: string;
+      primaryContactName?: string; primaryContactRole?: string;
+      email?: string; phone?: string; address?: string;
+      dayRate?: number | null; nightRate?: number | null;
+    }) => apiFetch<Client>("/clients", { method: "POST", body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<{
+      name: string; status: ClientStatus; industry: string;
+      primaryContactName: string; primaryContactRole: string;
+      email: string; phone: string; address: string;
+      dayRate: number | null; nightRate: number | null;
+    }>) => apiFetch<Client>(`/clients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     delete: (id: number) => apiFetch<void>(`/clients/${id}`, { method: "DELETE" }),
+  },
+  clientActivities: {
+    list: (clientId: number) => apiFetch<ClientActivity[]>(`/clients/${clientId}/activities`),
+    create: (clientId: number, data: { note: string; createdBy?: number | null }) =>
+      apiFetch<ClientActivity>(`/clients/${clientId}/activities`, { method: "POST", body: JSON.stringify(data) }),
+    delete: (clientId: number, id: number) => apiFetch<void>(`/clients/${clientId}/activities/${id}`, { method: "DELETE" }),
   },
   quotes: {
     list: () => apiFetch<Quote[]>("/quotes"),

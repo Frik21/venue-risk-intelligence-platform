@@ -11,13 +11,25 @@ import { z } from "zod/v4";
 // by the quote engine yet (that's manual line items for now, see
 // quotationLineItems in schema/tasks.ts), just recorded here ready
 // for when that's automated.
+//
+// CRM-style profile per direct product direction: a structured
+// primary contact person + status/industry, rather than the single
+// freeform "contact" string this started as. The freeform notes field
+// is gone too - replaced by client_activities, a running dated log
+// (see client-activities.ts), which is the standard CRM shape and
+// gives the client's detail page real content over time.
 export const clientsTable = pgTable("clients", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  contact: text("contact").notNull().default(""),
+  status: text("status").notNull().default("active"), // lead | active | inactive | vip
+  industry: text("industry").notNull().default(""),
+  primaryContactName: text("primary_contact_name").notNull().default(""),
+  primaryContactRole: text("primary_contact_role").notNull().default(""),
+  email: text("email").notNull().default(""),
+  phone: text("phone").notNull().default(""),
+  address: text("address").notNull().default(""),
   dayRate: real("day_rate"),
   nightRate: real("night_rate"),
-  notes: text("notes").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
