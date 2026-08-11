@@ -18,6 +18,7 @@ import {
   Bell,
   Radio,
   Briefcase,
+  Store,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -43,6 +44,7 @@ const navGroups = [
       { href: "/admin/cpo-deployment", label: "Operator Deployment", icon: UserCog },
       { href: "/admin/onboarding", label: "Operator Onboarding", icon: UserPlus },
       { href: "/osint", label: "OSINT", icon: Radio },
+      { href: "/admin/vendors", label: "Vendors", icon: Store },
       { href: "/admin/task-archive", label: "Task Archived", icon: Archive },
       { href: "/admin/offices", label: "Offices", icon: Building2 },
       { href: "/admin/users", label: "Users", icon: Users },
