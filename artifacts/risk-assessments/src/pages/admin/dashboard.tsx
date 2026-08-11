@@ -4,7 +4,6 @@ import { api, type Task, type User, type Office, type Venue } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NewTaskDialog } from "@/components/new-task-dialog";
 import {
   ClipboardPlus,
@@ -17,8 +16,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { formatDate } from "@/lib/display-utils";
-import { useToast } from "@/hooks/use-toast";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
 
 const PRIORITY_COLORS: Record<string, string> = {
   low: "text-slate-600 bg-slate-100 border-slate-200",
@@ -70,8 +67,6 @@ function SectionCard({
 // the dispatching Manager's.
 export default function AdminDashboard() {
   const [showNewTask, setShowNewTask] = useState(false);
-  const qc = useQueryClient();
-  const { toast } = useToast();
 
   const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({
     queryKey: ["tasks"],
@@ -80,15 +75,6 @@ export default function AdminDashboard() {
   const { data: users = [], isLoading: usersLoading } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list });
   const { data: venues = [] } = useQuery<Venue[]>({ queryKey: ["venues"], queryFn: api.venues.list });
   const { data: offices = [], isLoading: officesLoading } = useQuery<Office[]>({ queryKey: ["offices"], queryFn: api.offices.list });
-
-  const addAssigneeMutation = useMutation({
-    mutationFn: ({ task, cpoId }: { task: Task; cpoId: number }) =>
-      api.tasks.update(task.id, { assigneeIds: [...task.assignedToIds, cpoId] }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tasks"] });
-      toast({ title: "CPO assigned" });
-    },
-  });
 
   const cpos = users.filter((u) => u.role === "cpo");
   const managers = users.filter((u) => u.role === "manager" || u.role === "admin");
@@ -135,7 +121,6 @@ export default function AdminDashboard() {
           <div className="space-y-3">
             {openTasks.slice(0, 8).map((task) => {
               const understaffed = task.assignedToIds.length < task.operatorsRequired;
-              const availableToAdd = cpos.filter((u) => !task.assignedToIds.includes(u.id));
               return (
                 <div key={task.id} className="flex items-start justify-between gap-3 text-sm border-b border-slate-100 last:border-0 pb-3 last:pb-0">
                   <div className="min-w-0 flex-1">
@@ -156,14 +141,6 @@ export default function AdminDashboard() {
                         {task.assignedToNames.length > 0 ? task.assignedToNames.join(", ") : "Unassigned"}
                         {` (${task.assignedToIds.length}/${task.operatorsRequired})`}
                       </span>
-                      {understaffed && availableToAdd.length > 0 && (
-                        <Select onValueChange={(v) => addAssigneeMutation.mutate({ task, cpoId: Number(v) })}>
-                          <SelectTrigger className="h-6 text-xs w-36"><SelectValue placeholder="+ Add CPO..." /></SelectTrigger>
-                          <SelectContent>
-                            {availableToAdd.map((u) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      )}
                     </div>
                   </div>
                 </div>
