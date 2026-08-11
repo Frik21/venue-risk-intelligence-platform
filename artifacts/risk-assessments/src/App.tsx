@@ -33,6 +33,7 @@ import TaskArchive from "@/pages/admin/task-archive";
 import VendorsPage from "@/pages/admin/vendors";
 import CommunicationsPage from "@/pages/admin/communications";
 import CpoDeployment from "@/pages/admin/cpo-deployment";
+import InvoicesPage from "@/pages/admin/invoices";
 import SchedulePage from "@/pages/admin/schedule";
 import CalendarPage from "@/pages/admin/calendar";
 import CostsPage from "@/pages/admin/costs";
@@ -89,6 +90,7 @@ function Router() {
         <Route path="/admin/audit-log" component={AuditLogPage} />
         <Route path="/admin/vendors" component={VendorsPage} />
         <Route path="/admin/task-archive" component={TaskArchive} />
+        <Route path="/admin/invoices" component={InvoicesPage} />
         <Route path="/admin/cpo-deployment" component={CpoDeployment} />
         <Route path="/admin/schedule" component={SchedulePage} />
         <Route path="/admin/calendar" component={CalendarPage} />
