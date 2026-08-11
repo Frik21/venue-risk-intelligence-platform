@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Task, type TaskStatus, type TaskPriority, type QuotationStatus, type Venue, type User, type Client, type TimesheetEntry } from "@/lib/api";
+import { api, type Task, type TaskStatus, type TaskPriority, type Venue, type User, type Client, type TimesheetEntry } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -248,29 +248,10 @@ export default function TasksList() {
   });
   const { data: venues = [] } = useQuery<Venue[]>({ queryKey: ["venues"], queryFn: api.venues.list });
   const { data: users = [] } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list });
-  const cpos = users.filter((u) => u.role === "cpo");
   // No real login/session in this app - same "default to the first
   // manager/admin found" convention used elsewhere (e.g. Profile
   // resolution on the CPO side).
   const currentManagerId = users.find((u) => u.role === "manager" || u.role === "admin")?.id;
-
-  const addAssigneeMutation = useMutation({
-    mutationFn: ({ task, cpoId }: { task: Task; cpoId: number }) =>
-      api.tasks.update(task.id, { assigneeIds: [...task.assignedToIds, cpoId] }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tasks"] });
-      toast({ title: "CPO assigned" });
-    },
-  });
-
-  const quotationMutation = useMutation({
-    mutationFn: ({ id, quotationStatus }: { id: number; quotationStatus: QuotationStatus }) =>
-      api.tasks.update(id, { quotationStatus }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tasks"] });
-      toast({ title: "Quotation status updated" });
-    },
-  });
 
   const duplicateMutation = useMutation({
     mutationFn: (id: number) => api.tasks.duplicate(id),
@@ -416,7 +397,6 @@ export default function TasksList() {
             const pc = PRIORITY_CONFIG[task.priority];
             const bc = BUCKET_CONFIG[taskBucket(task)];
             const understaffed = task.assignedToIds.length < task.operatorsRequired;
-            const availableToAdd = cpos.filter((u) => !task.assignedToIds.includes(u.id));
             return (
               <Card key={task.id} className={cn(task.archived && "opacity-60")}>
                 <CardContent className="p-4">
@@ -440,15 +420,6 @@ export default function TasksList() {
                       <div className="font-semibold text-slate-900 text-sm mb-0.5">{task.title}</div>
                       {task.clientName && (
                         <p className="text-xs text-slate-500">Client: {task.clientName}{task.clientContact && ` (${task.clientContact})`}</p>
-                      )}
-
-                      {taskBucket(task) === "quotation" && (
-                        <div className="mt-1.5 max-w-sm">
-                          <QuotationStatusPicker
-                            value={task.quotationStatus}
-                            onChange={(v) => quotationMutation.mutate({ id: task.id, quotationStatus: v })}
-                          />
-                        </div>
                       )}
 
                       {taskBucket(task) === "running" && (
@@ -537,17 +508,6 @@ export default function TasksList() {
                           </div>
                         )}
                       </div>
-
-                      {understaffed && availableToAdd.length > 0 && (
-                        <div className="mt-1.5">
-                          <Select onValueChange={(v) => addAssigneeMutation.mutate({ task, cpoId: Number(v) })}>
-                            <SelectTrigger className="h-6 text-xs w-44"><SelectValue placeholder="+ Add a CPO..." /></SelectTrigger>
-                            <SelectContent>
-                              {availableToAdd.map((u) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
 
                       {task.planSubmittedAt ? (
                         <p className="text-xs text-green-600 flex items-center gap-1 mt-1.5">
