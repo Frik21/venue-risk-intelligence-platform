@@ -37,6 +37,19 @@ Report on completion:
 
 Never merge directly into main unless explicitly instructed.
 
+# Session Continuity
+
+If this session is starting fresh - no memory of prior conversation in this repo (e.g. a brand new session, or context that was compacted/summarized) - say so explicitly to the user before doing anything else. Don't silently improvise commands or workflows from guesswork.
+
+The command to visually check the site (build + serve, single command, run by the user in their own terminal after a `git pull` of the working branch):
+
+```
+git pull origin <branch>
+pnpm run serve
+```
+
+Always give this exact command for visual verification - don't substitute `pnpm run dev`, `pnpm run dev:all`, or a manually-assembled scratch-DB/Playwright setup unless the user explicitly asks for something different.
+
 # Notes & Follow-ups
 
 - **City/town database ceiling**: the search bar's city data (`city-registry.ts`) comes from Natural Earth's populated-places dataset, capped at 7,342 places worldwide - real cities and towns, but not exhaustive (e.g. Stellenbosch isn't in it). Come back to this later if we want a genuinely bigger database - likely means switching to a much larger source (e.g. GeoNames) and probably a real search backend instead of a static file shipped to the browser, since that kind of dataset is much bigger than what fits in a static array.
