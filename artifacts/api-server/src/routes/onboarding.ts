@@ -8,6 +8,35 @@ const router: IRouter = Router();
 const DOCUMENT_TYPE_VALUES = DOCUMENT_TYPES.map((t) => t.value) as [string, ...string[]];
 const ONBOARDING_STATUSES = ["in_progress", "onboarded", "denied"] as const;
 
+// A mutually-exclusive group (see group on OnboardingChecklistItem)
+// only counts as a single item toward completion - checking any one
+// member of the group satisfies it, rather than requiring every item
+// in it (which would be impossible once they're mutually exclusive).
+function computeProgress(checklist: { key: string; checked: boolean }[]) {
+  const groupChecked: Record<string, boolean> = {};
+  const countedGroups = new Set<string>();
+  let checkedCount = 0;
+  let totalCount = 0;
+
+  for (const item of checklist) {
+    const group = ONBOARDING_CHECKLIST_ITEMS.find((i) => i.key === item.key)?.group;
+    if (group) {
+      groupChecked[group] = (groupChecked[group] ?? false) || item.checked;
+      if (!countedGroups.has(group)) {
+        countedGroups.add(group);
+        totalCount += 1;
+      }
+    } else {
+      totalCount += 1;
+      if (item.checked) checkedCount += 1;
+    }
+  }
+  for (const checked of Object.values(groupChecked)) {
+    if (checked) checkedCount += 1;
+  }
+  return { checkedCount, totalCount };
+}
+
 function formatOnboarding(row: typeof operatorOnboardingTable.$inferSelect, userName?: string | null) {
   const stored = (row.checklist as Record<string, boolean>) ?? {};
   const checklist = ONBOARDING_CHECKLIST_ITEMS.map((item) => ({
@@ -15,14 +44,15 @@ function formatOnboarding(row: typeof operatorOnboardingTable.$inferSelect, user
     label: item.label,
     checked: stored[item.key] === true,
   }));
+  const { checkedCount, totalCount } = computeProgress(checklist);
   return {
     id: row.id,
     userId: row.userId,
     userName: userName ?? row.candidateName,
     status: row.status as (typeof ONBOARDING_STATUSES)[number],
     checklist,
-    checkedCount: checklist.filter((c) => c.checked).length,
-    totalCount: checklist.length,
+    checkedCount,
+    totalCount,
     operationalAccessGrantedAt: row.operationalAccessGrantedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -142,7 +172,8 @@ router.patch("/onboarding/:id/checklist", async (req, res): Promise<void> => {
   const parsed = ChecklistUpdateSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  if (!ONBOARDING_CHECKLIST_ITEMS.some((item) => item.key === parsed.data.key)) {
+  const itemDef = ONBOARDING_CHECKLIST_ITEMS.find((item) => item.key === parsed.data.key);
+  if (!itemDef) {
     res.status(400).json({ error: `Unknown checklist item "${parsed.data.key}"` });
     return;
   }
@@ -151,6 +182,13 @@ router.patch("/onboarding/:id/checklist", async (req, res): Promise<void> => {
   if (!existing) { res.status(404).json({ error: "Onboarding record not found" }); return; }
 
   const nextChecklist = { ...(existing.checklist as Record<string, boolean>), [parsed.data.key]: parsed.data.checked };
+  // Mutually-exclusive group (Freelancer vs Long term contract) -
+  // checking one clears the rest of its group.
+  if (parsed.data.checked && itemDef.group) {
+    for (const other of ONBOARDING_CHECKLIST_ITEMS) {
+      if (other.group === itemDef.group && other.key !== itemDef.key) nextChecklist[other.key] = false;
+    }
+  }
 
   const [updated] = await db
     .update(operatorOnboardingTable)

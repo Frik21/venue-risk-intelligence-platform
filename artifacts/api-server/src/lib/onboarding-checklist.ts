@@ -7,6 +7,13 @@
 export interface OnboardingChecklistItem {
   key: string;
   label: string;
+  // Items sharing a group are mutually exclusive (an operator is a
+  // Freelancer or on a Long term contract, not both) - checking one
+  // clears the rest of its group (see the PATCH .../checklist route),
+  // and the whole group counts as a single item toward completion
+  // (any one of them checked satisfies it, not every item in it - see
+  // computeProgress in routes/onboarding.ts).
+  group?: string;
 }
 
 export const ONBOARDING_CHECKLIST_ITEMS: OnboardingChecklistItem[] = [
@@ -16,8 +23,8 @@ export const ONBOARDING_CHECKLIST_ITEMS: OnboardingChecklistItem[] = [
   { key: "background_check", label: "Background check completed" },
   { key: "references_checked", label: "References checked" },
   { key: "contract_signed", label: "Contract signed" },
-  { key: "freelancer", label: "Freelancer" },
-  { key: "long_term_contract", label: "Long term contract" },
+  { key: "freelancer", label: "Freelancer", group: "engagement_type" },
+  { key: "long_term_contract", label: "Long term contract", group: "engagement_type" },
   { key: "equipment_issued", label: "Equipment issued" },
   { key: "training_complete", label: "Training complete" },
   { key: "ready_for_deployment", label: "Ready for deployment" },
