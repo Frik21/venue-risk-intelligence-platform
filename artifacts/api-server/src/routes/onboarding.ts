@@ -112,7 +112,12 @@ router.get("/onboarding", async (_req, res): Promise<void> => {
   let records = await db.select().from(operatorOnboardingTable);
 
   const linkedUserIds = new Set(records.map((r) => r.userId).filter((id): id is number => id != null));
-  const unlinked = cpos.filter((c) => !linkedUserIds.has(c.id));
+  // Only auto-provisions active CPOs - a removed operator (DELETE
+  // /onboarding/:id deactivates their linked account, see below) must
+  // stay gone rather than being silently recreated here on the very
+  // next load just because their (now-inactive) user row still has
+  // role "cpo" and no onboarding row of its own.
+  const unlinked = cpos.filter((c) => c.active && !linkedUserIds.has(c.id));
   if (unlinked.length > 0) {
     const inserted = await db
       .insert(operatorOnboardingTable)
@@ -289,6 +294,28 @@ router.patch("/onboarding/:id/operational-access", async (req, res): Promise<voi
     : null;
 
   res.json(formatOnboarding(updated, userName));
+});
+
+// Fully removes the candidate/operator - their documents cascade-delete
+// with them (see onDelete: "cascade" on operator_documents' FK). If a
+// real CPO account was already created for them (operational access
+// was granted at some point), that account is deactivated rather than
+// deleted outright - deleting it could break FK references from their
+// existing task assignments/timesheet history elsewhere, the same
+// reason denying an operator (PATCH .../status) only deactivates too.
+router.delete("/onboarding/:id", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [existing] = await db.select().from(operatorOnboardingTable).where(eq(operatorOnboardingTable.id, id));
+  if (!existing) { res.status(404).json({ error: "Onboarding record not found" }); return; }
+
+  if (existing.userId != null) {
+    await db.update(usersTable).set({ active: false }).where(eq(usersTable.id, existing.userId));
+  }
+  await db.delete(operatorOnboardingTable).where(eq(operatorOnboardingTable.id, id));
+
+  res.sendStatus(204);
 });
 
 router.get("/onboarding/:id/documents", async (req, res): Promise<void> => {

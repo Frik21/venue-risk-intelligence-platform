@@ -7,6 +7,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useRef, useState } from "react";
@@ -75,6 +86,8 @@ function DocumentUploadForm({
   operationalAccessAvailable,
   onToggleOperationalAccess,
   togglingOperationalAccess,
+  onRemove,
+  removing,
 }: {
   onboardingId: number;
   onAdded: () => void;
@@ -93,6 +106,8 @@ function DocumentUploadForm({
   operationalAccessAvailable: boolean;
   onToggleOperationalAccess: () => void;
   togglingOperationalAccess: boolean;
+  onRemove: () => void;
+  removing: boolean;
 }) {
   const [documentType, setDocumentType] = useState<DocumentType>("id_document");
   const [expiryDate, setExpiryDate] = useState("");
@@ -177,6 +192,27 @@ function DocumentUploadForm({
         {operationalAccessGranted && <CheckCircle2 className="w-3.5 h-3.5" />}
         {togglingOperationalAccess ? "Updating..." : operationalAccessGranted ? "Operational Access Granted" : "Assign Operational Access"}
       </button>
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <button
+            type="button"
+            disabled={removing}
+            className="h-8 px-3 flex items-center gap-1.5 rounded-md border border-red-200 text-red-600 text-xs font-medium hover:bg-red-50 disabled:opacity-50"
+          >
+            {removing ? "Removing..." : "Remove"}
+          </button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove operator</AlertDialogTitle>
+            <AlertDialogDescription>This will remove the operator from the database.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>No</AlertDialogCancel>
+            <AlertDialogAction onClick={onRemove}>Yes</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -229,7 +265,7 @@ function AddOperatorDialog({ onClose, onCreated }: { onClose: () => void; onCrea
   );
 }
 
-function CpoOnboardingDetail({ onboardingId }: { onboardingId: number }) {
+function CpoOnboardingDetail({ onboardingId, onRemoved }: { onboardingId: number; onRemoved: () => void }) {
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -282,6 +318,17 @@ function CpoOnboardingDetail({ onboardingId }: { onboardingId: number }) {
       qc.invalidateQueries({ queryKey: ["onboarding-documents", onboardingId] });
       toast({ title: "Document removed" });
     },
+  });
+
+  const removeOperatorMutation = useMutation({
+    mutationFn: () => api.onboarding.remove(onboardingId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["onboarding-overview"] });
+      qc.removeQueries({ queryKey: ["onboarding", onboardingId] });
+      toast({ title: "Operator removed" });
+      onRemoved();
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   return (
@@ -386,6 +433,8 @@ function CpoOnboardingDetail({ onboardingId }: { onboardingId: number }) {
           operationalAccessAvailable={record?.status === "onboarded"}
           onToggleOperationalAccess={() => record && operationalAccessMutation.mutate(record.operationalAccessGrantedAt == null)}
           togglingOperationalAccess={operationalAccessMutation.isPending || recordLoading}
+          onRemove={() => removeOperatorMutation.mutate()}
+          removing={removeOperatorMutation.isPending}
         />
       </div>
     </div>
@@ -500,7 +549,9 @@ export default function OnboardingPage() {
               {expandedOnboardingId === r.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
           </div>
-          {expandedOnboardingId === r.id && <CpoOnboardingDetail onboardingId={r.id} />}
+          {expandedOnboardingId === r.id && (
+            <CpoOnboardingDetail onboardingId={r.id} onRemoved={() => setExpandedOnboardingId(null)} />
+          )}
         </CardContent>
       </Card>
     );

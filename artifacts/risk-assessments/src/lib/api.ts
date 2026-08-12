@@ -792,6 +792,7 @@ export const api = {
     updateDocument: (id: number, data: Partial<{ label: string; expiryDate: string; verified: boolean }>) =>
       apiFetch<OnboardingDocument>(`/onboarding-documents/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     deleteDocument: (id: number) => apiFetch<void>(`/onboarding-documents/${id}`, { method: "DELETE" }),
+    remove: (onboardingId: number) => apiFetch<void>(`/onboarding/${onboardingId}`, { method: "DELETE" }),
   },
   expenses: {
     list: (taskId: number) => apiFetch<Expense[]>(`/tasks/${taskId}/expenses`),
