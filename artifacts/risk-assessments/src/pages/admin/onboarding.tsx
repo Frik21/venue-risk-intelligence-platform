@@ -222,7 +222,7 @@ function DocumentUploadForm({
 // Manager approves them (see CpoOnboardingDetail's statusMutation),
 // so a Pending/Denied operator can't be assigned tasks or show up in
 // Operator View until they're actually approved.
-function AddOperatorDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (onboardingId: number) => void }) {
+function AddOperatorDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const qc = useQueryClient();
@@ -230,13 +230,10 @@ function AddOperatorDialog({ onClose, onCreated }: { onClose: () => void; onCrea
 
   const mutation = useMutation({
     mutationFn: () => api.onboarding.create({ name, email }),
-    onSuccess: async (record) => {
-      // Wait for the overview list to include the new operator before
-      // handing off to onCreated, which expands their row - otherwise
-      // there's nothing to expand yet.
+    onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["onboarding-overview"] });
       toast({ title: "Operator added" });
-      onCreated(record.id);
+      onCreated();
       onClose();
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -447,7 +444,12 @@ function CpoOnboardingDetail({ onboardingId, onRemoved }: { onboardingId: number
 // server-defined list (same pattern as the Operational Plan
 // checklist), not user-configurable.
 export default function OnboardingPage() {
-  const [expandedOnboardingId, setExpandedOnboardingId] = useState<number | null>(null);
+  // Keyed by `${column}-${id}`, matching cardRefs below, rather than
+  // bare id - an unassigned operator (neither engagement checklist
+  // item checked) renders a card in both the Freelancers and Long
+  // Term Contract columns at once, and a bare-id key would expand
+  // both cards together whenever either one was clicked.
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [statusFilter, setStatusFilter] = useState<OnboardingStatus | null>(null);
   // Freelancers and Long Term Contract are each their own searchable
@@ -459,11 +461,8 @@ export default function OnboardingPage() {
   // a unit, per direct product direction - defaults open since that's
   // the existing always-visible behavior.
   const [columnsExpanded, setColumnsExpanded] = useState(true);
-  // Keyed by `${column}-${id}` rather than just id - an unassigned
-  // operator (neither engagement checklist item checked) renders in
-  // both the Freelancers and Long Term Contract columns at once, so a
-  // plain id key would have one column's node silently overwrite the
-  // other's on every render.
+  // Keyed by `${column}-${id}` rather than just id - same reasoning as
+  // expandedKey above.
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const { data: records = [], isLoading } = useQuery<OnboardingOverviewRecord[]>({
@@ -471,15 +470,12 @@ export default function OnboardingPage() {
     queryFn: api.onboarding.listAll,
   });
 
-  // Scroll a freshly-added operator's row into view once it's expanded,
-  // so creating them flows straight into their onboarding checklist.
-  // Try both column keys since which one(s) the operator rendered in
-  // depends on their (still-empty, for a new operator) engagement type.
+  // Scroll a manually-expanded card into view (e.g. after "Manage" on
+  // a row further down the list).
   useEffect(() => {
-    if (expandedOnboardingId == null) return;
-    const el = cardRefs.current[`freelancer-${expandedOnboardingId}`] ?? cardRefs.current[`longterm-${expandedOnboardingId}`];
-    el?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [expandedOnboardingId, records]);
+    if (expandedKey == null) return;
+    cardRefs.current[expandedKey]?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [expandedKey]);
 
   const counts = {
     onboarded: records.filter((r) => r.status === "onboarded").length,
@@ -546,15 +542,18 @@ export default function OnboardingPage() {
               </div>
             </div>
             <button
-              onClick={() => setExpandedOnboardingId((id) => (id === r.id ? null : r.id))}
+              onClick={() => {
+                const key = `${columnKey}-${r.id}`;
+                setExpandedKey((current) => (current === key ? null : key));
+              }}
               className="flex items-center gap-1 text-xs text-blue-600 hover:underline shrink-0"
             >
-              {expandedOnboardingId === r.id ? "Hide" : "Manage"}
-              {expandedOnboardingId === r.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              {expandedKey === `${columnKey}-${r.id}` ? "Hide" : "Manage"}
+              {expandedKey === `${columnKey}-${r.id}` ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
           </div>
-          {expandedOnboardingId === r.id && (
-            <CpoOnboardingDetail onboardingId={r.id} onRemoved={() => setExpandedOnboardingId(null)} />
+          {expandedKey === `${columnKey}-${r.id}` && (
+            <CpoOnboardingDetail onboardingId={r.id} onRemoved={() => setExpandedKey(null)} />
           )}
         </CardContent>
       </Card>
@@ -566,11 +565,14 @@ export default function OnboardingPage() {
       {showAdd && (
         <AddOperatorDialog
           onClose={() => setShowAdd(false)}
-          onCreated={(onboardingId) => {
+          onCreated={() => {
             // Clear any active status filter so the new (Pending)
-            // operator is guaranteed to be visible when we expand them.
+            // operator is guaranteed to be visible in the list -
+            // deliberately not auto-expanded/scrolled to, per direct
+            // product direction: it should just appear in the list
+            // like any other operator, opened only on an explicit
+            // "Manage" click.
             setStatusFilter(null);
-            setExpandedOnboardingId(onboardingId);
           }}
         />
       )}
