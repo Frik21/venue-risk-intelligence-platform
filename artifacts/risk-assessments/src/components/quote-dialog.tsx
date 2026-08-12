@@ -148,6 +148,10 @@ export function QuoteDialog({
       setQuoteNumber(q.quoteNumber);
       setStatus(q.status);
       qc.invalidateQueries({ queryKey: ["quotes"] });
+      // Approving moves the linked task's quotationStatus server-side
+      // too (see PATCH /quotes/:id) - refetch tasks so the Tasks
+      // list's Pending Allocation bucket picks it up immediately.
+      if (q.status === "approved") qc.invalidateQueries({ queryKey: ["tasks"] });
       toast({
         title: q.status === "sent" ? "Quote sent" : q.status === "approved" ? "Quote approved" : q.status === "rejected" ? "Quote rejected" : "Draft saved",
       });

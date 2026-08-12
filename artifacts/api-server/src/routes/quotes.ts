@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
-import { db, quotesTable, venuesTable, usersTable } from "@workspace/db";
+import { db, quotesTable, venuesTable, usersTable, tasksTable } from "@workspace/db";
 import { z } from "zod";
 import { buildQuotePdf } from "../lib/quote-pdf";
 
@@ -205,6 +205,17 @@ router.patch("/quotes/:id", async (req, res): Promise<void> => {
     })
     .where(eq(quotesTable.id, id))
     .returning();
+
+  // Approving the Quote is what actually moves its linked Task out of
+  // the "Quotation" bucket and into "Pending Allocation" (see
+  // taskBucket() in task-bucket.ts, which reads task.quotationStatus -
+  // a separate field from this Quote's own status, per direct product
+  // direction: quote approval is the trigger, not merely creating/
+  // saving one). Only fires on this explicit transition, not on every
+  // edit of an already-approved quote.
+  if (status === "approved" && quote.taskId != null) {
+    await db.update(tasksTable).set({ quotationStatus: "approved" }).where(eq(tasksTable.id, quote.taskId));
+  }
 
   const ctx = await loadContext(quote);
   res.json(formatQuote(quote, ctx.venueName, ctx.assignedByName));
