@@ -41,14 +41,15 @@ Never merge directly into main unless explicitly instructed.
 
 If this session is starting fresh - no memory of prior conversation in this repo (e.g. a brand new session, or context that was compacted/summarized) - say so explicitly to the user before doing anything else. Don't silently improvise commands or workflows from guesswork.
 
-The command to visually check the site (build + serve, single command, run by the user in their own terminal after a `git pull` of the working branch):
+The command to visually check the site (build + serve, single command, run by the user in their own terminal after a `git pull` of the working branch). `serve` is a root workspace script - it only exists at the repo root, not inside `artifacts/api-server` or `artifacts/risk-assessments`, so the `cd` to repo root is not optional:
 
 ```
+cd /workspaces/venue-risk-intelligence-platform
 git pull origin <branch>
 pnpm run serve
 ```
 
-Always give this exact command for visual verification - don't substitute `pnpm run dev`, `pnpm run dev:all`, or a manually-assembled scratch-DB/Playwright setup unless the user explicitly asks for something different.
+Always give this exact command, with the repo-root `cd` included every time regardless of what directory the user's prompt shows them in - for visual verification. Don't substitute `pnpm run dev`, `pnpm run dev:all`, or a manually-assembled scratch-DB/Playwright setup unless the user explicitly asks for something different.
 
 # Notes & Follow-ups
 
