@@ -455,6 +455,10 @@ export default function OnboardingPage() {
   // page-level search box, per direct product direction.
   const [freelancerSearch, setFreelancerSearch] = useState("");
   const [longTermSearch, setLongTermSearch] = useState("");
+  // Collapses/expands the two Freelance/Long Term Contract columns as
+  // a unit, per direct product direction - defaults open since that's
+  // the existing always-visible behavior.
+  const [columnsExpanded, setColumnsExpanded] = useState(true);
   // Keyed by `${column}-${id}` rather than just id - an unassigned
   // operator (neither engagement checklist item checked) renders in
   // both the Freelancers and Long Term Contract columns at once, so a
@@ -627,6 +631,16 @@ export default function OnboardingPage() {
           </CardContent>
         </Card>
       ) : (
+        <div>
+          <button
+            type="button"
+            onClick={() => setColumnsExpanded((v) => !v)}
+            className="flex items-center gap-1.5 text-sm font-semibold text-slate-700 hover:text-slate-900 mb-3"
+          >
+            Operator Database
+            {columnsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+          {columnsExpanded && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div>
             <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2.5">Freelance Database</h2>
@@ -670,6 +684,8 @@ export default function OnboardingPage() {
               )}
             </div>
           </div>
+        </div>
+          )}
         </div>
       )}
     </div>
