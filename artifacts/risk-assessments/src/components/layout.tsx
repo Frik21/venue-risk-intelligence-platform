@@ -21,6 +21,7 @@ import {
   Store,
   MessageSquare,
   Receipt,
+  Wallet,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -47,6 +48,7 @@ const navGroups = [
       { href: "/admin/invoices", label: "Invoices", icon: Receipt },
       { href: "/admin/cpo-deployment", label: "Operator Deployment", icon: UserCog },
       { href: "/admin/onboarding", label: "Operator Database", icon: UserPlus },
+      { href: "/admin/payroll", label: "Payroll", icon: Wallet },
       { href: "/osint", label: "OSINT", icon: Radio },
       { href: "/admin/vendors", label: "Vendors", icon: Store },
       { href: "/admin/task-archive", label: "Task Archived", icon: Archive },

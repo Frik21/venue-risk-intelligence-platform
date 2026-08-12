@@ -58,3 +58,4 @@ Always give this exact command, with the repo-root `cd` included every time rega
 - **"Vendors" placeholder**: new sidebar item (`/admin/vendors`, above Task Archived) per direct product direction - left empty for now, scope not yet defined. No schema/backend yet either.
 - **"Communications" placeholder**: new sidebar item (`/admin/communications`, above Clients) per direct product direction - left empty for now, scope not yet defined. No schema/backend yet either.
 - **"Invoices" placeholder**: new sidebar item (`/admin/invoices`, above Operator Deployment) per direct product direction - left empty for now, scope not yet defined. No schema/backend yet either.
+- **"Payroll" placeholder**: new sidebar item (`/admin/payroll`, above OSINT) per direct product direction - left empty for now, scope not yet defined. No schema/backend yet either.
