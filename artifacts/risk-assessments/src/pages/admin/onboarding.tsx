@@ -68,6 +68,9 @@ function isExpiringSoon(expiryDate: string | null): boolean {
 function DocumentUploadForm({
   onboardingId,
   onAdded,
+  isOnboarded,
+  onOnboard,
+  onboarding,
   operationalAccessGranted,
   operationalAccessAvailable,
   onToggleOperationalAccess,
@@ -75,6 +78,14 @@ function DocumentUploadForm({
 }: {
   onboardingId: number;
   onAdded: () => void;
+  // A one-click shortcut to Approve (status: "onboarded") right here
+  // in the document workflow, instead of scrolling back up to the
+  // Status dropdown - same status change, just handier once documents
+  // are in and the operator's ready to move to Assign Operational
+  // Access next to it.
+  isOnboarded: boolean;
+  onOnboard: () => void;
+  onboarding: boolean;
   operationalAccessGranted: boolean;
   // Granting is only allowed once the operator is Approved - the
   // server enforces this too, this just disables the button early
@@ -135,6 +146,20 @@ function DocumentUploadForm({
         {uploading || mutation.isPending ? "Uploading..." : "Choose File"}
         <input type="file" className="hidden" onChange={handleFile} disabled={uploading || mutation.isPending} />
       </label>
+      <button
+        type="button"
+        onClick={onOnboard}
+        disabled={isOnboarded || onboarding}
+        className={cn(
+          "h-8 px-3 flex items-center gap-1.5 rounded-md border text-xs font-medium",
+          isOnboarded
+            ? "border-green-200 bg-green-50 text-green-700 cursor-not-allowed"
+            : "border-slate-200 hover:bg-slate-50",
+        )}
+      >
+        {isOnboarded && <CheckCircle2 className="w-3.5 h-3.5" />}
+        {onboarding ? "Onboarding..." : isOnboarded ? "Onboarded" : "Onboard"}
+      </button>
       <button
         type="button"
         onClick={onToggleOperationalAccess}
@@ -354,6 +379,9 @@ function CpoOnboardingDetail({ onboardingId }: { onboardingId: number }) {
         <DocumentUploadForm
           onboardingId={onboardingId}
           onAdded={() => qc.invalidateQueries({ queryKey: ["onboarding-documents", onboardingId] })}
+          isOnboarded={record?.status === "onboarded"}
+          onOnboard={() => statusMutation.mutate("onboarded")}
+          onboarding={statusMutation.isPending}
           operationalAccessGranted={record?.operationalAccessGrantedAt != null}
           operationalAccessAvailable={record?.status === "onboarded"}
           onToggleOperationalAccess={() => record && operationalAccessMutation.mutate(record.operationalAccessGrantedAt == null)}
