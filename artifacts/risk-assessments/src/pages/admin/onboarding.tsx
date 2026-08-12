@@ -402,7 +402,12 @@ export default function OnboardingPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [statusFilter, setStatusFilter] = useState<OnboardingStatus | null>(null);
   const [search, setSearch] = useState("");
-  const cardRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  // Keyed by `${column}-${id}` rather than just id - an unassigned
+  // operator (neither engagement checklist item checked) renders in
+  // both the Freelancers and Long Term Contract columns at once, so a
+  // plain id key would have one column's node silently overwrite the
+  // other's on every render.
+  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const { data: records = [], isLoading } = useQuery<OnboardingOverviewRecord[]>({
     queryKey: ["onboarding-overview"],
@@ -411,8 +416,12 @@ export default function OnboardingPage() {
 
   // Scroll a freshly-added operator's row into view once it's expanded,
   // so creating them flows straight into their onboarding checklist.
+  // Try both column keys since which one(s) the operator rendered in
+  // depends on their (still-empty, for a new operator) engagement type.
   useEffect(() => {
-    if (expandedOnboardingId != null) cardRefs.current[expandedOnboardingId]?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (expandedOnboardingId == null) return;
+    const el = cardRefs.current[`freelancer-${expandedOnboardingId}`] ?? cardRefs.current[`longterm-${expandedOnboardingId}`];
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [expandedOnboardingId, records]);
 
   const counts = {
@@ -427,6 +436,67 @@ export default function OnboardingPage() {
     if (query && !r.userName?.toLowerCase().includes(query)) return false;
     return true;
   });
+
+  // Two columns by engagement type, per direct product direction. An
+  // operator who hasn't had either "engagement_type" checklist item
+  // checked yet appears in BOTH columns (rather than a third
+  // "Unassigned" column or being hidden) so nobody drops out of view
+  // while their onboarding is still in progress; the two items are
+  // mutually exclusive (see onboarding-checklist.ts) so an assigned
+  // operator can only ever land in exactly one column.
+  const engagementOf = (r: OnboardingOverviewRecord) => ({
+    isFreelancer: r.checklist.find((c) => c.key === "freelancer")?.checked ?? false,
+    isLongTermContract: r.checklist.find((c) => c.key === "long_term_contract")?.checked ?? false,
+  });
+  const freelancerColumnRecords = visibleRecords.filter((r) => {
+    const { isFreelancer, isLongTermContract } = engagementOf(r);
+    return isFreelancer || (!isFreelancer && !isLongTermContract);
+  });
+  const longTermColumnRecords = visibleRecords.filter((r) => {
+    const { isFreelancer, isLongTermContract } = engagementOf(r);
+    return isLongTermContract || (!isFreelancer && !isLongTermContract);
+  });
+
+  function renderOperatorCard(r: OnboardingOverviewRecord, columnKey: string) {
+    const pct = r.totalCount === 0 ? 0 : Math.round((r.checkedCount / r.totalCount) * 100);
+    const { isFreelancer, isLongTermContract } = engagementOf(r);
+    return (
+      <Card key={`${columnKey}-${r.id}`} ref={(el) => { cardRefs.current[`${columnKey}-${r.id}`] = el; }}>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                <span className="font-semibold text-slate-900 text-sm">{r.userName}</span>
+                <Badge variant="secondary" className={cn("text-[10px] uppercase", STATUS_CONFIG[r.status].color)}>
+                  {STATUS_CONFIG[r.status].label}
+                </Badge>
+                {r.operationalAccessGrantedAt != null && (
+                  <span className="flex items-center gap-1 text-[10px] font-medium uppercase text-green-600">
+                    <CheckCircle2 className="w-3 h-3" /> Access Granted
+                  </span>
+                )}
+                <span className="text-xs text-slate-400">{r.documentCount} document{r.documentCount !== 1 ? "s" : ""}</span>
+                <EngagementBadge label="Freelancer" checked={isFreelancer} />
+                <EngagementBadge label="Long Term Contract" checked={isLongTermContract} />
+              </div>
+              <div className="flex items-center gap-2">
+                <Progress value={pct} className="h-1.5 flex-1 max-w-xs" />
+                <span className="text-xs text-slate-500 shrink-0">{r.checkedCount}/{r.totalCount}</span>
+              </div>
+            </div>
+            <button
+              onClick={() => setExpandedOnboardingId((id) => (id === r.id ? null : r.id))}
+              className="flex items-center gap-1 text-xs text-blue-600 hover:underline shrink-0"
+            >
+              {expandedOnboardingId === r.id ? "Hide" : "Manage"}
+              {expandedOnboardingId === r.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+          {expandedOnboardingId === r.id && <CpoOnboardingDetail onboardingId={r.id} />}
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -512,48 +582,27 @@ export default function OnboardingPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {visibleRecords.map((r) => {
-            const pct = r.totalCount === 0 ? 0 : Math.round((r.checkedCount / r.totalCount) * 100);
-            const isFreelancer = r.checklist.find((c) => c.key === "freelancer")?.checked ?? false;
-            const isLongTermContract = r.checklist.find((c) => c.key === "long_term_contract")?.checked ?? false;
-            return (
-              <Card key={r.id} ref={(el) => { cardRefs.current[r.id] = el; }}>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                        <span className="font-semibold text-slate-900 text-sm">{r.userName}</span>
-                        <Badge variant="secondary" className={cn("text-[10px] uppercase", STATUS_CONFIG[r.status].color)}>
-                          {STATUS_CONFIG[r.status].label}
-                        </Badge>
-                        {r.operationalAccessGrantedAt != null && (
-                          <span className="flex items-center gap-1 text-[10px] font-medium uppercase text-green-600">
-                            <CheckCircle2 className="w-3 h-3" /> Access Granted
-                          </span>
-                        )}
-                        <span className="text-xs text-slate-400">{r.documentCount} document{r.documentCount !== 1 ? "s" : ""}</span>
-                        <EngagementBadge label="Freelancer" checked={isFreelancer} />
-                        <EngagementBadge label="Long Term Contract" checked={isLongTermContract} />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Progress value={pct} className="h-1.5 flex-1 max-w-xs" />
-                        <span className="text-xs text-slate-500 shrink-0">{r.checkedCount}/{r.totalCount}</span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setExpandedOnboardingId((id) => (id === r.id ? null : r.id))}
-                      className="flex items-center gap-1 text-xs text-blue-600 hover:underline shrink-0"
-                    >
-                      {expandedOnboardingId === r.id ? "Hide" : "Manage"}
-                      {expandedOnboardingId === r.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                  {expandedOnboardingId === r.id && <CpoOnboardingDetail onboardingId={r.id} />}
-                </CardContent>
-              </Card>
-            );
-          })}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div>
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2.5">Freelancers</h2>
+            <div className="space-y-3">
+              {freelancerColumnRecords.length === 0 ? (
+                <p className="text-sm text-slate-400">No operators in this column.</p>
+              ) : (
+                freelancerColumnRecords.map((r) => renderOperatorCard(r, "freelancer"))
+              )}
+            </div>
+          </div>
+          <div>
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2.5">Long Term Contract</h2>
+            <div className="space-y-3">
+              {longTermColumnRecords.length === 0 ? (
+                <p className="text-sm text-slate-400">No operators in this column.</p>
+              ) : (
+                longTermColumnRecords.map((r) => renderOperatorCard(r, "longterm"))
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
