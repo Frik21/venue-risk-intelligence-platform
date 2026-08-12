@@ -233,18 +233,26 @@ function TaskHoursPanel({ taskId, currentManagerId }: { taskId: number; currentM
 export default function TasksList() {
   const [showNew, setShowNew] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [showArchived, setShowArchived] = useState(false);
   const [expandedHoursTaskId, setExpandedHoursTaskId] = useState<number | null>(null);
-  const [bucketFilter, setBucketFilter] = useState<TaskBucket | null>(null);
+  // "archived" sits alongside the real TaskBucket values as a 7th,
+  // page-local filter tile ("Task Archive") - not a real bucket (an
+  // archived task can have been in any status/bucket before it was
+  // archived), so it's kept out of task-bucket.ts's shared TaskBucket
+  // type and handled here instead.
+  const [bucketFilter, setBucketFilter] = useState<TaskBucket | "archived" | null>(null);
   const [search, setSearch] = useState("");
   const [extendingTaskId, setExtendingTaskId] = useState<number | null>(null);
   const [extendDate, setExtendDate] = useState("");
   const qc = useQueryClient();
   const { toast } = useToast();
 
+  // Always fetches archived tasks too now (rather than a separate
+  // "Show archived" toggle re-querying with includeArchived) - the
+  // Task Archive tile below does the filtering client-side, same as
+  // every other bucket tile.
   const { data: tasks = [], isLoading } = useQuery<Task[]>({
-    queryKey: ["tasks", { includeArchived: showArchived }],
-    queryFn: () => api.tasks.list({ includeArchived: showArchived }),
+    queryKey: ["tasks"],
+    queryFn: () => api.tasks.list({ includeArchived: true }),
   });
   const { data: venues = [] } = useQuery<Venue[]>({ queryKey: ["venues"], queryFn: api.venues.list });
   const { data: users = [] } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list });
@@ -300,6 +308,7 @@ export default function TasksList() {
   // Deployment's status counts - archived tasks are cancelled/dead,
   // not part of the live Pending/Running/Completed picture.
   const activeTasks = tasks.filter((t) => !t.archived);
+  const archivedTasks = tasks.filter((t) => t.archived);
   const bucketCounts: Record<TaskBucket, number> = {
     pending_details: activeTasks.filter((t) => taskBucket(t) === "pending_details").length,
     quotation: activeTasks.filter((t) => taskBucket(t) === "quotation").length,
@@ -308,7 +317,12 @@ export default function TasksList() {
     completed: activeTasks.filter((t) => taskBucket(t) === "completed").length,
     invoiced: activeTasks.filter((t) => taskBucket(t) === "invoiced").length,
   };
-  const bucketFiltered = bucketFilter == null ? tasks : activeTasks.filter((t) => taskBucket(t) === bucketFilter);
+  const bucketFilterLabel = bucketFilter == null ? "" : bucketFilter === "archived" ? "Task Archive" : BUCKET_CONFIG[bucketFilter].label;
+  const bucketFiltered = bucketFilter == null
+    ? activeTasks
+    : bucketFilter === "archived"
+      ? archivedTasks
+      : activeTasks.filter((t) => taskBucket(t) === bucketFilter);
   const query = search.trim().toLowerCase();
   const visibleTasks = query === ""
     ? bucketFiltered
@@ -335,7 +349,7 @@ export default function TasksList() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-6 gap-4">
+      <div className="grid grid-cols-7 gap-4">
         {(["pending_details", "quotation", "pending_allocation", "running", "completed", "invoiced"] as const).map((b) => (
           <button
             key={b}
@@ -351,6 +365,18 @@ export default function TasksList() {
             </Card>
           </button>
         ))}
+        <button
+          onClick={() => setBucketFilter((current) => (current === "archived" ? null : "archived"))}
+          className="text-left"
+          disabled={isLoading}
+        >
+          <Card className={cn("transition-colors", bucketFilter === "archived" && "ring-2 ring-blue-500 border-blue-500")}>
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-slate-900">{isLoading ? "—" : archivedTasks.length}</div>
+              <div className="text-xs text-slate-500">Task Archive</div>
+            </CardContent>
+          </Card>
+        </button>
       </div>
 
       <div className="relative max-w-sm">
@@ -363,20 +389,12 @@ export default function TasksList() {
         />
       </div>
 
-      <div className="flex items-center gap-3">
-        {bucketFilter != null && (
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            Showing only {BUCKET_CONFIG[bucketFilter].label.toLowerCase()} tasks
-            <button onClick={() => setBucketFilter(null)} className="text-blue-600 hover:underline">Clear filter</button>
-          </div>
-        )}
-        <button
-          onClick={() => setShowArchived((s) => !s)}
-          className="text-xs text-slate-500 hover:text-slate-700 underline underline-offset-2"
-        >
-          {showArchived ? "Hide archived tasks" : "Show archived tasks"}
-        </button>
-      </div>
+      {bucketFilter != null && (
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          Showing only {bucketFilterLabel.toLowerCase()} tasks
+          <button onClick={() => setBucketFilter(null)} className="text-blue-600 hover:underline">Clear filter</button>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="space-y-3">{Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-20" />)}</div>
@@ -395,7 +413,9 @@ export default function TasksList() {
             <h3 className="font-medium text-slate-600">
               {query !== ""
                 ? `No tasks match "${search}"`
-                : `No ${BUCKET_CONFIG[bucketFilter!].label.toLowerCase()} tasks`}
+                : bucketFilter != null
+                  ? `No ${bucketFilterLabel.toLowerCase()} tasks`
+                  : "No active tasks"}
             </h3>
           </CardContent>
         </Card>
