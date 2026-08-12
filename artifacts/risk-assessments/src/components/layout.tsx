@@ -46,7 +46,7 @@ const navGroups = [
       { href: "/admin/costs", label: "Quotations", icon: DollarSign },
       { href: "/admin/invoices", label: "Invoices", icon: Receipt },
       { href: "/admin/cpo-deployment", label: "Operator Deployment", icon: UserCog },
-      { href: "/admin/onboarding", label: "Operator Onboarding", icon: UserPlus },
+      { href: "/admin/onboarding", label: "Operator Database", icon: UserPlus },
       { href: "/osint", label: "OSINT", icon: Radio },
       { href: "/admin/vendors", label: "Vendors", icon: Store },
       { href: "/admin/task-archive", label: "Task Archived", icon: Archive },
