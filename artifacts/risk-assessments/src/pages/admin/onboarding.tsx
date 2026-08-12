@@ -401,7 +401,11 @@ export default function OnboardingPage() {
   const [expandedOnboardingId, setExpandedOnboardingId] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [statusFilter, setStatusFilter] = useState<OnboardingStatus | null>(null);
-  const [search, setSearch] = useState("");
+  // Freelancers and Long Term Contract are each their own searchable
+  // list (independent of one another) rather than sharing a single
+  // page-level search box, per direct product direction.
+  const [freelancerSearch, setFreelancerSearch] = useState("");
+  const [longTermSearch, setLongTermSearch] = useState("");
   // Keyed by `${column}-${id}` rather than just id - an unassigned
   // operator (neither engagement checklist item checked) renders in
   // both the Freelancers and Long Term Contract columns at once, so a
@@ -430,10 +434,8 @@ export default function OnboardingPage() {
     denied: records.filter((r) => r.status === "denied").length,
   };
 
-  const query = search.trim().toLowerCase();
   const visibleRecords = records.filter((r) => {
     if (statusFilter != null && r.status !== statusFilter) return false;
-    if (query && !r.userName?.toLowerCase().includes(query)) return false;
     return true;
   });
 
@@ -448,13 +450,19 @@ export default function OnboardingPage() {
     isFreelancer: r.checklist.find((c) => c.key === "freelancer")?.checked ?? false,
     isLongTermContract: r.checklist.find((c) => c.key === "long_term_contract")?.checked ?? false,
   });
+  const freelancerQuery = freelancerSearch.trim().toLowerCase();
   const freelancerColumnRecords = visibleRecords.filter((r) => {
     const { isFreelancer, isLongTermContract } = engagementOf(r);
-    return isFreelancer || (!isFreelancer && !isLongTermContract);
+    if (!(isFreelancer || (!isFreelancer && !isLongTermContract))) return false;
+    if (freelancerQuery && !r.userName?.toLowerCase().includes(freelancerQuery)) return false;
+    return true;
   });
+  const longTermQuery = longTermSearch.trim().toLowerCase();
   const longTermColumnRecords = visibleRecords.filter((r) => {
     const { isFreelancer, isLongTermContract } = engagementOf(r);
-    return isLongTermContract || (!isFreelancer && !isLongTermContract);
+    if (!(isLongTermContract || (!isFreelancer && !isLongTermContract))) return false;
+    if (longTermQuery && !r.userName?.toLowerCase().includes(longTermQuery)) return false;
+    return true;
   });
 
   function renderOperatorCard(r: OnboardingOverviewRecord, columnKey: string) {
@@ -541,18 +549,6 @@ export default function OnboardingPage() {
         </div>
       )}
 
-      {!isLoading && records.length > 0 && (
-        <div className="relative max-w-sm">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-          <Input
-            placeholder="Search operators by name..."
-            className="pl-8 h-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-      )}
-
       {statusFilter != null && (
         <div className="flex items-center gap-2 text-xs text-slate-500">
           Showing only {STATUS_CONFIG[statusFilter].label.toLowerCase()} operators
@@ -575,29 +571,49 @@ export default function OnboardingPage() {
           <CardContent className="py-16 text-center">
             <UserPlus className="w-10 h-10 mx-auto mb-3 text-slate-300" />
             <h3 className="font-medium text-slate-600 mb-1">
-              {query
-                ? `No operators match "${search.trim()}"`
-                : `No ${STATUS_CONFIG[statusFilter!].label.toLowerCase()} operators`}
+              No {STATUS_CONFIG[statusFilter!].label.toLowerCase()} operators
             </h3>
           </CardContent>
         </Card>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div>
-            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2.5">Freelancers</h2>
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2.5">Freelance Database</h2>
+            <div className="relative mb-3">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <Input
+                placeholder="Search freelancers by name..."
+                className="pl-8 h-9"
+                value={freelancerSearch}
+                onChange={(e) => setFreelancerSearch(e.target.value)}
+              />
+            </div>
             <div className="space-y-3">
               {freelancerColumnRecords.length === 0 ? (
-                <p className="text-sm text-slate-400">No operators in this column.</p>
+                <p className="text-sm text-slate-400">
+                  {freelancerQuery ? `No freelancers match "${freelancerSearch.trim()}"` : "No operators in this column."}
+                </p>
               ) : (
                 freelancerColumnRecords.map((r) => renderOperatorCard(r, "freelancer"))
               )}
             </div>
           </div>
           <div>
-            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2.5">Long Term Contract</h2>
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2.5">Long Term Contract Database</h2>
+            <div className="relative mb-3">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <Input
+                placeholder="Search long term contract operators by name..."
+                className="pl-8 h-9"
+                value={longTermSearch}
+                onChange={(e) => setLongTermSearch(e.target.value)}
+              />
+            </div>
             <div className="space-y-3">
               {longTermColumnRecords.length === 0 ? (
-                <p className="text-sm text-slate-400">No operators in this column.</p>
+                <p className="text-sm text-slate-400">
+                  {longTermQuery ? `No operators match "${longTermSearch.trim()}"` : "No operators in this column."}
+                </p>
               ) : (
                 longTermColumnRecords.map((r) => renderOperatorCard(r, "longterm"))
               )}
