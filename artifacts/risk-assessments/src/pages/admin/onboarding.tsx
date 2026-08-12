@@ -32,6 +32,24 @@ const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
 // base64-encoded (~33% larger than the raw file) - see app.ts.
 const MAX_DOCUMENT_BYTES = 6 * 1024 * 1024;
 
+// Always-shown either/or indicator for the two mutually-exclusive
+// "engagement_type" checklist items (see onboarding-checklist.ts) -
+// filled in when checked, outlined/dim when not, so both read as
+// consistent columns down the operator list rather than badges that
+// only appear once set.
+function EngagementBadge({ label, checked }: { label: string; checked: boolean }) {
+  return (
+    <span
+      className={cn(
+        "flex items-center gap-1 text-[10px] font-medium uppercase px-1.5 py-0.5 rounded border shrink-0",
+        checked ? "text-blue-700 bg-blue-50 border-blue-200" : "text-slate-400 bg-slate-50 border-slate-200",
+      )}
+    >
+      {checked && <CheckCircle2 className="w-3 h-3" />} {label}
+    </span>
+  );
+}
+
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -469,6 +487,8 @@ export default function OnboardingPage() {
         <div className="space-y-3">
           {visibleRecords.map((r) => {
             const pct = r.totalCount === 0 ? 0 : Math.round((r.checkedCount / r.totalCount) * 100);
+            const isFreelancer = r.checklist.find((c) => c.key === "freelancer")?.checked ?? false;
+            const isLongTermContract = r.checklist.find((c) => c.key === "long_term_contract")?.checked ?? false;
             return (
               <Card key={r.id} ref={(el) => { cardRefs.current[r.id] = el; }}>
                 <CardContent className="p-4">
@@ -485,6 +505,8 @@ export default function OnboardingPage() {
                           </span>
                         )}
                         <span className="text-xs text-slate-400">{r.documentCount} document{r.documentCount !== 1 ? "s" : ""}</span>
+                        <EngagementBadge label="Freelancer" checked={isFreelancer} />
+                        <EngagementBadge label="Long Term Contract" checked={isLongTermContract} />
                       </div>
                       <div className="flex items-center gap-2">
                         <Progress value={pct} className="h-1.5 flex-1 max-w-xs" />
