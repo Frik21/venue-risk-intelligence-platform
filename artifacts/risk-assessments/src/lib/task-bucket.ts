@@ -17,7 +17,7 @@ import type { Task } from "@/lib/api";
 // between the Tasks list (badges/filters), Operator Deployment (Assign
 // Task's task options, Deployed status) and Alerts' Task Flags panel so
 // they all always agree on what's what.
-export type TaskBucket = "pending_details" | "quotation" | "pending_allocation" | "running" | "completed";
+export type TaskBucket = "pending_details" | "quotation" | "pending_allocation" | "running" | "completed" | "invoiced";
 
 export const BUCKET_CONFIG: Record<TaskBucket, { label: string; color: string }> = {
   pending_details: { label: "Pending Details", color: "text-amber-700 bg-amber-50 border-amber-200" },
@@ -25,6 +25,10 @@ export const BUCKET_CONFIG: Record<TaskBucket, { label: string; color: string }>
   pending_allocation: { label: "Pending Allocation", color: "text-purple-700 bg-purple-50 border-purple-200" },
   running: { label: "Running", color: "text-blue-700 bg-blue-50 border-blue-200" },
   completed: { label: "Completed", color: "text-green-700 bg-green-50 border-green-200" },
+  // Supersedes Completed once a Manager marks the task invoiced (see
+  // Task.invoiced) - a completed task is either Completed or Invoiced,
+  // never both at once.
+  invoiced: { label: "Invoiced", color: "text-teal-700 bg-teal-50 border-teal-200" },
 };
 
 // Estimated Cost is deliberately not checked here - it's off both task
@@ -42,7 +46,7 @@ function detailsComplete(task: Task): boolean {
 }
 
 export function taskBucket(task: Task): TaskBucket {
-  if (task.status === "completed") return "completed";
+  if (task.status === "completed") return task.invoiced ? "invoiced" : "completed";
   if (!detailsComplete(task)) return "pending_details";
   if (task.quotationStatus !== "approved") return "quotation";
   return task.assignedToIds.length === 0 ? "pending_allocation" : "running";

@@ -95,6 +95,7 @@ export interface Task {
   status: TaskStatus;
   priority: TaskPriority;
   archived: boolean;
+  invoiced: boolean;
   completionNote: string | null;
   // Manager-set, independent of status - see clientConfirmedAt in
   // lib/db/src/schema/tasks.ts. null until a Manager confirms with the
@@ -651,6 +652,7 @@ export const api = {
     update: (id: number, data: Partial<{
       venueId: number | null; assigneeIds: number[]; assignedTo: number | null; assignedBy: number; title: string;
       dueDate: string | null; endDate: string | null; status: TaskStatus; priority: TaskPriority; archived: boolean;
+      invoiced: boolean;
       clientConfirmed: boolean; quotationStatus: QuotationStatus;
       clientId: number | null; clientName: string; clientContact: string; clientRequirements: string;
       operatorsRequired: number; armedRequired: boolean; vehiclesRequired: number;

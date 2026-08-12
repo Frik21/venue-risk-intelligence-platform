@@ -2304,6 +2304,7 @@ function OperationalCanvas({
     status: "not_completed",
     priority: "medium",
     archived: false,
+    invoiced: false,
     completionNote: null,
     clientConfirmedAt: null,
     quotationStatus: "awaiting_approval",

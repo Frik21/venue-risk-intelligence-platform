@@ -37,6 +37,7 @@ function formatTask(
     status: row.status as "not_completed" | "in_progress" | "completed",
     priority: row.priority as "low" | "medium" | "high" | "urgent",
     archived: row.archived,
+    invoiced: row.invoiced,
     completionNote: row.completionNote ?? null,
     clientConfirmedAt: row.clientConfirmedAt?.toISOString() ?? null,
     quotationStatus: row.quotationStatus as "approved" | "awaiting_approval" | "denied",
@@ -231,6 +232,7 @@ const TaskUpdateSchema = z.object({
   priority: z.enum(TASK_PRIORITIES).optional(),
   quotationStatus: z.enum(QUOTATION_STATUSES).optional(),
   archived: z.boolean().optional(),
+  invoiced: z.boolean().optional(),
   completionNote: z.string().max(500).optional(),
   // Manager-set client confirmation - see clientConfirmedAt in
   // schema/tasks.ts. true stamps the current time, false clears it.

@@ -12,7 +12,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
-import { ListChecks, Plus, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, Search, Shield } from "lucide-react";
+import { ListChecks, Plus, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, Search, Shield, Receipt } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -277,6 +277,14 @@ export default function TasksList() {
     },
   });
 
+  const invoiceMutation = useMutation({
+    mutationFn: (id: number) => api.tasks.update(id, { invoiced: true }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      toast({ title: "Task marked invoiced" });
+    },
+  });
+
   const extendMutation = useMutation({
     mutationFn: ({ id, endDate }: { id: number; endDate: string }) => api.tasks.update(id, { endDate }),
     onSuccess: () => {
@@ -298,6 +306,7 @@ export default function TasksList() {
     pending_allocation: activeTasks.filter((t) => taskBucket(t) === "pending_allocation").length,
     running: activeTasks.filter((t) => taskBucket(t) === "running").length,
     completed: activeTasks.filter((t) => taskBucket(t) === "completed").length,
+    invoiced: activeTasks.filter((t) => taskBucket(t) === "invoiced").length,
   };
   const bucketFiltered = bucketFilter == null ? tasks : activeTasks.filter((t) => taskBucket(t) === bucketFilter);
   const query = search.trim().toLowerCase();
@@ -326,8 +335,8 @@ export default function TasksList() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-5 gap-4">
-        {(["pending_details", "quotation", "pending_allocation", "running", "completed"] as const).map((b) => (
+      <div className="grid grid-cols-6 gap-4">
+        {(["pending_details", "quotation", "pending_allocation", "running", "completed", "invoiced"] as const).map((b) => (
           <button
             key={b}
             onClick={() => setBucketFilter((current) => (current === b ? null : b))}
@@ -511,14 +520,30 @@ export default function TasksList() {
 
                       {task.status === "completed" && (
                         <>
-                          <button
-                            onClick={() => setExpandedHoursTaskId((id) => (id === task.id ? null : task.id))}
-                            className="flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1.5"
-                          >
-                            <Clock className="w-3 h-3" />
-                            Hours logged
-                            {expandedHoursTaskId === task.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                          </button>
+                          <div className="flex items-center gap-3 mt-1.5">
+                            <button
+                              onClick={() => setExpandedHoursTaskId((id) => (id === task.id ? null : task.id))}
+                              className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                            >
+                              <Clock className="w-3 h-3" />
+                              Hours logged
+                              {expandedHoursTaskId === task.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                            </button>
+                            {task.invoiced ? (
+                              <span className="flex items-center gap-1 text-xs font-medium text-teal-700">
+                                <Check className="w-3 h-3" /> Invoiced
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => invoiceMutation.mutate(task.id)}
+                                disabled={invoiceMutation.isPending}
+                                className="flex items-center gap-1 text-xs text-teal-700 hover:underline disabled:opacity-50"
+                              >
+                                <Receipt className="w-3 h-3" />
+                                Mark Invoiced
+                              </button>
+                            )}
+                          </div>
                           {expandedHoursTaskId === task.id && (
                             <TaskHoursPanel taskId={task.id} currentManagerId={currentManagerId} />
                           )}

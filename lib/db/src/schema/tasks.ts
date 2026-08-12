@@ -50,6 +50,13 @@ export const tasksTable = pgTable("tasks", {
   priority: text("priority").notNull().default("medium"),
   archived: boolean("archived").notNull().default(false),
   completionNote: text("completion_note"),
+  // Manager-set once a Completed task has actually been billed - a
+  // separate flag rather than a 6th status value, same reasoning as
+  // archived above. Only meaningful once status is "completed" (see
+  // Invoiced in lib/task-bucket.ts on the frontend, which supersedes
+  // the Completed bucket once this is set); toggled via PATCH
+  // /tasks/:id from the Tasks list, mirroring Mark Completed.
+  invoiced: boolean("invoiced").notNull().default(false),
   // No longer drives Tasks list bucketing (see venueId comment above and
   // lib/task-bucket.ts - that's now based on field completeness). Kept
   // as manually-settable state via PATCH /tasks/:id, clientConfirmed,
