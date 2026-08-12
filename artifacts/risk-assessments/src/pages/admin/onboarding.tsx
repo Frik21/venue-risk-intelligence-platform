@@ -632,6 +632,18 @@ export default function OnboardingPage() {
             </h3>
           </CardContent>
         </Card>
+      ) : statusFilter === "in_progress" ? (
+        // Pending operators haven't been assigned an engagement type
+        // yet (that's part of what "Pending" means), so the
+        // Freelance/Long Term Contract split doesn't apply to them -
+        // every pending operator would show in both columns at once,
+        // duplicating the exact same card. A single flat list instead,
+        // per direct product direction - no "Operator Database"
+        // toggle either, since that's specifically the two-column
+        // view (already available unfiltered or under Approved).
+        <div className="space-y-3">
+          {visibleRecords.map((r) => renderOperatorCard(r, "pending"))}
+        </div>
       ) : (
         <div>
           <button
