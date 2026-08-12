@@ -16,6 +16,8 @@ export const ONBOARDING_CHECKLIST_ITEMS: OnboardingChecklistItem[] = [
   { key: "background_check", label: "Background check completed" },
   { key: "references_checked", label: "References checked" },
   { key: "contract_signed", label: "Contract signed" },
+  { key: "freelancer", label: "Freelancer" },
+  { key: "long_term_contract", label: "Long term contract" },
   { key: "equipment_issued", label: "Equipment issued" },
   { key: "training_complete", label: "Training complete" },
   { key: "ready_for_deployment", label: "Ready for deployment" },
