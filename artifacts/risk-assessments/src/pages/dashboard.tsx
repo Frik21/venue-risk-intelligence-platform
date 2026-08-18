@@ -2313,6 +2313,7 @@ function OperationalCanvas({
     dueDate: null,
     endDate: null,
     status: "not_completed",
+    completedAt: null,
     priority: "medium",
     archived: false,
     invoiced: false,

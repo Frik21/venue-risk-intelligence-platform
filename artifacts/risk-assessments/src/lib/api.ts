@@ -94,6 +94,10 @@ export interface Task {
   dueDate: string | null;
   endDate: string | null;
   status: TaskStatus;
+  // Stamped server-side the first time status moves into "completed" -
+  // see completedAt in lib/db/src/schema/tasks.ts. Powers the
+  // Dashboard's Tasks Completed trend line.
+  completedAt: string | null;
   priority: TaskPriority;
   archived: boolean;
   invoiced: boolean;

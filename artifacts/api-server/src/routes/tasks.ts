@@ -36,6 +36,7 @@ function formatTask(
     dueDate: row.dueDate?.toISOString() ?? null,
     endDate: row.endDate?.toISOString() ?? null,
     status: row.status as "not_completed" | "in_progress" | "completed",
+    completedAt: row.completedAt?.toISOString() ?? null,
     priority: row.priority as "low" | "medium" | "high" | "urgent",
     archived: row.archived,
     invoiced: row.invoiced,
@@ -267,13 +268,23 @@ router.patch("/tasks/:id", async (req, res): Promise<void> => {
   const parsed = TaskUpdateSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const [existing] = await db.select().from(tasksTable).where(eq(tasksTable.id, id));
+  if (!existing) { res.status(404).json({ error: "Task not found" }); return; }
+
   const { dueDate, endDate, assigneeIds, assignedTo, clientConfirmed, alertReviewedBucket, alertReviewedBy, ...rest } = parsed.data;
   const nextRoster = assigneeIds ?? (assignedTo !== undefined ? (assignedTo !== null ? [assignedTo] : []) : undefined);
+
+  // Stamped the first time status moves into "completed" - never
+  // cleared if the task is later edited back to another status, same
+  // reasoning as sentAt/decidedAt on quotesTable.
+  const completedAtStamp =
+    rest.status === "completed" && existing.status !== "completed" ? { completedAt: new Date() } : {};
 
   const [task] = await db
     .update(tasksTable)
     .set({
       ...rest,
+      ...completedAtStamp,
       ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
       ...(endDate !== undefined ? { endDate: endDate ? new Date(endDate) : null } : {}),
       ...(nextRoster !== undefined ? { assignedTo: nextRoster[0] ?? null } : {}),

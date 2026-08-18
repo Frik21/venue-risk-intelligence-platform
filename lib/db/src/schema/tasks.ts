@@ -51,6 +51,13 @@ export const tasksTable = pgTable("tasks", {
   dueDate: timestamp("due_date", { withTimezone: true }),
   endDate: timestamp("end_date", { withTimezone: true }),
   status: text("status").notNull().default("not_completed"),
+  // Stamped the first time status moves into "completed" - same
+  // "stamp X the first time it moves into that status" reasoning as
+  // sentAt/decidedAt on quotesTable. Powers the Dashboard's Tasks
+  // Completed trend line, which needs an actual completion date
+  // rather than updatedAt (that changes on any edit, not just
+  // completion).
+  completedAt: timestamp("completed_at", { withTimezone: true }),
   priority: text("priority").notNull().default("medium"),
   archived: boolean("archived").notNull().default(false),
   completionNote: text("completion_note"),
