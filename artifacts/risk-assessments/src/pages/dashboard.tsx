@@ -2056,9 +2056,11 @@ function OperationalCanvas({
   const [alertsPanelOpen, setAlertsPanelOpen] = useState(false);
 
   // Manager-to-CPO broadcast instructions (see /admin/communications
-  // and schema/announcements.ts) - one-way, no per-CPO targeting,
-  // every CPO sees every announcement. Fetched once on mount, same
-  // pattern as cpoTasks below.
+  // and schema/announcements.ts) - one-way. General ones (taskId null)
+  // go to every CPO; task-scoped ones only to CPOs on that task's
+  // roster - filtered below, once cpoTasks (this CPO's roster-aware
+  // task list) is available. Fetched once on mount, same pattern as
+  // cpoTasks below.
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   useEffect(() => {
     api.announcements
@@ -2066,24 +2068,28 @@ function OperationalCanvas({
       .then(setAnnouncements)
       .catch((err) => console.error("Failed to load announcements:", err));
   }, []);
+  const [cpoUsers, setCpoUsers] = useState<User[]>([]);
+  const [viewingAsCpoId, setViewingAsCpoId] = useState<number | null>(null);
+  const [cpoTasks, setCpoTasks] = useState<Task[]>([]);
+  const [cpoTasksLoading, setCpoTasksLoading] = useState(false);
+  const visibleAnnouncements = useMemo(() => {
+    const myTaskIds = new Set(cpoTasks.map((t) => t.id));
+    return announcements.filter((a) => a.taskId == null || myTaskIds.has(a.taskId));
+  }, [announcements, cpoTasks]);
   // Instructions received via Communications also surface in the Alerts
   // panel - a Manager instruction is exactly the kind of thing an
   // operator shouldn't have to go looking for in a separate panel to
   // notice. Mapped to OperationalAlert's shape so it renders through
   // the same list as everything else there, listed first (most
   // recent/relevant).
-  const instructionAlerts: OperationalAlert[] = announcements.map((announcement) => ({
+  const instructionAlerts: OperationalAlert[] = visibleAnnouncements.map((announcement) => ({
     id: `instruction-${announcement.id}`,
     severity: "info",
-    title: "Instruction from your Manager",
+    title: announcement.taskId != null ? `Instruction · ${announcement.taskNumber}` : "Instruction from your Manager",
     description: announcement.message,
     location: announcement.createdByName ?? "Manager",
     timestamp: timeAgo(announcement.createdAt),
   }));
-  const [cpoUsers, setCpoUsers] = useState<User[]>([]);
-  const [viewingAsCpoId, setViewingAsCpoId] = useState<number | null>(null);
-  const [cpoTasks, setCpoTasks] = useState<Task[]>([]);
-  const [cpoTasksLoading, setCpoTasksLoading] = useState(false);
   // Closest thing this app has to "the logged-in user" without real
   // auth - matches the operator area's hardcoded "Frik" by name,
   // falling back to an Admin, then anyone, if that name isn't in the
@@ -3903,11 +3909,14 @@ function OperationalCanvas({
         </button>
 
         <div className="tasks-panel-list">
-          {announcements.length === 0 ? (
+          {visibleAnnouncements.length === 0 ? (
             <p className="tasks-panel-empty">No instructions yet.</p>
           ) : (
-            announcements.map((announcement) => (
+            visibleAnnouncements.map((announcement) => (
               <div key={announcement.id} className="task-row">
+                {announcement.taskId != null && (
+                  <p className="task-row-assigned-by">{announcement.taskNumber} · {announcement.taskTitle}</p>
+                )}
                 <p className="task-row-title">{announcement.message}</p>
                 <p className="task-row-assigned-by">{announcement.createdByName ?? "Manager"} · {timeAgo(announcement.createdAt)}</p>
               </div>

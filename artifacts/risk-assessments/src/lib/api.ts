@@ -476,6 +476,9 @@ export interface PayRun {
 export interface Announcement {
   id: number;
   message: string;
+  taskId: number | null;
+  taskNumber: string | null;
+  taskTitle: string | null;
   createdBy: number | null;
   createdByName: string | null;
   createdAt: string;
@@ -928,7 +931,7 @@ export const api = {
   },
   announcements: {
     list: () => apiFetch<Announcement[]>("/announcements"),
-    create: (data: { message: string; createdBy?: number | null }) =>
+    create: (data: { message: string; taskId?: number | null; createdBy?: number | null }) =>
       apiFetch<Announcement>("/announcements", { method: "POST", body: JSON.stringify(data) }),
     delete: (id: number) => apiFetch<void>(`/announcements/${id}`, { method: "DELETE" }),
   },
