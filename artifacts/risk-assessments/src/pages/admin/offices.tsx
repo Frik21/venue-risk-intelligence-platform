@@ -14,6 +14,8 @@ import { useState } from "react";
 import { Building, Plus, MapPin, MoreVertical, Pencil, Trash2, User as UserIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+const NEW_MANAGER = "__new_manager__";
+
 function OfficeDialog({ office, managers, onClose }: { office: Office | null; managers: User[]; onClose: () => void }) {
   const [form, setForm] = useState({
     name: office?.name ?? "",
@@ -23,8 +25,29 @@ function OfficeDialog({ office, managers, onClose }: { office: Office | null; ma
     managerId: office?.managerId != null ? String(office.managerId) : "",
     notes: office?.notes ?? "",
   });
+  // Picking "+ Add New Manager" from the Select below switches into
+  // this inline create form instead of requiring a Manager to already
+  // exist and go create one on the Users page first, per direct
+  // product direction ("where you add an office you must be able to
+  // add a manager").
+  const [creatingManager, setCreatingManager] = useState(false);
+  const [newManagerName, setNewManagerName] = useState("");
+  const [newManagerEmail, setNewManagerEmail] = useState("");
   const qc = useQueryClient();
   const { toast } = useToast();
+
+  const createManagerMutation = useMutation({
+    mutationFn: () => api.users.create({ name: newManagerName, email: newManagerEmail, role: "manager" }),
+    onSuccess: (user) => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      setForm((f) => ({ ...f, managerId: String(user.id) }));
+      setCreatingManager(false);
+      setNewManagerName("");
+      setNewManagerEmail("");
+      toast({ title: "Manager created and assigned" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -73,12 +96,33 @@ function OfficeDialog({ office, managers, onClose }: { office: Office | null; ma
         </div>
         <div>
           <Label>Office Manager</Label>
-          <Select value={form.managerId} onValueChange={(v) => set("managerId", v)}>
+          <Select
+            value={form.managerId}
+            onValueChange={(v) => (v === NEW_MANAGER ? setCreatingManager(true) : set("managerId", v))}
+          >
             <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
             <SelectContent>
               {managers.map((u) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
+              <SelectItem value={NEW_MANAGER}>+ Add New Manager</SelectItem>
             </SelectContent>
           </Select>
+          {creatingManager && (
+            <div className="mt-2 p-3 rounded-md border border-slate-200 bg-slate-50 space-y-2">
+              <Input placeholder="Manager's full name" value={newManagerName} onChange={(e) => setNewManagerName(e.target.value)} />
+              <Input type="email" placeholder="Email" value={newManagerEmail} onChange={(e) => setNewManagerEmail(e.target.value)} />
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => createManagerMutation.mutate()}
+                  disabled={createManagerMutation.isPending || !newManagerName.trim() || !newManagerEmail.trim()}
+                >
+                  {createManagerMutation.isPending ? "Creating..." : "Create & Assign"}
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => setCreatingManager(false)}>Cancel</Button>
+              </div>
+            </div>
+          )}
         </div>
         <div>
           <Label>Notes</Label>
