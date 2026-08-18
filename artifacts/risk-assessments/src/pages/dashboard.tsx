@@ -278,7 +278,7 @@ export default function Dashboard() {
     return (
       <div className="min-h-[80vh] flex items-center justify-center bg-slate-950 text-white rounded-3xl overflow-hidden">
         <div className="w-full max-w-md p-8">
-          <p className="text-sm text-sky-300 mb-2">VenueGuard</p>
+          <p className="text-sm text-sky-300 mb-2">Operators note</p>
           <h1 className="text-4xl font-semibold tracking-tight mb-2">Planning powered by Intelligence.</h1>
           <p className="text-slate-400 mb-8">Sign in to prepare your operational brief.</p>
 
@@ -418,7 +418,7 @@ const SEARCH_RESULT_LIMIT = 8;
 // space (the canvas sits below it, not underneath it) rather than
 // floating over the map like the panel triggers, per direct product
 // direction.
-// Dispatched by the VenueGuard brand menu (TopBanner) and picked up by
+// Dispatched by the Operators note brand menu (TopBanner) and picked up by
 // OperationalCanvas - the two components are siblings under Dashboard,
 // not parent/child, and the Brief/Layers panel state already lives
 // deep inside OperationalCanvas's own click-outside-to-close logic.
@@ -434,7 +434,7 @@ const OPEN_ROUTE_PLANNING_PANEL_EVENT = "venueguard-open-route-planning-panel";
 const OPEN_DOWNLOAD_TASK_PANEL_EVENT = "venueguard-open-download-task-panel";
 const OPEN_LAYERS_PANEL_EVENT = "venueguard-open-layers-panel";
 // Dispatched by the operator menu (TopBanner, top-right - separate
-// from the VenueGuard brand menu on the left) when "Profile" is
+// from the Operators note brand menu on the left) when "Profile" is
 // clicked. Kept in the same activePanel state as the six brand-menu
 // panels above (not its own boolean) so it automatically gets the
 // same mutual-exclusivity and click-outside-to-close behavior for
@@ -454,9 +454,9 @@ const REOPEN_OPERATOR_MENU_EVENT = "venueguard-reopen-operator-menu";
 // menu/dropdown (e.g. the search bar, the operator area, blank space
 // in the banner) and picked up by OperationalCanvas, the same
 // cross-sibling reason as the events above - lets clicking anywhere in
-// the top banner close an open VenueGuard panel, matching what
+// the top banner close an open Operators note panel, matching what
 // clicking the canvas itself already does (see handleCanvasClick).
-const CLOSE_VENUEGUARD_PANELS_EVENT = "venueguard-close-panels";
+const CLOSE_OPERATORS_NOTE_PANELS_EVENT = "operators-note-close-panels";
 // The Alerts trigger now lives in the persistent top banner (left of
 // the operator/Profile area) instead of floating over the canvas, but
 // its state (alertsPanelOpen) and the alert list itself
@@ -865,7 +865,7 @@ const TIMESHEET_WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 // Profile > Timesheet - a hand-rolled month-grid calendar rather than
 // the shadcn Calendar component elsewhere in this app (components/ui/
 // calendar.tsx), which is styled for the light Tailwind/shadcn admin
-// pages, not this panel's dark, hand-styled VenueGuard theme. Clicking
+// pages, not this panel's dark, hand-styled Operators note theme. Clicking
 // a day opens the log-hours form below the grid for that date; days
 // that already have an entry show the hours logged right on the cell.
 function TimesheetCalendar({
@@ -1344,7 +1344,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
   return (
     <header
       className="top-banner"
-      onClick={() => window.dispatchEvent(new Event(CLOSE_VENUEGUARD_PANELS_EVENT))}
+      onClick={() => window.dispatchEvent(new Event(CLOSE_OPERATORS_NOTE_PANELS_EVENT))}
     >
       <div
         className="top-banner-brand"
@@ -1360,7 +1360,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
           aria-expanded={brandMenuOpen}
         >
           <ShieldCheck className="w-5 h-5 text-sky-300" />
-          <span className="top-banner-brand-name">VenueGuard</span>
+          <span className="top-banner-brand-name">Operators note</span>
           <span className="top-banner-brand-divider" aria-hidden="true" />
           <span className="top-banner-brand-context">Operations Centre</span>
           <ChevronDown className={`w-3.5 h-3.5 top-banner-brand-chevron ${brandMenuOpen ? "top-banner-brand-chevron-open" : ""}`} />
@@ -2000,7 +2000,7 @@ function OperationalCanvas({
   const [calibrationPoint, setCalibrationPoint] = useState<{ x: number; y: number } | null>(null);
   const [activeCountry, setActiveCountry] = useState<ActiveCountry | null>(null);
 
-  // The five VenueGuard-menu panels (Operational Brief, Communications,
+  // The five Operators note-menu panels (Operational Brief, Communications,
   // Tasks, Task Planning, Layers) are mutually exclusive - only one open
   // at a time. They previously each had their own boolean and stacked
   // side-by-side with a computed left-shift, but that let a panel opened
@@ -2012,9 +2012,9 @@ function OperationalCanvas({
   // these is ever visible.
   //
   // Alerts (the bell icon, top-right) is a separate, older panel - not
-  // part of the VenueGuard menu, slides from the opposite edge, and can
+  // part of the Operators note menu, slides from the opposite edge, and can
   // coexist with any of these six.
-  type VenueGuardPanel =
+  type OperatorsNotePanel =
     | "brief"
     | "communications"
     | "tasks"
@@ -2025,7 +2025,7 @@ function OperationalCanvas({
     | "layers"
     | "profile"
     | null;
-  const [activePanel, setActivePanel] = useState<VenueGuardPanel>(null);
+  const [activePanel, setActivePanel] = useState<OperatorsNotePanel>(null);
   const briefPanelOpen = activePanel === "brief";
   const communicationsPanelOpen = activePanel === "communications";
   const tasksPanelOpen = activePanel === "tasks";
@@ -2047,7 +2047,7 @@ function OperationalCanvas({
   // this one panel rather than a separate sliding panel, deliberately:
   // the earlier nested-panel design for Task Planning caused a real bug
   // (panels layering on top of each other), and the fix was making the
-  // VenueGuard panels mutually exclusive. Nesting a nav level *inside*
+  // Operators note panels mutually exclusive. Nesting a nav level *inside*
   // one panel's own content sidesteps that whole class of bug instead of
   // reintroducing it. Resets to "root" whenever the panel is (re)opened.
   const [riskAssessmentsView, setRiskAssessmentsView] = useState<"root" | "venues" | "assessment">("root");
@@ -2275,7 +2275,7 @@ function OperationalCanvas({
   }
 
   // Task Planning (Planner, Step 1) - a real sibling panel reached
-  // directly from the VenueGuard menu (Operational Brief, Tasks, Task
+  // directly from the Operators note menu (Operational Brief, Tasks, Task
   // Planning, Layers), not nested inside Tasks. It has its own task
   // selector, since it isn't opened from a specific task row.
   //
@@ -2344,9 +2344,9 @@ function OperationalCanvas({
     }
   }
 
-  // Closes whichever panel is open and reopens the VenueGuard dropdown,
+  // Closes whichever panel is open and reopens the Operators note dropdown,
   // so switching panels is one motion instead of close-then-reclick-
-  // VenueGuard. Same cross-sibling-component pattern as the
+  // Operators note. Same cross-sibling-component pattern as the
   // OPEN_*_PANEL_EVENT constants (TopBanner owns brandMenuOpen).
   function backToMenu() {
     setActivePanel(null);
@@ -3186,7 +3186,7 @@ function OperationalCanvas({
   }, []);
 
   // Operational Brief, Communications, Tasks, Task Planning, Risk
-  // Assessments, and Layers are now opened from the VenueGuard brand
+  // Assessments, and Layers are now opened from the Operators note brand
   // menu in TopBanner - see OPEN_BRIEF_PANEL_EVENT/
   // OPEN_COMMUNICATIONS_PANEL_EVENT/OPEN_TASKS_PANEL_EVENT/
   // OPEN_TASK_PLANNING_PANEL_EVENT/OPEN_RISK_ASSESSMENTS_PANEL_EVENT/
@@ -3223,7 +3223,7 @@ function OperationalCanvas({
     };
     // Mirrors the panel-closing half of handleCanvasClick below, fired
     // from TopBanner (a sibling, not a descendant of this canvas) when a
-    // click lands outside its brand menu - see CLOSE_VENUEGUARD_PANELS_EVENT.
+    // click lands outside its brand menu - see CLOSE_OPERATORS_NOTE_PANELS_EVENT.
     const closePanelsFromTopBanner = () => {
       setActivePanel(null);
       setAlertsPanelOpen(false);
@@ -3249,7 +3249,7 @@ function OperationalCanvas({
     window.addEventListener(OPEN_DOWNLOAD_TASK_PANEL_EVENT, openDownloadTask);
     window.addEventListener(OPEN_LAYERS_PANEL_EVENT, openLayers);
     window.addEventListener(OPEN_PROFILE_PANEL_EVENT, openProfile);
-    window.addEventListener(CLOSE_VENUEGUARD_PANELS_EVENT, closePanelsFromTopBanner);
+    window.addEventListener(CLOSE_OPERATORS_NOTE_PANELS_EVENT, closePanelsFromTopBanner);
     window.addEventListener(TOGGLE_ALERTS_PANEL_EVENT, toggleAlerts);
     return () => {
       window.removeEventListener(OPEN_BRIEF_PANEL_EVENT, openBrief);
@@ -3261,7 +3261,7 @@ function OperationalCanvas({
       window.removeEventListener(OPEN_DOWNLOAD_TASK_PANEL_EVENT, openDownloadTask);
       window.removeEventListener(OPEN_LAYERS_PANEL_EVENT, openLayers);
       window.removeEventListener(OPEN_PROFILE_PANEL_EVENT, openProfile);
-      window.removeEventListener(CLOSE_VENUEGUARD_PANELS_EVENT, closePanelsFromTopBanner);
+      window.removeEventListener(CLOSE_OPERATORS_NOTE_PANELS_EVENT, closePanelsFromTopBanner);
       window.removeEventListener(TOGGLE_ALERTS_PANEL_EVENT, toggleAlerts);
     };
   }, []);
@@ -3422,7 +3422,7 @@ function OperationalCanvas({
   // hit-zones below, and the focused country's own clipped image) stops
   // propagation on click, so this canvas-level handler only ever fires for
   // clicks that didn't land on anything - i.e. genuinely "outside" any
-  // country, focused or not. Every VenueGuard panel (Brief/Communications/
+  // country, focused or not. Every Operators note panel (Brief/Communications/
   // Tasks/Task Planning/Layers) and the Alerts panel also stop
   // propagation on their own click, so a click landing here is also
   // genuinely "outside" whichever of those is open - close it the same
