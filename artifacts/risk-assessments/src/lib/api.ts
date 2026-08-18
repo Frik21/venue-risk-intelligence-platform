@@ -37,7 +37,7 @@ export type RouteCreationMethod = "endpoint_marker" | "street_builder" | "freeha
 
 export interface User {
   id: number; name: string; email: string; role: UserRole; avatarInitials: string | null; active: boolean;
-  dayRate: number | null; nightRate: number | null; createdAt: string;
+  dayRate: number | null; nightRate: number | null; officeId: number | null; createdAt: string;
 }
 
 export interface Venue {
@@ -83,6 +83,7 @@ export interface Task {
   // Pending Details in lib/task-bucket.ts.
   venueId: number | null;
   venueName: string | null;
+  officeId: number | null;
   assignedTo: number | null;
   assignedToName: string | null;
   assignedToIds: number[];
@@ -160,6 +161,7 @@ export interface Client {
   address: string;
   dayRate: number | null;
   nightRate: number | null;
+  officeId: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -187,6 +189,7 @@ export interface Vendor {
   email: string;
   phone: string;
   address: string;
+  officeId: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -219,6 +222,7 @@ export interface Quote {
   id: number;
   quoteNumber: string;
   taskId: number | null;
+  officeId: number | null;
   title: string;
   status: QuoteStatus;
   validUntil: string | null;
@@ -268,6 +272,7 @@ export interface Invoice {
   taskId: number | null;
   quoteId: number | null;
   clientId: number | null;
+  officeId: number | null;
   title: string;
   status: InvoiceStatus;
   clientName: string;
@@ -712,7 +717,7 @@ export const api = {
   users: {
     list: () => apiFetch<User[]>("/users"),
     create: (data: Partial<User>) => apiFetch<User>("/users", { method: "POST", body: JSON.stringify(data) }),
-    update: (id: number, data: Partial<Pick<User, "name" | "email" | "avatarInitials">>) =>
+    update: (id: number, data: Partial<Pick<User, "name" | "email" | "avatarInitials" | "officeId">>) =>
       apiFetch<User>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     updateRates: (id: number, data: { dayRate: number | null; nightRate: number | null }) =>
       apiFetch<User>(`/users/${id}/rates`, { method: "PATCH", body: JSON.stringify(data) }),
@@ -742,7 +747,7 @@ export const api = {
       return apiFetch<Task[]>(`/tasks${qs ? `?${qs}` : ""}`);
     },
     create: (data: {
-      venueId?: number | null; assigneeIds?: number[]; assignedBy: number; title?: string;
+      venueId?: number | null; officeId?: number | null; assigneeIds?: number[]; assignedBy: number; title?: string;
       dueDate?: string; endDate?: string; priority?: TaskPriority; quotationStatus?: QuotationStatus;
       clientId?: number | null; clientName?: string; clientContact?: string; clientRequirements?: string;
       operatorsRequired?: number; armedRequired?: boolean; vehiclesRequired?: number;
@@ -751,7 +756,7 @@ export const api = {
     updateStatus: (id: number, data: { status: TaskStatus; completionNote?: string }) =>
       apiFetch<Task>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     update: (id: number, data: Partial<{
-      venueId: number | null; assigneeIds: number[]; assignedTo: number | null; assignedBy: number; title: string;
+      venueId: number | null; officeId: number | null; assigneeIds: number[]; assignedTo: number | null; assignedBy: number; title: string;
       dueDate: string | null; endDate: string | null; status: TaskStatus; priority: TaskPriority; archived: boolean;
       invoiced: boolean;
       clientConfirmed: boolean; quotationStatus: QuotationStatus;
@@ -777,13 +782,13 @@ export const api = {
       name: string; status?: ClientStatus; industry?: string;
       primaryContactName?: string; primaryContactRole?: string;
       email?: string; phone?: string; address?: string;
-      dayRate?: number | null; nightRate?: number | null;
+      dayRate?: number | null; nightRate?: number | null; officeId?: number | null;
     }) => apiFetch<Client>("/clients", { method: "POST", body: JSON.stringify(data) }),
     update: (id: number, data: Partial<{
       name: string; status: ClientStatus; industry: string;
       primaryContactName: string; primaryContactRole: string;
       email: string; phone: string; address: string;
-      dayRate: number | null; nightRate: number | null;
+      dayRate: number | null; nightRate: number | null; officeId: number | null;
     }>) => apiFetch<Client>(`/clients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     delete: (id: number) => apiFetch<void>(`/clients/${id}`, { method: "DELETE" }),
   },
@@ -798,12 +803,12 @@ export const api = {
     create: (data: {
       name: string; status?: VendorStatus; category?: string;
       primaryContactName?: string; primaryContactRole?: string;
-      email?: string; phone?: string; address?: string;
+      email?: string; phone?: string; address?: string; officeId?: number | null;
     }) => apiFetch<Vendor>("/vendors", { method: "POST", body: JSON.stringify(data) }),
     update: (id: number, data: Partial<{
       name: string; status: VendorStatus; category: string;
       primaryContactName: string; primaryContactRole: string;
-      email: string; phone: string; address: string;
+      email: string; phone: string; address: string; officeId: number | null;
     }>) => apiFetch<Vendor>(`/vendors/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     delete: (id: number) => apiFetch<void>(`/vendors/${id}`, { method: "DELETE" }),
   },
@@ -816,7 +821,7 @@ export const api = {
   quotes: {
     list: () => apiFetch<Quote[]>("/quotes"),
     create: (data: Partial<{
-      taskId: number | null;
+      taskId: number | null; officeId: number | null;
       title: string; status: QuoteStatus; validUntil: string | null;
       clientId: number | null; clientName: string; clientContact: string; billingDetails: string;
       venueId: number | null; clientRequirements: string; startDate: string | null; endDate: string | null;
@@ -842,7 +847,7 @@ export const api = {
   invoices: {
     list: () => apiFetch<Invoice[]>("/invoices"),
     create: (data: Partial<{
-      taskId: number | null; quoteId: number | null;
+      taskId: number | null; quoteId: number | null; officeId: number | null;
       title: string; status: InvoiceStatus;
       clientId: number | null; clientName: string; clientContact: string; billingDetails: string;
       dueDate: string | null;
@@ -851,7 +856,7 @@ export const api = {
       assignedBy: number;
     }> & { assignedBy: number }) => apiFetch<Invoice>("/invoices", { method: "POST", body: JSON.stringify(data) }),
     update: (id: number, data: Partial<{
-      taskId: number | null; quoteId: number | null;
+      taskId: number | null; quoteId: number | null; officeId: number | null;
       title: string; status: InvoiceStatus;
       clientId: number | null; clientName: string; clientContact: string; billingDetails: string;
       dueDate: string | null;

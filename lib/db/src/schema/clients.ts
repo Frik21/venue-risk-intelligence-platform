@@ -1,6 +1,7 @@
-import { pgTable, text, serial, real, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, real, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { officesTable } from "./offices";
 
 // A client (the organization/person requesting CPO services) - kept
 // separate from the freeform clientName/clientContact still on each
@@ -30,6 +31,9 @@ export const clientsTable = pgTable("clients", {
   address: text("address").notNull().default(""),
   dayRate: real("day_rate"),
   nightRate: real("night_rate"),
+  // Which office owns this client relationship - see officeId comment
+  // in schema/users.ts for the broader multi-office direction.
+  officeId: integer("office_id").references(() => officesTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

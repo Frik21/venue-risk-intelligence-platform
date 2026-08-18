@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type Venue, type User, type Client, type TaskPriority, type QuotationStatus } from "@/lib/api";
+import { api, type Venue, type User, type Client, type TaskPriority, type QuotationStatus, type Office } from "@/lib/api";
+import { useSelectedOfficeId } from "@/lib/office-scope";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -306,8 +307,11 @@ export function NewTaskDialog({
 }) {
   const managers = users.filter((u) => u.role === "manager" || u.role === "admin");
   const { data: clients = [] } = useQuery<Client[]>({ queryKey: ["clients"], queryFn: api.clients.list });
+  const { data: offices = [] } = useQuery<Office[]>({ queryKey: ["offices"], queryFn: api.offices.list });
+  const [selectedOfficeId] = useSelectedOfficeId();
   const [form, setForm] = useState({
     venueId: "",
+    officeId: selectedOfficeId as number | null,
     assigneeIds: initialAssigneeId != null ? [initialAssigneeId] : [] as number[],
     assignedBy: "",
     title: "",
@@ -329,6 +333,7 @@ export function NewTaskDialog({
     mutationFn: () =>
       api.tasks.create({
         venueId: form.venueId ? Number(form.venueId) : undefined,
+        officeId: form.officeId,
         assigneeIds: form.assigneeIds,
         assignedBy: Number(form.assignedBy),
         title: form.title || undefined,
@@ -471,6 +476,20 @@ export function NewTaskDialog({
               ) : (
                 managers.map((u) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)
               )}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <Label>Office</Label>
+          <Select
+            value={form.officeId != null ? String(form.officeId) : "none"}
+            onValueChange={(v) => setForm((f) => ({ ...f, officeId: v === "none" ? null : Number(v) }))}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No office</SelectItem>
+              {offices.map((o) => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>

@@ -5,6 +5,7 @@ import { clientsTable } from "./clients";
 import { venuesTable } from "./venues";
 import { usersTable } from "./users";
 import { tasksTable } from "./tasks";
+import { officesTable } from "./offices";
 
 // A formal sales quote - its own record with its own number/status
 // lifecycle (Draft -> Sent -> Approved/Rejected), independent of
@@ -23,6 +24,10 @@ export const quotesTable = pgTable("quotes", {
   // created with no Task at all, this is just how a task drops off
   // that pending list once it has one.
   taskId: integer("task_id").references(() => tasksTable.id, { onDelete: "set null" }),
+
+  // Which office this quote belongs to - see officeId comment in
+  // schema/users.ts for the broader multi-office direction.
+  officeId: integer("office_id").references(() => officesTable.id, { onDelete: "set null" }),
 
   // 1. Quote Details
   title: text("title").notNull().default(""),

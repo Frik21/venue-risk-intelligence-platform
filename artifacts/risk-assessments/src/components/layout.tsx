@@ -25,6 +25,9 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { api, type Office } from "@/lib/api";
+import { useSelectedOfficeId } from "@/lib/office-scope";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // Deliberately lean - this is a dispatch console for Managers
 // (creating/costing task requests, assigning CPOs, tracking who's
@@ -58,9 +61,16 @@ const navGroups = [
   },
 ];
 
+const ALL_OFFICES = "all";
+
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [offices, setOffices] = useState<Office[]>([]);
+  const [selectedOfficeId, setSelectedOfficeId] = useSelectedOfficeId();
+  useEffect(() => {
+    api.offices.list().then(setOffices).catch((err) => console.error("Failed to load offices:", err));
+  }, []);
   const [showShell, setShowShell] = useState(() => {
   return sessionStorage.getItem("venueguard-show-shell") === "true";
 });
@@ -93,6 +103,30 @@ const hideShell = (location === "/" || location === "/cpo") && !showShell;
           <div className="text-sm font-bold text-white tracking-wide">VENUEGUARD</div>
           <div className="text-[10px] text-slate-500 uppercase tracking-widest">Risk Intelligence</div>
         </div>
+      </div>
+
+      {/* Office switcher - global filter, per direct product direction
+          ("companies will have different offices... select an office
+          and all the data from the allocated office"). Persists to
+          localStorage (see lib/office-scope.ts) so it survives
+          reloads/navigation, and every list page filters to it. */}
+      <div className="px-3 pt-3 pb-1 border-b border-slate-800 shrink-0">
+        <Building2 className="w-3 h-3 text-slate-500 inline mr-1.5 mb-2" />
+        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Office</span>
+        <Select
+          value={selectedOfficeId != null ? String(selectedOfficeId) : ALL_OFFICES}
+          onValueChange={(v) => setSelectedOfficeId(v === ALL_OFFICES ? null : Number(v))}
+        >
+          <SelectTrigger className="h-8 text-xs bg-slate-900 border-slate-800 text-slate-200 mt-1">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_OFFICES}>All Offices</SelectItem>
+            {offices.map((o) => (
+              <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="flex-1 overflow-y-auto py-3 px-2 space-y-4">

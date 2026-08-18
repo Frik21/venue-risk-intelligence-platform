@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type Invoice, type InvoiceStatus, type Task, type User, type Client, type Quote } from "@/lib/api";
+import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -57,11 +58,14 @@ export default function InvoicesPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  const { data: invoices = [], isLoading: invoicesLoading } = useQuery<Invoice[]>({ queryKey: ["invoices"], queryFn: api.invoices.list });
-  const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({ queryKey: ["tasks"], queryFn: () => api.tasks.list() });
+  const { data: allInvoices = [], isLoading: invoicesLoading } = useQuery<Invoice[]>({ queryKey: ["invoices"], queryFn: api.invoices.list });
+  const { data: allTasks = [], isLoading: tasksLoading } = useQuery<Task[]>({ queryKey: ["tasks"], queryFn: () => api.tasks.list() });
   const { data: users = [] } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list });
   const { data: clients = [] } = useQuery<Client[]>({ queryKey: ["clients"], queryFn: api.clients.list });
   const { data: quotes = [] } = useQuery<Quote[]>({ queryKey: ["quotes"], queryFn: api.quotes.list });
+  const [selectedOfficeId] = useSelectedOfficeId();
+  const invoices = filterByOffice(allInvoices, selectedOfficeId);
+  const tasks = filterByOffice(allTasks, selectedOfficeId);
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.invoices.delete(id),

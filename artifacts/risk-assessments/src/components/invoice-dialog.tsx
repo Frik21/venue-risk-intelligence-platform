@@ -1,8 +1,9 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   api, type Invoice, type Task, type User, type Client, type Quote, type InvoiceStatus,
-  type QuoteCostCategory, QUOTE_COST_CATEGORIES,
+  type QuoteCostCategory, QUOTE_COST_CATEGORIES, type Office,
 } from "@/lib/api";
+import { useSelectedOfficeId } from "@/lib/office-scope";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -69,6 +70,8 @@ export function InvoiceDialog({
   onClose: () => void;
 }) {
   const managers = users.filter((u) => u.role === "manager" || u.role === "admin");
+  const { data: offices = [] } = useQuery<Office[]>({ queryKey: ["offices"], queryFn: api.offices.list });
+  const [selectedOfficeId] = useSelectedOfficeId();
 
   const [savedId, setSavedId] = useState<number | null>(invoice?.id ?? null);
   const [invoiceNumber, setInvoiceNumber] = useState(invoice?.invoiceNumber ?? null);
@@ -79,6 +82,7 @@ export function InvoiceDialog({
 
   const [form, setForm] = useState({
     title: invoice?.title ?? initialQuote?.title ?? initialTask?.title ?? "",
+    officeId: (invoice?.officeId ?? initialQuote?.officeId ?? initialTask?.officeId ?? selectedOfficeId) as number | null,
     dueDate: invoice?.dueDate ? invoice.dueDate.slice(0, 10) : "",
     clientId: invoice?.clientId ?? initialQuote?.clientId ?? initialTask?.clientId ?? null as number | null,
     clientName: invoice?.clientName ?? initialQuote?.clientName ?? initialTask?.clientName ?? "",
@@ -127,6 +131,7 @@ export function InvoiceDialog({
       const payload = {
         taskId,
         quoteId,
+        officeId: form.officeId,
         title: form.title,
         dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : null,
         clientId: form.clientId,
@@ -186,6 +191,19 @@ export function InvoiceDialog({
             <div>
               <Label>Due Date</Label>
               <Input type="date" value={form.dueDate} onChange={(e) => set("dueDate", e.target.value)} />
+            </div>
+            <div>
+              <Label>Office</Label>
+              <Select
+                value={form.officeId != null ? String(form.officeId) : "none"}
+                onValueChange={(v) => setForm((f) => ({ ...f, officeId: v === "none" ? null : Number(v) }))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No office</SelectItem>
+                  {offices.map((o) => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>

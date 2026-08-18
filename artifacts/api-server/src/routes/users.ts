@@ -10,6 +10,7 @@ const UserInputSchema = z.object({
   email: z.string().email(),
   role: z.enum(["admin", "manager", "cpo"]),
   avatarInitials: z.string().optional(),
+  officeId: z.number().int().nullable().optional(),
 });
 
 function formatUser(row: typeof usersTable.$inferSelect) {
@@ -22,6 +23,7 @@ function formatUser(row: typeof usersTable.$inferSelect) {
     active: row.active,
     dayRate: row.dayRate ?? null,
     nightRate: row.nightRate ?? null,
+    officeId: row.officeId,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -44,6 +46,9 @@ const UserUpdateSchema = z.object({
   name: z.string().min(1).optional(),
   email: z.string().email().optional(),
   avatarInitials: z.string().max(4).optional(),
+  // Unlike role/active below, home office isn't a permission field -
+  // no separate admin-only endpoint needed for it.
+  officeId: z.number().int().nullable().optional(),
 });
 
 // Self-service profile edit (Profile > Account Details) - deliberately

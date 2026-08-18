@@ -25,6 +25,7 @@ function formatTask(
     taskNumber: taskNumber(row.id),
     venueId: row.venueId,
     venueName: venueName ?? null,
+    officeId: row.officeId,
     assignedTo: row.assignedTo,
     assignedToName: roster.find((r) => r.id === row.assignedTo)?.name ?? null,
     assignedToIds: roster.map((r) => r.id),
@@ -125,6 +126,7 @@ const TaskInputSchema = z.object({
   // Optional - a task can be created before a location is picked (see
   // Pending Details in the frontend's lib/task-bucket.ts).
   venueId: z.number().int().nullable().optional(),
+  officeId: z.number().int().nullable().optional(),
   // The actual roster of CPOs assigned, if any decided yet - can be
   // empty ("unassigned", Task Assignment Board) or several (a request
   // for multiple operators). First entry becomes the legacy primary
@@ -190,6 +192,7 @@ router.post("/tasks", async (req, res): Promise<void> => {
     .insert(tasksTable)
     .values({
       venueId: parsed.data.venueId ?? null,
+      officeId: parsed.data.officeId ?? null,
       assignedTo: assigneeIds[0] ?? null,
       assignedBy: parsed.data.assignedBy,
       title: parsed.data.title ?? "",
@@ -220,6 +223,7 @@ router.post("/tasks", async (req, res): Promise<void> => {
 // roster, changing priority, and archiving/cancelling (archived=true).
 const TaskUpdateSchema = z.object({
   venueId: z.number().int().nullable().optional(),
+  officeId: z.number().int().nullable().optional(),
   assigneeIds: z.array(z.number().int()).optional(),
   // Legacy single-assignee convenience - equivalent to assigneeIds:
   // [id] (or [] when null). Ignored if assigneeIds is also given.
@@ -309,6 +313,7 @@ router.post("/tasks/:id/duplicate", async (req, res): Promise<void> => {
     .insert(tasksTable)
     .values({
       venueId: source.venueId,
+      officeId: source.officeId,
       assignedTo: source.assignedTo,
       assignedBy: source.assignedBy,
       title: `${source.title} (Copy)`,

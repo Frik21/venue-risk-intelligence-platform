@@ -20,6 +20,7 @@ function formatClient(row: typeof clientsTable.$inferSelect) {
     address: row.address,
     dayRate: row.dayRate,
     nightRate: row.nightRate,
+    officeId: row.officeId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -52,6 +53,7 @@ const ClientInputSchema = z.object({
   address: z.string().max(500).optional(),
   dayRate: z.number().min(0).nullable().optional(),
   nightRate: z.number().min(0).nullable().optional(),
+  officeId: z.number().int().nullable().optional(),
 });
 
 router.post("/clients", async (req, res): Promise<void> => {
@@ -71,6 +73,7 @@ router.post("/clients", async (req, res): Promise<void> => {
       address: parsed.data.address ?? "",
       dayRate: parsed.data.dayRate ?? null,
       nightRate: parsed.data.nightRate ?? null,
+      officeId: parsed.data.officeId ?? null,
     })
     .returning();
 

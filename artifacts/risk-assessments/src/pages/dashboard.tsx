@@ -2302,6 +2302,7 @@ function OperationalCanvas({
     taskNumber: "T-DEMO",
     venueId: -1,
     venueName: "Example Venue (Demo)",
+    officeId: null,
     assignedTo: -1,
     assignedToName: null,
     assignedToIds: [-1],

@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 import { venuesTable } from "./venues";
 import { usersTable } from "./users";
 import { clientsTable } from "./clients";
+import { officesTable } from "./offices";
 
 // Task Assignment - a Manager assigns a CPO a specific piece of
 // structured work already in the platform ("complete the assessment
@@ -41,6 +42,9 @@ export const tasksTable = pgTable("tasks", {
   // no venueId, blank title, no dates, or no estimated cost stays
   // Pending Details until every one of those is filled in).
   venueId: integer("venue_id").references(() => venuesTable.id, { onDelete: "cascade" }),
+  // Which office this task belongs to - see officeId comment in
+  // schema/users.ts for the broader multi-office direction.
+  officeId: integer("office_id").references(() => officesTable.id, { onDelete: "set null" }),
   assignedTo: integer("assigned_to").references(() => usersTable.id, { onDelete: "cascade" }),
   assignedBy: integer("assigned_by").notNull().references(() => usersTable.id),
   title: text("title").notNull(),

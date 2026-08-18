@@ -1,8 +1,9 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   api, type Quote, type Task, type Venue, type User, type Client, type TaskPriority,
-  type QuoteStatus, type QuoteMarkupType, type QuoteCostCategory, QUOTE_COST_CATEGORIES,
+  type QuoteStatus, type QuoteMarkupType, type QuoteCostCategory, QUOTE_COST_CATEGORIES, type Office,
 } from "@/lib/api";
+import { useSelectedOfficeId } from "@/lib/office-scope";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,6 +56,8 @@ export function QuoteDialog({
   onClose: () => void;
 }) {
   const managers = users.filter((u) => u.role === "manager" || u.role === "admin");
+  const { data: offices = [] } = useQuery<Office[]>({ queryKey: ["offices"], queryFn: api.offices.list });
+  const [selectedOfficeId] = useSelectedOfficeId();
 
   const [savedId, setSavedId] = useState<number | null>(quote?.id ?? null);
   const [quoteNumber, setQuoteNumber] = useState(quote?.quoteNumber ?? null);
@@ -64,6 +67,7 @@ export function QuoteDialog({
 
   const [form, setForm] = useState({
     title: quote?.title ?? initialTask?.title ?? "",
+    officeId: (quote?.officeId ?? initialTask?.officeId ?? selectedOfficeId) as number | null,
     validUntil: quote?.validUntil ? quote.validUntil.slice(0, 10) : "",
     clientId: quote?.clientId ?? initialTask?.clientId ?? null as number | null,
     clientName: quote?.clientName ?? initialTask?.clientName ?? "",
@@ -116,6 +120,7 @@ export function QuoteDialog({
     mutationFn: async (nextStatus?: QuoteStatus) => {
       const payload = {
         taskId,
+        officeId: form.officeId,
         title: form.title,
         validUntil: form.validUntil ? new Date(form.validUntil).toISOString() : null,
         clientId: form.clientId,
@@ -183,6 +188,19 @@ export function QuoteDialog({
             <div>
               <Label>Valid Until</Label>
               <Input type="date" value={form.validUntil} onChange={(e) => set("validUntil", e.target.value)} />
+            </div>
+            <div>
+              <Label>Office</Label>
+              <Select
+                value={form.officeId != null ? String(form.officeId) : "none"}
+                onValueChange={(v) => setForm((f) => ({ ...f, officeId: v === "none" ? null : Number(v) }))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No office</SelectItem>
+                  {offices.map((o) => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>

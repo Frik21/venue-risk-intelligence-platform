@@ -18,6 +18,7 @@ function formatVendor(row: typeof vendorsTable.$inferSelect) {
     email: row.email,
     phone: row.phone,
     address: row.address,
+    officeId: row.officeId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -48,6 +49,7 @@ const VendorInputSchema = z.object({
   email: z.string().max(200).optional(),
   phone: z.string().max(200).optional(),
   address: z.string().max(500).optional(),
+  officeId: z.number().int().nullable().optional(),
 });
 
 router.post("/vendors", async (req, res): Promise<void> => {
@@ -65,6 +67,7 @@ router.post("/vendors", async (req, res): Promise<void> => {
       email: parsed.data.email ?? "",
       phone: parsed.data.phone ?? "",
       address: parsed.data.address ?? "",
+      officeId: parsed.data.officeId ?? null,
     })
     .returning();
 

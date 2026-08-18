@@ -1,6 +1,7 @@
-import { pgTable, text, serial, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { officesTable } from "./offices";
 
 // A security vendor (subcontractor/supplier used across tasks -
 // equipment, transport, subcontracted CPOs, technology, training,
@@ -20,6 +21,9 @@ export const vendorsTable = pgTable("vendors", {
   email: text("email").notNull().default(""),
   phone: text("phone").notNull().default(""),
   address: text("address").notNull().default(""),
+  // Which office owns this vendor relationship - see officeId comment
+  // in schema/users.ts for the broader multi-office direction.
+  officeId: integer("office_id").references(() => officesTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

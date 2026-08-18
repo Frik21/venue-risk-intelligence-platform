@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -13,7 +13,10 @@ export const officesTable = pgTable("offices", {
   address: text("address").notNull().default(""),
   city: text("city").notNull(),
   country: text("country").notNull(),
-  managerId: integer("manager_id").references(() => usersTable.id, { onDelete: "set null" }),
+  // Explicit AnyPgColumn return type breaks the users<->offices
+  // circular-inference issue TS can't otherwise resolve (users.ts's
+  // officeId references officesTable right back).
+  managerId: integer("manager_id").references((): AnyPgColumn => usersTable.id, { onDelete: "set null" }),
   notes: text("notes").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

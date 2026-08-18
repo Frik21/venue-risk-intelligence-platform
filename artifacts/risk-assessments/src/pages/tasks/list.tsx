@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type Task, type TaskStatus, type TaskPriority, type Venue, type User, type Client, type TimesheetEntry } from "@/lib/api";
+import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -250,10 +251,12 @@ export default function TasksList() {
   // "Show archived" toggle re-querying with includeArchived) - the
   // Task Archive tile below does the filtering client-side, same as
   // every other bucket tile.
-  const { data: tasks = [], isLoading } = useQuery<Task[]>({
+  const { data: allTasks = [], isLoading } = useQuery<Task[]>({
     queryKey: ["tasks"],
     queryFn: () => api.tasks.list({ includeArchived: true }),
   });
+  const [selectedOfficeId] = useSelectedOfficeId();
+  const tasks = filterByOffice(allTasks, selectedOfficeId);
   const { data: venues = [] } = useQuery<Venue[]>({ queryKey: ["venues"], queryFn: api.venues.list });
   const { data: users = [] } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list });
   // No real login/session in this app - same "default to the first

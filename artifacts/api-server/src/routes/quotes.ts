@@ -40,6 +40,7 @@ function formatQuote(
     id: row.id,
     quoteNumber: quoteNumber(row.id),
     taskId: row.taskId,
+    officeId: row.officeId,
     title: row.title,
     status: row.status as (typeof QUOTE_STATUSES)[number],
     validUntil: row.validUntil?.toISOString() ?? null,
@@ -108,6 +109,7 @@ const CostLineItemSchema = z.object({
 
 const QuoteFieldsSchema = {
   taskId: z.number().int().nullable().optional(),
+  officeId: z.number().int().nullable().optional(),
   title: z.string().max(200).optional(),
   status: z.enum(QUOTE_STATUSES).optional(),
   validUntil: z.string().nullable().optional(),
@@ -142,6 +144,7 @@ router.post("/quotes", async (req, res): Promise<void> => {
     .insert(quotesTable)
     .values({
       taskId: parsed.data.taskId ?? null,
+      officeId: parsed.data.officeId ?? null,
       title: parsed.data.title ?? "",
       status: parsed.data.status ?? "draft",
       validUntil: parsed.data.validUntil ? new Date(parsed.data.validUntil) : undefined,
@@ -239,6 +242,7 @@ router.patch("/quotes/:id", async (req, res): Promise<void> => {
         .values({
           taskId: quote.taskId,
           quoteId: quote.id,
+          officeId: quote.officeId,
           clientId: quote.clientId,
           title: quote.title,
           status: "draft",

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { api, type Client, type ClientStatus, type Task } from "@/lib/api";
+import { api, type Client, type ClientStatus, type Task, type Office } from "@/lib/api";
+import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,8 @@ export const CLIENT_STATUS_CONFIG: Record<ClientStatus, { label: string; color: 
 // detail page now as a dated activity log (client_activities), not
 // here - a brand new client just doesn't have any log entries yet.
 export function ClientDialog({ client, onClose }: { client: Client | null; onClose: () => void }) {
+  const { data: offices = [] } = useQuery<Office[]>({ queryKey: ["offices"], queryFn: api.offices.list });
+  const [selectedOfficeId] = useSelectedOfficeId();
   const [form, setForm] = useState({
     name: client?.name ?? "",
     status: (client?.status ?? "active") as ClientStatus,
@@ -43,6 +46,10 @@ export function ClientDialog({ client, onClose }: { client: Client | null; onClo
     address: client?.address ?? "",
     dayRate: client?.dayRate != null ? String(client.dayRate) : "",
     nightRate: client?.nightRate != null ? String(client.nightRate) : "",
+    // New records inherit whichever office is currently selected in
+    // the sidebar switcher - editable here, per direct product
+    // direction ("inherit from selected office").
+    officeId: (client?.officeId ?? selectedOfficeId) as number | null,
   });
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -60,6 +67,7 @@ export function ClientDialog({ client, onClose }: { client: Client | null; onClo
         address: form.address,
         dayRate: form.dayRate.trim() === "" ? null : Number(form.dayRate),
         nightRate: form.nightRate.trim() === "" ? null : Number(form.nightRate),
+        officeId: form.officeId,
       };
       return client ? api.clients.update(client.id, data) : api.clients.create(data);
     },
@@ -97,6 +105,19 @@ export function ClientDialog({ client, onClose }: { client: Client | null; onClo
           <div>
             <Label>Industry</Label>
             <Input placeholder="e.g. Corporate Events" value={form.industry} onChange={(e) => set("industry", e.target.value)} />
+          </div>
+          <div>
+            <Label>Office</Label>
+            <Select
+              value={form.officeId != null ? String(form.officeId) : "none"}
+              onValueChange={(v) => setForm((f) => ({ ...f, officeId: v === "none" ? null : Number(v) }))}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No office</SelectItem>
+                {offices.map((o) => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -183,8 +204,10 @@ export default function ClientsPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  const { data: clients = [], isLoading } = useQuery<Client[]>({ queryKey: ["clients"], queryFn: api.clients.list });
+  const { data: allClients = [], isLoading } = useQuery<Client[]>({ queryKey: ["clients"], queryFn: api.clients.list });
   const { data: tasks = [] } = useQuery<Task[]>({ queryKey: ["tasks"], queryFn: () => api.tasks.list() });
+  const [selectedOfficeId] = useSelectedOfficeId();
+  const clients = filterByOffice(allClients, selectedOfficeId);
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.clients.delete(id),

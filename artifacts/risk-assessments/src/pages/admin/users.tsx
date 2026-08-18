@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type User } from "@/lib/api";
+import { api, type User, type Office } from "@/lib/api";
+import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +30,9 @@ const ROLE_ICONS = {
 };
 
 function NewUserDialog({ onClose }: { onClose: () => void }) {
-  const [form, setForm] = useState({ name: "", email: "", role: "cpo" as any });
+  const { data: offices = [] } = useQuery<Office[]>({ queryKey: ["offices"], queryFn: api.offices.list });
+  const [selectedOfficeId] = useSelectedOfficeId();
+  const [form, setForm] = useState({ name: "", email: "", role: "cpo" as any, officeId: selectedOfficeId as number | null });
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -65,6 +68,19 @@ function NewUserDialog({ onClose }: { onClose: () => void }) {
               <SelectItem value="admin">Admin — VenueGuard platform owner</SelectItem>
               <SelectItem value="manager">Manager — Assigns and oversees CPOs</SelectItem>
               <SelectItem value="cpo">CPO — Field operator</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>Office</Label>
+          <Select
+            value={form.officeId != null ? String(form.officeId) : "none"}
+            onValueChange={(v) => setForm((f: any) => ({ ...f, officeId: v === "none" ? null : Number(v) }))}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No office</SelectItem>
+              {offices.map((o) => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -129,10 +145,12 @@ function CpoRateEditor({ user }: { user: User }) {
 export default function UsersPage() {
   const [showNew, setShowNew] = useState(false);
 
-  const { data: users = [], isLoading } = useQuery<User[]>({
+  const { data: allUsers = [], isLoading } = useQuery<User[]>({
     queryKey: ["users"],
     queryFn: api.users.list,
   });
+  const [selectedOfficeId] = useSelectedOfficeId();
+  const users = filterByOffice(allUsers, selectedOfficeId);
 
   return (
     <div className="space-y-5">

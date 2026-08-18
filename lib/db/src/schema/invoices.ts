@@ -5,6 +5,7 @@ import { tasksTable } from "./tasks";
 import { quotesTable } from "./quotes";
 import { clientsTable } from "./clients";
 import { usersTable } from "./users";
+import { officesTable } from "./offices";
 
 // A client-facing Invoice - money owed TO VenueGuard, the natural next
 // step after a Task/Quote is approved and completed, per direct
@@ -35,6 +36,9 @@ export const invoicesTable = pgTable("invoices", {
   taskId: integer("task_id").references(() => tasksTable.id, { onDelete: "set null" }),
   quoteId: integer("quote_id").references(() => quotesTable.id, { onDelete: "set null" }),
   clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "set null" }),
+  // Which office this invoice belongs to - see officeId comment in
+  // schema/users.ts for the broader multi-office direction.
+  officeId: integer("office_id").references(() => officesTable.id, { onDelete: "set null" }),
   title: text("title").notNull().default(""),
   status: text("status").notNull().default("draft"), // draft | sent | paid
   clientName: text("client_name").notNull().default(""),

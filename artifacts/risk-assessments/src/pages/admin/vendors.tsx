@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { api, type Vendor, type VendorStatus } from "@/lib/api";
+import { api, type Vendor, type VendorStatus, type Office } from "@/lib/api";
+import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +30,8 @@ export const VENDOR_STATUS_CONFIG: Record<VendorStatus, { label: string; color: 
 // schema/vendors.ts). Notes live on the vendor's detail page as a
 // dated activity log (vendor_activities), not here.
 export function VendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClose: () => void }) {
+  const { data: offices = [] } = useQuery<Office[]>({ queryKey: ["offices"], queryFn: api.offices.list });
+  const [selectedOfficeId] = useSelectedOfficeId();
   const [form, setForm] = useState({
     name: vendor?.name ?? "",
     status: (vendor?.status ?? "active") as VendorStatus,
@@ -38,6 +41,7 @@ export function VendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
     email: vendor?.email ?? "",
     phone: vendor?.phone ?? "",
     address: vendor?.address ?? "",
+    officeId: (vendor?.officeId ?? selectedOfficeId) as number | null,
   });
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -53,6 +57,7 @@ export function VendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
         email: form.email,
         phone: form.phone,
         address: form.address,
+        officeId: form.officeId,
       };
       return vendor ? api.vendors.update(vendor.id, data) : api.vendors.create(data);
     },
@@ -90,6 +95,19 @@ export function VendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
           <div>
             <Label>Category</Label>
             <Input placeholder="e.g. Equipment Supplier" value={form.category} onChange={(e) => set("category", e.target.value)} />
+          </div>
+          <div>
+            <Label>Office</Label>
+            <Select
+              value={form.officeId != null ? String(form.officeId) : "none"}
+              onValueChange={(v) => setForm((f) => ({ ...f, officeId: v === "none" ? null : Number(v) }))}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No office</SelectItem>
+                {offices.map((o) => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -142,7 +160,9 @@ export default function VendorsPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  const { data: vendors = [], isLoading } = useQuery<Vendor[]>({ queryKey: ["vendors"], queryFn: api.vendors.list });
+  const { data: allVendors = [], isLoading } = useQuery<Vendor[]>({ queryKey: ["vendors"], queryFn: api.vendors.list });
+  const [selectedOfficeId] = useSelectedOfficeId();
+  const vendors = filterByOffice(allVendors, selectedOfficeId);
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.vendors.delete(id),

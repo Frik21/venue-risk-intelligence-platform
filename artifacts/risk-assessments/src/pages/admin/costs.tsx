@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { api, type GlobalExpense, type PersonnelCostLine, type CompanySettings, type Task, type QuotationStatus, type ExpenseCategory, type Venue, type User, type Client, type Quote } from "@/lib/api";
+import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -501,11 +502,14 @@ export default function CostsPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({ queryKey: ["tasks"], queryFn: () => api.tasks.list() });
+  const { data: allTasks = [], isLoading: tasksLoading } = useQuery<Task[]>({ queryKey: ["tasks"], queryFn: () => api.tasks.list() });
   const { data: venues = [] } = useQuery<Venue[]>({ queryKey: ["venues"], queryFn: api.venues.list });
   const { data: users = [] } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list });
   const { data: clients = [] } = useQuery<Client[]>({ queryKey: ["clients"], queryFn: api.clients.list });
-  const { data: quotes = [], isLoading: quotesLoading } = useQuery<Quote[]>({ queryKey: ["quotes"], queryFn: api.quotes.list });
+  const { data: allQuotes = [], isLoading: quotesLoading } = useQuery<Quote[]>({ queryKey: ["quotes"], queryFn: api.quotes.list });
+  const [selectedOfficeId] = useSelectedOfficeId();
+  const tasks = filterByOffice(allTasks, selectedOfficeId);
+  const quotes = filterByOffice(allQuotes, selectedOfficeId);
   const { data: expenses = [], isLoading: expensesLoading } = useQuery<GlobalExpense[]>({
     queryKey: ["expenses-all"],
     queryFn: api.expenses.listAll,
