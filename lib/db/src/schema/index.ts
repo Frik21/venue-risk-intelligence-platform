@@ -21,3 +21,4 @@ export * from "./vendors";
 export * from "./vendor-activities";
 export * from "./invoices";
 export * from "./payroll";
+export * from "./announcements";

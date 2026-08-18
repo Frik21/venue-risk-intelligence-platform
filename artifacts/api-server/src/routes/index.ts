@@ -32,6 +32,7 @@ import onboardingRouter from "./onboarding";
 import vendorsRouter from "./vendors";
 import invoicesRouter from "./invoices";
 import payrollRouter from "./payroll";
+import announcementsRouter from "./announcements";
 
 const router: IRouter = Router();
 
@@ -68,5 +69,6 @@ router.use(onboardingRouter);
 router.use(vendorsRouter);
 router.use(invoicesRouter);
 router.use(payrollRouter);
+router.use(announcementsRouter);
 
 export default router;

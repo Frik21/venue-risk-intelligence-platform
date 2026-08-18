@@ -42,6 +42,7 @@ import type {
   TimesheetEntry,
   Expense,
   ExpenseCategory,
+  Announcement,
 } from "@/lib/api";
 import { LocationSearch, resolveCurrentLocation } from "@/components/location-search";
 import type { LocationSearchResult } from "@/components/location-search";
@@ -2054,27 +2055,30 @@ function OperationalCanvas({
 
   const [alertsPanelOpen, setAlertsPanelOpen] = useState(false);
 
-  const DEMO_INSTRUCTIONS = [
-    {
-      id: 1,
-      from: "Demo Manager",
-      message: "Principal delayed 30 minutes - hold at current position until further notice.",
-      sentAt: "Today, 08:42",
-    },
-  ];
+  // Manager-to-CPO broadcast instructions (see /admin/communications
+  // and schema/announcements.ts) - one-way, no per-CPO targeting,
+  // every CPO sees every announcement. Fetched once on mount, same
+  // pattern as cpoTasks below.
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  useEffect(() => {
+    api.announcements
+      .list()
+      .then(setAnnouncements)
+      .catch((err) => console.error("Failed to load announcements:", err));
+  }, []);
   // Instructions received via Communications also surface in the Alerts
   // panel - a Manager instruction is exactly the kind of thing an
   // operator shouldn't have to go looking for in a separate panel to
   // notice. Mapped to OperationalAlert's shape so it renders through
   // the same list as everything else there, listed first (most
   // recent/relevant).
-  const instructionAlerts: OperationalAlert[] = DEMO_INSTRUCTIONS.map((instruction) => ({
-    id: `instruction-${instruction.id}`,
+  const instructionAlerts: OperationalAlert[] = announcements.map((announcement) => ({
+    id: `instruction-${announcement.id}`,
     severity: "info",
     title: "Instruction from your Manager",
-    description: instruction.message,
-    location: instruction.from,
-    timestamp: instruction.sentAt,
+    description: announcement.message,
+    location: announcement.createdByName ?? "Manager",
+    timestamp: timeAgo(announcement.createdAt),
   }));
   const [cpoUsers, setCpoUsers] = useState<User[]>([]);
   const [viewingAsCpoId, setViewingAsCpoId] = useState<number | null>(null);
@@ -3899,12 +3903,16 @@ function OperationalCanvas({
         </button>
 
         <div className="tasks-panel-list">
-          {DEMO_INSTRUCTIONS.map((instruction) => (
-            <div key={instruction.id} className="task-row">
-              <p className="task-row-title">{instruction.message}</p>
-              <p className="task-row-assigned-by">{instruction.from} · {instruction.sentAt}</p>
-            </div>
-          ))}
+          {announcements.length === 0 ? (
+            <p className="tasks-panel-empty">No instructions yet.</p>
+          ) : (
+            announcements.map((announcement) => (
+              <div key={announcement.id} className="task-row">
+                <p className="task-row-title">{announcement.message}</p>
+                <p className="task-row-assigned-by">{announcement.createdByName ?? "Manager"} · {timeAgo(announcement.createdAt)}</p>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

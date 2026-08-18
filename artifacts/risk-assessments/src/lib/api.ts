@@ -471,6 +471,16 @@ export interface PayRun {
   updatedAt: string;
 }
 
+// A Manager-to-CPO broadcast instruction - see
+// announcementsTable in schema/announcements.ts.
+export interface Announcement {
+  id: number;
+  message: string;
+  createdBy: number | null;
+  createdByName: string | null;
+  createdAt: string;
+}
+
 export interface OnboardingChecklistEntry {
   key: string;
   label: string;
@@ -915,6 +925,12 @@ export const api = {
     updateRun: (id: number, data: { status: PayRunStatus }) =>
       apiFetch<PayRun>(`/payroll/runs/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     deleteRun: (id: number) => apiFetch<void>(`/payroll/runs/${id}`, { method: "DELETE" }),
+  },
+  announcements: {
+    list: () => apiFetch<Announcement[]>("/announcements"),
+    create: (data: { message: string; createdBy?: number | null }) =>
+      apiFetch<Announcement>("/announcements", { method: "POST", body: JSON.stringify(data) }),
+    delete: (id: number) => apiFetch<void>(`/announcements/${id}`, { method: "DELETE" }),
   },
   onboarding: {
     listAll: () => apiFetch<OnboardingOverviewRecord[]>("/onboarding"),
