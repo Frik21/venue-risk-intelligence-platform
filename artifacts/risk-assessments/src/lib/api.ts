@@ -274,7 +274,7 @@ export interface Invoice {
   clientContact: string;
   billingDetails: string;
   dueDate: string | null;
-  lineItems: { description: string; amount: number }[];
+  lineItems: { category: QuoteCostCategory | null; description: string; amount: number }[];
   taxRatePercent: number;
   currency: string;
   assignedBy: number;
@@ -846,7 +846,7 @@ export const api = {
       title: string; status: InvoiceStatus;
       clientId: number | null; clientName: string; clientContact: string; billingDetails: string;
       dueDate: string | null;
-      lineItems: { description: string; amount: number }[];
+      lineItems: { category: QuoteCostCategory | null; description: string; amount: number }[];
       taxRatePercent: number; currency: string;
       assignedBy: number;
     }> & { assignedBy: number }) => apiFetch<Invoice>("/invoices", { method: "POST", body: JSON.stringify(data) }),
@@ -855,7 +855,7 @@ export const api = {
       title: string; status: InvoiceStatus;
       clientId: number | null; clientName: string; clientContact: string; billingDetails: string;
       dueDate: string | null;
-      lineItems: { description: string; amount: number }[];
+      lineItems: { category: QuoteCostCategory | null; description: string; amount: number }[];
       taxRatePercent: number; currency: string;
       assignedBy: number;
     }>) => apiFetch<Invoice>(`/invoices/${id}`, { method: "PATCH", body: JSON.stringify(data) }),

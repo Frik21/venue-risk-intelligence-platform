@@ -9,10 +9,10 @@ import { usersTable } from "./users";
 // A client-facing Invoice - money owed TO VenueGuard, the natural next
 // step after a Task/Quote is approved and completed, per direct
 // product direction ("client invoices - money owed to you"). Kept
-// deliberately separate and simpler than Quotes (schema/quotes.ts):
-// no cost-category build-up or markup, since an invoice bills a
-// client for an already-agreed amount rather than working one out -
-// just billing line items (description + amount) and a tax rate.
+// deliberately simpler than Quotes (schema/quotes.ts): no markup, no
+// derived internal-cost/client-price build-up - just billing line
+// items and a tax rate, since an invoice bills a client for an
+// already-agreed amount rather than working one out.
 //
 // taskId/quoteId are both optional and independent - an invoice can
 // be raised straight from an approved Quote (pre-filling client/title/
@@ -20,6 +20,16 @@ import { usersTable } from "./users";
 // standalone for a one-off client with neither. clientName/
 // clientContact/billingDetails stay the actual freeform fields even
 // when clientId is linked, same convention as Quotes/Tasks.
+//
+// A quote's approval (routes/quotes.ts) auto-creates a draft invoice
+// here as a single uncategorized line item for the quote's total -
+// per direct product direction, a Manager can then add further,
+// categorized line items for costs incurred beyond what was quoted
+// (operational costs, additional manpower, vehicles, etc.), reusing
+// Quotes' own cost category vocabulary (COST_CATEGORIES in
+// routes/quotes.ts) so both entities speak the same taxonomy. category
+// is nullable - null means "the original agreed amount", a real
+// category means "an extra cost added after the fact".
 export const invoicesTable = pgTable("invoices", {
   id: serial("id").primaryKey(),
   taskId: integer("task_id").references(() => tasksTable.id, { onDelete: "set null" }),
@@ -31,7 +41,7 @@ export const invoicesTable = pgTable("invoices", {
   clientContact: text("client_contact").notNull().default(""),
   billingDetails: text("billing_details").notNull().default(""),
   dueDate: timestamp("due_date", { withTimezone: true }),
-  lineItems: jsonb("line_items").notNull().default([]).$type<{ description: string; amount: number }[]>(),
+  lineItems: jsonb("line_items").notNull().default([]).$type<{ category: string | null; description: string; amount: number }[]>(),
   taxRatePercent: real("tax_rate_percent").notNull().default(0),
   currency: text("currency").notNull().default("ZAR"),
   assignedBy: integer("assigned_by").notNull().references(() => usersTable.id),

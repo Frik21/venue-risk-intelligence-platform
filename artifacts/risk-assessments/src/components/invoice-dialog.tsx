@@ -1,5 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Invoice, type Task, type User, type Client, type Quote, type InvoiceStatus } from "@/lib/api";
+import {
+  api, type Invoice, type Task, type User, type Client, type Quote, type InvoiceStatus,
+  type QuoteCostCategory, QUOTE_COST_CATEGORIES,
+} from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,8 +20,30 @@ const STATUS_LABELS: Record<InvoiceStatus, { label: string; color: string }> = {
   paid: { label: "Paid", color: "text-green-700 bg-green-50 border-green-200" },
 };
 
+// Same vocabulary as Quotes' own cost build-up (quote-dialog.tsx) -
+// lets a Manager add categorized costs incurred beyond the originally
+// quoted amount (operational costs, additional manpower, vehicles,
+// etc.), per direct product direction. NONE_CATEGORY represents "no
+// category" (the uncategorized base line item an auto-created
+// invoice starts with) - a real Select needs a non-empty value even
+// for its "none of these" option.
+const NONE_CATEGORY = "none";
+const CATEGORY_LABELS: Record<QuoteCostCategory, string> = {
+  cpo_rate: "CPO Rate", overtime: "Overtime", vehicles: "Vehicle Costs", fuel_mileage: "Fuel / Mileage",
+  accommodation: "Accommodation", flights_travel: "Flights / Travel", equipment: "Equipment",
+  subcontractors: "Subcontractors", allowances: "Allowances / Per Diem", misc: "Miscellaneous",
+};
+
 function formatMoney(amount: number, currency: string) {
   return `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+}
+
+// Same T-000x/Q-000x formula as tasks.ts/quotes.ts on the backend -
+// lets a reopened, already-saved invoice show where it came from
+// (taskId/quoteId) even when initialTask/initialQuote (only set on
+// the one-time creation flow) aren't passed.
+function refNumber(prefix: string, id: number) {
+  return `${prefix}-${String(id).padStart(4, "0")}`;
 }
 
 // Invoice creation/edit flow - a separate, simpler entity/lifecycle
@@ -66,12 +91,12 @@ export function InvoiceDialog({
       : initialTask?.assignedBy != null ? String(initialTask.assignedBy) : "",
   });
 
-  const [lineItems, setLineItems] = useState<{ description: string; amount: string }[]>(
+  const [lineItems, setLineItems] = useState<{ category: QuoteCostCategory | null; description: string; amount: string }[]>(
     invoice && invoice.lineItems.length > 0
-      ? invoice.lineItems.map((i) => ({ description: i.description, amount: String(i.amount) }))
+      ? invoice.lineItems.map((i) => ({ category: i.category, description: i.description, amount: String(i.amount) }))
       : initialQuote
-        ? [{ description: initialQuote.title || "Services rendered", amount: String(initialQuote.totalQuoteValue) }]
-        : [{ description: "", amount: "" }],
+        ? [{ category: null, description: initialQuote.title || "Services rendered", amount: String(initialQuote.totalQuoteValue) }]
+        : [{ category: null, description: "", amount: "" }],
   );
 
   const qc = useQueryClient();
@@ -81,7 +106,13 @@ export function InvoiceDialog({
   const updateLineItem = (idx: number, field: "description" | "amount", value: string) => {
     setLineItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
   };
-  const addLineItem = () => setLineItems((prev) => [...prev, { description: "", amount: "" }]);
+  const updateLineItemCategory = (idx: number, value: string) => {
+    setLineItems((prev) => prev.map((it, i) => (i === idx ? { ...it, category: value === NONE_CATEGORY ? null : (value as QuoteCostCategory) } : it)));
+  };
+  // New rows default to "misc" rather than no category - they're
+  // typically an added cost beyond the quoted amount, the case this
+  // category field exists for.
+  const addLineItem = () => setLineItems((prev) => [...prev, { category: "misc", description: "", amount: "" }]);
   const removeLineItem = (idx: number) => setLineItems((prev) => prev.filter((_, i) => i !== idx));
 
   // Live-computed totals, same formula as computeTotals() on the
@@ -104,7 +135,7 @@ export function InvoiceDialog({
         billingDetails: form.billingDetails,
         lineItems: lineItems
           .filter((i) => i.description.trim() !== "" || Number(i.amount))
-          .map((i) => ({ description: i.description.trim(), amount: Number(i.amount) || 0 })),
+          .map((i) => ({ category: i.category, description: i.description.trim(), amount: Number(i.amount) || 0 })),
         taxRatePercent: Number(form.taxRatePercent) || 0,
         currency: form.currency.trim() || "ZAR",
         assignedBy: Number(form.assignedBy),
@@ -142,8 +173,10 @@ export function InvoiceDialog({
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
             {createdAt ? `Issued ${new Date(createdAt).toLocaleDateString()}` : "Auto-generated invoice number is assigned on first save."}
-            {initialTask && ` · From ${initialTask.taskNumber}`}
-            {initialQuote && ` · From ${initialQuote.quoteNumber}`}
+            {(initialTask?.taskNumber ?? (taskId != null ? refNumber("T", taskId) : null)) &&
+              ` · From ${initialTask?.taskNumber ?? refNumber("T", taskId!)}`}
+            {(initialQuote?.quoteNumber ?? (quoteId != null ? refNumber("Q", quoteId) : null)) &&
+              ` · From ${initialQuote?.quoteNumber ?? refNumber("Q", quoteId!)}`}
           </p>
           <div className="grid grid-cols-2 gap-3 mt-3">
             <div className="col-span-2">
@@ -193,9 +226,19 @@ export function InvoiceDialog({
         {/* 3. Line Items */}
         <div className="pt-4 border-t border-slate-100">
           <h3 className="text-sm font-semibold text-slate-900 mb-2">2. Line Items</h3>
+          <p className="text-xs text-slate-400 mb-2">
+            Category is optional - use it to add costs incurred beyond the originally billed amount (operational costs, additional manpower, vehicles, etc.).
+          </p>
           <div className="space-y-2">
             {lineItems.map((item, idx) => (
               <div key={idx} className="flex items-center gap-2">
+                <Select value={item.category ?? NONE_CATEGORY} onValueChange={(v) => updateLineItemCategory(idx, v)}>
+                  <SelectTrigger className="h-8 w-40 text-xs shrink-0"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE_CATEGORY}>No category</SelectItem>
+                    {QUOTE_COST_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{CATEGORY_LABELS[c]}</SelectItem>)}
+                  </SelectContent>
+                </Select>
                 <Input
                   placeholder="Description"
                   className="h-8 text-xs flex-1"

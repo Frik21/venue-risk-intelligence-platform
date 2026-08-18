@@ -2,9 +2,12 @@ import PDFDocument from "pdfkit";
 
 // Client-facing billing document for the Invoices entity (see
 // schema/invoices.ts) - deliberately simpler than quote-pdf.ts: no
-// cost-category build-up or markup, just billing line items, tax, and
-// a total, since an invoice bills an already-agreed amount rather
-// than working one out.
+// markup or derived internal-cost build-up, just billing line items,
+// tax, and a total, since an invoice bills an already-agreed amount
+// rather than working one out. Line items can optionally carry a cost
+// category (same vocabulary as Quotes, see CATEGORY_LABELS below) for
+// costs added beyond that agreed amount - rendered as a "[Category] "
+// prefix rather than its own column, to keep this simpler layout.
 export interface InvoicePdfData {
   invoiceNumber: string;
   title: string;
@@ -14,7 +17,7 @@ export interface InvoicePdfData {
   clientName: string;
   clientContact: string;
   billingDetails: string;
-  lineItems: { description: string; amount: number }[];
+  lineItems: { category: string | null; description: string; amount: number }[];
   taxRatePercent: number;
   currency: string;
   assignedByName: string | null;
@@ -22,6 +25,12 @@ export interface InvoicePdfData {
   taxAmount: number;
   totalAmount: number;
 }
+
+const CATEGORY_LABELS: Record<string, string> = {
+  cpo_rate: "CPO Rate", overtime: "Overtime", vehicles: "Vehicle Costs", fuel_mileage: "Fuel / Mileage",
+  accommodation: "Accommodation", flights_travel: "Flights / Travel", equipment: "Equipment",
+  subcontractors: "Subcontractors", allowances: "Allowances / Per Diem", misc: "Miscellaneous",
+};
 
 function formatMoney(amount: number, currency: string) {
   return `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
@@ -95,7 +104,8 @@ export function buildInvoicePdf(data: InvoicePdfData): PDFKit.PDFDocument {
   } else {
     for (const item of data.lineItems) {
       const rowY = doc.y;
-      doc.text(item.description || "—", tableLeft, rowY, { width: descColWidth });
+      const label = item.category ? `[${CATEGORY_LABELS[item.category] ?? item.category}] ` : "";
+      doc.text(`${label}${item.description || "—"}`, tableLeft, rowY, { width: descColWidth });
       const afterY = doc.y;
       doc.text(formatMoney(item.amount, data.currency), tableLeft + descColWidth, rowY, {
         width: amountColWidth,

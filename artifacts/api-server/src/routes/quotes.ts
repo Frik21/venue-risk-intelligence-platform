@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
-import { db, quotesTable, venuesTable, usersTable, tasksTable } from "@workspace/db";
+import { db, quotesTable, venuesTable, usersTable, tasksTable, invoicesTable } from "@workspace/db";
 import { z } from "zod";
 import { buildQuotePdf } from "../lib/quote-pdf";
 
@@ -213,8 +213,51 @@ router.patch("/quotes/:id", async (req, res): Promise<void> => {
   // direction: quote approval is the trigger, not merely creating/
   // saving one). Only fires on this explicit transition, not on every
   // edit of an already-approved quote.
-  if (status === "approved" && quote.taskId != null) {
+  const justApproved = status === "approved" && existing.status !== "approved";
+  if (justApproved && quote.taskId != null) {
     await db.update(tasksTable).set({ quotationStatus: "approved" }).where(eq(tasksTable.id, quote.taskId));
+  }
+
+  // Auto-create a draft Invoice the moment a Quote is approved, per
+  // direct product direction - the same "prefill from an approved
+  // Quote" the manual Task Pending Invoice flow already does
+  // (invoice-dialog.tsx's initialQuote prop), just triggered
+  // automatically instead of waiting for a Manager to open the
+  // dialog. A Manager can then add further, categorized line items
+  // for costs beyond the quoted amount (operational costs, additional
+  // manpower, vehicles, etc. - COST_CATEGORIES above, shared with
+  // Quotes' own cost build-up). Guarded on the same justApproved
+  // transition, plus a check for an existing invoice against this
+  // quote, so re-saving an already-approved quote (or a quote that
+  // already had one manually created) never creates a duplicate.
+  if (justApproved) {
+    const [existingInvoice] = await db.select({ id: invoicesTable.id }).from(invoicesTable).where(eq(invoicesTable.quoteId, quote.id));
+    if (!existingInvoice) {
+      const { totalQuoteValue } = computeCommercials(quote);
+      const [draftInvoice] = await db
+        .insert(invoicesTable)
+        .values({
+          taskId: quote.taskId,
+          quoteId: quote.id,
+          clientId: quote.clientId,
+          title: quote.title,
+          status: "draft",
+          clientName: quote.clientName,
+          clientContact: quote.clientContact,
+          billingDetails: quote.billingDetails,
+          lineItems: [{ category: null, description: quote.title || "Services rendered", amount: totalQuoteValue }],
+          taxRatePercent: quote.taxRatePercent,
+          currency: quote.currency,
+          assignedBy: quote.assignedBy,
+        })
+        .returning();
+      // Same "a saved Invoice record existing for a task IS what
+      // billed means" sync as manual invoice creation - see
+      // syncTaskInvoiced in routes/invoices.ts.
+      if (draftInvoice.taskId != null) {
+        await db.update(tasksTable).set({ invoiced: true }).where(eq(tasksTable.id, draftInvoice.taskId));
+      }
+    }
   }
 
   const ctx = await loadContext(quote);

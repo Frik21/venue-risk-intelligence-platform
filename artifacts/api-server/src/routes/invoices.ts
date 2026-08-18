@@ -3,6 +3,7 @@ import { eq, desc } from "drizzle-orm";
 import { db, invoicesTable, usersTable, tasksTable } from "@workspace/db";
 import { z } from "zod";
 import { buildInvoicePdf } from "../lib/invoice-pdf";
+import { COST_CATEGORIES } from "./quotes";
 
 const router: IRouter = Router();
 
@@ -88,13 +89,24 @@ const InvoiceFieldsSchema = {
   clientContact: z.string().max(200).optional(),
   billingDetails: z.string().max(2000).optional(),
   dueDate: z.string().nullable().optional(),
-  lineItems: z.array(z.object({ description: z.string().max(200), amount: z.number() })).optional(),
+  lineItems: z.array(z.object({
+    category: z.enum(COST_CATEGORIES).nullable().optional(),
+    description: z.string().max(200),
+    amount: z.number(),
+  })).optional(),
   taxRatePercent: z.number().min(0).optional(),
   currency: z.string().min(1).max(10).optional(),
 };
 
 const InvoiceInputSchema = z.object({ ...InvoiceFieldsSchema, assignedBy: z.number().int() });
 const InvoiceUpdateSchema = z.object({ ...InvoiceFieldsSchema, assignedBy: z.number().int().optional() });
+
+// Zod's .optional() on category means a client that omits it entirely
+// parses fine, but the column type requires the key present - normalize
+// that gap here rather than loosening the column type.
+function normalizeLineItems(items?: { category?: string | null; description: string; amount: number }[]) {
+  return items?.map((i) => ({ category: i.category ?? null, description: i.description, amount: i.amount }));
+}
 
 router.post("/invoices", async (req, res): Promise<void> => {
   const parsed = InvoiceInputSchema.safeParse(req.body);
@@ -112,7 +124,7 @@ router.post("/invoices", async (req, res): Promise<void> => {
       clientContact: parsed.data.clientContact ?? "",
       billingDetails: parsed.data.billingDetails ?? "",
       dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : undefined,
-      lineItems: parsed.data.lineItems ?? [],
+      lineItems: normalizeLineItems(parsed.data.lineItems) ?? [],
       taxRatePercent: parsed.data.taxRatePercent ?? 0,
       currency: parsed.data.currency ?? "ZAR",
       assignedBy: parsed.data.assignedBy,
@@ -135,7 +147,7 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
   const [existing] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, id));
   if (!existing) { res.status(404).json({ error: "Invoice not found" }); return; }
 
-  const { dueDate, status, ...rest } = parsed.data;
+  const { dueDate, status, lineItems, ...rest } = parsed.data;
 
   // Stamps sentAt/paidAt the first time the invoice moves into that
   // status - same reasoning as sentAt/decidedAt on Quotes.
@@ -151,6 +163,7 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
       ...rest,
       ...(status !== undefined ? { status } : {}),
       ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
+      ...(lineItems !== undefined ? { lineItems: normalizeLineItems(lineItems) } : {}),
       ...statusStamps,
     })
     .where(eq(invoicesTable.id, id))

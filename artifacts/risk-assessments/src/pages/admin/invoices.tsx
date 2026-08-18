@@ -40,11 +40,15 @@ function CurrencyStack({ byCurrency }: { byCurrency: Record<string, number> }) {
 // Invoices - client-facing billing (money owed TO VenueGuard), per
 // direct product direction ("client invoices - money owed to you").
 // Own entity/lifecycle (schema/invoices.ts), separate from and
-// simpler than Quotes - no cost-category build-up or markup, just
-// billing line items and a tax rate, since an invoice bills an
-// already-agreed amount. Creating/saving an invoice against a task
-// marks that task "invoiced" server-side (see PATCH /invoices/:id),
-// which is what moves it from the Completed to Invoiced bucket on the
+// simpler than Quotes - no markup, just billing line items and a tax
+// rate, since an invoice bills an already-agreed amount. An approved
+// Quote auto-creates a draft invoice here (routes/quotes.ts) as a
+// single line item for the quoted total; a Manager can then add
+// further, categorized line items (invoice-dialog.tsx) for costs
+// incurred beyond that amount. Creating/saving an invoice against a
+// task marks that task "invoiced" server-side (see PATCH
+// /invoices/:id), which is what moves it from the Completed to
+// Invoiced bucket on the
 // Tasks list.
 export default function InvoicesPage() {
   const [showDialog, setShowDialog] = useState(false);
