@@ -17,3 +17,5 @@ export * from "./task-assignments";
 export * from "./offices";
 export * from "./company-settings";
 export * from "./operator-onboarding";
+export * from "./vendors";
+export * from "./vendor-activities";

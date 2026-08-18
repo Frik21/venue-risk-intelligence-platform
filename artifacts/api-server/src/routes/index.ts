@@ -29,6 +29,7 @@ import quotesRouter from "./quotes";
 import settingsRouter from "./settings";
 import personnelCostsRouter from "./personnel-costs";
 import onboardingRouter from "./onboarding";
+import vendorsRouter from "./vendors";
 
 const router: IRouter = Router();
 
@@ -62,5 +63,6 @@ router.use(quotesRouter);
 router.use(settingsRouter);
 router.use(personnelCostsRouter);
 router.use(onboardingRouter);
+router.use(vendorsRouter);
 
 export default router;

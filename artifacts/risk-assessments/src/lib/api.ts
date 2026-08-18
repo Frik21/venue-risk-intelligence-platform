@@ -175,6 +175,33 @@ export interface ClientActivity {
   createdAt: string;
 }
 
+export type VendorStatus = "lead" | "active" | "inactive" | "preferred";
+
+export interface Vendor {
+  id: number;
+  name: string;
+  status: VendorStatus;
+  category: string;
+  primaryContactName: string;
+  primaryContactRole: string;
+  email: string;
+  phone: string;
+  address: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// A dated activity/communication log entry against a Vendor - see
+// vendorActivitiesTable in schema/vendor-activities.ts.
+export interface VendorActivity {
+  id: number;
+  vendorId: number;
+  note: string;
+  createdBy: number | null;
+  createdByName: string | null;
+  createdAt: string;
+}
+
 export type QuoteStatus = "draft" | "sent" | "approved" | "rejected";
 export type QuoteMarkupType = "percent" | "fixed";
 export const QUOTE_COST_CATEGORIES = [
@@ -691,6 +718,26 @@ export const api = {
     create: (clientId: number, data: { note: string; createdBy?: number | null }) =>
       apiFetch<ClientActivity>(`/clients/${clientId}/activities`, { method: "POST", body: JSON.stringify(data) }),
     delete: (clientId: number, id: number) => apiFetch<void>(`/clients/${clientId}/activities/${id}`, { method: "DELETE" }),
+  },
+  vendors: {
+    list: () => apiFetch<Vendor[]>("/vendors"),
+    create: (data: {
+      name: string; status?: VendorStatus; category?: string;
+      primaryContactName?: string; primaryContactRole?: string;
+      email?: string; phone?: string; address?: string;
+    }) => apiFetch<Vendor>("/vendors", { method: "POST", body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<{
+      name: string; status: VendorStatus; category: string;
+      primaryContactName: string; primaryContactRole: string;
+      email: string; phone: string; address: string;
+    }>) => apiFetch<Vendor>(`/vendors/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    delete: (id: number) => apiFetch<void>(`/vendors/${id}`, { method: "DELETE" }),
+  },
+  vendorActivities: {
+    list: (vendorId: number) => apiFetch<VendorActivity[]>(`/vendors/${vendorId}/activities`),
+    create: (vendorId: number, data: { note: string; createdBy?: number | null }) =>
+      apiFetch<VendorActivity>(`/vendors/${vendorId}/activities`, { method: "POST", body: JSON.stringify(data) }),
+    delete: (vendorId: number, id: number) => apiFetch<void>(`/vendors/${vendorId}/activities/${id}`, { method: "DELETE" }),
   },
   quotes: {
     list: () => apiFetch<Quote[]>("/quotes"),
