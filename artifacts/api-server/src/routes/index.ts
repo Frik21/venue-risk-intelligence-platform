@@ -30,6 +30,7 @@ import settingsRouter from "./settings";
 import personnelCostsRouter from "./personnel-costs";
 import onboardingRouter from "./onboarding";
 import vendorsRouter from "./vendors";
+import invoicesRouter from "./invoices";
 
 const router: IRouter = Router();
 
@@ -64,5 +65,6 @@ router.use(settingsRouter);
 router.use(personnelCostsRouter);
 router.use(onboardingRouter);
 router.use(vendorsRouter);
+router.use(invoicesRouter);
 
 export default router;

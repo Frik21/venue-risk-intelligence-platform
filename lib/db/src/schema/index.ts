@@ -19,3 +19,4 @@ export * from "./company-settings";
 export * from "./operator-onboarding";
 export * from "./vendors";
 export * from "./vendor-activities";
+export * from "./invoices";

@@ -254,6 +254,40 @@ export interface Quote {
   totalQuoteValue: number;
 }
 
+export type InvoiceStatus = "draft" | "sent" | "paid";
+
+// A client-facing Invoice - money owed TO VenueGuard, the natural next
+// step after a Task/Quote is approved and completed (see
+// schema/invoices.ts). Deliberately simpler than Quote: billing line
+// items + a tax rate, no cost-category build-up or markup.
+// subtotal/taxAmount/totalAmount are computed server-side on every
+// read, never stored.
+export interface Invoice {
+  id: number;
+  invoiceNumber: string;
+  taskId: number | null;
+  quoteId: number | null;
+  clientId: number | null;
+  title: string;
+  status: InvoiceStatus;
+  clientName: string;
+  clientContact: string;
+  billingDetails: string;
+  dueDate: string | null;
+  lineItems: { description: string; amount: number }[];
+  taxRatePercent: number;
+  currency: string;
+  assignedBy: number;
+  assignedByName: string | null;
+  sentAt: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  subtotal: number;
+  taxAmount: number;
+  totalAmount: number;
+}
+
 // Operational Planning (Planner, Step 1: the pre-op readiness
 // checklist) - one Plan per Task, going deeper than the task's own
 // title. The checklist is a fixed, ordered list defined server-side
@@ -764,6 +798,28 @@ export const api = {
       assignedBy: number;
     }>) => apiFetch<Quote>(`/quotes/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     delete: (id: number) => apiFetch<void>(`/quotes/${id}`, { method: "DELETE" }),
+  },
+  invoices: {
+    list: () => apiFetch<Invoice[]>("/invoices"),
+    create: (data: Partial<{
+      taskId: number | null; quoteId: number | null;
+      title: string; status: InvoiceStatus;
+      clientId: number | null; clientName: string; clientContact: string; billingDetails: string;
+      dueDate: string | null;
+      lineItems: { description: string; amount: number }[];
+      taxRatePercent: number; currency: string;
+      assignedBy: number;
+    }> & { assignedBy: number }) => apiFetch<Invoice>("/invoices", { method: "POST", body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<{
+      taskId: number | null; quoteId: number | null;
+      title: string; status: InvoiceStatus;
+      clientId: number | null; clientName: string; clientContact: string; billingDetails: string;
+      dueDate: string | null;
+      lineItems: { description: string; amount: number }[];
+      taxRatePercent: number; currency: string;
+      assignedBy: number;
+    }>) => apiFetch<Invoice>(`/invoices/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    delete: (id: number) => apiFetch<void>(`/invoices/${id}`, { method: "DELETE" }),
   },
   plans: {
     forTask: (taskId: number) => apiFetch<Plan>(`/tasks/${taskId}/plan`),
