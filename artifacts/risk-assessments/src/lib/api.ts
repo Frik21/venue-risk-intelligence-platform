@@ -444,6 +444,33 @@ export interface PersonnelCostLine {
   cost: number;
 }
 
+// An operator's approved-but-not-yet-paid hours, rolled up ready for
+// a Pay Run - see GET /payroll/pending in routes/payroll.ts.
+export interface PendingPayroll {
+  userId: number;
+  userName: string | null;
+  totalHours: number;
+  totalAmount: number;
+}
+
+export type PayRunStatus = "pending" | "paid";
+
+// A Pay Run - one payout to one operator (see schema/payroll.ts).
+// totalHours/totalAmount are snapshotted at creation, not recomputed
+// live - a Pay Run represents money already committed to/paid out.
+export interface PayRun {
+  id: number;
+  userId: number;
+  userName: string | null;
+  totalHours: number;
+  totalAmount: number;
+  status: PayRunStatus;
+  paidAt: string | null;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface OnboardingChecklistEntry {
   key: string;
   label: string;
@@ -879,6 +906,15 @@ export const api = {
   },
   personnelCosts: {
     list: () => apiFetch<PersonnelCostLine[]>("/personnel-costs"),
+  },
+  payroll: {
+    pending: () => apiFetch<PendingPayroll[]>("/payroll/pending"),
+    listRuns: () => apiFetch<PayRun[]>("/payroll/runs"),
+    createRun: (data: { userId: number; createdBy?: number | null }) =>
+      apiFetch<PayRun>("/payroll/runs", { method: "POST", body: JSON.stringify(data) }),
+    updateRun: (id: number, data: { status: PayRunStatus }) =>
+      apiFetch<PayRun>(`/payroll/runs/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    deleteRun: (id: number) => apiFetch<void>(`/payroll/runs/${id}`, { method: "DELETE" }),
   },
   onboarding: {
     listAll: () => apiFetch<OnboardingOverviewRecord[]>("/onboarding"),

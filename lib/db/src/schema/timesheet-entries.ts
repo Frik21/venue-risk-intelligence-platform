@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
 import { tasksTable } from "./tasks";
+import { payRunsTable } from "./payroll";
 
 // One row per (operator, calendar day, task) - Profile > Timesheet.
 // date is a plain "YYYY-MM-DD" string (not drizzle's date type, to
@@ -41,6 +42,11 @@ export const timesheetEntriesTable = pgTable(
     approved: boolean("approved").notNull().default(false),
     approvedBy: integer("approved_by").references(() => usersTable.id, { onDelete: "set null" }),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
+    // Set once this entry's cost has been folded into a Pay Run (see
+    // schema/payroll.ts) - excludes it from Payroll's "pending" rollup
+    // so the same hours can never be paid out twice. Deleting the Pay
+    // Run (onDelete: set null) puts the entry back into pending.
+    payRunId: integer("pay_run_id").references(() => payRunsTable.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   },
