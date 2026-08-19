@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, ChangeEvent } from "react";
-import { useLocation } from "wouter";
-import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet, Gauge } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -1272,7 +1271,6 @@ function ExpenseEntryCard({
 }
 
 function TopBanner({ onSignOut }: { onSignOut: () => void }) {
-  const [, navigate] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
   const [operatorMenuOpen, setOperatorMenuOpen] = useState(false);
@@ -1518,17 +1516,6 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
             >
               <UserIcon className="w-4 h-4" />
               Profile
-            </button>
-            <button
-              type="button"
-              className="top-banner-operator-menu-item"
-              onClick={() => {
-                setOperatorMenuOpen(false);
-                navigate("/admin");
-              }}
-            >
-              <Gauge className="w-4 h-4" />
-              Admin Dashboard
             </button>
             <button
               type="button"
