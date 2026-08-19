@@ -11,7 +11,7 @@ import { ShieldCheck, Gauge, ShieldAlert, ArrowRight } from "lucide-react";
 // same way they always were.
 export default function RoleSelect() {
   return (
-    <div className="min-h-[80vh] bg-slate-950 text-white rounded-3xl p-8 flex items-center justify-center">
+    <div className="min-h-screen bg-slate-950 text-white p-8 flex items-center justify-center">
       <div className="max-w-3xl w-full mx-auto space-y-10 text-center">
         <div className="flex flex-col items-center gap-3">
           <ShieldAlert className="w-8 h-8 text-blue-400" />

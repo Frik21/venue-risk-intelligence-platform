@@ -239,7 +239,7 @@ const hideShell = (location === "/" || location === "/cpo") && !showShell;
     hideShell ? "p-0" : "p-4 md:p-6"
   )}
 >
-          <div className="max-w-7xl mx-auto w-full">
+          <div className={cn("w-full", !hideShell && "max-w-7xl mx-auto")}>
             {children}
           </div>
         </div>
