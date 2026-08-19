@@ -490,18 +490,15 @@ export default function OnboardingPage() {
 
   // Two columns by engagement type, per direct product direction. An
   // operator who hasn't had either "engagement_type" checklist item
-  // checked yet shows once in a single shared "Unassigned" list
-  // instead - not duplicated into both columns, and not hidden -
-  // then moves into exactly one column the moment either checklist
+  // checked yet doesn't belong in either column - they're findable
+  // under the "Pending" status filter's single flat list below
+  // instead (Pending is effectively "not yet assigned" in practice)
+  // - then moves into exactly one column the moment either checklist
   // item is checked (the two items are mutually exclusive, see
   // onboarding-checklist.ts, so it can only ever land in one).
   const engagementOf = (r: OnboardingOverviewRecord) => ({
     isFreelancer: r.checklist.find((c) => c.key === "freelancer")?.checked ?? false,
     isLongTermContract: r.checklist.find((c) => c.key === "long_term_contract")?.checked ?? false,
-  });
-  const unassignedRecords = visibleRecords.filter((r) => {
-    const { isFreelancer, isLongTermContract } = engagementOf(r);
-    return !isFreelancer && !isLongTermContract;
   });
   const freelancerQuery = freelancerSearch.trim().toLowerCase();
   const freelancerColumnRecords = visibleRecords.filter((r) => {
@@ -648,14 +645,6 @@ export default function OnboardingPage() {
         </div>
       ) : (
         <div>
-          {unassignedRecords.length > 0 && (
-            <div className="mb-5">
-              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2.5">Unassigned</h2>
-              <div className="space-y-3">
-                {unassignedRecords.map((r) => renderOperatorCard(r, "unassigned"))}
-              </div>
-            </div>
-          )}
           <button
             type="button"
             onClick={() => setColumnsExpanded((v) => !v)}
