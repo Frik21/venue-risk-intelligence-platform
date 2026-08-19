@@ -89,12 +89,41 @@ router.post("/onboarding", async (req, res): Promise<void> => {
   const parsed = CreateOnboardingSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const [existingUser] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, parsed.data.email));
-  if (existingUser) { res.status(409).json({ error: `A user with email "${parsed.data.email}" already exists` }); return; }
+  const [existingUser] = await db.select({ id: usersTable.id, active: usersTable.active }).from(usersTable).where(eq(usersTable.email, parsed.data.email));
 
+  // A genuinely live account already owns this email - block, same as
+  // before.
+  if (existingUser?.active) { res.status(409).json({ error: `A user with email "${parsed.data.email}" already exists` }); return; }
+
+  // operatorOnboardingTable.userId is unique - if this inactive user
+  // is somehow still linked to a live onboarding record (shouldn't
+  // happen via the normal Remove flow, which deletes that row
+  // outright, but could if a user was deactivated some other way),
+  // linking a second record to them would trip that constraint.
+  if (existingUser) {
+    const [linkedRecord] = await db.select({ id: operatorOnboardingTable.id }).from(operatorOnboardingTable).where(eq(operatorOnboardingTable.userId, existingUser.id));
+    if (linkedRecord) { res.status(409).json({ error: `A user with email "${parsed.data.email}" already exists` }); return; }
+  }
+
+  // email is UNIQUE on usersTable, so a *removed* operator (DELETE
+  // /onboarding/:id deactivates rather than deletes their account, to
+  // avoid cascading that delete into their historical tasks/
+  // timesheets - see that route) leaves an inactive user row still
+  // holding their email. Re-onboarding under the same email used to
+  // hit the block above forever, even though the operator record
+  // itself was gone - re-link to that same (still inactive) user
+  // instead of trying to create a second row with an email the
+  // database won't allow to duplicate. operational-access grant
+  // reactivates it exactly like it already does for any other
+  // pre-linked user.
   const [record] = await db
     .insert(operatorOnboardingTable)
-    .values({ candidateName: parsed.data.name, candidateEmail: parsed.data.email, checklist: {} })
+    .values({
+      candidateName: parsed.data.name,
+      candidateEmail: parsed.data.email,
+      checklist: {},
+      userId: existingUser?.id ?? null,
+    })
     .returning();
 
   res.status(201).json(formatOnboarding(record));
