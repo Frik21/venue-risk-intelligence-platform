@@ -29,7 +29,7 @@ export type IncidentSeverity = "low" | "medium" | "high" | "critical";
 export type AlertPriority = "low" | "medium" | "high" | "critical";
 export type AlertStatus = "pending" | "reviewed" | "dismissed" | "escalated";
 export type OsintStatus = "pending" | "accepted" | "rejected";
-export type UserRole = "admin" | "manager" | "cpo";
+export type UserRole = "admin" | "manager" | "cpo" | "finance" | "human_resources" | "operations";
 export type RouteType =
   | "primary_extraction" | "secondary_extraction" | "medical_evacuation"
   | "vip_arrival" | "vip_departure" | "staff_access" | "supplier_route" | "emergency_access";

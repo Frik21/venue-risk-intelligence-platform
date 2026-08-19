@@ -8,7 +8,7 @@ const router: IRouter = Router();
 const UserInputSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
-  role: z.enum(["admin", "manager", "cpo"]),
+  role: z.enum(["admin", "manager", "cpo", "finance", "human_resources", "operations"]),
   avatarInitials: z.string().optional(),
   officeId: z.number().int().nullable().optional(),
 });
@@ -18,7 +18,7 @@ function formatUser(row: typeof usersTable.$inferSelect) {
     id: row.id,
     name: row.name,
     email: row.email,
-    role: row.role as "admin" | "manager" | "cpo",
+    role: row.role as "admin" | "manager" | "cpo" | "finance" | "human_resources" | "operations",
     avatarInitials: row.avatarInitials ?? null,
     active: row.active,
     dayRate: row.dayRate ?? null,

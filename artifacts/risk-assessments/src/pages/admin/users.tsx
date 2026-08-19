@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type User, type Office } from "@/lib/api";
+import { api, type User, type Office, type UserRole } from "@/lib/api";
 import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,30 +9,49 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
-import { Users, Plus, ShieldCheck, Shield, MapPin, Pencil } from "lucide-react";
+import { Users, Plus, ShieldCheck, Shield, Wallet, Users2, Workflow } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 // Admin: VenueGuard's own owner/operator (this SaaS's platform admin).
-// Manager: a subscribed client, oversees CPOs and assigns them tasks.
-// CPO: the field operator - the Operational Canvas is their page.
-const ROLE_COLORS = {
-  admin:   "text-red-700 bg-red-50 border-red-200",
-  manager: "text-purple-700 bg-purple-50 border-purple-200",
-  cpo:     "text-blue-700 bg-blue-50 border-blue-200",
+// Manager, Finance, Human Resources, Operations: a subscribed
+// company's own Management-side seats. CPOs are deliberately not a
+// role managed here - they're a separate, seat-limited pool onboarded
+// and tracked via Operator Database instead (their own Operational
+// Canvas / "Operators note" is a different product surface), per
+// direct product direction.
+// Partial - CPO is a valid UserRole in the data model (onboarded CPO
+// accounts still carry role: "cpo"), but deliberately has no entry
+// here since this page filters CPOs out before rendering.
+const ROLE_COLORS: Partial<Record<UserRole, string>> = {
+  admin:           "text-red-700 bg-red-50 border-red-200",
+  manager:         "text-purple-700 bg-purple-50 border-purple-200",
+  finance:         "text-emerald-700 bg-emerald-50 border-emerald-200",
+  human_resources: "text-rose-700 bg-rose-50 border-rose-200",
+  operations:      "text-amber-700 bg-amber-50 border-amber-200",
 };
 
-const ROLE_ICONS = {
-  admin:   Shield,
-  manager: ShieldCheck,
-  cpo:     MapPin,
+const ROLE_ICONS: Partial<Record<UserRole, typeof Shield>> = {
+  admin:           Shield,
+  manager:         ShieldCheck,
+  finance:         Wallet,
+  human_resources: Users2,
+  operations:      Workflow,
+};
+
+const ROLE_LABELS: Partial<Record<UserRole, string>> = {
+  admin:           "Admin",
+  manager:         "Manager",
+  finance:         "Finance",
+  human_resources: "Human Resources",
+  operations:      "Operations",
 };
 
 function NewUserDialog({ onClose }: { onClose: () => void }) {
   const { data: offices = [] } = useQuery<Office[]>({ queryKey: ["offices"], queryFn: api.offices.list });
   const [selectedOfficeId] = useSelectedOfficeId();
-  const [form, setForm] = useState({ name: "", email: "", role: "cpo" as any, officeId: selectedOfficeId as number | null });
+  const [form, setForm] = useState({ name: "", email: "", role: "manager" as any, officeId: selectedOfficeId as number | null });
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -67,7 +86,9 @@ function NewUserDialog({ onClose }: { onClose: () => void }) {
             <SelectContent>
               <SelectItem value="admin">Admin — VenueGuard platform owner</SelectItem>
               <SelectItem value="manager">Manager — Assigns and oversees CPOs</SelectItem>
-              <SelectItem value="cpo">CPO — Field operator</SelectItem>
+              <SelectItem value="finance">Finance</SelectItem>
+              <SelectItem value="human_resources">Human Resources</SelectItem>
+              <SelectItem value="operations">Operations</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -95,53 +116,6 @@ function NewUserDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-// CPO pay rate - Manager-set, drives Personnel Costs (Costs page).
-// Deliberately not part of self-service Account Details.
-function CpoRateEditor({ user }: { user: User }) {
-  const [editing, setEditing] = useState(false);
-  const [dayRate, setDayRate] = useState(user.dayRate != null ? String(user.dayRate) : "");
-  const [nightRate, setNightRate] = useState(user.nightRate != null ? String(user.nightRate) : "");
-  const qc = useQueryClient();
-  const { toast } = useToast();
-
-  const mutation = useMutation({
-    mutationFn: () =>
-      api.users.updateRates(user.id, {
-        dayRate: dayRate.trim() === "" ? null : Number(dayRate),
-        nightRate: nightRate.trim() === "" ? null : Number(nightRate),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["users"] });
-      toast({ title: "Rates updated" });
-      setEditing(false);
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
-
-  if (!editing) {
-    return (
-      <button
-        onClick={() => setEditing(true)}
-        className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 shrink-0"
-      >
-        <Pencil className="w-3 h-3" />
-        {user.dayRate != null || user.nightRate != null
-          ? `Day ${user.dayRate ?? "—"} / Night ${user.nightRate ?? "—"}`
-          : "Set rates"}
-      </button>
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-1.5 shrink-0">
-      <Input className="h-7 w-20 text-xs" type="number" min={0} placeholder="Day" value={dayRate} onChange={(e) => setDayRate(e.target.value)} />
-      <Input className="h-7 w-20 text-xs" type="number" min={0} placeholder="Night" value={nightRate} onChange={(e) => setNightRate(e.target.value)} />
-      <Button size="sm" className="h-7 px-2 text-xs" onClick={() => mutation.mutate()} disabled={mutation.isPending}>Save</Button>
-      <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setEditing(false)}>Cancel</Button>
-    </div>
-  );
-}
-
 export default function UsersPage() {
   const [showNew, setShowNew] = useState(false);
 
@@ -150,7 +124,11 @@ export default function UsersPage() {
     queryFn: api.users.list,
   });
   const [selectedOfficeId] = useSelectedOfficeId();
-  const users = filterByOffice(allUsers, selectedOfficeId);
+  // CPOs aren't managed from here - they're a separate, seat-limited
+  // pool onboarded via Operator Database instead, per direct product
+  // direction. Filtered out before office-scoping so they never show
+  // up in either the roster below or the role-count tiles.
+  const users = filterByOffice(allUsers.filter(u => u.role !== "cpo"), selectedOfficeId);
 
   return (
     <div className="space-y-5">
@@ -160,7 +138,7 @@ export default function UsersPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Users, Roles &amp; Permissions</h1>
           <p className="text-slate-500 text-sm mt-0.5">
-            Manage platform users and access roles. No team grouping or granular per-user permissions exist yet - access is controlled entirely by the three roles below.
+            Manage Management-side users and access roles. No team grouping or granular per-user permissions exist yet - access is controlled entirely by the roles below. CPOs are managed separately, via Operator Database.
           </p>
         </div>
         <Button onClick={() => setShowNew(true)}>
@@ -169,9 +147,9 @@ export default function UsersPage() {
       </div>
 
       {/* Role explanation */}
-      <div className="grid grid-cols-3 gap-3">
-        {(["admin", "manager", "cpo"] as const).map((role) => {
-          const Icon = ROLE_ICONS[role];
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {(["admin", "manager", "finance", "human_resources", "operations"] as const).map((role) => {
+          const Icon = ROLE_ICONS[role] ?? Shield;
           const inRole = users.filter(u => u.role === role);
           const activeCount = inRole.filter(u => u.active).length;
           return (
@@ -181,7 +159,7 @@ export default function UsersPage() {
                   <Icon className="w-4 h-4" />
                 </div>
                 <div className="text-xl font-bold">{inRole.length}</div>
-                <div className="text-xs text-slate-500 capitalize">{role}s{inRole.length > 0 && ` · ${activeCount} active`}</div>
+                <div className="text-xs text-slate-500">{ROLE_LABELS[role]}{inRole.length > 0 && ` · ${activeCount} active`}</div>
               </CardContent>
             </Card>
           );
@@ -215,10 +193,9 @@ export default function UsersPage() {
                     </div>
                     <div className="text-xs text-slate-400 mt-0.5">{user.email} · Joined {formatDate(user.createdAt)}</div>
                   </div>
-                  {user.role === "cpo" && <CpoRateEditor user={user} />}
-                  <div className={cn("flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded border uppercase shrink-0", ROLE_COLORS[user.role])}>
+                  <div className={cn("flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded border shrink-0", ROLE_COLORS[user.role])}>
                     <Icon className="w-3.5 h-3.5" />
-                    {user.role}
+                    {ROLE_LABELS[user.role] ?? user.role}
                   </div>
                 </div>
               );
