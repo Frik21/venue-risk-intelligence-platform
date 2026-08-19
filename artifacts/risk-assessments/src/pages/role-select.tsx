@@ -25,7 +25,7 @@ const TILES = [
     href: "/admin",
     icon: Gauge,
     iconColor: "text-amber-300",
-    label: "Admin",
+    label: "Management",
     description: "Management Dashboard - tasks, operators, costs, and reporting.",
   },
   {
