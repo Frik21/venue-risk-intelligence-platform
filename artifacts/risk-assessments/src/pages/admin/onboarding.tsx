@@ -445,10 +445,10 @@ function CpoOnboardingDetail({ onboardingId, onRemoved }: { onboardingId: number
 // checklist), not user-configurable.
 export default function OnboardingPage() {
   // Keyed by `${column}-${id}`, matching cardRefs below, rather than
-  // bare id - an unassigned operator (neither engagement checklist
-  // item checked) renders a card in both the Freelancers and Long
-  // Term Contract columns at once, and a bare-id key would expand
-  // both cards together whenever either one was clicked.
+  // bare id - the same operator can appear under different column
+  // keys over their lifetime (unassigned, then freelancer or
+  // longterm once assigned), and a bare-id key would carry an
+  // expanded/scroll target across that transition incorrectly.
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [statusFilter, setStatusFilter] = useState<OnboardingStatus | null>(null);
@@ -490,26 +490,28 @@ export default function OnboardingPage() {
 
   // Two columns by engagement type, per direct product direction. An
   // operator who hasn't had either "engagement_type" checklist item
-  // checked yet appears in BOTH columns (rather than a third
-  // "Unassigned" column or being hidden) so nobody drops out of view
-  // while their onboarding is still in progress; the two items are
-  // mutually exclusive (see onboarding-checklist.ts) so an assigned
-  // operator can only ever land in exactly one column.
+  // checked yet shows once in a single shared "Unassigned" list
+  // instead - not duplicated into both columns, and not hidden -
+  // then moves into exactly one column the moment either checklist
+  // item is checked (the two items are mutually exclusive, see
+  // onboarding-checklist.ts, so it can only ever land in one).
   const engagementOf = (r: OnboardingOverviewRecord) => ({
     isFreelancer: r.checklist.find((c) => c.key === "freelancer")?.checked ?? false,
     isLongTermContract: r.checklist.find((c) => c.key === "long_term_contract")?.checked ?? false,
   });
+  const unassignedRecords = visibleRecords.filter((r) => {
+    const { isFreelancer, isLongTermContract } = engagementOf(r);
+    return !isFreelancer && !isLongTermContract;
+  });
   const freelancerQuery = freelancerSearch.trim().toLowerCase();
   const freelancerColumnRecords = visibleRecords.filter((r) => {
-    const { isFreelancer, isLongTermContract } = engagementOf(r);
-    if (!(isFreelancer || (!isFreelancer && !isLongTermContract))) return false;
+    if (!engagementOf(r).isFreelancer) return false;
     if (freelancerQuery && !r.userName?.toLowerCase().includes(freelancerQuery)) return false;
     return true;
   });
   const longTermQuery = longTermSearch.trim().toLowerCase();
   const longTermColumnRecords = visibleRecords.filter((r) => {
-    const { isFreelancer, isLongTermContract } = engagementOf(r);
-    if (!(isLongTermContract || (!isFreelancer && !isLongTermContract))) return false;
+    if (!engagementOf(r).isLongTermContract) return false;
     if (longTermQuery && !r.userName?.toLowerCase().includes(longTermQuery)) return false;
     return true;
   });
@@ -646,6 +648,14 @@ export default function OnboardingPage() {
         </div>
       ) : (
         <div>
+          {unassignedRecords.length > 0 && (
+            <div className="mb-5">
+              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2.5">Unassigned</h2>
+              <div className="space-y-3">
+                {unassignedRecords.map((r) => renderOperatorCard(r, "unassigned"))}
+              </div>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => setColumnsExpanded((v) => !v)}
