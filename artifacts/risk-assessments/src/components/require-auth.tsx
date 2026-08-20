@@ -1,6 +1,8 @@
 import { useLocation, Redirect } from "wouter";
 import { useAuth } from "@/lib/auth";
-import { ShieldAlert } from "lucide-react";
+import { api } from "@/lib/api";
+import { ShieldAlert, FlaskConical } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 // Wraps App.tsx's whole <Switch> (outside <Layout>, so /login itself
 // renders full-bleed with no sidebar chrome). Redirects to /login when
@@ -41,5 +43,45 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
     return <Redirect to={homeRoute} />;
   }
 
-  return <>{children}</>;
+  // A plain Owner session (role: "admin", companyId: null, not
+  // previewing) has nothing to do on the Management/CPO pages - every
+  // API call there 400s (see requireCompanyId's comment in
+  // lib/resolve-company.ts). Send them to /owner instead of a broken
+  // empty-looking UI. Once they've entered Preview (pages/owner/
+  // dashboard.tsx's "Preview" button), companyId is set and these
+  // routes work normally, so this only applies pre-preview.
+  if (user?.role === "admin" && !user.isPreviewing && location !== "/owner") {
+    return <Redirect to="/owner" />;
+  }
+
+  return (
+    <>
+      {user?.isPreviewing && <PreviewBanner companyName={user.companyName} />}
+      {children}
+    </>
+  );
+}
+
+function PreviewBanner({ companyName }: { companyName: string | null }) {
+  return (
+    <div className="sticky top-0 z-50 h-9 flex items-center justify-center gap-3 bg-violet-600 text-white text-xs font-medium px-4">
+      <FlaskConical className="w-3.5 h-3.5" />
+      <span>Previewing {companyName ?? "the test company"} - not a real subscriber</span>
+      <Button
+        size="sm"
+        variant="secondary"
+        className="h-6 px-2 text-[11px]"
+        onClick={async () => {
+          // Full reload (not client-side nav) - same cache-safety reason
+          // login/enterPreview use one: no react-query cache here is
+          // keyed by company, so an in-memory cache built while
+          // previewing shouldn't bleed into the plain Owner view after.
+          await api.auth.exitPreview();
+          window.location.href = "/owner";
+        }}
+      >
+        Exit Preview
+      </Button>
+    </div>
+  );
 }

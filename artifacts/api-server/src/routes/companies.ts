@@ -65,6 +65,7 @@ async function buildCompanyRows() {
     name: c.name,
     tier: c.tier as (typeof TIERS)[number],
     status: c.status as (typeof STATUSES)[number],
+    isInternal: c.isInternal,
     managementUserCount: managementMap[c.id] ?? 0,
     cpoCount: cpoMap[c.id] ?? 0,
     venueCount: venueMap[c.id] ?? 0,
@@ -116,7 +117,19 @@ const CompanyInputSchema = z.object({
   name: z.string().trim().min(1).max(200),
   tier: z.enum(TIERS).optional(),
   status: z.enum(STATUSES).optional(),
+  isInternal: z.boolean().optional(),
 });
+
+function formatCompanyRecord(company: typeof companiesTable.$inferSelect) {
+  return {
+    id: company.id,
+    name: company.name,
+    tier: company.tier,
+    status: company.status,
+    isInternal: company.isInternal,
+    createdAt: company.createdAt.toISOString(),
+  };
+}
 
 router.post("/companies", async (req, res): Promise<void> => {
   const parsed = CompanyInputSchema.safeParse(req.body);
@@ -128,10 +141,11 @@ router.post("/companies", async (req, res): Promise<void> => {
       name: parsed.data.name,
       tier: parsed.data.tier ?? "enterprise",
       status: parsed.data.status ?? "trial",
+      isInternal: parsed.data.isInternal ?? false,
     })
     .returning();
 
-  res.status(201).json({ id: company.id, name: company.name, tier: company.tier, status: company.status, createdAt: company.createdAt.toISOString() });
+  res.status(201).json(formatCompanyRecord(company));
 });
 
 const CompanyUpdateSchema = CompanyInputSchema.partial();
@@ -146,7 +160,7 @@ router.patch("/companies/:id", async (req, res): Promise<void> => {
   const [company] = await db.update(companiesTable).set(parsed.data).where(eq(companiesTable.id, id)).returning();
   if (!company) { res.status(404).json({ error: "Company not found" }); return; }
 
-  res.json({ id: company.id, name: company.name, tier: company.tier, status: company.status, createdAt: company.createdAt.toISOString() });
+  res.json(formatCompanyRecord(company));
 });
 
 export default router;

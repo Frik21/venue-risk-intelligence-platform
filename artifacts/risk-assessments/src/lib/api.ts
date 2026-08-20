@@ -56,6 +56,10 @@ export interface User {
 export interface SessionUser {
   id: number; companyId: number | null; companyName: string | null; name: string; email: string; role: UserRole;
   avatarInitials: string | null; mustChangePassword: boolean;
+  // True only while an Owner (role: "admin") session is in Preview mode
+  // - see lib/api.ts's auth.enterPreview/exitPreview and the Owner
+  // Console's "Preview" button, pages/owner/dashboard.tsx.
+  isPreviewing: boolean;
 }
 
 export interface Venue {
@@ -167,6 +171,10 @@ export interface Company {
   name: string;
   tier: CompanyTier;
   status: CompanyStatus;
+  // The Owner's own sandbox for testing the Management/CPO pages - see
+  // SessionUser.isPreviewing. Only a company flagged true here can ever
+  // be entered via auth.enterPreview, enforced server-side.
+  isInternal: boolean;
   managementUserCount: number;
   cpoCount: number;
   venueCount: number;
@@ -826,13 +834,17 @@ export const api = {
     me: () => apiFetch<{ user: SessionUser }>("/auth/me"),
     changePassword: (currentPassword: string, newPassword: string) =>
       apiFetch<{ user: SessionUser }>("/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),
+    // Owner-only - browse the Management/CPO pages scoped to the
+    // internal test company for testing/QA. See SessionUser.isPreviewing.
+    enterPreview: (companyId: number) => apiFetch<{ user: SessionUser }>(`/auth/preview/${companyId}`, { method: "POST" }),
+    exitPreview: () => apiFetch<{ user: SessionUser }>("/auth/preview/exit", { method: "POST" }),
   },
   companies: {
     list: () => apiFetch<Company[]>("/companies"),
     summary: () => apiFetch<CompanySummary>("/companies/summary"),
-    create: (data: { name: string; tier?: CompanyTier; status?: CompanyStatus }) =>
+    create: (data: { name: string; tier?: CompanyTier; status?: CompanyStatus; isInternal?: boolean }) =>
       apiFetch<Company>("/companies", { method: "POST", body: JSON.stringify(data) }),
-    update: (id: number, data: Partial<{ name: string; tier: CompanyTier; status: CompanyStatus }>) =>
+    update: (id: number, data: Partial<{ name: string; tier: CompanyTier; status: CompanyStatus; isInternal: boolean }>) =>
       apiFetch<Company>(`/companies/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   },
   offices: {

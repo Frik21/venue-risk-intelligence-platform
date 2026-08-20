@@ -8,9 +8,16 @@ declare namespace Express {
       name: string;
       email: string;
       role: string;
-      // null only for role: "admin" (the platform Owner) - see
-      // lib/db/src/schema/users.ts's companyId comment.
+      // The EFFECTIVE company for this request - null for a plain Owner
+      // session, but overridden to the internal test company's id while
+      // the Owner is in Preview mode (see previewCompanyId below), so
+      // every existing tenant-scoped route (resolveCompanyId/
+      // requireCompanyId) works unchanged with no per-route awareness
+      // of preview mode at all.
       companyId: number | null;
+      // True only when companyId above came from an active Preview
+      // session rather than the user's own real company assignment.
+      isPreviewing: boolean;
     };
   }
 }

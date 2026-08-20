@@ -2,7 +2,17 @@ import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, usersTable, companiesTable } from "@workspace/db";
-import { SESSION_COOKIE, createSession, destroySession, hashPassword, requireAuth, verifyPassword } from "../lib/auth";
+import {
+  SESSION_COOKIE,
+  createSession,
+  destroySession,
+  enterPreview,
+  exitPreview,
+  hashPassword,
+  requireAuth,
+  requireRole,
+  verifyPassword,
+} from "../lib/auth";
 
 // Deliberately NOT behind requireAuth (except /me and /change-password,
 // gated per-route below) - registered in routes/index.ts before the
@@ -19,20 +29,28 @@ const cookieOptions = {
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 
-async function formatSessionUser(row: typeof usersTable.$inferSelect) {
+// `effective` carries the session's actual companyId/isPreviewing (from
+// req.user, which requireAuth already resolved) for callers that need
+// it - login and change-password never have a preview active yet (a
+// fresh/still-authenticating session), so they can omit it and fall
+// back to the raw user row's own companyId.
+async function formatSessionUser(row: typeof usersTable.$inferSelect, effective?: { companyId: number | null; isPreviewing: boolean }) {
+  const companyId = effective?.companyId ?? row.companyId;
+  const isPreviewing = effective?.isPreviewing ?? false;
   // A non-Owner session can't hit GET /companies (Owner-only) to learn
   // its own company's name for display, so it rides along on the
   // session payload instead - the one place a name, not just an id, is
   // needed outside the aggregate-only Owner surface.
   let companyName: string | null = null;
-  if (row.companyId != null) {
-    const [company] = await db.select({ name: companiesTable.name }).from(companiesTable).where(eq(companiesTable.id, row.companyId));
+  if (companyId != null) {
+    const [company] = await db.select({ name: companiesTable.name }).from(companiesTable).where(eq(companiesTable.id, companyId));
     companyName = company?.name ?? null;
   }
   return {
     id: row.id,
-    companyId: row.companyId,
+    companyId,
     companyName,
+    isPreviewing,
     name: row.name,
     email: row.email,
     role: row.role as "admin" | "manager" | "cpo" | "finance" | "human_resources" | "operations",
@@ -74,7 +92,37 @@ router.post("/auth/logout", async (req, res): Promise<void> => {
 router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id));
   if (!user) { res.status(401).json({ error: "Not authenticated" }); return; }
-  res.json({ user: await formatSessionUser(user) });
+  res.json({ user: await formatSessionUser(user, { companyId: req.user!.companyId, isPreviewing: req.user!.isPreviewing }) });
+});
+
+// Lets the Owner browse the Management/CPO pages for testing/QA,
+// scoped to the internal test company only - never a real subscriber.
+// The isInternal check here is the actual enforcement of that boundary
+// (not just the Owner Console UI only showing a Preview button on that
+// one row) - a request for any other company's id is rejected outright.
+router.post("/auth/preview/:companyId", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+  const companyId = Number(req.params.companyId);
+  if (isNaN(companyId)) { res.status(400).json({ error: "Invalid company id" }); return; }
+
+  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId));
+  if (!company || !company.isInternal) {
+    res.status(403).json({ error: "Preview is only available for the designated internal test company" });
+    return;
+  }
+
+  const sessionId = req.signedCookies?.[SESSION_COOKIE];
+  await enterPreview(sessionId, companyId);
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id));
+  res.json({ user: await formatSessionUser(user!, { companyId, isPreviewing: true }) });
+});
+
+router.post("/auth/preview/exit", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+  const sessionId = req.signedCookies?.[SESSION_COOKIE];
+  await exitPreview(sessionId);
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id));
+  res.json({ user: await formatSessionUser(user!, { companyId: user!.companyId, isPreviewing: false }) });
 });
 
 const ChangePasswordSchema = z.object({

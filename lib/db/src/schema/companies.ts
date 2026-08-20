@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -12,6 +12,13 @@ export const companiesTable = pgTable("companies", {
   name: text("name").notNull(),
   tier: text("tier").notNull().default("enterprise"),
   status: text("status").notNull().default("trial"),
+  // The Owner's own sandbox for testing/QA-ing the Management and CPO
+  // pages (see lib/auth.ts's preview session mechanism) - never a real
+  // subscriber. Only a company flagged true here can ever be entered
+  // via POST /auth/preview/:companyId; enforced server-side there, not
+  // just a UI convention, so the Owner's aggregate-only boundary on
+  // every other company can never be bypassed by URL/API manipulation.
+  isInternal: boolean("is_internal").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
