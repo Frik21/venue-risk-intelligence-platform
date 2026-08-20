@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type OnboardingOverviewRecord, type OnboardingRecord, type OnboardingDocument, type DocumentType, type OnboardingStatus } from "@/lib/api";
+import { api, type OnboardingOverviewRecord, type OnboardingRecord, type OnboardingDocument, type DocumentType, type OnboardingStatus, type User } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useRef, useState } from "react";
-import { UserPlus, ChevronDown, ChevronUp, FileText, CheckCircle2, Trash2, Plus, Search } from "lucide-react";
+import { UserPlus, ChevronDown, ChevronUp, FileText, CheckCircle2, Trash2, Plus, Search, Pencil } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -262,9 +262,66 @@ function AddOperatorDialog({ onClose, onCreated }: { onClose: () => void; onCrea
   );
 }
 
+// CPO day/night pay rate - Manager-set, drives Personnel Costs (Costs
+// page). Lives here rather than on Users (which no longer manages
+// CPOs at all - see "Product Vision & Business Model" in CLAUDE.md)
+// since a CPO's rate is exactly the kind of Management-side-only
+// setting that shouldn't exist inside Operators note itself.
+function OperatorRateEditor({ user }: { user: User }) {
+  const [editing, setEditing] = useState(false);
+  const [dayRate, setDayRate] = useState(user.dayRate != null ? String(user.dayRate) : "");
+  const [nightRate, setNightRate] = useState(user.nightRate != null ? String(user.nightRate) : "");
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      api.users.updateRates(user.id, {
+        dayRate: dayRate.trim() === "" ? null : Number(dayRate),
+        nightRate: nightRate.trim() === "" ? null : Number(nightRate),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      toast({ title: "Rates updated" });
+      setEditing(false);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700"
+      >
+        <Pencil className="w-3 h-3" />
+        {user.dayRate != null || user.nightRate != null
+          ? `Day ${user.dayRate ?? "—"} / Night ${user.nightRate ?? "—"}`
+          : "Set rates"}
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <Input className="h-7 w-20 text-xs" type="number" min={0} placeholder="Day" value={dayRate} onChange={(e) => setDayRate(e.target.value)} />
+      <Input className="h-7 w-20 text-xs" type="number" min={0} placeholder="Night" value={nightRate} onChange={(e) => setNightRate(e.target.value)} />
+      <Button size="sm" className="h-7 px-2 text-xs" onClick={() => mutation.mutate()} disabled={mutation.isPending}>Save</Button>
+      <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setEditing(false)}>Cancel</Button>
+    </div>
+  );
+}
+
 function CpoOnboardingDetail({ onboardingId, onRemoved }: { onboardingId: number; onRemoved: () => void }) {
   const qc = useQueryClient();
   const { toast } = useToast();
+
+  // Only needed to look up the linked user's current day/night rate
+  // once a real account exists (record.userId != null) - shares the
+  // ["users"] cache with the Users page and everywhere else that
+  // already queries it, so this doesn't add an extra network round
+  // trip in the common case.
+  const { data: allUsers } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list });
 
   const { data: record, isLoading: recordLoading } = useQuery<OnboardingRecord>({
     queryKey: ["onboarding", onboardingId],
@@ -304,6 +361,9 @@ function CpoOnboardingDetail({ onboardingId, onRemoved }: { onboardingId: number
     mutationFn: (granted: boolean) => api.onboarding.setOperationalAccess(record!.id, granted),
     onSuccess: (updated) => {
       qc.setQueryData(["onboarding", onboardingId], updated);
+      // First grant creates a brand-new users row - the Pay Rate
+      // editor's lookup needs the refreshed list to find it.
+      qc.invalidateQueries({ queryKey: ["users"] });
       toast({ title: updated.operationalAccessGrantedAt ? "Operational access granted" : "Operational access revoked" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -354,6 +414,20 @@ function CpoOnboardingDetail({ onboardingId, onRemoved }: { onboardingId: number
           </>
         )}
       </div>
+
+      {record?.userId != null && (
+        <div>
+          <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Pay Rate</p>
+          {allUsers == null ? (
+            <Skeleton className="h-6 w-32" />
+          ) : (
+            (() => {
+              const linkedUser = allUsers.find((u) => u.id === record.userId);
+              return linkedUser ? <OperatorRateEditor user={linkedUser} /> : null;
+            })()
+          )}
+        </div>
+      )}
 
       <div>
         <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Checklist</p>
@@ -477,29 +551,45 @@ export default function OnboardingPage() {
     cardRefs.current[expandedKey]?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [expandedKey]);
 
-  const counts = {
-    onboarded: records.filter((r) => r.status === "onboarded").length,
-    in_progress: records.filter((r) => r.status === "in_progress").length,
-    denied: records.filter((r) => r.status === "denied").length,
-  };
-
-  const visibleRecords = records.filter((r) => {
-    if (statusFilter != null && r.status !== statusFilter) return false;
-    return true;
-  });
-
   // Two columns by engagement type, per direct product direction. An
   // operator who hasn't had either "engagement_type" checklist item
   // checked yet doesn't belong in either column - they're findable
   // under the "Pending" status filter's single flat list below
-  // instead (Pending is effectively "not yet assigned" in practice)
-  // - then moves into exactly one column the moment either checklist
-  // item is checked (the two items are mutually exclusive, see
-  // onboarding-checklist.ts, so it can only ever land in one).
+  // instead, then moves into exactly one column the moment either
+  // checklist item is checked (the two items are mutually exclusive,
+  // see onboarding-checklist.ts, so it can only ever land in one).
   const engagementOf = (r: OnboardingOverviewRecord) => ({
     isFreelancer: r.checklist.find((c) => c.key === "freelancer")?.checked ?? false,
     isLongTermContract: r.checklist.find((c) => c.key === "long_term_contract")?.checked ?? false,
   });
+  const isUnassigned = (r: OnboardingOverviewRecord) => {
+    const { isFreelancer, isLongTermContract } = engagementOf(r);
+    return !isFreelancer && !isLongTermContract;
+  };
+  // "Pending" means outstanding action needed, per direct product
+  // direction: not-yet-approved candidates (status in_progress)
+  // regardless of assignment, PLUS approved candidates who still
+  // haven't been assigned Freelancer/Long Term Contract (otherwise
+  // they'd be unreachable - not in either column since unassigned,
+  // and not under Pending since their status moved off in_progress).
+  // Denied stays a pure status filter, deliberately excluded from
+  // this broadened definition - a denied candidate only ever shows
+  // under Denied, never bleeds into Pending regardless of assignment.
+  const isPending = (r: OnboardingOverviewRecord) =>
+    r.status === "in_progress" || (r.status !== "denied" && isUnassigned(r));
+
+  const counts = {
+    onboarded: records.filter((r) => r.status === "onboarded").length,
+    in_progress: records.filter(isPending).length,
+    denied: records.filter((r) => r.status === "denied").length,
+  };
+
+  const visibleRecords = records.filter((r) => {
+    if (statusFilter == null) return true;
+    if (statusFilter === "in_progress") return isPending(r);
+    return r.status === statusFilter;
+  });
+
   const freelancerQuery = freelancerSearch.trim().toLowerCase();
   const freelancerColumnRecords = visibleRecords.filter((r) => {
     if (!engagementOf(r).isFreelancer) return false;
@@ -631,17 +721,17 @@ export default function OnboardingPage() {
             </h3>
           </CardContent>
         </Card>
-      ) : statusFilter === "in_progress" ? (
-        // Pending operators haven't been assigned an engagement type
-        // yet (that's part of what "Pending" means), so the
-        // Freelance/Long Term Contract split doesn't apply to them -
-        // every pending operator would show in both columns at once,
-        // duplicating the exact same card. A single flat list instead,
-        // per direct product direction - no "Operator Database"
-        // toggle either, since that's specifically the two-column
-        // view (already available unfiltered or under Approved).
+      ) : statusFilter === "in_progress" || statusFilter === "denied" ? (
+        // Pending (see isPending above) is by definition either
+        // not-yet-approved or still unassigned, and Denied candidates
+        // aren't real roster members regardless of assignment - the
+        // Freelance/Long Term Contract split doesn't apply to either,
+        // so both get a single flat list instead, per direct product
+        // direction - no "Operator Database" toggle either, since
+        // that's specifically the two-column view (already available
+        // unfiltered or under Approved).
         <div className="space-y-3">
-          {visibleRecords.map((r) => renderOperatorCard(r, "pending"))}
+          {visibleRecords.map((r) => renderOperatorCard(r, statusFilter))}
         </div>
       ) : (
         <div>
