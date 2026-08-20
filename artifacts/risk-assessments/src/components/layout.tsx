@@ -124,25 +124,31 @@ const hideShell = (location === "/" || location === "/cpo" || location === "/own
           ("companies will have different offices... select an office
           and all the data from the allocated office"). Persists to
           localStorage (see lib/office-scope.ts) so it survives
-          reloads/navigation, and every list page filters to it. */}
-      <div className="px-3 pt-3 pb-1 border-b border-slate-800 shrink-0">
-        <Building2 className="w-3 h-3 text-slate-500 inline mr-1.5 mb-2" />
-        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Office</span>
-        <Select
-          value={selectedOfficeId != null ? String(selectedOfficeId) : ALL_OFFICES}
-          onValueChange={(v) => setSelectedOfficeId(v === ALL_OFFICES ? null : Number(v))}
-        >
-          <SelectTrigger className="h-8 text-xs bg-slate-900 border-slate-800 text-slate-200 mt-1">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_OFFICES}>All Offices</SelectItem>
-            {offices.map((o) => (
-              <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+          reloads/navigation, and every list page filters to it. Only
+          shown once there's actually more than one office to choose
+          between - with a single office it's indistinguishable from
+          "All Offices" and just reads as clutter next to the real
+          "Offices" management page in the nav below. */}
+      {offices.length > 1 && (
+        <div className="px-3 pt-3 pb-1 border-b border-slate-800 shrink-0">
+          <Building2 className="w-3 h-3 text-slate-500 inline mr-1.5 mb-2" />
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Office</span>
+          <Select
+            value={selectedOfficeId != null ? String(selectedOfficeId) : ALL_OFFICES}
+            onValueChange={(v) => setSelectedOfficeId(v === ALL_OFFICES ? null : Number(v))}
+          >
+            <SelectTrigger className="h-8 text-xs bg-slate-900 border-slate-800 text-slate-200 mt-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_OFFICES}>All Offices</SelectItem>
+              {offices.map((o) => (
+                <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto py-3 px-2 space-y-4">
         {navGroups.map((group) => (
