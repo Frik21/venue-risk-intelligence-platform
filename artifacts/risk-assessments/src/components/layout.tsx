@@ -143,38 +143,41 @@ const hideShell = (location === "/" || location === "/cpo" || location === "/own
         </div>
       </div>
 
-      {/* Company switcher - free selection only for the Owner outside
-          Preview mode (since /owner's aggregate-only surface is the one
-          legitimate cross-company view - in practice this branch never
-          actually renders, since a non-previewing Owner never reaches a
-          route with this sidebar at all, see require-auth.tsx). Every
-          other role, and a previewing Owner, is locked to one company -
-          the server enforces this regardless, this just avoids showing
-          a selector that couldn't do anything. */}
-      <div className="px-3 pt-3 pb-1 border-b border-slate-800 shrink-0">
-        <Building2 className="w-3 h-3 text-slate-500 inline mr-1.5 mb-2" />
-        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Company</span>
-        {!isLockedToOneCompany ? (
-          <Select
-            value={selectedCompanyId != null ? String(selectedCompanyId) : ALL_COMPANIES}
-            onValueChange={(v) => setSelectedCompanyId(v === ALL_COMPANIES ? null : Number(v))}
-          >
-            <SelectTrigger className="h-8 text-xs bg-slate-900 border-slate-800 text-slate-200 mt-1">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_COMPANIES}>All Companies</SelectItem>
-              {companies.map((c) => (
-                <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : (
-          <div className="h-8 flex items-center px-2.5 text-xs bg-slate-900 border border-slate-800 rounded-md text-slate-400 mt-1">
-            {user?.companyName ?? "—"}
-          </div>
-        )}
-      </div>
+      {/* Company switcher - Owner-only, full stop. A real subscriber's
+          own company is implicit (they only ever have one) and doesn't
+          need surfacing to them at all - this isn't just locked for
+          non-Owner roles, it's not rendered for them. Free selection
+          only applies outside Preview mode (in practice this branch
+          never actually renders, since a non-previewing Owner never
+          reaches a route with this sidebar at all, see require-auth.tsx)
+          - a previewing Owner gets the same locked single-company view
+          a real user would, so Preview looks/behaves like the real thing. */}
+      {user?.role === "admin" && (
+        <div className="px-3 pt-3 pb-1 border-b border-slate-800 shrink-0">
+          <Building2 className="w-3 h-3 text-slate-500 inline mr-1.5 mb-2" />
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Company</span>
+          {!isLockedToOneCompany ? (
+            <Select
+              value={selectedCompanyId != null ? String(selectedCompanyId) : ALL_COMPANIES}
+              onValueChange={(v) => setSelectedCompanyId(v === ALL_COMPANIES ? null : Number(v))}
+            >
+              <SelectTrigger className="h-8 text-xs bg-slate-900 border-slate-800 text-slate-200 mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_COMPANIES}>All Companies</SelectItem>
+                {companies.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <div className="h-8 flex items-center px-2.5 text-xs bg-slate-900 border border-slate-800 rounded-md text-slate-400 mt-1">
+              {user?.companyName ?? "—"}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Office switcher - global filter, per direct product direction
           ("companies will have different offices... select an office
