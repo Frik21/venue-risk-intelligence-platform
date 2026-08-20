@@ -113,7 +113,7 @@ export default function PayrollPage() {
           <h2 className="font-semibold text-slate-900 flex items-center gap-2 mb-3">
             <UsersIcon className="w-4 h-4 text-slate-400" /> Pending Payroll
           </h2>
-          <p className="text-xs text-slate-400 mb-3">Approved hours not yet included in a pay run. Set a CPO's rate from Users; approve hours from Tasks.</p>
+          <p className="text-xs text-slate-400 mb-3">Approved hours not yet included in a pay run. Set a CPO's rate from Operator Database; approve hours from Tasks.</p>
           {pendingLoading ? (
             <Skeleton className="h-16" />
           ) : pending.length === 0 ? (

@@ -885,7 +885,7 @@ export default function CostsPage() {
             </h2>
             <span className="text-lg font-mono tabular-nums font-semibold text-slate-900">{totalPersonnelCost.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
           </div>
-          <p className="text-xs text-slate-400 mb-4">Rate x hours logged in Timesheet, including overtime. Set a CPO's rate from Users.</p>
+          <p className="text-xs text-slate-400 mb-4">Rate x hours logged in Timesheet, including overtime. Set a CPO's rate from Operator Database.</p>
 
           {settings && (
             <div className="mb-4 pb-4 border-b border-slate-100 flex items-center gap-2">
