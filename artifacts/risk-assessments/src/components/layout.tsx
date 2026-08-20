@@ -99,10 +99,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // switcher to it once on login so every existing filterByCompany()
   // call site keeps working unchanged, just permanently scoped. The
   // server enforces this regardless (routes now read req.user.companyId,
-  // never the client-selected one) - this just keeps the UI honest.
+  // never the client-selected one) - this just keeps the UI honest. A
+  // previewing Owner (still role: "admin", but companyId now the test
+  // company - see lib/auth.ts's requireAuth) gets the same treatment:
+  // free cross-company selection only makes sense outside Preview mode.
+  const isLockedToOneCompany = user != null && (user.role !== "admin" || user.isPreviewing);
   useEffect(() => {
-    if (user && user.role !== "admin") setSelectedCompanyId(user.companyId);
-  }, [user]);
+    if (isLockedToOneCompany) setSelectedCompanyId(user!.companyId);
+  }, [isLockedToOneCompany, user?.companyId]);
   const [showShell, setShowShell] = useState(() => {
   return sessionStorage.getItem("venueguard-show-shell") === "true";
 });
@@ -139,15 +143,18 @@ const hideShell = (location === "/" || location === "/cpo" || location === "/own
         </div>
       </div>
 
-      {/* Company switcher - Owner-only (free selection across every
-          company, since /owner's aggregate-only surface is the one
-          legitimate cross-company view). Every other role is locked to
-          their own company - the server enforces this regardless, this
-          just avoids showing a selector that couldn't do anything. */}
+      {/* Company switcher - free selection only for the Owner outside
+          Preview mode (since /owner's aggregate-only surface is the one
+          legitimate cross-company view - in practice this branch never
+          actually renders, since a non-previewing Owner never reaches a
+          route with this sidebar at all, see require-auth.tsx). Every
+          other role, and a previewing Owner, is locked to one company -
+          the server enforces this regardless, this just avoids showing
+          a selector that couldn't do anything. */}
       <div className="px-3 pt-3 pb-1 border-b border-slate-800 shrink-0">
         <Building2 className="w-3 h-3 text-slate-500 inline mr-1.5 mb-2" />
         <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Company</span>
-        {user?.role === "admin" ? (
+        {!isLockedToOneCompany ? (
           <Select
             value={selectedCompanyId != null ? String(selectedCompanyId) : ALL_COMPANIES}
             onValueChange={(v) => setSelectedCompanyId(v === ALL_COMPANIES ? null : Number(v))}
