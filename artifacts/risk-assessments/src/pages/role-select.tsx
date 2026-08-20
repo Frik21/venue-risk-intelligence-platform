@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { ShieldCheck, Gauge, ShieldAlert, ArrowRight, Workflow, Wallet, Users2 } from "lucide-react";
+import { ShieldCheck, Gauge, ShieldAlert, ArrowRight, ArrowLeft, Workflow, Wallet, Users2 } from "lucide-react";
 
 // Owner-only fast-path (see require-auth.tsx - non-admin sessions
 // never reach this route). Used to be the default landing page at "/"
@@ -53,7 +53,14 @@ const TILES = [
 
 export default function RoleSelect() {
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-8 flex items-center justify-center">
+    <div className="min-h-screen bg-slate-950 text-white p-8 flex items-center justify-center relative">
+      <Link
+        href="/owner"
+        className="absolute top-6 left-6 flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Owner Console
+      </Link>
       <div className="max-w-5xl w-full mx-auto space-y-10 text-center">
         <div className="flex flex-col items-center gap-3">
           <ShieldAlert className="w-8 h-8 text-blue-400" />

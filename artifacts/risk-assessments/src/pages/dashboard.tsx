@@ -1274,6 +1274,7 @@ function ExpenseEntryCard({
 }
 
 function TopBanner({ onSignOut }: { onSignOut: () => void }) {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
   const [operatorMenuOpen, setOperatorMenuOpen] = useState(false);
@@ -1520,6 +1521,23 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
               <UserIcon className="w-4 h-4" />
               Profile
             </button>
+            {/* Owner-only, only shown while actively previewing a Test
+                Company (see require-auth.tsx) - lets the Owner jump back
+                to /owner without ending Preview, same idea as the
+                equivalent link in Layout's own header for the
+                Management side. */}
+            {user?.isPreviewing && (
+              <button
+                type="button"
+                className="top-banner-operator-menu-item"
+                onClick={() => {
+                  window.location.href = "/owner";
+                }}
+              >
+                <Building2 className="w-4 h-4" />
+                Back to Owner Console
+              </button>
+            )}
             <button
               type="button"
               className="top-banner-operator-menu-item top-banner-operator-menu-item-danger"

@@ -260,6 +260,12 @@ const hideShell = (location === "/cpo" || location === "/owner" || location === 
             <div className="flex items-center gap-2 bg-violet-50 border border-violet-200 text-violet-700 text-xs font-medium px-3 py-1.5 rounded-md">
               <FlaskConical className="w-3.5 h-3.5" />
               <span>Previewing {user.companyName ?? "the test company"} - not a real subscriber</span>
+              {/* Back to /owner without ending Preview - distinct from
+                  "Exit Preview" below, which does end the session. */}
+              <Link href="/owner" className="underline decoration-dotted hover:text-violet-900">
+                Owner Console
+              </Link>
+              <span className="text-violet-300">·</span>
               <button
                 className="underline decoration-dotted hover:text-violet-900"
                 onClick={async () => {
