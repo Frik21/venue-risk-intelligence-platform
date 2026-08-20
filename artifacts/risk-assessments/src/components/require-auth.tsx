@@ -30,10 +30,7 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
 
   // Where a logged-in session actually belongs - cpo -> its own
   // Operational Canvas, admin (Owner) -> the Owner Console, everyone
-  // else -> the Management Dashboard. Only used to route a fresh login
-  // (from /login) - "/" itself stays reachable afterward as a manual
-  // nav aid (role-select.tsx's own stated purpose), not redirected away
-  // from on every visit.
+  // else -> the Management Dashboard.
   const homeRoute = user?.role === "cpo" ? "/cpo" : user?.role === "admin" ? "/owner" : "/admin";
 
   if (location === "/login") return <Redirect to={user?.mustChangePassword ? "/change-password" : homeRoute} />;
@@ -43,6 +40,16 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   }
 
   if (location === "/owner" && user?.role !== "admin") {
+    return <Redirect to={homeRoute} />;
+  }
+
+  // "/" (role-select.tsx's "Where do you want to go?" chooser) is an
+  // Owner-only manual nav aid, not something a real subscriber's user
+  // should ever land on - its tiles expose every department's
+  // dashboard regardless of who's actually logged in. Same "only the
+  // Owner sees this" principle as the Company switcher and Owner
+  // Console itself.
+  if (location === "/" && user?.role !== "admin") {
     return <Redirect to={homeRoute} />;
   }
 
