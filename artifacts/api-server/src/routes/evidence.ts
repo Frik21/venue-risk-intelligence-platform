@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
 import { db, evidenceTable, usersTable, assessmentsTable } from "@workspace/db";
 import { z } from "zod";
+import { requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -37,8 +38,10 @@ async function formatEvidence(row: typeof evidenceTable.$inferSelect, uploadedBy
 // Dashboard's "Documents / PDF Repository" item, which has no
 // destination of its own (the route below only covers one assessment
 // at a time).
-router.get("/evidence", async (_req, res): Promise<void> => {
-  const rows = await db.select().from(evidenceTable).orderBy(desc(evidenceTable.createdAt)).limit(50);
+router.get("/evidence", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const rows = await db.select().from(evidenceTable).where(eq(evidenceTable.companyId, companyId)).orderBy(desc(evidenceTable.createdAt)).limit(50);
 
   const assessmentIds = [...new Set(rows.map((r) => r.assessmentId))];
   const assessments = assessmentIds.length

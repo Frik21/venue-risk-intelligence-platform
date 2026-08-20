@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, asc } from "drizzle-orm";
 import { db, officesTable, usersTable } from "@workspace/db";
 import { z } from "zod";
-import { resolveCompanyId } from "../lib/resolve-company";
+import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -22,8 +22,10 @@ function formatOffice(row: typeof officesTable.$inferSelect, managerName?: strin
   };
 }
 
-router.get("/offices", async (_req, res): Promise<void> => {
-  const rows = await db.select().from(officesTable).orderBy(asc(officesTable.name));
+router.get("/offices", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const rows = await db.select().from(officesTable).where(eq(officesTable.companyId, companyId)).orderBy(asc(officesTable.name));
   const users = await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable);
   const userMap: Record<number, string> = {};
   for (const u of users) userMap[u.id] = u.name;
@@ -45,7 +47,7 @@ router.post("/offices", async (req, res): Promise<void> => {
   const parsed = OfficeInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const companyId = await resolveCompanyId(parsed.data.companyId);
+  const companyId = await resolveCompanyId(req.user!.companyId);
   const [office] = await db
     .insert(officesTable)
     .values({

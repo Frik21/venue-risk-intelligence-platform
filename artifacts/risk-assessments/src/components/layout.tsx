@@ -22,6 +22,7 @@ import {
   MessageSquare,
   Receipt,
   Wallet,
+  LogOut,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,16 @@ import { api, type Office, type Company } from "@/lib/api";
 import { useSelectedOfficeId } from "@/lib/office-scope";
 import { useSelectedCompanyId } from "@/lib/company-scope";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from "@/lib/auth";
+
+const USER_ROLE_LABELS: Record<string, string> = {
+  admin: "Owner",
+  manager: "Manager",
+  finance: "Finance",
+  human_resources: "Human Resources",
+  operations: "Operations",
+  cpo: "CPO",
+};
 
 // Deliberately lean - this is a dispatch console for Managers
 // (creating/costing task requests, assigning CPOs, tracking who's
@@ -66,6 +77,7 @@ const ALL_OFFICES = "all";
 const ALL_COMPANIES = "all";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
+  const { user, logout } = useAuth();
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [offices, setOffices] = useState<Office[]>([]);
@@ -76,8 +88,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useSelectedCompanyId();
   useEffect(() => {
-    api.companies.list().then(setCompanies).catch((err) => console.error("Failed to load companies:", err));
-  }, []);
+    // The Owner Console fetches this list itself elsewhere - loading it
+    // here too would just 400 for a non-admin session (companies.ts is
+    // Owner-only), so this fetch, and this switcher, are admin-only.
+    if (user?.role === "admin") {
+      api.companies.list().then(setCompanies).catch((err) => console.error("Failed to load companies:", err));
+    }
+  }, [user?.role]);
+  // Every other role's company is fixed by their own session - pin the
+  // switcher to it once on login so every existing filterByCompany()
+  // call site keeps working unchanged, just permanently scoped. The
+  // server enforces this regardless (routes now read req.user.companyId,
+  // never the client-selected one) - this just keeps the UI honest.
+  useEffect(() => {
+    if (user && user.role !== "admin") setSelectedCompanyId(user.companyId);
+  }, [user]);
   const [showShell, setShowShell] = useState(() => {
   return sessionStorage.getItem("venueguard-show-shell") === "true";
 });
@@ -97,7 +122,7 @@ useEffect(() => {
 // Owner's own console (a different concept entirely from this
 // company-scoped Management shell, which carries the Office/Company
 // switchers) - none of the three want this sidebar/header chrome.
-const hideShell = (location === "/" || location === "/cpo" || location === "/owner") && !showShell;
+const hideShell = (location === "/" || location === "/cpo" || location === "/owner" || location === "/login" || location === "/change-password") && !showShell;
   // "/admin" needs the same exact-match treatment as "/" - otherwise
   // it'd also read as active on "/admin/users" (a real, distinct nav
   // item), since that path also starts with "/admin".
@@ -114,27 +139,34 @@ const hideShell = (location === "/" || location === "/cpo" || location === "/own
         </div>
       </div>
 
-      {/* Company switcher - same global-filter pattern as the Office
-          switcher below, one level up (a company can have several
-          offices). Meaningful once the Owner Console has onboarded
-          more than one company - see lib/company-scope.ts. */}
+      {/* Company switcher - Owner-only (free selection across every
+          company, since /owner's aggregate-only surface is the one
+          legitimate cross-company view). Every other role is locked to
+          their own company - the server enforces this regardless, this
+          just avoids showing a selector that couldn't do anything. */}
       <div className="px-3 pt-3 pb-1 border-b border-slate-800 shrink-0">
         <Building2 className="w-3 h-3 text-slate-500 inline mr-1.5 mb-2" />
         <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Company</span>
-        <Select
-          value={selectedCompanyId != null ? String(selectedCompanyId) : ALL_COMPANIES}
-          onValueChange={(v) => setSelectedCompanyId(v === ALL_COMPANIES ? null : Number(v))}
-        >
-          <SelectTrigger className="h-8 text-xs bg-slate-900 border-slate-800 text-slate-200 mt-1">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_COMPANIES}>All Companies</SelectItem>
-            {companies.map((c) => (
-              <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {user?.role === "admin" ? (
+          <Select
+            value={selectedCompanyId != null ? String(selectedCompanyId) : ALL_COMPANIES}
+            onValueChange={(v) => setSelectedCompanyId(v === ALL_COMPANIES ? null : Number(v))}
+          >
+            <SelectTrigger className="h-8 text-xs bg-slate-900 border-slate-800 text-slate-200 mt-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_COMPANIES}>All Companies</SelectItem>
+              {companies.map((c) => (
+                <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <div className="h-8 flex items-center px-2.5 text-xs bg-slate-900 border border-slate-800 rounded-md text-slate-400 mt-1">
+            {user?.companyName ?? "—"}
+          </div>
+        )}
       </div>
 
       {/* Office switcher - global filter, per direct product direction
@@ -197,23 +229,34 @@ const hideShell = (location === "/" || location === "/cpo" || location === "/own
         {/* Leaves this admin/manager shell entirely for the CPO's own
             full-screen Operational Canvas (its own login/brief flow,
             no persistent sidebar) - the reverse direction lives in
-            that flow's own operator menu ("Admin Dashboard"). */}
-        <Link
-          href="/cpo"
-          onClick={() => setMobileOpen(false)}
-          className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors border border-slate-800"
-        >
-          <ArrowLeftRight className="w-4 h-4 shrink-0" />
-          Operator View
-        </Link>
-        <div className="flex items-center gap-3 px-2 py-2 rounded-md text-slate-400">
+            that flow's own operator menu ("Admin Dashboard"). Owner-
+            only sessions skip this: they have no company to preview a
+            CPO's (company-scoped) view as. */}
+        {user?.role !== "admin" && (
+          <Link
+            href="/cpo"
+            onClick={() => setMobileOpen(false)}
+            className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors border border-slate-800"
+          >
+            <ArrowLeftRight className="w-4 h-4 shrink-0" />
+            Operator View
+          </Link>
+        )}
+        <div className="flex items-center gap-2 px-2 py-2 rounded-md text-slate-400">
           <div className="w-7 h-7 rounded bg-blue-600/30 flex items-center justify-center text-blue-300 text-xs font-bold shrink-0">
-            SA
+            {user?.avatarInitials ?? user?.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() ?? "?"}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-medium text-slate-200 truncate">Senior Analyst</div>
-            <div className="text-[10px] text-slate-500 truncate">Admin Access</div>
+            <div className="text-xs font-medium text-slate-200 truncate">{user?.name ?? "—"}</div>
+            <div className="text-[10px] text-slate-500 truncate">{user ? (USER_ROLE_LABELS[user.role] ?? user.role) : ""}</div>
           </div>
+          <button
+            onClick={() => logout()}
+            title="Sign Out"
+            className="p-1.5 rounded hover:bg-slate-800 hover:text-white transition-colors shrink-0"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
     </aside>
@@ -261,7 +304,7 @@ const hideShell = (location === "/" || location === "/cpo" || location === "/own
             <kbd className="ml-1 px-1.5 py-0.5 text-xs bg-white border border-slate-200 rounded font-mono">⌘K</kbd>
           </div>
           <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
-            SA
+            {user?.avatarInitials ?? user?.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() ?? "?"}
           </div>
         </header>
 

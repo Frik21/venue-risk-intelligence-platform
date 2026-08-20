@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { db, routesTable, routeFindingsTable, incidentsTable, venuesTable, assessmentsTable } from "@workspace/db";
 import { z } from "zod";
-import { resolveCompanyId } from "../lib/resolve-company";
+import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -116,12 +116,15 @@ function formatFinding(f: typeof routeFindingsTable.$inferSelect) {
 
 // ── List routes ───────────────────────────────────────────────────────────────
 router.get("/routes", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
   const assessmentId = req.query.assessmentId ? Number(req.query.assessmentId) : null;
   const venueId = req.query.venueId ? Number(req.query.venueId) : null;
 
   let query = db.select().from(routesTable).orderBy(desc(routesTable.createdAt)).$dynamic();
-  if (assessmentId) query = query.where(eq(routesTable.assessmentId, assessmentId));
-  else if (venueId) query = query.where(eq(routesTable.venueId, venueId));
+  if (assessmentId) query = query.where(and(eq(routesTable.companyId, companyId), eq(routesTable.assessmentId, assessmentId)));
+  else if (venueId) query = query.where(and(eq(routesTable.companyId, companyId), eq(routesTable.venueId, venueId)));
+  else query = query.where(eq(routesTable.companyId, companyId));
 
   const routes = await query;
   res.json(routes.map(formatRoute));
@@ -168,15 +171,7 @@ router.post("/routes", async (req, res): Promise<void> => {
   // For freehand: store drawn geometry as both original + active geometry
   const originalDrawn = data.originalDrawnGeometryGeojson ?? (data.creationMethod === "freehand_draw" ? routeGeometryGeojson : null);
 
-  let inheritedCompanyId: number | undefined;
-  if (data.venueId != null) {
-    const [venue] = await db.select({ companyId: venuesTable.companyId }).from(venuesTable).where(eq(venuesTable.id, data.venueId));
-    inheritedCompanyId = venue?.companyId;
-  } else if (data.assessmentId != null) {
-    const [assessment] = await db.select({ companyId: assessmentsTable.companyId }).from(assessmentsTable).where(eq(assessmentsTable.id, data.assessmentId));
-    inheritedCompanyId = assessment?.companyId;
-  }
-  const companyId = await resolveCompanyId(inheritedCompanyId);
+  const companyId = await resolveCompanyId(req.user!.companyId);
 
   const [route] = await db.insert(routesTable).values({
     ...data,

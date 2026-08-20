@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
+import { requireAuth } from "../lib/auth";
 import healthRouter from "./health";
+import authRouter from "./auth";
 import assessmentsRouter from "./assessments";
 import risksRouter from "./risks";
 import venuesRouter from "./venues";
@@ -37,7 +39,14 @@ import companiesRouter from "./companies";
 
 const router: IRouter = Router();
 
+// health and auth (login/logout, plus /auth/me and /auth/change-password
+// which gate themselves) must stay reachable without a session - every
+// router registered after requireAuth below is protected by this one
+// line instead of each of the ~33 files needing its own guard.
 router.use(healthRouter);
+router.use(authRouter);
+router.use(requireAuth);
+
 router.use(dashboardRouter);
 router.use(usersRouter);
 router.use(venuesRouter);

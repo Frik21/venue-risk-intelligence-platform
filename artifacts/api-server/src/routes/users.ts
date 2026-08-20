@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
 import { db, usersTable } from "@workspace/db";
 import { z } from "zod";
-import { eq, desc } from "drizzle-orm";
-import { resolveCompanyId } from "../lib/resolve-company";
+import { eq, desc, and } from "drizzle-orm";
+import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
+import { generateInitialPassword, hashPassword } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -27,12 +28,19 @@ function formatUser(row: typeof usersTable.$inferSelect) {
     dayRate: row.dayRate ?? null,
     nightRate: row.nightRate ?? null,
     officeId: row.officeId,
+    mustChangePassword: row.mustChangePassword,
     createdAt: row.createdAt.toISOString(),
   };
 }
 
-router.get("/users", async (_req, res): Promise<void> => {
-  const users = await db.select().from(usersTable).where(eq(usersTable.active, true)).orderBy(usersTable.name);
+router.get("/users", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const users = await db
+    .select()
+    .from(usersTable)
+    .where(and(eq(usersTable.companyId, companyId), eq(usersTable.active, true)))
+    .orderBy(usersTable.name);
   res.json(users.map(formatUser));
 });
 
@@ -40,13 +48,38 @@ router.post("/users", async (req, res): Promise<void> => {
   const parsed = UserInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  // Only an existing Owner can mint another Owner account - a company
+  // Manager creating a user has no business ever setting role: "admin".
+  if (parsed.data.role === "admin" && req.user!.role !== "admin") {
+    res.status(403).json({ error: "Only an Owner can create another Owner account" });
+    return;
+  }
+
   const initials = parsed.data.avatarInitials ?? parsed.data.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
   // admin (the platform Owner role) is never tied to a company - every
-  // other role always is, resolving to the default company when the
-  // frontend hasn't been updated to pass one yet.
-  const companyId = parsed.data.role === "admin" ? null : await resolveCompanyId(parsed.data.companyId);
-  const [user] = await db.insert(usersTable).values({ ...parsed.data, companyId, avatarInitials: initials }).returning();
-  res.status(201).json(formatUser(user));
+  // other role always is. A regular session can only ever create users
+  // in its own company (the client-supplied companyId is ignored, not
+  // trusted). The Owner is the one exception: they have no company of
+  // their own, so *their* client-supplied companyId is what lets them
+  // seed a company's first Manager from the Owner Console - falling
+  // back to resolveCompanyId's "first company" only if they omit it.
+  const companyId =
+    parsed.data.role === "admin"
+      ? null
+      : req.user!.role === "admin"
+        ? await resolveCompanyId(parsed.data.companyId)
+        : req.user!.companyId;
+
+  // Admin-generated, shown once in this response - no email
+  // infrastructure exists yet to send a real invite/reset link.
+  const initialPassword = generateInitialPassword();
+  const passwordHash = await hashPassword(initialPassword);
+
+  const [user] = await db
+    .insert(usersTable)
+    .values({ ...parsed.data, companyId, avatarInitials: initials, passwordHash, mustChangePassword: true })
+    .returning();
+  res.status(201).json({ ...formatUser(user), initialPassword });
 });
 
 const UserUpdateSchema = z.object({

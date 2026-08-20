@@ -1,9 +1,14 @@
 import express, { type Express, type ErrorRequestHandler } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
+import cookieParser from "cookie-parser";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import path from "path";
+
+if (!process.env.SESSION_SECRET) {
+  throw new Error("SESSION_SECRET must be set. Did you forget to configure it?");
+}
 
 const app: Express = express();
 
@@ -27,6 +32,9 @@ app.use(
   }),
 );
 app.use(cors());
+// Signed so the session cookie's value can't be tampered with
+// client-side - see lib/auth.ts's requireAuth for how it's read.
+app.use(cookieParser(process.env.SESSION_SECRET));
 // Raised from Express's 100kb default so Expenses' receipt uploads
 // (a base64 data: URL stored directly on the row - see
 // lib/db/src/schema/expenses.ts for why there's no separate file

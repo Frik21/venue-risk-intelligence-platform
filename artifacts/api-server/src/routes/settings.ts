@@ -26,12 +26,11 @@ async function getOrCreateSettings(companyId: number) {
 }
 
 router.get("/settings", async (req, res): Promise<void> => {
-  const companyId = await resolveCompanyId(typeof req.query.companyId === "string" ? Number(req.query.companyId) : undefined);
+  const companyId = await resolveCompanyId(req.user!.companyId);
   res.json(formatSettings(await getOrCreateSettings(companyId)));
 });
 
 const SettingsUpdateSchema = z.object({
-  companyId: z.number().int().optional(),
   overtimeThresholdHours: z.number().min(0).optional(),
   overtimeThresholdPeriod: z.enum(["daily", "weekly"]).optional(),
   overtimeMultiplier: z.number().min(1).optional(),
@@ -41,12 +40,11 @@ router.patch("/settings", async (req, res): Promise<void> => {
   const parsed = SettingsUpdateSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const { companyId: bodyCompanyId, ...updates } = parsed.data;
-  const companyId = await resolveCompanyId(bodyCompanyId);
+  const companyId = await resolveCompanyId(req.user!.companyId);
   const current = await getOrCreateSettings(companyId);
   const [updated] = await db
     .update(companySettingsTable)
-    .set(updates)
+    .set(parsed.data)
     .where(eq(companySettingsTable.id, current.id))
     .returning();
 

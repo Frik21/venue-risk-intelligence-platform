@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, asc, desc, inArray } from "drizzle-orm";
 import { db, vendorsTable, vendorActivitiesTable, usersTable } from "@workspace/db";
 import { z } from "zod";
-import { resolveCompanyId } from "../lib/resolve-company";
+import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -37,8 +37,10 @@ function formatActivity(row: typeof vendorActivitiesTable.$inferSelect, createdB
   };
 }
 
-router.get("/vendors", async (_req, res): Promise<void> => {
-  const rows = await db.select().from(vendorsTable).orderBy(asc(vendorsTable.name));
+router.get("/vendors", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const rows = await db.select().from(vendorsTable).where(eq(vendorsTable.companyId, companyId)).orderBy(asc(vendorsTable.name));
   res.json(rows.map(formatVendor));
 });
 
@@ -59,7 +61,7 @@ router.post("/vendors", async (req, res): Promise<void> => {
   const parsed = VendorInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const companyId = await resolveCompanyId(parsed.data.companyId);
+  const companyId = await resolveCompanyId(req.user!.companyId);
   const [vendor] = await db
     .insert(vendorsTable)
     .values({

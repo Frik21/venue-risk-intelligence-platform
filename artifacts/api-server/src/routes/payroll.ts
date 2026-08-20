@@ -3,7 +3,7 @@ import { eq, isNull, and, asc } from "drizzle-orm";
 import { db, timesheetEntriesTable, usersTable, companySettingsTable, payRunsTable } from "@workspace/db";
 import { z } from "zod";
 import { computePersonnelCosts } from "../lib/personnel-cost";
-import { resolveCompanyId } from "../lib/resolve-company";
+import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -24,8 +24,8 @@ function formatPayRun(row: typeof payRunsTable.$inferSelect, userName: string | 
   };
 }
 
-async function loadOvertimeSettings() {
-  const [settingsRow] = await db.select().from(companySettingsTable).orderBy(asc(companySettingsTable.companyId)).limit(1);
+async function loadOvertimeSettings(companyId: number) {
+  const [settingsRow] = await db.select().from(companySettingsTable).where(eq(companySettingsTable.companyId, companyId));
   return settingsRow ?? { overtimeThresholdHours: 8, overtimeThresholdPeriod: "daily" as const, overtimeMultiplier: 1.5 };
 }
 
@@ -36,10 +36,13 @@ async function loadOvertimeSettings() {
 // per-entry, since that's all a Pay Run needs. Excludes entries
 // already folded into a Pay Run (payRunId set) so the same hours can
 // never be paid out twice.
-router.get("/payroll/pending", async (_req, res): Promise<void> => {
-  const entries = (await db.select().from(timesheetEntriesTable)).filter((e) => e.approved && e.payRunId == null);
-  const users = await db.select().from(usersTable);
-  const settings = await loadOvertimeSettings();
+router.get("/payroll/pending", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const entries = (await db.select().from(timesheetEntriesTable).where(eq(timesheetEntriesTable.companyId, companyId)))
+    .filter((e) => e.approved && e.payRunId == null);
+  const users = await db.select().from(usersTable).where(eq(usersTable.companyId, companyId));
+  const settings = await loadOvertimeSettings(companyId);
 
   const rates: Record<number, { dayRate: number; nightRate: number }> = {};
   const userMap: Record<number, string> = {};
@@ -78,8 +81,10 @@ router.get("/payroll/pending", async (_req, res): Promise<void> => {
   );
 });
 
-router.get("/payroll/runs", async (_req, res): Promise<void> => {
-  const rows = await db.select().from(payRunsTable).orderBy(payRunsTable.createdAt);
+router.get("/payroll/runs", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const rows = await db.select().from(payRunsTable).where(eq(payRunsTable.companyId, companyId)).orderBy(payRunsTable.createdAt);
   const users = await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable);
   const userMap: Record<number, string> = {};
   for (const u of users) userMap[u.id] = u.name;
@@ -99,8 +104,9 @@ router.post("/payroll/runs", async (req, res): Promise<void> => {
   const parsed = CreatePayRunSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const companyId = await resolveCompanyId(req.user!.companyId);
   const { userId } = parsed.data;
-  const pendingEntries = (await db.select().from(timesheetEntriesTable))
+  const pendingEntries = (await db.select().from(timesheetEntriesTable).where(eq(timesheetEntriesTable.companyId, companyId)))
     .filter((e) => e.userId === userId && e.approved && e.payRunId == null);
 
   if (pendingEntries.length === 0) {
@@ -109,9 +115,9 @@ router.post("/payroll/runs", async (req, res): Promise<void> => {
   }
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
-  if (!user) { res.status(404).json({ error: "Operator not found" }); return; }
+  if (!user || user.companyId !== companyId) { res.status(404).json({ error: "Operator not found" }); return; }
 
-  const settings = await loadOvertimeSettings();
+  const settings = await loadOvertimeSettings(companyId);
   const lines = computePersonnelCosts(
     pendingEntries.map((e) => ({ id: e.id, userId: e.userId, taskId: e.taskId, date: e.date, dayHours: e.dayHours, nightHours: e.nightHours })),
     { [userId]: { dayRate: user.dayRate ?? 0, nightRate: user.nightRate ?? 0 } },
@@ -124,7 +130,6 @@ router.post("/payroll/runs", async (req, res): Promise<void> => {
   const totalHours = lines.reduce((sum, l) => sum + l.hours, 0);
   const totalAmount = lines.reduce((sum, l) => sum + l.cost, 0);
 
-  const companyId = await resolveCompanyId(user.companyId);
   const [payRun] = await db
     .insert(payRunsTable)
     .values({ companyId, userId, totalHours, totalAmount, createdBy: parsed.data.createdBy ?? null })

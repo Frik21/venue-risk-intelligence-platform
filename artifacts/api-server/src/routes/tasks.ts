@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { db, tasksTable, venuesTable, usersTable, plansTable, taskAssignmentsTable } from "@workspace/db";
 import { z } from "zod";
-import { resolveCompanyId } from "../lib/resolve-company";
+import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -86,12 +86,14 @@ async function rosterMap(taskIds: number[]) {
 }
 
 router.get("/tasks", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
   const assignedTo = typeof req.query.assignedTo === "string" ? Number(req.query.assignedTo) : undefined;
   const includeArchived = req.query.includeArchived === "true";
 
   const rows = includeArchived
-    ? await db.select().from(tasksTable).orderBy(desc(tasksTable.createdAt))
-    : await db.select().from(tasksTable).where(eq(tasksTable.archived, false)).orderBy(desc(tasksTable.createdAt));
+    ? await db.select().from(tasksTable).where(eq(tasksTable.companyId, companyId)).orderBy(desc(tasksTable.createdAt))
+    : await db.select().from(tasksTable).where(and(eq(tasksTable.companyId, companyId), eq(tasksTable.archived, false))).orderBy(desc(tasksTable.createdAt));
 
   const venues = await db.select({ id: venuesTable.id, name: venuesTable.name }).from(venuesTable);
   const users = await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable);
@@ -191,7 +193,7 @@ router.post("/tasks", async (req, res): Promise<void> => {
   }
 
   const assigneeIds = parsed.data.assigneeIds ?? [];
-  const companyId = await resolveCompanyId(parsed.data.companyId);
+  const companyId = await resolveCompanyId(req.user!.companyId);
 
   const [task] = await db
     .insert(tasksTable)
@@ -274,7 +276,7 @@ router.patch("/tasks/:id", async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const [existing] = await db.select().from(tasksTable).where(eq(tasksTable.id, id));
-  if (!existing) { res.status(404).json({ error: "Task not found" }); return; }
+  if (!existing || existing.companyId !== req.user!.companyId) { res.status(404).json({ error: "Task not found" }); return; }
 
   const { dueDate, endDate, assigneeIds, assignedTo, clientConfirmed, alertReviewedBucket, alertReviewedBy, ...rest } = parsed.data;
   const nextRoster = assigneeIds ?? (assignedTo !== undefined ? (assignedTo !== null ? [assignedTo] : []) : undefined);

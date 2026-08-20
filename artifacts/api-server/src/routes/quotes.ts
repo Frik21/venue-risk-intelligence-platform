@@ -3,7 +3,7 @@ import { eq, desc } from "drizzle-orm";
 import { db, quotesTable, venuesTable, usersTable, tasksTable, invoicesTable } from "@workspace/db";
 import { z } from "zod";
 import { buildQuotePdf } from "../lib/quote-pdf";
-import { resolveCompanyId } from "../lib/resolve-company";
+import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -83,8 +83,10 @@ async function loadContext(row: typeof quotesTable.$inferSelect) {
   return { venueName: venue?.name ?? null, assignedByName: assignedByUser?.name ?? null };
 }
 
-router.get("/quotes", async (_req, res): Promise<void> => {
-  const rows = await db.select().from(quotesTable).orderBy(desc(quotesTable.createdAt));
+router.get("/quotes", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const rows = await db.select().from(quotesTable).where(eq(quotesTable.companyId, companyId)).orderBy(desc(quotesTable.createdAt));
   const venues = await db.select({ id: venuesTable.id, name: venuesTable.name }).from(venuesTable);
   const venueMap: Record<number, string> = {};
   for (const v of venues) venueMap[v.id] = v.name;
@@ -143,7 +145,7 @@ router.post("/quotes", async (req, res): Promise<void> => {
   const parsed = QuoteInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const companyId = await resolveCompanyId(parsed.data.companyId);
+  const companyId = await resolveCompanyId(req.user!.companyId);
   const [quote] = await db
     .insert(quotesTable)
     .values({

@@ -1,10 +1,20 @@
 const BASE = "/api";
 
+// Fired on any 401 from any endpoint - AuthContext listens for this to
+// force a redirect to /login, so none of the ~35 call sites using
+// apiFetch need their own 401 handling. Not fired for /auth/login
+// itself (a bad password there is an expected, inline-handled result,
+// not a "your session died" event).
+export const SESSION_EXPIRED_EVENT = "venueguard-session-expired";
+
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { "Content-Type": "application/json", ...options?.headers },
     ...options,
   });
+  if (res.status === 401 && path !== "/auth/login") {
+    window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+  }
   if (!res.ok) {
     const text = await res.text();
     let message = text || `HTTP ${res.status}`;
@@ -36,8 +46,16 @@ export type RouteType =
 export type RouteCreationMethod = "endpoint_marker" | "street_builder" | "freehand_draw";
 
 export interface User {
-  id: number; name: string; email: string; role: UserRole; avatarInitials: string | null; active: boolean;
-  dayRate: number | null; nightRate: number | null; officeId: number | null; createdAt: string;
+  id: number; companyId: number | null; name: string; email: string; role: UserRole; avatarInitials: string | null; active: boolean;
+  dayRate: number | null; nightRate: number | null; officeId: number | null; mustChangePassword: boolean; createdAt: string;
+}
+
+// The logged-in session's own view of itself - a trimmed subset of
+// User (no active/dayRate/nightRate/officeId/createdAt, none of which
+// matter for "who am I").
+export interface SessionUser {
+  id: number; companyId: number | null; companyName: string | null; name: string; email: string; role: UserRole;
+  avatarInitials: string | null; mustChangePassword: boolean;
 }
 
 export interface Venue {
@@ -747,7 +765,9 @@ export const api = {
   dashboard: () => apiFetch<DashboardSummary>("/dashboard/summary"),
   users: {
     list: () => apiFetch<User[]>("/users"),
-    create: (data: Partial<User>) => apiFetch<User>("/users", { method: "POST", body: JSON.stringify(data) }),
+    // initialPassword is only ever present on this one response - shown
+    // once in the Add User dialog, never stored/refetchable.
+    create: (data: Partial<User>) => apiFetch<User & { initialPassword: string }>("/users", { method: "POST", body: JSON.stringify(data) }),
     update: (id: number, data: Partial<Pick<User, "name" | "email" | "avatarInitials" | "officeId">>) =>
       apiFetch<User>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     updateRates: (id: number, data: { dayRate: number | null; nightRate: number | null }) =>
@@ -798,6 +818,14 @@ export const api = {
       alertReviewedBucket: string | null; alertReviewedBy: number | null;
     }>) => apiFetch<Task>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     duplicate: (id: number) => apiFetch<Task>(`/tasks/${id}/duplicate`, { method: "POST" }),
+  },
+  auth: {
+    login: (email: string, password: string) =>
+      apiFetch<{ user: SessionUser }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+    logout: () => apiFetch<void>("/auth/logout", { method: "POST" }),
+    me: () => apiFetch<{ user: SessionUser }>("/auth/me"),
+    changePassword: (currentPassword: string, newPassword: string) =>
+      apiFetch<{ user: SessionUser }>("/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),
   },
   companies: {
     list: () => apiFetch<Company[]>("/companies"),

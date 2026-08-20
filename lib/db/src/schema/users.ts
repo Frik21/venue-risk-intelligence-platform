@@ -26,6 +26,14 @@ export const usersTable = pgTable("users", {
   // self-service PATCH /users/:id for Account Details).
   dayRate: real("day_rate"),
   nightRate: real("night_rate"),
+  // Nullable - existing seeded users and CPOs mid-onboarding may not
+  // have a password set yet. Login is refused (not "no password
+  // required") when this is null - see requireAuth in lib/auth.ts.
+  passwordHash: text("password_hash"),
+  // Set whenever an admin generates a user's initial password on
+  // their behalf (POST /users, onboarding operational-access grant);
+  // cleared on the user's own successful POST /auth/change-password.
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

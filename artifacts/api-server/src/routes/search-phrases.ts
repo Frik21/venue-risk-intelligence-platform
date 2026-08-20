@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db, venueSearchPhrasesTable, venuesTable } from "@workspace/db";
 import { z } from "zod";
-import { resolveCompanyId } from "../lib/resolve-company";
+import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -18,8 +18,10 @@ function formatPhrase(row: typeof venueSearchPhrasesTable.$inferSelect) {
 // All phrases - a flat, venue-less list for now (see venueId comment in
 // schema/monitoring.ts). Also used by the Alert Queue to figure out
 // which venues are being monitored, back when phrases were venue-scoped.
-router.get("/search-phrases", async (_req, res): Promise<void> => {
-  const phrases = await db.select().from(venueSearchPhrasesTable).orderBy(venueSearchPhrasesTable.createdAt);
+router.get("/search-phrases", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const phrases = await db.select().from(venueSearchPhrasesTable).where(eq(venueSearchPhrasesTable.companyId, companyId)).orderBy(venueSearchPhrasesTable.createdAt);
   res.json(phrases.map(formatPhrase));
 });
 
@@ -31,7 +33,7 @@ router.post("/search-phrases", async (req, res): Promise<void> => {
   const parsed = GlobalPhraseInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const companyId = await resolveCompanyId(undefined);
+  const companyId = await resolveCompanyId(req.user!.companyId);
   const [phrase] = await db
     .insert(venueSearchPhrasesTable)
     .values({ companyId, venueId: null, phrase: parsed.data.phrase })

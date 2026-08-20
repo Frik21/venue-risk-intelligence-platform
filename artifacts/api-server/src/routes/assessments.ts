@@ -11,7 +11,7 @@ import {
   auditLogTable,
 } from "@workspace/db";
 import { z } from "zod";
-import { resolveCompanyId } from "../lib/resolve-company";
+import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -56,9 +56,11 @@ async function buildAssessmentSummary(
   };
 }
 
-router.get("/assessments/summary", async (_req, res): Promise<void> => {
-  const assessments = await db.select().from(assessmentsTable).orderBy(desc(assessmentsTable.updatedAt));
-  const risks = await db.select().from(risksTable);
+router.get("/assessments/summary", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const assessments = await db.select().from(assessmentsTable).where(eq(assessmentsTable.companyId, companyId)).orderBy(desc(assessmentsTable.updatedAt));
+  const risks = await db.select().from(risksTable).where(eq(risksTable.companyId, companyId));
   const venues = await db.select({ id: venuesTable.id, name: venuesTable.name, city: venuesTable.city }).from(venuesTable);
   const venueMap: Record<number, { name: string; city: string }> = {};
   for (const v of venues) venueMap[v.id] = { name: v.name, city: v.city };
@@ -85,8 +87,10 @@ router.get("/assessments/summary", async (_req, res): Promise<void> => {
   });
 });
 
-router.get("/assessments", async (_req, res): Promise<void> => {
-  const assessments = await db.select().from(assessmentsTable).orderBy(desc(assessmentsTable.updatedAt));
+router.get("/assessments", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const assessments = await db.select().from(assessmentsTable).where(eq(assessmentsTable.companyId, companyId)).orderBy(desc(assessmentsTable.updatedAt));
   const venues = await db.select({ id: venuesTable.id, name: venuesTable.name, city: venuesTable.city }).from(venuesTable);
   const matrices = await db.select({ assessmentId: riskMatrixTable.assessmentId, overallRating: riskMatrixTable.overallRating }).from(riskMatrixTable);
 
@@ -105,12 +109,7 @@ router.post("/assessments", async (req, res): Promise<void> => {
   const parsed = AssessmentInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  let venueCompanyId: number | undefined;
-  if (parsed.data.venueId != null) {
-    const [venue] = await db.select({ companyId: venuesTable.companyId }).from(venuesTable).where(eq(venuesTable.id, parsed.data.venueId));
-    venueCompanyId = venue?.companyId;
-  }
-  const companyId = await resolveCompanyId(venueCompanyId);
+  const companyId = await resolveCompanyId(req.user!.companyId);
   const [assessment] = await db
     .insert(assessmentsTable)
     .values({ ...parsed.data, companyId, status: parsed.data.status ?? "draft" })
@@ -462,8 +461,10 @@ router.get("/assessments/:id/audit-log", async (req, res): Promise<void> => {
 // only ever written to from this file (create/status-change/approve),
 // so this is assessment lifecycle activity, not a platform-wide
 // audit trail - tasks, users, venues etc. have no audit logging today.
-router.get("/audit-log", async (_req, res): Promise<void> => {
-  const logs = await db.select().from(auditLogTable).orderBy(desc(auditLogTable.createdAt)).limit(50);
+router.get("/audit-log", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const logs = await db.select().from(auditLogTable).where(eq(auditLogTable.companyId, companyId)).orderBy(desc(auditLogTable.createdAt)).limit(50);
 
   const assessmentIds = [...new Set(logs.map((l) => l.assessmentId).filter((id): id is number => id !== null))];
   const assessments = assessmentIds.length

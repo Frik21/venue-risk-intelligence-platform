@@ -49,20 +49,47 @@ function NewUserDialog({ onClose }: { onClose: () => void }) {
   const { data: offices = [] } = useQuery<Office[]>({ queryKey: ["offices"], queryFn: api.offices.list });
   const [selectedOfficeId] = useSelectedOfficeId();
   const [form, setForm] = useState({ name: "", email: "", role: "manager" as any, officeId: selectedOfficeId as number | null });
+  const [initialPassword, setInitialPassword] = useState<string | null>(null);
   const qc = useQueryClient();
   const { toast } = useToast();
 
   const mutation = useMutation({
     mutationFn: () => api.users.create(form),
-    onSuccess: () => {
+    onSuccess: (user) => {
       qc.invalidateQueries({ queryKey: ["users"] });
-      toast({ title: "User created" });
-      onClose();
+      setInitialPassword(user.initialPassword);
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const set = (k: string, v: string) => setForm((f: any) => ({ ...f, [k]: v }));
+
+  // No email infrastructure exists to send a real invite yet - the
+  // admin shares this password out of band, shown here exactly once
+  // (it's never retrievable again after this dialog closes).
+  if (initialPassword) {
+    return (
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md my-8 p-6 space-y-4">
+          <h2 className="text-lg font-bold">User Created</h2>
+          <p className="text-sm text-slate-500">
+            Share this temporary password with {form.name} - they'll be asked to set their own on first login. It won't be shown again.
+          </p>
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
+            <code className="flex-1 font-mono text-sm text-slate-900">{initialPassword}</code>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => { navigator.clipboard.writeText(initialPassword); toast({ title: "Copied" }); }}
+            >
+              Copy
+            </Button>
+          </div>
+          <Button className="w-full" onClick={onClose}>Done</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto">

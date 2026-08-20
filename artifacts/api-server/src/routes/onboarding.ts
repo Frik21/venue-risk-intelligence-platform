@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { db, operatorOnboardingTable, operatorDocumentsTable, usersTable } from "@workspace/db";
 import { z } from "zod";
 import { ONBOARDING_CHECKLIST_ITEMS, DOCUMENT_TYPES } from "../lib/onboarding-checklist";
-import { resolveCompanyId } from "../lib/resolve-company";
+import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
+import { generateInitialPassword, hashPassword } from "../lib/auth";
 
 const router: IRouter = Router();
 const DOCUMENT_TYPE_VALUES = DOCUMENT_TYPES.map((t) => t.value) as [string, ...string[]];
@@ -118,7 +119,7 @@ router.post("/onboarding", async (req, res): Promise<void> => {
   // database won't allow to duplicate. operational-access grant
   // reactivates it exactly like it already does for any other
   // pre-linked user.
-  const companyId = await resolveCompanyId(parsed.data.companyId ?? existingUser?.companyId);
+  const companyId = await resolveCompanyId(req.user!.companyId);
   const [record] = await db
     .insert(operatorOnboardingTable)
     .values({
@@ -140,9 +141,11 @@ router.post("/onboarding", async (req, res): Promise<void> => {
 // created directly from the Users page rather than through Add
 // Operator, which already has a real, active account so neither gate
 // applies to them.
-router.get("/onboarding", async (_req, res): Promise<void> => {
-  const cpos = await db.select().from(usersTable).where(eq(usersTable.role, "cpo"));
-  let records = await db.select().from(operatorOnboardingTable);
+router.get("/onboarding", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const cpos = await db.select().from(usersTable).where(and(eq(usersTable.role, "cpo"), eq(usersTable.companyId, companyId)));
+  let records = await db.select().from(operatorOnboardingTable).where(eq(operatorOnboardingTable.companyId, companyId));
 
   const linkedUserIds = new Set(records.map((r) => r.userId).filter((id): id is number => id != null));
   // Only auto-provisions active CPOs - a removed operator (DELETE
@@ -152,7 +155,7 @@ router.get("/onboarding", async (_req, res): Promise<void> => {
   // role "cpo" and no onboarding row of its own.
   const unlinked = cpos.filter((c) => c.active && !linkedUserIds.has(c.id));
   if (unlinked.length > 0) {
-    const fallbackCompanyId = await resolveCompanyId(undefined);
+    const fallbackCompanyId = companyId;
     const inserted = await db
       .insert(operatorOnboardingTable)
       .values(unlinked.map((c) => ({
@@ -303,15 +306,28 @@ router.patch("/onboarding/:id/operational-access", async (req, res): Promise<voi
   }
 
   let userId = existing.userId;
+  let initialPassword: string | null = null;
 
   if (parsed.data.granted && userId == null) {
     const [dupe] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, existing.candidateEmail));
     if (dupe) { res.status(409).json({ error: `A user with email "${existing.candidateEmail}" already exists` }); return; }
 
     const initials = existing.candidateName.trim().split(/\s+/).map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+    // Admin-generated, shown once - same as POST /users, no email
+    // infrastructure exists yet to send a real invite.
+    initialPassword = generateInitialPassword();
+    const passwordHash = await hashPassword(initialPassword);
     const [user] = await db
       .insert(usersTable)
-      .values({ name: existing.candidateName, email: existing.candidateEmail, role: "cpo", avatarInitials: initials })
+      .values({
+        name: existing.candidateName,
+        email: existing.candidateEmail,
+        role: "cpo",
+        avatarInitials: initials,
+        companyId: existing.companyId,
+        passwordHash,
+        mustChangePassword: true,
+      })
       .returning();
     userId = user.id;
   } else if (userId != null) {
@@ -328,7 +344,7 @@ router.patch("/onboarding/:id/operational-access", async (req, res): Promise<voi
     ? (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, userId)))[0]?.name ?? null
     : null;
 
-  res.json(formatOnboarding(updated, userName));
+  res.json({ ...formatOnboarding(updated, userName), initialPassword });
 });
 
 // Fully removes the candidate/operator - their documents cascade-delete

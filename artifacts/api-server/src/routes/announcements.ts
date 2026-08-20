@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, desc, inArray } from "drizzle-orm";
 import { db, announcementsTable, usersTable, tasksTable } from "@workspace/db";
 import { z } from "zod";
-import { resolveCompanyId } from "../lib/resolve-company";
+import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -33,8 +33,10 @@ function formatAnnouncement(
 // task-scoped ones only to that task's roster - the frontend does that
 // filtering (it already has each CPO's task list loaded). A Manager
 // sees the unfiltered list here on /admin/communications.
-router.get("/announcements", async (_req, res): Promise<void> => {
-  const rows = await db.select().from(announcementsTable).orderBy(desc(announcementsTable.createdAt));
+router.get("/announcements", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const rows = await db.select().from(announcementsTable).where(eq(announcementsTable.companyId, companyId)).orderBy(desc(announcementsTable.createdAt));
 
   const userIds = [...new Set(rows.map((r) => r.createdBy).filter((id): id is number => id != null))];
   const users = userIds.length
@@ -79,7 +81,7 @@ router.post("/announcements", async (req, res): Promise<void> => {
     task = { taskNumber: taskNumber(row.id), title: row.title, companyId: row.companyId };
   }
 
-  const companyId = await resolveCompanyId(parsed.data.companyId ?? task?.companyId);
+  const companyId = await resolveCompanyId(req.user!.companyId);
   const [announcement] = await db
     .insert(announcementsTable)
     .values({ companyId, message: parsed.data.message, taskId: parsed.data.taskId ?? null, createdBy: parsed.data.createdBy ?? null })

@@ -7,6 +7,10 @@ import NotFound from "@/pages/not-found";
 import Layout from "@/components/layout";
 import Dashboard from "@/pages/dashboard";
 import RoleSelect from "@/pages/role-select";
+import LoginPage from "@/pages/login";
+import ChangePasswordPage from "@/pages/change-password";
+import { AuthProvider } from "@/lib/auth";
+import RequireAuth from "@/components/require-auth";
 
 import AssessmentsList from "@/pages/assessments/list";
 import AssessmentNew from "@/pages/assessments/new";
@@ -56,8 +60,11 @@ const queryClient = new QueryClient({
 
 function Router() {
   return (
-    <Layout>
+    <RequireAuth>
+      <Layout>
       <Switch>
+        <Route path="/login" component={LoginPage} />
+        <Route path="/change-password" component={ChangePasswordPage} />
         <Route path="/" component={RoleSelect} />
         <Route path="/owner" component={OwnerDashboard} />
         <Route path="/cpo" component={Dashboard} />
@@ -109,7 +116,8 @@ function Router() {
 
         <Route component={NotFound} />
       </Switch>
-    </Layout>
+      </Layout>
+    </RequireAuth>
   );
 }
 
@@ -118,7 +126,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
+          <AuthProvider>
+            <Router />
+          </AuthProvider>
         </WouterRouter>
         <Toaster />
       </TooltipProvider>

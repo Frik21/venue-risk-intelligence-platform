@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db, timesheetEntriesTable, usersTable, tasksTable, companySettingsTable } from "@workspace/db";
-import { asc } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { computePersonnelCosts } from "../lib/personnel-cost";
+import { requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -15,10 +16,12 @@ const router: IRouter = Router();
 // whatever's been approved so far, not the CPO's full unreviewed log).
 // Deliberately not pre-aggregated server-side so the frontend can
 // group by task, by CPO, or by period as needed.
-router.get("/personnel-costs", async (_req, res): Promise<void> => {
-  const entries = (await db.select().from(timesheetEntriesTable)).filter((e) => e.approved);
-  const users = await db.select().from(usersTable);
-  const [settingsRow] = await db.select().from(companySettingsTable).orderBy(asc(companySettingsTable.companyId)).limit(1);
+router.get("/personnel-costs", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const entries = (await db.select().from(timesheetEntriesTable).where(eq(timesheetEntriesTable.companyId, companyId))).filter((e) => e.approved);
+  const users = await db.select().from(usersTable).where(eq(usersTable.companyId, companyId));
+  const [settingsRow] = await db.select().from(companySettingsTable).where(eq(companySettingsTable.companyId, companyId));
   const settings = settingsRow ?? { overtimeThresholdHours: 8, overtimeThresholdPeriod: "daily" as const, overtimeMultiplier: 1.5 };
 
   const rates: Record<number, { dayRate: number; nightRate: number }> = {};

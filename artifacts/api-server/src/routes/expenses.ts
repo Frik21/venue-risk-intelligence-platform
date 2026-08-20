@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
 import { db, expensesTable, tasksTable, venuesTable } from "@workspace/db";
 import { z } from "zod";
+import { requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -27,8 +28,10 @@ function formatExpense(row: typeof expensesTable.$inferSelect) {
 // Global feed across every task - powers Task Costs / Budget Overview
 // on the Management Dashboard, which has no destination of its own
 // (the route below only covers one task at a time).
-router.get("/expenses", async (_req, res): Promise<void> => {
-  const rows = await db.select().from(expensesTable).orderBy(desc(expensesTable.incurredOn)).limit(200);
+router.get("/expenses", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const rows = await db.select().from(expensesTable).where(eq(expensesTable.companyId, companyId)).orderBy(desc(expensesTable.incurredOn)).limit(200);
 
   const taskIds = [...new Set(rows.map((r) => r.taskId))];
   const tasks = taskIds.length

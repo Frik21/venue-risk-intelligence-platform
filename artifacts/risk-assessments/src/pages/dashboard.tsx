@@ -22,6 +22,7 @@ import {
   MAP_BORDER_FULL_DETAIL_MAX_POINTS,
 } from "@/lib/map-aesthetics";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import type {
   CountryIntelligence,
   CountryRiskLevel,
@@ -385,12 +386,11 @@ export default function Dashboard() {
     );
   }
 
+  const { logout } = useAuth();
+
   return (
     <div className="fixed inset-0 z-50 overflow-hidden text-white flex flex-col" style={{ backgroundColor: OCEAN_COLOR }}>
-      {/* Login is bypassed for now (see the step state comment above) - */}
-      {/* Sign Out matches that by staying on the Brief rather than */}
-      {/* dead-ending at a login screen with nothing behind it. */}
-      <TopBanner onSignOut={() => setStep("brief")} />
+      <TopBanner onSignOut={() => logout()} />
       <div className="flex-1 min-h-0 relative">
         <OperationalCanvas
           briefArea={briefArea}
@@ -2080,13 +2080,11 @@ function OperationalCanvas({
     location: announcement.createdByName ?? "Manager",
     timestamp: timeAgo(announcement.createdAt),
   }));
-  // Closest thing this app has to "the logged-in user" without real
-  // auth - matches the operator area's hardcoded "Frik" by name,
-  // falling back to an Admin, then anyone, if that name isn't in the
-  // Users table yet. Scopes Profile > Timesheet (and anything else
-  // Profile grows) to one specific real account - distinct from
-  // viewingAsCpoId above, which is a separate "Manager viewing as a
-  // CPO" concept for admin testing elsewhere in this dashboard.
+  // The real logged-in session's own account - scopes Profile >
+  // Timesheet (and anything else Profile grows) to it. Distinct from
+  // viewingAsCpoId above, which is a separate "Manager/Owner viewing
+  // as a CPO" concept for testing/support elsewhere in this dashboard.
+  const { user: sessionUser } = useAuth();
   const [profileUserId, setProfileUserId] = useState<number | null>(null);
   const [profileUser, setProfileUser] = useState<User | null>(null);
 
@@ -2096,17 +2094,18 @@ function OperationalCanvas({
       .then((users) => {
         const cpos = users.filter((u) => u.role === "cpo");
         setCpoUsers(cpos);
-        setViewingAsCpoId((current) => current ?? cpos[0]?.id ?? null);
+        // Only a Manager/Owner previewing a CPO's view needs a default
+        // pick here - a CPO's own session is never "viewing as" anyone.
+        if (sessionUser && sessionUser.role !== "cpo") {
+          setViewingAsCpoId((current) => current ?? cpos[0]?.id ?? null);
+        }
 
-        const frikMatch =
-          users.find((u) => u.name.trim().toLowerCase() === "frik") ??
-          users.find((u) => u.role === "admin") ??
-          users[0];
-        setProfileUserId(frikMatch?.id ?? null);
-        setProfileUser(frikMatch ?? null);
+        const self = users.find((u) => u.id === sessionUser?.id) ?? null;
+        setProfileUserId(self?.id ?? null);
+        setProfileUser(self);
       })
       .catch((err) => console.error("Failed to load CPO users:", err));
-  }, []);
+  }, [sessionUser]);
 
   // Broadcasts to TopBanner (a sibling that can't see this state
   // directly) so the operator area's name/avatar can reflect the real

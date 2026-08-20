@@ -2,8 +2,13 @@ import { Router, type IRouter } from "express";
 import { eq, asc, ne, count, max } from "drizzle-orm";
 import { db, companiesTable, usersTable, venuesTable, clientsTable, tasksTable } from "@workspace/db";
 import { z } from "zod";
+import { requireRole } from "../lib/auth";
 
 const router: IRouter = Router();
+// Owner-only - the one surface a companyId: null session is allowed to
+// use, and only for this aggregate-only data (see buildCompanyRows's
+// own comment for the invariant this protects).
+router.use(requireRole("admin"));
 
 const TIERS = ["enterprise", "micro_enterprise"] as const;
 const STATUSES = ["trial", "active", "suspended", "cancelled"] as const;

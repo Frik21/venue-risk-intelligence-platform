@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
 import { db, alertsTable, venuesTable, usersTable } from "@workspace/db";
 import { z } from "zod";
+import { requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -21,8 +22,10 @@ async function formatAlert(row: typeof alertsTable.$inferSelect, venueName?: str
   };
 }
 
-router.get("/alerts", async (_req, res): Promise<void> => {
-  const alerts = await db.select().from(alertsTable).orderBy(desc(alertsTable.createdAt));
+router.get("/alerts", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const alerts = await db.select().from(alertsTable).where(eq(alertsTable.companyId, companyId)).orderBy(desc(alertsTable.createdAt));
   const venues = await db.select({ id: venuesTable.id, name: venuesTable.name }).from(venuesTable);
   const users = await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable);
 

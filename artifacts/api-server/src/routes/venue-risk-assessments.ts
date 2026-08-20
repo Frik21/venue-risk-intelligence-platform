@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { eq, max, desc, or, ne } from "drizzle-orm";
+import { eq, and, max, desc, or, ne } from "drizzle-orm";
 import { db, venueRiskAssessmentsTable, tasksTable, usersTable, venuesTable } from "@workspace/db";
 import { z } from "zod";
+import { requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -40,11 +41,16 @@ async function withOperatorName(row: typeof venueRiskAssessmentsTable.$inferSele
 // per-task list route below only covers one task at a time). Only
 // rows where the CPO actually wrote something into one of those two
 // fields are returned - an empty default("") value isn't a real note.
-router.get("/venue-risk-assessments", async (_req, res): Promise<void> => {
+router.get("/venue-risk-assessments", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
   const rows = await db
     .select()
     .from(venueRiskAssessmentsTable)
-    .where(or(ne(venueRiskAssessmentsTable.areaAdvisories, ""), ne(venueRiskAssessmentsTable.currentOperatingConditions, "")))
+    .where(and(
+      eq(venueRiskAssessmentsTable.companyId, companyId),
+      or(ne(venueRiskAssessmentsTable.areaAdvisories, ""), ne(venueRiskAssessmentsTable.currentOperatingConditions, "")),
+    ))
     .orderBy(desc(venueRiskAssessmentsTable.updatedAt))
     .limit(30);
 

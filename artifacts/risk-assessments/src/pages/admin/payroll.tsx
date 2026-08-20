@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type PendingPayroll, type PayRun, type PayRunStatus, type User } from "@/lib/api";
+import { api, type PendingPayroll, type PayRun, type PayRunStatus } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,6 +9,7 @@ import {
 import { Wallet, MoreVertical, CheckCircle2, Trash2, Users as UsersIcon } from "lucide-react";
 import { formatDateTime } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const STATUS_CONFIG: Record<PayRunStatus, { label: string; color: string }> = {
@@ -46,8 +47,8 @@ export default function PayrollPage() {
     queryKey: ["payroll-runs"],
     queryFn: api.payroll.listRuns,
   });
-  const { data: users = [] } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list });
-  const currentUserId = users.find((u) => u.role === "manager" || u.role === "admin")?.id;
+  const { user: sessionUser } = useAuth();
+  const currentUserId = sessionUser?.id;
 
   const createRunMutation = useMutation({
     mutationFn: (userId: number) => api.payroll.createRun({ userId, createdBy: currentUserId ?? null }),

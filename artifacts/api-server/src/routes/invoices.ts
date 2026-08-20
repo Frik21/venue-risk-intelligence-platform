@@ -4,7 +4,7 @@ import { db, invoicesTable, usersTable, tasksTable } from "@workspace/db";
 import { z } from "zod";
 import { buildInvoicePdf } from "../lib/invoice-pdf";
 import { COST_CATEGORIES } from "./quotes";
-import { resolveCompanyId } from "../lib/resolve-company";
+import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -73,8 +73,10 @@ async function syncTaskInvoiced(taskId: number | null) {
   await db.update(tasksTable).set({ invoiced: true }).where(eq(tasksTable.id, taskId));
 }
 
-router.get("/invoices", async (_req, res): Promise<void> => {
-  const rows = await db.select().from(invoicesTable).orderBy(desc(invoicesTable.createdAt));
+router.get("/invoices", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const rows = await db.select().from(invoicesTable).where(eq(invoicesTable.companyId, companyId)).orderBy(desc(invoicesTable.createdAt));
   const users = await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable);
   const userMap: Record<number, string> = {};
   for (const u of users) userMap[u.id] = u.name;
@@ -117,7 +119,7 @@ router.post("/invoices", async (req, res): Promise<void> => {
   const parsed = InvoiceInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const companyId = await resolveCompanyId(parsed.data.companyId);
+  const companyId = await resolveCompanyId(req.user!.companyId);
   const [invoice] = await db
     .insert(invoicesTable)
     .values({
