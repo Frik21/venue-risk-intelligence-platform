@@ -1,14 +1,17 @@
 import { useLocation, Redirect } from "wouter";
 import { useAuth } from "@/lib/auth";
-import { api } from "@/lib/api";
-import { ShieldAlert, FlaskConical } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ShieldAlert } from "lucide-react";
 
 // Wraps App.tsx's whole <Switch> (outside <Layout>, so /login itself
 // renders full-bleed with no sidebar chrome). Redirects to /login when
 // unauthenticated, to /change-password when the session must set a
 // real password first, and gates /owner to the admin (Owner) role only
 // - matching the backend's requireRole("admin") on /api/companies/*.
+// The Preview-mode banner itself lives inside Layout's own header
+// (components/layout.tsx), not here - it needs to render as normal
+// in-flow content, not a separate sticky/fixed sibling stacked on top
+// of Layout's own sticky sidebar/header, which caused rendering
+// glitches (see that file's history for what went wrong).
 export default function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, status } = useAuth();
   const [location] = useLocation();
@@ -54,41 +57,5 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
     return <Redirect to="/owner" />;
   }
 
-  return (
-    <>
-      {user?.isPreviewing && <PreviewBanner companyName={user.companyName} />}
-      {/* Layout's own root div is `min-h-screen` with a `sticky top-0`
-          sidebar/header - stacking that under a second `sticky top-0`
-          sibling is unreliable (they can end up competing for the same
-          spot depending on the browser's scroll-container resolution
-          rather than cleanly stacking), which is why the banner above
-          uses `fixed` instead. This padding just reserves its height so
-          fixed positioning doesn't cover the page underneath it. */}
-      <div className={user?.isPreviewing ? "pt-9" : undefined}>{children}</div>
-    </>
-  );
-}
-
-function PreviewBanner({ companyName }: { companyName: string | null }) {
-  return (
-    <div className="fixed top-0 inset-x-0 z-[100] h-9 flex items-center justify-center gap-3 bg-violet-600 text-white text-xs font-medium px-4">
-      <FlaskConical className="w-3.5 h-3.5" />
-      <span>Previewing {companyName ?? "the test company"} - not a real subscriber</span>
-      <Button
-        size="sm"
-        variant="secondary"
-        className="h-6 px-2 text-[11px]"
-        onClick={async () => {
-          // Full reload (not client-side nav) - same cache-safety reason
-          // login/enterPreview use one: no react-query cache here is
-          // keyed by company, so an in-memory cache built while
-          // previewing shouldn't bleed into the plain Owner view after.
-          await api.auth.exitPreview();
-          window.location.href = "/owner";
-        }}
-      >
-        Exit Preview
-      </Button>
-    </div>
-  );
+  return <>{children}</>;
 }
