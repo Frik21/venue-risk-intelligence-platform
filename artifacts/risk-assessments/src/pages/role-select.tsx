@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { ShieldCheck, Gauge, ShieldAlert, ArrowRight, ArrowLeft, Workflow, Wallet, Users2 } from "lucide-react";
+import { ShieldCheck, Gauge, ShieldAlert, ArrowRight, ArrowLeft, Workflow, Wallet, Users2, Cpu } from "lucide-react";
 
 // Owner-only fast-path (see require-auth.tsx - non-admin sessions
 // never reach this route). Used to be the default landing page at "/"
@@ -7,12 +7,14 @@ import { ShieldCheck, Gauge, ShieldAlert, ArrowRight, ArrowLeft, Workflow, Walle
 // button on the Owner Console header (pages/owner/dashboard.tsx), for
 // jumping straight into whatever's currently the Test Company's
 // Management/CPO pages during Preview, without digging through either
-// app's own nav. Not a role/auth gate itself - all five tiles land on
-// either /cpo or the same /admin Management Dashboard, exactly like
-// clicking into them normally would. Operations/Finance/Human
+// app's own nav. Not a role/auth gate itself - the tiles with an href
+// land on either /cpo or the same /admin Management Dashboard, exactly
+// like clicking into them normally would. Operations/Finance/Human
 // Resources are extra entry points into that one dashboard, not
 // separately scoped views - per direct product direction, revisit if
-// role-scoped dashboards are wanted later.
+// role-scoped dashboards are wanted later. IT has no destination yet
+// (href: null) - deliberately left as a placeholder, not wired to
+// /admin like the others, until there's an actual IT-specific surface.
 const TILES = [
   {
     href: "/cpo",
@@ -49,7 +51,14 @@ const TILES = [
     label: "Human Resources",
     description: "Management Dashboard - tasks, operators, costs, and reporting.",
   },
-] as const;
+  {
+    href: null,
+    icon: Cpu,
+    iconColor: "text-slate-400",
+    label: "IT",
+    description: "Not built yet.",
+  },
+] as const satisfies readonly { href: string | null; icon: typeof Cpu; iconColor: string; label: string; description: string }[];
 
 export default function RoleSelect() {
   return (
@@ -76,20 +85,36 @@ export default function RoleSelect() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-left">
-          {TILES.map((tile) => (
-            <Link
-              key={tile.label}
-              href={tile.href}
-              className="group bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-blue-500 hover:bg-slate-800/60 transition-colors"
-            >
-              <tile.icon className={`w-6 h-6 ${tile.iconColor} mb-3`} />
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold">{tile.label}</h2>
-                <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all" />
+          {TILES.map((tile) =>
+            tile.href ? (
+              <Link
+                key={tile.label}
+                href={tile.href}
+                className="group bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-blue-500 hover:bg-slate-800/60 transition-colors"
+              >
+                <tile.icon className={`w-6 h-6 ${tile.iconColor} mb-3`} />
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-bold">{tile.label}</h2>
+                  <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all" />
+                </div>
+                <p className="text-sm text-slate-400 mt-1">{tile.description}</p>
+              </Link>
+            ) : (
+              <div
+                key={tile.label}
+                className="bg-slate-900/40 border border-dashed border-slate-800 rounded-2xl p-6 cursor-not-allowed"
+              >
+                <tile.icon className={`w-6 h-6 ${tile.iconColor} mb-3`} />
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-bold text-slate-500">{tile.label}</h2>
+                  <span className="text-[10px] uppercase tracking-widest text-slate-600 border border-slate-700 rounded px-1.5 py-0.5">
+                    Coming soon
+                  </span>
+                </div>
+                <p className="text-sm text-slate-500 mt-1">{tile.description}</p>
               </div>
-              <p className="text-sm text-slate-400 mt-1">{tile.description}</p>
-            </Link>
-          ))}
+            ),
+          )}
         </div>
       </div>
     </div>
