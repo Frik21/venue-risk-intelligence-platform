@@ -43,6 +43,7 @@ import OfficesPage from "@/pages/admin/offices";
 import ClientsPage from "@/pages/admin/clients";
 import ClientDetailPage from "@/pages/admin/client-detail";
 import OnboardingPage from "@/pages/admin/onboarding";
+import OwnerDashboard from "@/pages/owner/dashboard";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,6 +59,7 @@ function Router() {
     <Layout>
       <Switch>
         <Route path="/" component={RoleSelect} />
+        <Route path="/owner" component={OwnerDashboard} />
         <Route path="/cpo" component={Dashboard} />
 
         {/* Venues */}

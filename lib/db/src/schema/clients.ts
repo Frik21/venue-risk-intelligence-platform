@@ -2,6 +2,7 @@ import { pgTable, text, serial, real, timestamp, integer } from "drizzle-orm/pg-
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { officesTable } from "./offices";
+import { companiesTable } from "./companies";
 
 // A client (the organization/person requesting CPO services) - kept
 // separate from the freeform clientName/clientContact still on each
@@ -21,6 +22,7 @@ import { officesTable } from "./offices";
 // gives the client's detail page real content over time.
 export const clientsTable = pgTable("clients", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   name: text("name").notNull(),
   status: text("status").notNull().default("active"), // lead | active | inactive | vip
   industry: text("industry").notNull().default(""),

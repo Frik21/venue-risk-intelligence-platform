@@ -2,6 +2,7 @@ import { pgTable, text, serial, integer, timestamp, type AnyPgColumn } from "dri
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
+import { companiesTable } from "./companies";
 
 // A company office/base location, added manually by a Manager to
 // track operational footprint - deliberately separate from Venues
@@ -9,6 +10,7 @@ import { usersTable } from "./users";
 // integration - just the reference details a Manager types in.
 export const officesTable = pgTable("offices", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   name: text("name").notNull(),
   address: text("address").notNull().default(""),
   city: text("city").notNull(),

@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { tasksTable } from "./tasks";
 import { usersTable } from "./users";
+import { companiesTable } from "./companies";
 
 // The full CPO roster for a task - a task can genuinely need several
 // operators (per direct product direction: "client wants 3
@@ -13,6 +14,7 @@ export const taskAssignmentsTable = pgTable(
   "task_assignments",
   {
     id: serial("id").primaryKey(),
+    companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
     taskId: integer("task_id").notNull().references(() => tasksTable.id, { onDelete: "cascade" }),
     operatorId: integer("operator_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

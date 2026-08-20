@@ -51,7 +51,7 @@ router.post("/tasks/:taskId/routes", async (req, res): Promise<void> => {
   const taskId = Number(req.params.taskId);
   if (isNaN(taskId)) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const [task] = await db.select({ id: tasksTable.id }).from(tasksTable).where(eq(tasksTable.id, taskId));
+  const [task] = await db.select({ id: tasksTable.id, companyId: tasksTable.companyId }).from(tasksTable).where(eq(tasksTable.id, taskId));
   if (!task) { res.status(404).json({ error: "Task not found" }); return; }
 
   const [{ highest }] = await db
@@ -60,7 +60,7 @@ router.post("/tasks/:taskId/routes", async (req, res): Promise<void> => {
     .where(eq(taskRoutesTable.taskId, taskId));
   const nextSlot = (highest ?? 0) + 1;
 
-  const [route] = await db.insert(taskRoutesTable).values({ taskId, slotIndex: nextSlot }).returning();
+  const [route] = await db.insert(taskRoutesTable).values({ companyId: task.companyId, taskId, slotIndex: nextSlot }).returning();
   res.status(201).json(formatRoute(route));
 });
 

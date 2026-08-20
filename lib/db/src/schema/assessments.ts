@@ -3,9 +3,11 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { venuesTable } from "./venues";
 import { usersTable } from "./users";
+import { companiesTable } from "./companies";
 
 export const assessmentsTable = pgTable("assessments", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   venueId: integer("venue_id").references(() => venuesTable.id, { onDelete: "set null" }),
   title: text("title").notNull(),
   description: text("description"),
@@ -27,6 +29,7 @@ export type Assessment = typeof assessmentsTable.$inferSelect;
 
 export const assessmentVersionsTable = pgTable("assessment_versions", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   assessmentId: integer("assessment_id").notNull().references(() => assessmentsTable.id, { onDelete: "cascade" }),
   version: integer("version").notNull(),
   snapshot: jsonb("snapshot").notNull(),
@@ -37,6 +40,7 @@ export const assessmentVersionsTable = pgTable("assessment_versions", {
 
 export const riskMatrixTable = pgTable("risk_matrix", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   assessmentId: integer("assessment_id").notNull().references(() => assessmentsTable.id, { onDelete: "cascade" }).unique(),
   areaRisk: text("area_risk").default("unknown"),
   accessControl: text("access_control").default("unknown"),
@@ -54,6 +58,7 @@ export const riskMatrixTable = pgTable("risk_matrix", {
 
 export const auditLogTable = pgTable("audit_log", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   assessmentId: integer("assessment_id").references(() => assessmentsTable.id, { onDelete: "cascade" }),
   userId: integer("user_id").references(() => usersTable.id),
   action: text("action").notNull(),
@@ -66,6 +71,7 @@ export const auditLogTable = pgTable("audit_log", {
 
 export const risksTable = pgTable("risks", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   assessmentId: integer("assessment_id").notNull().references(() => assessmentsTable.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   description: text("description"),

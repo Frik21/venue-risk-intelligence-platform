@@ -3,6 +3,7 @@ import { eq, desc } from "drizzle-orm";
 import { db, quotesTable, venuesTable, usersTable, tasksTable, invoicesTable } from "@workspace/db";
 import { z } from "zod";
 import { buildQuotePdf } from "../lib/quote-pdf";
+import { resolveCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -40,6 +41,7 @@ function formatQuote(
     id: row.id,
     quoteNumber: quoteNumber(row.id),
     taskId: row.taskId,
+    companyId: row.companyId,
     officeId: row.officeId,
     title: row.title,
     status: row.status as (typeof QUOTE_STATUSES)[number],
@@ -108,6 +110,7 @@ const CostLineItemSchema = z.object({
 });
 
 const QuoteFieldsSchema = {
+  companyId: z.number().int().optional(),
   taskId: z.number().int().nullable().optional(),
   officeId: z.number().int().nullable().optional(),
   title: z.string().max(200).optional(),
@@ -140,9 +143,11 @@ router.post("/quotes", async (req, res): Promise<void> => {
   const parsed = QuoteInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const companyId = await resolveCompanyId(parsed.data.companyId);
   const [quote] = await db
     .insert(quotesTable)
     .values({
+      companyId,
       taskId: parsed.data.taskId ?? null,
       officeId: parsed.data.officeId ?? null,
       title: parsed.data.title ?? "",
@@ -240,6 +245,7 @@ router.patch("/quotes/:id", async (req, res): Promise<void> => {
       const [draftInvoice] = await db
         .insert(invoicesTable)
         .values({
+          companyId: quote.companyId,
           taskId: quote.taskId,
           quoteId: quote.id,
           officeId: quote.officeId,

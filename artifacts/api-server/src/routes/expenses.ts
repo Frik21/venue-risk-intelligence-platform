@@ -83,7 +83,7 @@ router.post("/tasks/:taskId/expenses", async (req, res): Promise<void> => {
   const today = new Date().toISOString().slice(0, 10);
   const [expense] = await db
     .insert(expensesTable)
-    .values({ taskId, operatorId: task.assignedTo, incurredOn: today })
+    .values({ companyId: task.companyId, taskId, operatorId: task.assignedTo, incurredOn: today })
     .returning();
 
   res.status(201).json(formatExpense(expense));

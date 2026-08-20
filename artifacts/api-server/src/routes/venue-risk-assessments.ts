@@ -122,7 +122,7 @@ router.post("/tasks/:taskId/risk-assessments", async (req, res): Promise<void> =
   const timezone = typeof req.body?.timezone === "string" ? req.body.timezone : null;
   const [assessment] = await db
     .insert(venueRiskAssessmentsTable)
-    .values({ taskId, slotIndex: nextSlot, operatorId: task.assignedTo, timezone })
+    .values({ companyId: task.companyId, taskId, slotIndex: nextSlot, operatorId: task.assignedTo, timezone })
     .returning();
 
   res.status(201).json(await withOperatorName(assessment));

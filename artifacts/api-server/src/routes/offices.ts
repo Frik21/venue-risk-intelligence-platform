@@ -2,12 +2,14 @@ import { Router, type IRouter } from "express";
 import { eq, asc } from "drizzle-orm";
 import { db, officesTable, usersTable } from "@workspace/db";
 import { z } from "zod";
+import { resolveCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
 function formatOffice(row: typeof officesTable.$inferSelect, managerName?: string | null) {
   return {
     id: row.id,
+    companyId: row.companyId,
     name: row.name,
     address: row.address,
     city: row.city,
@@ -30,6 +32,7 @@ router.get("/offices", async (_req, res): Promise<void> => {
 });
 
 const OfficeInputSchema = z.object({
+  companyId: z.number().int().optional(),
   name: z.string().trim().min(1).max(200),
   address: z.string().max(500).optional(),
   city: z.string().trim().min(1).max(100),
@@ -42,9 +45,11 @@ router.post("/offices", async (req, res): Promise<void> => {
   const parsed = OfficeInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const companyId = await resolveCompanyId(parsed.data.companyId);
   const [office] = await db
     .insert(officesTable)
     .values({
+      companyId,
       name: parsed.data.name,
       address: parsed.data.address ?? "",
       city: parsed.data.city,

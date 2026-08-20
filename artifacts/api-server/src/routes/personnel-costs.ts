@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, timesheetEntriesTable, usersTable, tasksTable, companySettingsTable } from "@workspace/db";
+import { asc } from "drizzle-orm";
 import { computePersonnelCosts } from "../lib/personnel-cost";
 
 const router: IRouter = Router();
@@ -17,7 +18,7 @@ const router: IRouter = Router();
 router.get("/personnel-costs", async (_req, res): Promise<void> => {
   const entries = (await db.select().from(timesheetEntriesTable)).filter((e) => e.approved);
   const users = await db.select().from(usersTable);
-  const [settingsRow] = await db.select().from(companySettingsTable).limit(1);
+  const [settingsRow] = await db.select().from(companySettingsTable).orderBy(asc(companySettingsTable.companyId)).limit(1);
   const settings = settingsRow ?? { overtimeThresholdHours: 8, overtimeThresholdPeriod: "daily" as const, overtimeMultiplier: 1.5 };
 
   const rates: Record<number, { dayRate: number; nightRate: number }> = {};

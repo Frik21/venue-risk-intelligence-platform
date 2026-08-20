@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, riskMatrixTable } from "@workspace/db";
+import { db, riskMatrixTable, assessmentsTable } from "@workspace/db";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -68,9 +68,11 @@ router.put("/assessments/:id/risk-matrix", async (req, res): Promise<void> => {
       .where(eq(riskMatrixTable.assessmentId, id))
       .returning();
   } else {
+    const [assessment] = await db.select({ companyId: assessmentsTable.companyId }).from(assessmentsTable).where(eq(assessmentsTable.id, id));
+    if (!assessment) { res.status(404).json({ error: "Assessment not found" }); return; }
     [matrix] = await db
       .insert(riskMatrixTable)
-      .values({ assessmentId: id, ...parsed.data })
+      .values({ companyId: assessment.companyId, assessmentId: id, ...parsed.data })
       .returning();
   }
 

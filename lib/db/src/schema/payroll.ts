@@ -2,6 +2,7 @@ import { pgTable, serial, integer, real, text, timestamp } from "drizzle-orm/pg-
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
+import { companiesTable } from "./companies";
 
 // A Pay Run - one payout to one operator, covering whatever approved
 // timesheet entries were still unpaid at the moment it was created
@@ -19,6 +20,7 @@ import { usersTable } from "./users";
 // (draft/sent vs paid), not an instant payment.
 export const payRunsTable = pgTable("pay_runs", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   totalHours: real("total_hours").notNull().default(0),
   totalAmount: real("total_amount").notNull().default(0),

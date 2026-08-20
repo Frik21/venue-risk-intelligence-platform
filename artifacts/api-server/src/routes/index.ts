@@ -33,6 +33,7 @@ import vendorsRouter from "./vendors";
 import invoicesRouter from "./invoices";
 import payrollRouter from "./payroll";
 import announcementsRouter from "./announcements";
+import companiesRouter from "./companies";
 
 const router: IRouter = Router();
 
@@ -70,5 +71,6 @@ router.use(vendorsRouter);
 router.use(invoicesRouter);
 router.use(payrollRouter);
 router.use(announcementsRouter);
+router.use(companiesRouter);
 
 export default router;

@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
 import { db, incidentsTable, venuesTable } from "@workspace/db";
 import { z } from "zod";
+import { resolveCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -55,9 +56,15 @@ router.post("/incidents", async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const { incidentDate, ...rest } = parsed.data;
+  let venueCompanyId: number | undefined;
+  if (rest.venueId != null) {
+    const [venue] = await db.select({ companyId: venuesTable.companyId }).from(venuesTable).where(eq(venuesTable.id, rest.venueId));
+    venueCompanyId = venue?.companyId;
+  }
+  const companyId = await resolveCompanyId(venueCompanyId);
   const [incident] = await db
     .insert(incidentsTable)
-    .values({ ...rest, incidentDate: new Date(incidentDate) })
+    .values({ ...rest, companyId, incidentDate: new Date(incidentDate) })
     .returning();
 
   let venueName: string | null = null;

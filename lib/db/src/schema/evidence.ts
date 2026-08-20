@@ -3,9 +3,11 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { assessmentsTable } from "./assessments";
 import { usersTable } from "./users";
+import { companiesTable } from "./companies";
 
 export const evidenceTable = pgTable("evidence", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   assessmentId: integer("assessment_id").notNull().references(() => assessmentsTable.id, { onDelete: "cascade" }),
   evidenceType: text("evidence_type").notNull(),
   label: text("label").notNull(),

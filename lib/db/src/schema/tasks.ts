@@ -5,6 +5,7 @@ import { venuesTable } from "./venues";
 import { usersTable } from "./users";
 import { clientsTable } from "./clients";
 import { officesTable } from "./offices";
+import { companiesTable } from "./companies";
 
 // Task Assignment - a Manager assigns a CPO a specific piece of
 // structured work already in the platform ("complete the assessment
@@ -37,6 +38,7 @@ import { officesTable } from "./offices";
 // assignee - per direct product direction.
 export const tasksTable = pgTable("tasks", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   // Nullable - a task can be created before a location is picked (see
   // Pending Details in lib/task-bucket.ts on the frontend: a task with
   // no venueId, blank title, no dates, or no estimated cost stays

@@ -5,9 +5,11 @@ import { venuesTable } from "./venues";
 import { incidentsTable } from "./incidents";
 import { usersTable } from "./users";
 import { assessmentsTable } from "./assessments";
+import { companiesTable } from "./companies";
 
 export const alertsTable = pgTable("alerts", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   venueId: integer("venue_id").notNull().references(() => venuesTable.id, { onDelete: "cascade" }),
   incidentId: integer("incident_id").references(() => incidentsTable.id, { onDelete: "set null" }),
   priority: text("priority").notNull().default("medium"),
@@ -25,6 +27,7 @@ export type Alert = typeof alertsTable.$inferSelect;
 
 export const osintEventsTable = pgTable("osint_events", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   venueId: integer("venue_id").notNull().references(() => venuesTable.id, { onDelete: "cascade" }),
   eventType: text("event_type").notNull(),
   summary: text("summary").notNull(),
@@ -52,6 +55,7 @@ export type OsintEvent = typeof osintEventsTable.$inferSelect;
 // migration.
 export const venueSearchPhrasesTable = pgTable("venue_search_phrases", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   venueId: integer("venue_id").references(() => venuesTable.id, { onDelete: "cascade" }),
   phrase: text("phrase").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -63,6 +67,7 @@ export type VenueSearchPhrase = typeof venueSearchPhrasesTable.$inferSelect;
 
 export const routesTable = pgTable("routes", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   assessmentId: integer("assessment_id").references(() => assessmentsTable.id, { onDelete: "cascade" }),
   venueId: integer("venue_id").references(() => venuesTable.id, { onDelete: "set null" }),
   routeName: text("route_name").notNull(),
@@ -100,6 +105,7 @@ export type Route = typeof routesTable.$inferSelect;
 
 export const routeFindingsTable = pgTable("route_findings", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   routeId: integer("route_id").notNull().references(() => routesTable.id, { onDelete: "cascade" }),
   assessmentId: integer("assessment_id").references(() => assessmentsTable.id, { onDelete: "set null" }),
   venueId: integer("venue_id").references(() => venuesTable.id, { onDelete: "set null" }),

@@ -2,6 +2,7 @@ import { pgTable, text, serial, timestamp, boolean, real, integer, type AnyPgCol
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { officesTable } from "./offices";
+import { companiesTable } from "./companies";
 
 export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -10,6 +11,11 @@ export const usersTable = pgTable("users", {
   role: text("role").notNull().default("cpo"),
   avatarInitials: text("avatar_initials"),
   active: boolean("active").notNull().default(true),
+  // Nullable - null means this user isn't tied to any one company.
+  // That's only true for role: "admin" (VenueGuard's own Owner
+  // accounts, see routes/companies.ts) - every company-side user
+  // (manager/finance/human_resources/operations/cpo) always has one.
+  companyId: integer("company_id").references(() => companiesTable.id, { onDelete: "restrict" }),
   // Home office (per direct product direction: "companies will have
   // different offices... select an office and all the data from the
   // allocated office") - a Manager or CPO's own base, distinct from

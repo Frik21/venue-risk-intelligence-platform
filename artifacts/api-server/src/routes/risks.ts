@@ -83,6 +83,7 @@ router.post("/assessments/:assessmentId/risks", async (req, res): Promise<void> 
   const [risk] = await db
     .insert(risksTable)
     .values({
+      companyId: assessment.companyId,
       assessmentId: params.data.assessmentId,
       title,
       description,

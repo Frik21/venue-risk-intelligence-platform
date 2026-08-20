@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db, venueSearchPhrasesTable, venuesTable } from "@workspace/db";
 import { z } from "zod";
+import { resolveCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -30,9 +31,10 @@ router.post("/search-phrases", async (req, res): Promise<void> => {
   const parsed = GlobalPhraseInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const companyId = await resolveCompanyId(undefined);
   const [phrase] = await db
     .insert(venueSearchPhrasesTable)
-    .values({ venueId: null, phrase: parsed.data.phrase })
+    .values({ companyId, venueId: null, phrase: parsed.data.phrase })
     .returning();
 
   res.status(201).json(formatPhrase(phrase));
@@ -62,12 +64,12 @@ router.post("/venues/:id/search-phrases", async (req, res): Promise<void> => {
   const parsed = PhraseInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const [venue] = await db.select({ id: venuesTable.id }).from(venuesTable).where(eq(venuesTable.id, venueId));
+  const [venue] = await db.select({ id: venuesTable.id, companyId: venuesTable.companyId }).from(venuesTable).where(eq(venuesTable.id, venueId));
   if (!venue) { res.status(404).json({ error: "Venue not found" }); return; }
 
   const [phrase] = await db
     .insert(venueSearchPhrasesTable)
-    .values({ venueId, phrase: parsed.data.phrase })
+    .values({ companyId: venue.companyId, venueId, phrase: parsed.data.phrase })
     .returning();
 
   res.status(201).json(formatPhrase(phrase));

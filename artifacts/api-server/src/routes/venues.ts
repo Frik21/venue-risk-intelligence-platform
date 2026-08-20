@@ -2,10 +2,12 @@ import { Router, type IRouter } from "express";
 import { eq, desc, count } from "drizzle-orm";
 import { db, venuesTable, assessmentsTable, incidentsTable } from "@workspace/db";
 import { z } from "zod";
+import { resolveCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
 const VenueInputSchema = z.object({
+  companyId: z.number().int().optional(),
   name: z.string().min(1),
   venueType: z.string().optional(),
   address: z.string().min(1),
@@ -22,6 +24,7 @@ const VenueInputSchema = z.object({
 function formatVenue(row: typeof venuesTable.$inferSelect, assessmentCount = 0) {
   return {
     id: row.id,
+    companyId: row.companyId,
     name: row.name,
     venueType: row.venueType,
     address: row.address,
@@ -117,7 +120,8 @@ router.post("/venues", async (req, res): Promise<void> => {
   const parsed = VenueInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const [venue] = await db.insert(venuesTable).values(parsed.data).returning();
+  const companyId = await resolveCompanyId(parsed.data.companyId);
+  const [venue] = await db.insert(venuesTable).values({ ...parsed.data, companyId }).returning();
   res.status(201).json(formatVenue(venue, 0));
 });
 

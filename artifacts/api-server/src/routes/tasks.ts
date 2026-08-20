@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, desc, inArray } from "drizzle-orm";
 import { db, tasksTable, venuesTable, usersTable, plansTable, taskAssignmentsTable } from "@workspace/db";
 import { z } from "zod";
+import { resolveCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -23,6 +24,7 @@ function formatTask(
   return {
     id: row.id,
     taskNumber: taskNumber(row.id),
+    companyId: row.companyId,
     venueId: row.venueId,
     venueName: venueName ?? null,
     officeId: row.officeId,
@@ -124,6 +126,7 @@ router.get("/tasks", async (req, res): Promise<void> => {
 });
 
 const TaskInputSchema = z.object({
+  companyId: z.number().int().nullable().optional(),
   // Optional - a task can be created before a location is picked (see
   // Pending Details in the frontend's lib/task-bucket.ts).
   venueId: z.number().int().nullable().optional(),
@@ -153,11 +156,11 @@ const TaskInputSchema = z.object({
   estimatedCostCurrency: z.string().min(1).max(10).optional(),
 });
 
-async function setRoster(taskId: number, assigneeIds: number[]) {
+async function setRoster(taskId: number, companyId: number, assigneeIds: number[]) {
   await db.delete(taskAssignmentsTable).where(eq(taskAssignmentsTable.taskId, taskId));
   const unique = [...new Set(assigneeIds)];
   if (unique.length) {
-    await db.insert(taskAssignmentsTable).values(unique.map((operatorId) => ({ taskId, operatorId })));
+    await db.insert(taskAssignmentsTable).values(unique.map((operatorId) => ({ companyId, taskId, operatorId })));
   }
 }
 
@@ -188,10 +191,12 @@ router.post("/tasks", async (req, res): Promise<void> => {
   }
 
   const assigneeIds = parsed.data.assigneeIds ?? [];
+  const companyId = await resolveCompanyId(parsed.data.companyId);
 
   const [task] = await db
     .insert(tasksTable)
     .values({
+      companyId,
       venueId: parsed.data.venueId ?? null,
       officeId: parsed.data.officeId ?? null,
       assignedTo: assigneeIds[0] ?? null,
@@ -213,7 +218,7 @@ router.post("/tasks", async (req, res): Promise<void> => {
     })
     .returning();
 
-  await setRoster(task.id, assigneeIds);
+  await setRoster(task.id, task.companyId, assigneeIds);
 
   const ctx = await loadTaskContext(task);
   res.status(201).json(formatTask(task, ctx.venueName, ctx.assignedByName, null, ctx.roster, ctx.alertReviewedByName));
@@ -301,7 +306,7 @@ router.patch("/tasks/:id", async (req, res): Promise<void> => {
     .returning();
 
   if (!task) { res.status(404).json({ error: "Task not found" }); return; }
-  if (nextRoster !== undefined) await setRoster(task.id, nextRoster);
+  if (nextRoster !== undefined) await setRoster(task.id, task.companyId, nextRoster);
 
   const ctx = await loadTaskContext(task);
   const [plan] = await db.select({ submittedAt: plansTable.submittedAt }).from(plansTable).where(eq(plansTable.taskId, task.id));
@@ -323,6 +328,7 @@ router.post("/tasks/:id/duplicate", async (req, res): Promise<void> => {
   const [task] = await db
     .insert(tasksTable)
     .values({
+      companyId: source.companyId,
       venueId: source.venueId,
       officeId: source.officeId,
       assignedTo: source.assignedTo,
@@ -341,7 +347,7 @@ router.post("/tasks/:id/duplicate", async (req, res): Promise<void> => {
     })
     .returning();
 
-  await setRoster(task.id, sourceRoster.map((r) => r.id));
+  await setRoster(task.id, task.companyId, sourceRoster.map((r) => r.id));
 
   const ctx = await loadTaskContext(task);
   res.status(201).json(formatTask(task, ctx.venueName, ctx.assignedByName, null, ctx.roster));

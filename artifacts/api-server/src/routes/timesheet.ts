@@ -93,13 +93,14 @@ router.post("/users/:userId/timesheet", async (req, res): Promise<void> => {
   const parsed = TimesheetEntrySchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const [task] = await db.select({ title: tasksTable.title }).from(tasksTable).where(eq(tasksTable.id, parsed.data.taskId));
+  const [task] = await db.select({ title: tasksTable.title, companyId: tasksTable.companyId }).from(tasksTable).where(eq(tasksTable.id, parsed.data.taskId));
   if (!task) { res.status(404).json({ error: "Task not found" }); return; }
 
   const hoursWorked = parsed.data.dayHours + parsed.data.nightHours;
   const [entry] = await db
     .insert(timesheetEntriesTable)
     .values({
+      companyId: task.companyId,
       userId,
       taskId: parsed.data.taskId,
       date: parsed.data.date,

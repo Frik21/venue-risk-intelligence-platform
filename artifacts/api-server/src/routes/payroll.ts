@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
-import { eq, isNull, and } from "drizzle-orm";
+import { eq, isNull, and, asc } from "drizzle-orm";
 import { db, timesheetEntriesTable, usersTable, companySettingsTable, payRunsTable } from "@workspace/db";
 import { z } from "zod";
 import { computePersonnelCosts } from "../lib/personnel-cost";
+import { resolveCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -24,7 +25,7 @@ function formatPayRun(row: typeof payRunsTable.$inferSelect, userName: string | 
 }
 
 async function loadOvertimeSettings() {
-  const [settingsRow] = await db.select().from(companySettingsTable).limit(1);
+  const [settingsRow] = await db.select().from(companySettingsTable).orderBy(asc(companySettingsTable.companyId)).limit(1);
   return settingsRow ?? { overtimeThresholdHours: 8, overtimeThresholdPeriod: "daily" as const, overtimeMultiplier: 1.5 };
 }
 
@@ -123,9 +124,10 @@ router.post("/payroll/runs", async (req, res): Promise<void> => {
   const totalHours = lines.reduce((sum, l) => sum + l.hours, 0);
   const totalAmount = lines.reduce((sum, l) => sum + l.cost, 0);
 
+  const companyId = await resolveCompanyId(user.companyId);
   const [payRun] = await db
     .insert(payRunsTable)
-    .values({ userId, totalHours, totalAmount, createdBy: parsed.data.createdBy ?? null })
+    .values({ companyId, userId, totalHours, totalAmount, createdBy: parsed.data.createdBy ?? null })
     .returning();
 
   await db

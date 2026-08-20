@@ -3,6 +3,7 @@ import { eq, desc } from "drizzle-orm";
 import { db, operatorOnboardingTable, operatorDocumentsTable, usersTable } from "@workspace/db";
 import { z } from "zod";
 import { ONBOARDING_CHECKLIST_ITEMS, DOCUMENT_TYPES } from "../lib/onboarding-checklist";
+import { resolveCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 const DOCUMENT_TYPE_VALUES = DOCUMENT_TYPES.map((t) => t.value) as [string, ...string[]];
@@ -75,6 +76,7 @@ function formatDocument(row: typeof operatorDocumentsTable.$inferSelect) {
 }
 
 const CreateOnboardingSchema = z.object({
+  companyId: z.number().int().nullable().optional(),
   name: z.string().min(1),
   email: z.string().email(),
 });
@@ -89,7 +91,7 @@ router.post("/onboarding", async (req, res): Promise<void> => {
   const parsed = CreateOnboardingSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const [existingUser] = await db.select({ id: usersTable.id, active: usersTable.active }).from(usersTable).where(eq(usersTable.email, parsed.data.email));
+  const [existingUser] = await db.select({ id: usersTable.id, active: usersTable.active, companyId: usersTable.companyId }).from(usersTable).where(eq(usersTable.email, parsed.data.email));
 
   // A genuinely live account already owns this email - block, same as
   // before.
@@ -116,9 +118,11 @@ router.post("/onboarding", async (req, res): Promise<void> => {
   // database won't allow to duplicate. operational-access grant
   // reactivates it exactly like it already does for any other
   // pre-linked user.
+  const companyId = await resolveCompanyId(parsed.data.companyId ?? existingUser?.companyId);
   const [record] = await db
     .insert(operatorOnboardingTable)
     .values({
+      companyId,
       candidateName: parsed.data.name,
       candidateEmail: parsed.data.email,
       checklist: {},
@@ -148,9 +152,11 @@ router.get("/onboarding", async (_req, res): Promise<void> => {
   // role "cpo" and no onboarding row of its own.
   const unlinked = cpos.filter((c) => c.active && !linkedUserIds.has(c.id));
   if (unlinked.length > 0) {
+    const fallbackCompanyId = await resolveCompanyId(undefined);
     const inserted = await db
       .insert(operatorOnboardingTable)
       .values(unlinked.map((c) => ({
+        companyId: c.companyId ?? fallbackCompanyId,
         userId: c.id,
         candidateName: c.name,
         candidateEmail: c.email,
@@ -375,13 +381,14 @@ router.post("/onboarding/:id/documents", async (req, res): Promise<void> => {
   const parsed = DocumentInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const [record] = await db.select({ id: operatorOnboardingTable.id }).from(operatorOnboardingTable).where(eq(operatorOnboardingTable.id, id));
+  const [record] = await db.select({ id: operatorOnboardingTable.id, companyId: operatorOnboardingTable.companyId }).from(operatorOnboardingTable).where(eq(operatorOnboardingTable.id, id));
   if (!record) { res.status(404).json({ error: "Onboarding record not found" }); return; }
 
   const typeLabel = DOCUMENT_TYPES.find((t) => t.value === parsed.data.documentType)?.label ?? "Document";
   const [doc] = await db
     .insert(operatorDocumentsTable)
     .values({
+      companyId: record.companyId,
       operatorOnboardingId: id,
       documentType: parsed.data.documentType,
       label: parsed.data.label || typeLabel,

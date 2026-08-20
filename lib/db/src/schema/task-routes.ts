@@ -2,6 +2,7 @@ import { pgTable, serial, integer, text, real, jsonb, timestamp, unique } from "
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { tasksTable } from "./tasks";
+import { companiesTable } from "./companies";
 
 // A CPO's route for a specific task - Route Planning (Operational
 // Canvas), same task-scoped/slot pattern as venue_risk_assessments: a
@@ -22,6 +23,7 @@ export const taskRoutesTable = pgTable(
   "task_routes",
   {
     id: serial("id").primaryKey(),
+    companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
     taskId: integer("task_id").notNull().references(() => tasksTable.id, { onDelete: "cascade" }),
     slotIndex: integer("slot_index").notNull().default(1),
     startLabel: text("start_label").notNull().default(""),

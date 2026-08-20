@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 import { usersTable } from "./users";
 import { tasksTable } from "./tasks";
 import { payRunsTable } from "./payroll";
+import { companiesTable } from "./companies";
 
 // One row per (operator, calendar day, task) - Profile > Timesheet.
 // date is a plain "YYYY-MM-DD" string (not drizzle's date type, to
@@ -32,6 +33,7 @@ export const timesheetEntriesTable = pgTable(
   "timesheet_entries",
   {
     id: serial("id").primaryKey(),
+    companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
     userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
     taskId: integer("task_id").references(() => tasksTable.id, { onDelete: "set null" }),
     date: text("date").notNull(),

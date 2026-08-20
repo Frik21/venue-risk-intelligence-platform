@@ -52,6 +52,9 @@ export async function runGdeltCheckForVenue(venueId: number, opts?: { autoAlert?
   const phrases = await db.select({ phrase: venueSearchPhrasesTable.phrase }).from(venueSearchPhrasesTable);
   if (phrases.length === 0) return 0;
 
+  const [venue] = await db.select({ companyId: venuesTable.companyId }).from(venuesTable).where(eq(venuesTable.id, venueId));
+  if (!venue) return 0;
+
   const findings = await fetchGdeltFindings(phrases.map((p) => p.phrase));
   if (findings.length === 0) return 0;
 
@@ -68,6 +71,7 @@ export async function runGdeltCheckForVenue(venueId: number, opts?: { autoAlert?
     .insert(osintEventsTable)
     .values(
       fresh.map((f) => ({
+        companyId: venue.companyId,
         venueId,
         eventType: gdeltEventType(f.severity),
         summary: f.summary,
@@ -81,6 +85,7 @@ export async function runGdeltCheckForVenue(venueId: number, opts?: { autoAlert?
   if (autoAlert) {
     await db.insert(alertsTable).values(
       inserted.map((row) => ({
+        companyId: row.companyId,
         venueId: row.venueId,
         priority: gdeltAlertPriority(row.eventType),
         title: `OSINT Alert: ${row.eventType.replace(/_/g, " ")}`,

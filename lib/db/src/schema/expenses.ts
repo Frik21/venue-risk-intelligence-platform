@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { tasksTable } from "./tasks";
 import { usersTable } from "./users";
+import { companiesTable } from "./companies";
 
 // One expense logged against a task - Profile > Expenses. A task can
 // have several (fuel, food, parking, ...), added on demand like
@@ -16,6 +17,7 @@ import { usersTable } from "./users";
 // routes/expenses.ts's dedicated body-size limit).
 export const expensesTable = pgTable("expenses", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   taskId: integer("task_id").notNull().references(() => tasksTable.id, { onDelete: "cascade" }),
   operatorId: integer("operator_id").notNull().references(() => usersTable.id),
   category: text("category").notNull().default("other"),

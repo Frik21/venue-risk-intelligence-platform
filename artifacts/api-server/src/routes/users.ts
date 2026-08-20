@@ -2,10 +2,12 @@ import { Router, type IRouter } from "express";
 import { db, usersTable } from "@workspace/db";
 import { z } from "zod";
 import { eq, desc } from "drizzle-orm";
+import { resolveCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
 const UserInputSchema = z.object({
+  companyId: z.number().int().nullable().optional(),
   name: z.string().min(1),
   email: z.string().email(),
   role: z.enum(["admin", "manager", "cpo", "finance", "human_resources", "operations"]),
@@ -16,6 +18,7 @@ const UserInputSchema = z.object({
 function formatUser(row: typeof usersTable.$inferSelect) {
   return {
     id: row.id,
+    companyId: row.companyId,
     name: row.name,
     email: row.email,
     role: row.role as "admin" | "manager" | "cpo" | "finance" | "human_resources" | "operations",
@@ -38,7 +41,11 @@ router.post("/users", async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const initials = parsed.data.avatarInitials ?? parsed.data.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
-  const [user] = await db.insert(usersTable).values({ ...parsed.data, avatarInitials: initials }).returning();
+  // admin (the platform Owner role) is never tied to a company - every
+  // other role always is, resolving to the default company when the
+  // frontend hasn't been updated to pass one yet.
+  const companyId = parsed.data.role === "admin" ? null : await resolveCompanyId(parsed.data.companyId);
+  const [user] = await db.insert(usersTable).values({ ...parsed.data, companyId, avatarInitials: initials }).returning();
   res.status(201).json(formatUser(user));
 });
 

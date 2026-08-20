@@ -11,6 +11,7 @@ import {
   auditLogTable,
 } from "@workspace/db";
 import { z } from "zod";
+import { resolveCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -104,9 +105,15 @@ router.post("/assessments", async (req, res): Promise<void> => {
   const parsed = AssessmentInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  let venueCompanyId: number | undefined;
+  if (parsed.data.venueId != null) {
+    const [venue] = await db.select({ companyId: venuesTable.companyId }).from(venuesTable).where(eq(venuesTable.id, parsed.data.venueId));
+    venueCompanyId = venue?.companyId;
+  }
+  const companyId = await resolveCompanyId(venueCompanyId);
   const [assessment] = await db
     .insert(assessmentsTable)
-    .values({ ...parsed.data, status: parsed.data.status ?? "draft" })
+    .values({ ...parsed.data, companyId, status: parsed.data.status ?? "draft" })
     .returning();
 
   const venues = await db.select({ id: venuesTable.id, name: venuesTable.name, city: venuesTable.city }).from(venuesTable);
@@ -115,6 +122,7 @@ router.post("/assessments", async (req, res): Promise<void> => {
 
   if (parsed.data.createdBy) {
     await db.insert(auditLogTable).values({
+      companyId: assessment.companyId,
       assessmentId: assessment.id,
       userId: parsed.data.createdBy,
       action: "created",
@@ -214,6 +222,7 @@ router.patch("/assessments/:id", async (req, res): Promise<void> => {
 
   if (updatedBy && updates.status && updates.status !== before.status) {
     await db.insert(auditLogTable).values({
+      companyId: before.companyId,
       assessmentId: id,
       userId: updatedBy,
       action: "status_changed",
@@ -309,6 +318,7 @@ router.post("/assessments/:id/approve", async (req, res): Promise<void> => {
   const snapshot = { assessment, risks, matrix: matrix ?? null };
 
   await db.insert(assessmentVersionsTable).values({
+    companyId: assessment.companyId,
     assessmentId: id,
     version: assessment.version,
     snapshot,
@@ -329,6 +339,7 @@ router.post("/assessments/:id/approve", async (req, res): Promise<void> => {
     .returning();
 
   await db.insert(auditLogTable).values({
+    companyId: assessment.companyId,
     assessmentId: id,
     userId: parsed.data.userId,
     action: "approved",

@@ -25,8 +25,9 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { api, type Office } from "@/lib/api";
+import { api, type Office, type Company } from "@/lib/api";
 import { useSelectedOfficeId } from "@/lib/office-scope";
+import { useSelectedCompanyId } from "@/lib/company-scope";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // Deliberately lean - this is a dispatch console for Managers
@@ -62,6 +63,7 @@ const navGroups = [
 ];
 
 const ALL_OFFICES = "all";
+const ALL_COMPANIES = "all";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -70,6 +72,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [selectedOfficeId, setSelectedOfficeId] = useSelectedOfficeId();
   useEffect(() => {
     api.offices.list().then(setOffices).catch((err) => console.error("Failed to load offices:", err));
+  }, []);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useSelectedCompanyId();
+  useEffect(() => {
+    api.companies.list().then(setCompanies).catch((err) => console.error("Failed to load companies:", err));
   }, []);
   const [showShell, setShowShell] = useState(() => {
   return sessionStorage.getItem("venueguard-show-shell") === "true";
@@ -85,10 +92,12 @@ useEffect(() => {
     window.removeEventListener("venueguard-show-shell", handler);
   };
 }, []);
-// "/" is the quick-access chooser (CPO vs Admin) and "/cpo" is the
-// CPO's own full-screen Operational Canvas - neither wants this
-// Manager sidebar/header chrome around it.
-const hideShell = (location === "/" || location === "/cpo") && !showShell;
+// "/" is the quick-access chooser (CPO vs Admin), "/cpo" is the CPO's
+// own full-screen Operational Canvas, and "/owner" is the platform
+// Owner's own console (a different concept entirely from this
+// company-scoped Management shell, which carries the Office/Company
+// switchers) - none of the three want this sidebar/header chrome.
+const hideShell = (location === "/" || location === "/cpo" || location === "/owner") && !showShell;
   // "/admin" needs the same exact-match treatment as "/" - otherwise
   // it'd also read as active on "/admin/users" (a real, distinct nav
   // item), since that path also starts with "/admin".
@@ -103,6 +112,29 @@ const hideShell = (location === "/" || location === "/cpo") && !showShell;
           <div className="text-sm font-bold text-white tracking-wide">VENUEGUARD</div>
           <div className="text-[10px] text-slate-500 uppercase tracking-widest">Risk Intelligence</div>
         </div>
+      </div>
+
+      {/* Company switcher - same global-filter pattern as the Office
+          switcher below, one level up (a company can have several
+          offices). Meaningful once the Owner Console has onboarded
+          more than one company - see lib/company-scope.ts. */}
+      <div className="px-3 pt-3 pb-1 border-b border-slate-800 shrink-0">
+        <Building2 className="w-3 h-3 text-slate-500 inline mr-1.5 mb-2" />
+        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Company</span>
+        <Select
+          value={selectedCompanyId != null ? String(selectedCompanyId) : ALL_COMPANIES}
+          onValueChange={(v) => setSelectedCompanyId(v === ALL_COMPANIES ? null : Number(v))}
+        >
+          <SelectTrigger className="h-8 text-xs bg-slate-900 border-slate-800 text-slate-200 mt-1">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_COMPANIES}>All Companies</SelectItem>
+            {companies.map((c) => (
+              <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Office switcher - global filter, per direct product direction

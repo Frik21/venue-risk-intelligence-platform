@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
-import { db, routesTable, routeFindingsTable, incidentsTable } from "@workspace/db";
+import { db, routesTable, routeFindingsTable, incidentsTable, venuesTable, assessmentsTable } from "@workspace/db";
 import { z } from "zod";
+import { resolveCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -167,8 +168,19 @@ router.post("/routes", async (req, res): Promise<void> => {
   // For freehand: store drawn geometry as both original + active geometry
   const originalDrawn = data.originalDrawnGeometryGeojson ?? (data.creationMethod === "freehand_draw" ? routeGeometryGeojson : null);
 
+  let inheritedCompanyId: number | undefined;
+  if (data.venueId != null) {
+    const [venue] = await db.select({ companyId: venuesTable.companyId }).from(venuesTable).where(eq(venuesTable.id, data.venueId));
+    inheritedCompanyId = venue?.companyId;
+  } else if (data.assessmentId != null) {
+    const [assessment] = await db.select({ companyId: assessmentsTable.companyId }).from(assessmentsTable).where(eq(assessmentsTable.id, data.assessmentId));
+    inheritedCompanyId = assessment?.companyId;
+  }
+  const companyId = await resolveCompanyId(inheritedCompanyId);
+
   const [route] = await db.insert(routesTable).values({
     ...data,
+    companyId,
     estimatedDistance: estimatedDistance ?? null,
     estimatedTravelTime: estimatedTravelTime ?? null,
     routeGeometryGeojson: routeGeometryGeojson ?? null,
@@ -382,6 +394,7 @@ async function generateCorridorFindings(route: typeof routesTable.$inferSelect) 
   }
 
   const toInsert = nearby.map((inc) => ({
+    companyId: route.companyId,
     routeId: route.id,
     assessmentId: route.assessmentId ?? null,
     venueId: route.venueId ?? null,
@@ -409,7 +422,7 @@ function mapIncidentToFindingType(incidentType: string): string {
 }
 
 function buildMockFindings(route: typeof routesTable.$inferSelect) {
-  const base = { routeId: route.id, assessmentId: route.assessmentId ?? null, venueId: route.venueId ?? null, detectedAt: new Date(), verified: false, analystNotes: null, sourceUrl: null };
+  const base = { companyId: route.companyId, routeId: route.id, assessmentId: route.assessmentId ?? null, venueId: route.venueId ?? null, detectedAt: new Date(), verified: false, analystNotes: null, sourceUrl: null };
   const findings = [];
   if (route.routeType === "primary_extraction" || route.routeType === "secondary_extraction") {
     findings.push({ ...base, findingType: "traffic_disruption", severity: "low", summary: "No active road closures detected in corridor. Monitor for event-day traffic surges.", sourceName: "OSINT Auto-Analysis", distanceFromRoute: null });

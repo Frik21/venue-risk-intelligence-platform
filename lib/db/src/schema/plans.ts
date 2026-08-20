@@ -2,6 +2,7 @@ import { pgTable, serial, integer, jsonb, timestamp } from "drizzle-orm/pg-core"
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { tasksTable } from "./tasks";
+import { companiesTable } from "./companies";
 
 // Operational Planning (Step 1 of the Planner: the pre-op readiness
 // checklist) - one Plan per Task (per direct product direction), a
@@ -15,6 +16,7 @@ import { tasksTable } from "./tasks";
 // a data migration.
 export const plansTable = pgTable("plans", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   taskId: integer("task_id").notNull().unique().references(() => tasksTable.id, { onDelete: "cascade" }),
   checklist: jsonb("checklist").notNull().default({}),
   // Set when the CPO submits the checklist to their Manager (see

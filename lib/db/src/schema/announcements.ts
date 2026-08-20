@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
 import { tasksTable } from "./tasks";
+import { companiesTable } from "./companies";
 
 // A Manager-to-CPO broadcast instruction/announcement - one-way, no
 // chat, per direct product direction. Optionally scoped to one task
@@ -19,6 +20,7 @@ import { tasksTable } from "./tasks";
 // about later gets deleted.
 export const announcementsTable = pgTable("announcements", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   message: text("message").notNull(),
   taskId: integer("task_id").references(() => tasksTable.id, { onDelete: "set null" }),
   createdBy: integer("created_by").references(() => usersTable.id, { onDelete: "set null" }),

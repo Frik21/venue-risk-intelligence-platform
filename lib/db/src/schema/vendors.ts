@@ -2,6 +2,7 @@ import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { officesTable } from "./offices";
+import { companiesTable } from "./companies";
 
 // A security vendor (subcontractor/supplier used across tasks -
 // equipment, transport, subcontracted CPOs, technology, training,
@@ -13,6 +14,7 @@ import { officesTable } from "./offices";
 // client-billing concepts that don't apply to a vendor relationship.
 export const vendorsTable = pgTable("vendors", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   name: text("name").notNull(),
   status: text("status").notNull().default("active"), // lead | active | inactive | preferred
   category: text("category").notNull().default(""), // e.g. "Equipment Supplier", "Subcontracted CPOs", "Transport"

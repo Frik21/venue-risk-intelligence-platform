@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, desc, inArray } from "drizzle-orm";
 import { db, announcementsTable, usersTable, tasksTable } from "@workspace/db";
 import { z } from "zod";
+import { resolveCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -61,6 +62,7 @@ router.get("/announcements", async (_req, res): Promise<void> => {
 });
 
 const AnnouncementInputSchema = z.object({
+  companyId: z.number().int().nullable().optional(),
   message: z.string().trim().min(1).max(2000),
   taskId: z.number().int().nullable().optional(),
   createdBy: z.number().int().nullable().optional(),
@@ -70,16 +72,17 @@ router.post("/announcements", async (req, res): Promise<void> => {
   const parsed = AnnouncementInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  let task: { taskNumber: string; title: string } | null = null;
+  let task: { taskNumber: string; title: string; companyId: number } | null = null;
   if (parsed.data.taskId != null) {
-    const [row] = await db.select({ id: tasksTable.id, title: tasksTable.title }).from(tasksTable).where(eq(tasksTable.id, parsed.data.taskId));
+    const [row] = await db.select({ id: tasksTable.id, title: tasksTable.title, companyId: tasksTable.companyId }).from(tasksTable).where(eq(tasksTable.id, parsed.data.taskId));
     if (!row) { res.status(400).json({ error: "Task not found" }); return; }
-    task = { taskNumber: taskNumber(row.id), title: row.title };
+    task = { taskNumber: taskNumber(row.id), title: row.title, companyId: row.companyId };
   }
 
+  const companyId = await resolveCompanyId(parsed.data.companyId ?? task?.companyId);
   const [announcement] = await db
     .insert(announcementsTable)
-    .values({ message: parsed.data.message, taskId: parsed.data.taskId ?? null, createdBy: parsed.data.createdBy ?? null })
+    .values({ companyId, message: parsed.data.message, taskId: parsed.data.taskId ?? null, createdBy: parsed.data.createdBy ?? null })
     .returning();
 
   let createdByName: string | null = null;

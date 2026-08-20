@@ -138,6 +138,33 @@ export interface Task {
   updatedAt: string;
 }
 
+export type CompanyTier = "enterprise" | "micro_enterprise";
+export type CompanyStatus = "trial" | "active" | "suspended" | "cancelled";
+
+// A subscriber of VenueGuard itself - the Owner page's own entity, not
+// a company-side concept. Aggregate-only fields (counts, timestamps) -
+// never row-level content from that company's own data.
+export interface Company {
+  id: number;
+  name: string;
+  tier: CompanyTier;
+  status: CompanyStatus;
+  managementUserCount: number;
+  cpoCount: number;
+  venueCount: number;
+  clientCount: number;
+  taskCount: number;
+  lastActivityAt: string | null;
+  createdAt: string;
+}
+
+export interface CompanySummary {
+  totalCompanies: number;
+  byStatus: Record<CompanyStatus, number>;
+  byTier: Record<CompanyTier, number>;
+  estimatedMonthlyRevenue: number;
+}
+
 export interface Office {
   id: number;
   name: string;
@@ -771,6 +798,14 @@ export const api = {
       alertReviewedBucket: string | null; alertReviewedBy: number | null;
     }>) => apiFetch<Task>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     duplicate: (id: number) => apiFetch<Task>(`/tasks/${id}/duplicate`, { method: "POST" }),
+  },
+  companies: {
+    list: () => apiFetch<Company[]>("/companies"),
+    summary: () => apiFetch<CompanySummary>("/companies/summary"),
+    create: (data: { name: string; tier?: CompanyTier; status?: CompanyStatus }) =>
+      apiFetch<Company>("/companies", { method: "POST", body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<{ name: string; tier: CompanyTier; status: CompanyStatus }>) =>
+      apiFetch<Company>(`/companies/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   },
   offices: {
     list: () => apiFetch<Office[]>("/offices"),

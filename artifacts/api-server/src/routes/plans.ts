@@ -33,12 +33,12 @@ router.get("/tasks/:taskId/plan", async (req, res): Promise<void> => {
   const taskId = Number(req.params.taskId);
   if (isNaN(taskId)) { res.status(400).json({ error: "Invalid task id" }); return; }
 
-  const [task] = await db.select({ id: tasksTable.id }).from(tasksTable).where(eq(tasksTable.id, taskId));
+  const [task] = await db.select({ id: tasksTable.id, companyId: tasksTable.companyId }).from(tasksTable).where(eq(tasksTable.id, taskId));
   if (!task) { res.status(404).json({ error: "Task not found" }); return; }
 
   let [plan] = await db.select().from(plansTable).where(eq(plansTable.taskId, taskId));
   if (!plan) {
-    [plan] = await db.insert(plansTable).values({ taskId, checklist: {} }).returning();
+    [plan] = await db.insert(plansTable).values({ companyId: task.companyId, taskId, checklist: {} }).returning();
   }
 
   res.json(formatPlan(plan));

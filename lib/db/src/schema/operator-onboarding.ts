@@ -2,6 +2,7 @@ import { pgTable, serial, integer, jsonb, text, boolean, timestamp } from "drizz
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
+import { companiesTable } from "./companies";
 
 // Operator Onboarding - one record per candidate/CPO, created the
 // moment a Manager adds an operator (POST /onboarding) - *before* any
@@ -19,6 +20,7 @@ import { usersTable } from "./users";
 // operationalAccessGrantedAt below, which is the real gate.
 export const operatorOnboardingTable = pgTable("operator_onboarding", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   userId: integer("user_id").unique().references(() => usersTable.id, { onDelete: "set null" }),
   candidateName: text("candidate_name").notNull().default(""),
   candidateEmail: text("candidate_email").notNull().default(""),
@@ -50,6 +52,7 @@ export type OperatorOnboarding = typeof operatorOnboardingTable.$inferSelect;
 // receipts), stored/returned directly on the row.
 export const operatorDocumentsTable = pgTable("operator_documents", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   operatorOnboardingId: integer("operator_onboarding_id").notNull().references(() => operatorOnboardingTable.id, { onDelete: "cascade" }),
   documentType: text("document_type").notNull().default("other"),
   label: text("label").notNull().default(""),

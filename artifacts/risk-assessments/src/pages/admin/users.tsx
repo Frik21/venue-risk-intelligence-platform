@@ -14,18 +14,17 @@ import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-// Admin: VenueGuard's own owner/operator (this SaaS's platform admin).
 // Manager, Finance, Human Resources, Operations: a subscribed
-// company's own Management-side seats. CPOs are deliberately not a
-// role managed here - they're a separate, seat-limited pool onboarded
-// and tracked via Operator Database instead (their own Operational
-// Canvas / "Operators note" is a different product surface), per
-// direct product direction.
-// Partial - CPO is a valid UserRole in the data model (onboarded CPO
-// accounts still carry role: "cpo"), but deliberately has no entry
-// here since this page filters CPOs out before rendering.
+// company's own Management-side seats - what this page manages. CPOs
+// and Admin (VenueGuard's own platform-owner role, repurposed as the
+// real Owner Console at /owner) are deliberately not managed here:
+// CPOs are a separate, seat-limited pool onboarded via Operator
+// Database instead; Admin isn't tied to any one company at all, so it
+// can't be a selectable role on a company-scoped Users page.
+// Partial - both "cpo" and "admin" are valid UserRole values in the
+// data model, but deliberately have no entry here since this page
+// filters both out before rendering.
 const ROLE_COLORS: Partial<Record<UserRole, string>> = {
-  admin:           "text-red-700 bg-red-50 border-red-200",
   manager:         "text-purple-700 bg-purple-50 border-purple-200",
   finance:         "text-emerald-700 bg-emerald-50 border-emerald-200",
   human_resources: "text-rose-700 bg-rose-50 border-rose-200",
@@ -33,7 +32,6 @@ const ROLE_COLORS: Partial<Record<UserRole, string>> = {
 };
 
 const ROLE_ICONS: Partial<Record<UserRole, typeof Shield>> = {
-  admin:           Shield,
   manager:         ShieldCheck,
   finance:         Wallet,
   human_resources: Users2,
@@ -41,7 +39,6 @@ const ROLE_ICONS: Partial<Record<UserRole, typeof Shield>> = {
 };
 
 const ROLE_LABELS: Partial<Record<UserRole, string>> = {
-  admin:           "Admin",
   manager:         "Manager",
   finance:         "Finance",
   human_resources: "Human Resources",
@@ -84,7 +81,6 @@ function NewUserDialog({ onClose }: { onClose: () => void }) {
           <Select value={form.role} onValueChange={v => set("role", v)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="admin">Admin — VenueGuard platform owner</SelectItem>
               <SelectItem value="manager">Manager — Assigns and oversees CPOs</SelectItem>
               <SelectItem value="finance">Finance</SelectItem>
               <SelectItem value="human_resources">Human Resources</SelectItem>
@@ -124,11 +120,14 @@ export default function UsersPage() {
     queryFn: api.users.list,
   });
   const [selectedOfficeId] = useSelectedOfficeId();
-  // CPOs aren't managed from here - they're a separate, seat-limited
-  // pool onboarded via Operator Database instead, per direct product
-  // direction. Filtered out before office-scoping so they never show
-  // up in either the roster below or the role-count tiles.
-  const users = filterByOffice(allUsers.filter(u => u.role !== "cpo"), selectedOfficeId);
+  // Neither CPOs nor Admin are managed from here. CPOs are a separate,
+  // seat-limited pool onboarded via Operator Database instead, per
+  // direct product direction. Admin is VenueGuard's own platform-owner
+  // role (see the Owner Console at /owner) - not tied to any one
+  // company, so it can't appear on a company-scoped Users page at all.
+  // Filtered out before office-scoping so neither shows up in the
+  // roster below or the role-count tiles.
+  const users = filterByOffice(allUsers.filter(u => u.role !== "cpo" && u.role !== "admin"), selectedOfficeId);
 
   return (
     <div className="space-y-5">
@@ -147,8 +146,8 @@ export default function UsersPage() {
       </div>
 
       {/* Role explanation */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {(["admin", "manager", "finance", "human_resources", "operations"] as const).map((role) => {
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {(["manager", "finance", "human_resources", "operations"] as const).map((role) => {
           const Icon = ROLE_ICONS[role] ?? Shield;
           const inRole = users.filter(u => u.role === role);
           const activeCount = inRole.filter(u => u.active).length;

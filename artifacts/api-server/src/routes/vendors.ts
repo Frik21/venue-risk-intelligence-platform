@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, asc, desc, inArray } from "drizzle-orm";
 import { db, vendorsTable, vendorActivitiesTable, usersTable } from "@workspace/db";
 import { z } from "zod";
+import { resolveCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -10,6 +11,7 @@ const VENDOR_STATUSES = ["lead", "active", "inactive", "preferred"] as const;
 function formatVendor(row: typeof vendorsTable.$inferSelect) {
   return {
     id: row.id,
+    companyId: row.companyId,
     name: row.name,
     status: row.status as (typeof VENDOR_STATUSES)[number],
     category: row.category,
@@ -41,6 +43,7 @@ router.get("/vendors", async (_req, res): Promise<void> => {
 });
 
 const VendorInputSchema = z.object({
+  companyId: z.number().int().optional(),
   name: z.string().trim().min(1).max(200),
   status: z.enum(VENDOR_STATUSES).optional(),
   category: z.string().max(200).optional(),
@@ -56,9 +59,11 @@ router.post("/vendors", async (req, res): Promise<void> => {
   const parsed = VendorInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const companyId = await resolveCompanyId(parsed.data.companyId);
   const [vendor] = await db
     .insert(vendorsTable)
     .values({
+      companyId,
       name: parsed.data.name,
       status: parsed.data.status ?? "active",
       category: parsed.data.category ?? "",
@@ -127,7 +132,7 @@ router.post("/vendors/:id/activities", async (req, res): Promise<void> => {
   const vendorId = Number(req.params.id);
   if (isNaN(vendorId)) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const [vendor] = await db.select({ id: vendorsTable.id }).from(vendorsTable).where(eq(vendorsTable.id, vendorId));
+  const [vendor] = await db.select({ id: vendorsTable.id, companyId: vendorsTable.companyId }).from(vendorsTable).where(eq(vendorsTable.id, vendorId));
   if (!vendor) { res.status(404).json({ error: "Vendor not found" }); return; }
 
   const parsed = ActivityInputSchema.safeParse(req.body);
@@ -135,7 +140,7 @@ router.post("/vendors/:id/activities", async (req, res): Promise<void> => {
 
   const [activity] = await db
     .insert(vendorActivitiesTable)
-    .values({ vendorId, note: parsed.data.note, createdBy: parsed.data.createdBy ?? null })
+    .values({ companyId: vendor.companyId, vendorId, note: parsed.data.note, createdBy: parsed.data.createdBy ?? null })
     .returning();
 
   let createdByName: string | null = null;

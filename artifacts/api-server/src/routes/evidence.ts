@@ -92,9 +92,12 @@ router.post("/assessments/:id/evidence", async (req, res): Promise<void> => {
   const parsed = EvidenceInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const [assessment] = await db.select({ companyId: assessmentsTable.companyId }).from(assessmentsTable).where(eq(assessmentsTable.id, id));
+  if (!assessment) { res.status(404).json({ error: "Assessment not found" }); return; }
+
   const [row] = await db
     .insert(evidenceTable)
-    .values({ ...parsed.data, assessmentId: id })
+    .values({ ...parsed.data, companyId: assessment.companyId, assessmentId: id })
     .returning();
 
   let uploadedByName: string | null = null;

@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, asc, desc, inArray } from "drizzle-orm";
 import { db, clientsTable, clientActivitiesTable, usersTable } from "@workspace/db";
 import { z } from "zod";
+import { resolveCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -10,6 +11,7 @@ const CLIENT_STATUSES = ["lead", "active", "inactive", "vip"] as const;
 function formatClient(row: typeof clientsTable.$inferSelect) {
   return {
     id: row.id,
+    companyId: row.companyId,
     name: row.name,
     status: row.status as (typeof CLIENT_STATUSES)[number],
     industry: row.industry,
@@ -43,6 +45,7 @@ router.get("/clients", async (_req, res): Promise<void> => {
 });
 
 const ClientInputSchema = z.object({
+  companyId: z.number().int().optional(),
   name: z.string().trim().min(1).max(200),
   status: z.enum(CLIENT_STATUSES).optional(),
   industry: z.string().max(200).optional(),
@@ -60,9 +63,11 @@ router.post("/clients", async (req, res): Promise<void> => {
   const parsed = ClientInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const companyId = await resolveCompanyId(parsed.data.companyId);
   const [client] = await db
     .insert(clientsTable)
     .values({
+      companyId,
       name: parsed.data.name,
       status: parsed.data.status ?? "active",
       industry: parsed.data.industry ?? "",
@@ -133,7 +138,7 @@ router.post("/clients/:id/activities", async (req, res): Promise<void> => {
   const clientId = Number(req.params.id);
   if (isNaN(clientId)) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const [client] = await db.select({ id: clientsTable.id }).from(clientsTable).where(eq(clientsTable.id, clientId));
+  const [client] = await db.select({ id: clientsTable.id, companyId: clientsTable.companyId }).from(clientsTable).where(eq(clientsTable.id, clientId));
   if (!client) { res.status(404).json({ error: "Client not found" }); return; }
 
   const parsed = ActivityInputSchema.safeParse(req.body);
@@ -141,7 +146,7 @@ router.post("/clients/:id/activities", async (req, res): Promise<void> => {
 
   const [activity] = await db
     .insert(clientActivitiesTable)
-    .values({ clientId, note: parsed.data.note, createdBy: parsed.data.createdBy ?? null })
+    .values({ companyId: client.companyId, clientId, note: parsed.data.note, createdBy: parsed.data.createdBy ?? null })
     .returning();
 
   let createdByName: string | null = null;

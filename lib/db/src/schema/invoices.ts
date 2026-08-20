@@ -6,6 +6,7 @@ import { quotesTable } from "./quotes";
 import { clientsTable } from "./clients";
 import { usersTable } from "./users";
 import { officesTable } from "./offices";
+import { companiesTable } from "./companies";
 
 // A client-facing Invoice - money owed TO VenueGuard, the natural next
 // step after a Task/Quote is approved and completed, per direct
@@ -33,6 +34,7 @@ import { officesTable } from "./offices";
 // category means "an extra cost added after the fact".
 export const invoicesTable = pgTable("invoices", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   taskId: integer("task_id").references(() => tasksTable.id, { onDelete: "set null" }),
   quoteId: integer("quote_id").references(() => quotesTable.id, { onDelete: "set null" }),
   clientId: integer("client_id").references(() => clientsTable.id, { onDelete: "set null" }),

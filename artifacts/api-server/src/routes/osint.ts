@@ -68,6 +68,7 @@ router.get("/venues/:id/osint", async (req, res): Promise<void> => {
 
   if (existing.length === 0) {
     const toInsert = OSINT_TEMPLATES.map((t) => ({
+      companyId: venue.companyId,
       venueId: id,
       eventType: t.eventType,
       summary: t.summary,
@@ -100,6 +101,7 @@ router.get("/venues/:id/osint", async (req, res): Promise<void> => {
             .where(eq(osintEventsTable.id, recentPendingWeather.id));
         } else {
           await db.insert(osintEventsTable).values({
+            companyId: venue.companyId,
             venueId: id,
             eventType,
             summary: finding.summary,
@@ -164,6 +166,7 @@ router.patch("/osint/:id/review", async (req, res): Promise<void> => {
           ? "critical"
           : "medium";
     await db.insert(alertsTable).values({
+      companyId: row.companyId,
       venueId: row.venueId,
       priority,
       title: `OSINT Alert: ${row.eventType.replace(/_/g, " ")}`,

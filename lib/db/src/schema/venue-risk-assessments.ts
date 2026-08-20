@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { tasksTable } from "./tasks";
 import { usersTable } from "./users";
+import { companiesTable } from "./companies";
 
 // The CPO's in-field risk assessment - filled in from the Operational
 // Canvas (Risk Assessments > Venues > a task). Distinct from the
@@ -19,6 +20,7 @@ export const venueRiskAssessmentsTable = pgTable(
   "venue_risk_assessments",
   {
     id: serial("id").primaryKey(),
+    companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
     taskId: integer("task_id").notNull().references(() => tasksTable.id, { onDelete: "cascade" }),
     // 1, 2, 3... per task - lets a CPO add another assessment for the
     // same task (e.g. a second/third venue) without a real venue

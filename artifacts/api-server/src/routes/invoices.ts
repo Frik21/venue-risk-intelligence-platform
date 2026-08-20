@@ -4,6 +4,7 @@ import { db, invoicesTable, usersTable, tasksTable } from "@workspace/db";
 import { z } from "zod";
 import { buildInvoicePdf } from "../lib/invoice-pdf";
 import { COST_CATEGORIES } from "./quotes";
+import { resolveCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -30,6 +31,7 @@ function formatInvoice(
   return {
     id: row.id,
     invoiceNumber: invoiceNumber(row.id),
+    companyId: row.companyId,
     taskId: row.taskId,
     quoteId: row.quoteId,
     clientId: row.clientId,
@@ -81,6 +83,7 @@ router.get("/invoices", async (_req, res): Promise<void> => {
 });
 
 const InvoiceFieldsSchema = {
+  companyId: z.number().int().optional(),
   taskId: z.number().int().nullable().optional(),
   quoteId: z.number().int().nullable().optional(),
   clientId: z.number().int().nullable().optional(),
@@ -114,9 +117,11 @@ router.post("/invoices", async (req, res): Promise<void> => {
   const parsed = InvoiceInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const companyId = await resolveCompanyId(parsed.data.companyId);
   const [invoice] = await db
     .insert(invoicesTable)
     .values({
+      companyId,
       taskId: parsed.data.taskId ?? null,
       quoteId: parsed.data.quoteId ?? null,
       clientId: parsed.data.clientId ?? null,
