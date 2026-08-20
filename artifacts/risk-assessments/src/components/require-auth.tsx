@@ -44,11 +44,16 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   }
 
   // "/" isn't a real page anymore (role-select.tsx's manual "Where do
-  // you want to go?" chooser was removed - Owner Preview mode already
-  // covers what it was for, and it doubled as a way for any logged-in
-  // user to poke into another department's dashboard). Anyone landing
-  // on the bare root just gets sent to their own home route.
+  // you want to go?" chooser moved to /quick-access, Owner-only -
+  // Preview mode already covers what "/" itself was for, and it
+  // doubled as a way for any logged-in user to poke into another
+  // department's dashboard). Anyone landing on the bare root just gets
+  // sent to their own home route.
   if (location === "/") {
+    return <Redirect to={homeRoute} />;
+  }
+
+  if (location === "/quick-access" && user?.role !== "admin") {
     return <Redirect to={homeRoute} />;
   }
 
@@ -58,8 +63,11 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   // lib/resolve-company.ts). Send them to /owner instead of a broken
   // empty-looking UI. Once they've entered Preview (pages/owner/
   // dashboard.tsx's "Preview" button), companyId is set and these
-  // routes work normally, so this only applies pre-preview.
-  if (user?.role === "admin" && !user.isPreviewing && location !== "/owner") {
+  // routes work normally, so this only applies pre-preview. /quick-
+  // access itself is exempt (same as /owner) - it's just a static tile
+  // grid, no API calls of its own, and it's the whole point of the
+  // header button that links there while previewing.
+  if (user?.role === "admin" && !user.isPreviewing && location !== "/owner" && location !== "/quick-access") {
     return <Redirect to="/owner" />;
   }
 

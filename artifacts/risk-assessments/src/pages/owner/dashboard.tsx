@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { Link } from "wouter";
 import { api, type Company, type CompanySummary, type CompanyTier, type CompanyStatus } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, ShieldAlert, Building2, Users, UserCog, Wallet, TrendingUp, FlaskConical, Eye } from "lucide-react";
+import { Plus, ShieldAlert, Building2, Users, UserCog, Wallet, TrendingUp, FlaskConical, Eye, Compass } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatDate } from "@/lib/display-utils";
 import { cn } from "@/lib/utils";
@@ -137,6 +138,18 @@ export default function OwnerDashboard() {
           <div className="text-sm font-bold tracking-wide">VENUEGUARD</div>
           <div className="text-[10px] text-slate-500 uppercase tracking-widest -mt-0.5">Owner Console</div>
         </div>
+        <div className="flex-1" />
+        {/* Owner-only manual chooser (/quick-access, see require-auth.tsx
+            for the gating) - jump straight into /cpo or /admin without
+            digging through either app's own nav, mainly useful once
+            you're already previewing a Test Company. */}
+        <Link
+          href="/quick-access"
+          className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors"
+        >
+          <Compass className="w-3.5 h-3.5" />
+          Quick Access
+        </Link>
       </header>
 
       <div className="max-w-6xl mx-auto p-6 space-y-5">

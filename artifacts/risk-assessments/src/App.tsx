@@ -47,6 +47,7 @@ import ClientsPage from "@/pages/admin/clients";
 import ClientDetailPage from "@/pages/admin/client-detail";
 import OnboardingPage from "@/pages/admin/onboarding";
 import OwnerDashboard from "@/pages/owner/dashboard";
+import RoleSelect from "@/pages/role-select";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -65,6 +66,7 @@ function Router() {
         <Route path="/login" component={LoginPage} />
         <Route path="/change-password" component={ChangePasswordPage} />
         <Route path="/owner" component={OwnerDashboard} />
+        <Route path="/quick-access" component={RoleSelect} />
         <Route path="/cpo" component={Dashboard} />
 
         {/* Venues */}
