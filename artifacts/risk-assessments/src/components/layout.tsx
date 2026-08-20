@@ -98,12 +98,13 @@ useEffect(() => {
     window.removeEventListener("venueguard-show-shell", handler);
   };
 }, []);
-// "/" is the quick-access chooser (CPO vs Admin), "/cpo" is the CPO's
-// own full-screen Operational Canvas, and "/owner" is the platform
-// Owner's own console (a different concept entirely from this
-// company-scoped Management shell, which carries the Office switcher)
-// - none of the three want this sidebar/header chrome.
-const hideShell = (location === "/" || location === "/cpo" || location === "/owner" || location === "/login" || location === "/change-password") && !showShell;
+// "/cpo" is the CPO's own full-screen Operational Canvas, and "/owner"
+// is the platform Owner's own console (a different concept entirely
+// from this company-scoped Management shell, which carries the Office
+// switcher) - neither wants this sidebar/header chrome, nor do the
+// full-bleed auth pages. "/" itself no longer renders anything (see
+// require-auth.tsx) so it's not listed here.
+const hideShell = (location === "/cpo" || location === "/owner" || location === "/login" || location === "/change-password") && !showShell;
   // "/admin" needs the same exact-match treatment as "/" - otherwise
   // it'd also read as active on "/admin/users" (a real, distinct nav
   // item), since that path also starts with "/admin".

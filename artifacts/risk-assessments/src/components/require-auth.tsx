@@ -43,13 +43,12 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
     return <Redirect to={homeRoute} />;
   }
 
-  // "/" (role-select.tsx's "Where do you want to go?" chooser) is an
-  // Owner-only manual nav aid, not something a real subscriber's user
-  // should ever land on - its tiles expose every department's
-  // dashboard regardless of who's actually logged in. Same "only the
-  // Owner sees this" principle as the Company switcher and Owner
-  // Console itself.
-  if (location === "/" && user?.role !== "admin") {
+  // "/" isn't a real page anymore (role-select.tsx's manual "Where do
+  // you want to go?" chooser was removed - Owner Preview mode already
+  // covers what it was for, and it doubled as a way for any logged-in
+  // user to poke into another department's dashboard). Anyone landing
+  // on the bare root just gets sent to their own home route.
+  if (location === "/") {
     return <Redirect to={homeRoute} />;
   }
 
