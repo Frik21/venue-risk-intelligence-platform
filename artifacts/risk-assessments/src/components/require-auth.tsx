@@ -57,14 +57,21 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   return (
     <>
       {user?.isPreviewing && <PreviewBanner companyName={user.companyName} />}
-      {children}
+      {/* Layout's own root div is `min-h-screen` with a `sticky top-0`
+          sidebar/header - stacking that under a second `sticky top-0`
+          sibling is unreliable (they can end up competing for the same
+          spot depending on the browser's scroll-container resolution
+          rather than cleanly stacking), which is why the banner above
+          uses `fixed` instead. This padding just reserves its height so
+          fixed positioning doesn't cover the page underneath it. */}
+      <div className={user?.isPreviewing ? "pt-9" : undefined}>{children}</div>
     </>
   );
 }
 
 function PreviewBanner({ companyName }: { companyName: string | null }) {
   return (
-    <div className="sticky top-0 z-50 h-9 flex items-center justify-center gap-3 bg-violet-600 text-white text-xs font-medium px-4">
+    <div className="fixed top-0 inset-x-0 z-[100] h-9 flex items-center justify-center gap-3 bg-violet-600 text-white text-xs font-medium px-4">
       <FlaskConical className="w-3.5 h-3.5" />
       <span>Previewing {companyName ?? "the test company"} - not a real subscriber</span>
       <Button
