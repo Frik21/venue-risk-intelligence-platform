@@ -1,5 +1,19 @@
 import { Link } from "wouter";
-import { ShieldCheck, Gauge, ShieldAlert, ArrowRight, ArrowLeft, Workflow, Wallet, Users2, Cpu } from "lucide-react";
+import {
+  ShieldCheck,
+  Gauge,
+  ShieldAlert,
+  ArrowRight,
+  ArrowLeft,
+  Workflow,
+  Wallet,
+  Users2,
+  Cpu,
+  Globe,
+  CreditCard,
+  Building2,
+  UserCog,
+} from "lucide-react";
 
 // Owner-only fast-path (see require-auth.tsx - non-admin sessions
 // never reach this route). Used to be the default landing page at "/"
@@ -56,6 +70,34 @@ const TILES = [
     icon: Cpu,
     iconColor: "text-slate-400",
     label: "IT",
+    description: "Not built yet.",
+  },
+  {
+    href: null,
+    icon: Globe,
+    iconColor: "text-slate-400",
+    label: "Landing Page",
+    description: "Not built yet.",
+  },
+  {
+    href: null,
+    icon: CreditCard,
+    iconColor: "text-slate-400",
+    label: "Subscriptions",
+    description: "Not built yet.",
+  },
+  {
+    href: null,
+    icon: Building2,
+    iconColor: "text-slate-400",
+    label: "Enterprise",
+    description: "Not built yet.",
+  },
+  {
+    href: null,
+    icon: UserCog,
+    iconColor: "text-slate-400",
+    label: "Single Operator",
     description: "Not built yet.",
   },
 ] as const satisfies readonly { href: string | null; icon: typeof Cpu; iconColor: string; label: string; description: string }[];
