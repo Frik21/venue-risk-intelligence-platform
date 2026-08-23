@@ -92,3 +92,31 @@ Always give this exact command, with the repo-root `cd` included every time rega
 - **Fixed: Preview banner not appearing**: a `fixed`-then-earlier-`sticky` banner rendered as a sibling above `Layout`'s own `sticky top-0` sidebar/header competed for the same screen position rather than cleanly stacking - the banner could be in the DOM but never actually visible, reported directly as UI elements "duplicating." Resolved by moving the notice into `Layout`'s existing header bar as normal in-flow content instead of a separate positioned layer.
 - **Company/Office switcher visibility tightened**: reported directly as confusing duplication with the real "Offices" management page in the nav. The Company switcher is now Owner-only, full stop (not shown to any real subscriber's session, not even as a locked label) - client-side `company-scope.ts`/`filterByCompany()` turned out to have zero real consumers once server-side scoping (the auth work above) existed, so both were deleted rather than left as dead code. The Office switcher only renders once a company actually has more than one office - with a single office it's indistinguishable from "All Offices" and just duplicated the real Offices page in the nav below.
 - **Quick Access placeholder tiles**: `/quick-access` (see Owner Preview mode above) got an "IT" tile and four more - "Landing Page," "Subscriptions," "Enterprise," "Single Operator" - each with `href: null`, rendered as a dashed, non-interactive "Coming soon" card rather than silently landing on `/admin` like the real department tiles do. Tracks real gaps already flagged this session (no public marketing/signup page exists yet - a potential client hitting the live site today gets redirected straight to `/login` with no way to create an account; no billing/subscription-tier UI; Operators note's planned standalone single-CPO product, per the "Product Vision & Business Model" section above) without building any of them prematurely.
+
+# Outstanding / Roadmap
+
+Everything flagged as still-needed during this session's "what would it take to actually go live" conversation, kept here as a running punch list rather than scattered across chat history. Tackle in whatever order makes sense - roughly sequenced below by what unblocks what, not by strict priority. Update this list as items get built (move them into "Notes & Follow-ups" above) or as priorities change - it isn't a spec to build from unprompted, same rule as the Product Vision section: confirm before starting a chunk of this.
+
+**Product surfaces still missing:**
+- Public marketing/landing page in front of `/login` - today a stranger hitting the live site gets redirected straight to a login form with no way in
+- Self-serve company signup - right now the only way a company becomes a subscriber is the Owner manually onboarding it from `/owner`
+- Real pricing + a payment processor (Stripe or similar) wired to actual subscription charges, with webhooks flipping `companies.status` (`trial`/`active`/`suspended`/`cancelled`) automatically instead of by hand
+- Seat-limit enforcement - tiers already display "20 mgmt / 20 CPO" etc. but nothing currently blocks a company from exceeding it
+- Ask Intelligence (CPO-side differentiator, deliberately deferred until there's cashflow for paid AI APIs) and Operational Route corridor analysis (the other CPO differentiator discussed, not yet built)
+
+**Security/hardening before handling real customers' credentials:**
+- Rate limiting on `/auth/login` - nothing currently stops brute-forcing a password
+- A real "forgot password" email flow - needs email sending infrastructure that doesn't exist yet (today's workaround is the Owner/admin manually generating one-time passwords)
+- Basic security headers (`helmet` or equivalent) - not installed anywhere in the stack
+- Database indexes on every table's `company_id` column - added as a filter everywhere this session, but with no index yet; cheap to add, matters as row counts grow per tenant
+
+**Operational safety net:**
+- Error tracking / uptime monitoring (e.g. Sentry) - a crash today is only visible if someone's watching logs
+- CI running `pnpm run build`/typecheck automatically on every PR - none configured yet, all verification this session was manual
+- Automated production database backups + a tested restore process - doesn't exist against any real database yet
+
+**Business/non-code (not this repo's work, but blocking a real launch):**
+- Registered business entity, Terms of Service, Privacy Policy
+- Actual decided pricing for Enterprise vs Micro Enterprise (today's "Est. Monthly Revenue" figure on `/owner` is a hardcoded placeholder map, not real prices)
+- A support channel for subscribers
+- Hosting + a domain, connected together - mechanically simple once the above is far enough along (see this session's own walkthrough for the how-to)
