@@ -220,6 +220,17 @@ export interface CompanySummary {
   estimatedMonthlyRevenue: number;
 }
 
+// Owner-editable, platform-wide (not per-company) subscription pricing
+// - see the backend's pricingConfigTable. Directional only, no billing
+// integration exists - but a real, changeable number instead of one
+// buried in code.
+export interface PricingConfig {
+  baseMonthlyPrice: number;
+  pricePerAdditionalSeat: number;
+  soloOperatorMonthlyPrice: number;
+  updatedAt: string;
+}
+
 export interface Office {
   id: number;
   name: string;
@@ -888,6 +899,9 @@ export const api = {
   companies: {
     list: () => apiFetch<Company[]>("/companies"),
     summary: () => apiFetch<CompanySummary>("/companies/summary"),
+    pricing: () => apiFetch<PricingConfig>("/companies/pricing"),
+    updatePricing: (data: Partial<{ baseMonthlyPrice: number; pricePerAdditionalSeat: number; soloOperatorMonthlyPrice: number }>) =>
+      apiFetch<PricingConfig>("/companies/pricing", { method: "PATCH", body: JSON.stringify(data) }),
     create: (
       data: {
         name: string;

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, asc, count, max } from "drizzle-orm";
-import { db, companiesTable, usersTable, venuesTable, clientsTable, tasksTable } from "@workspace/db";
+import { db, companiesTable, usersTable, venuesTable, clientsTable, tasksTable, pricingConfigTable } from "@workspace/db";
 import { z } from "zod";
 import { requireRole } from "../lib/auth";
 
@@ -36,24 +36,29 @@ export const BASE_SEATS_BY_ROLE = {
 type ManagementRole = keyof typeof BASE_SEATS_BY_ROLE;
 const MANAGEMENT_ROLES = Object.keys(BASE_SEATS_BY_ROLE) as ManagementRole[];
 
-// Directional only - no billing integration exists. A flat per-company
-// base plus a flat price per additional seat purchased (any role),
-// used purely to give the Owner a sense of platform revenue on the
-// summary tile; never derived from an actual invoice/subscription.
-const BASE_MONTHLY_PRICE = 1500;
-const PRICE_PER_ADDITIONAL_SEAT = 40;
-// Flat, single-seat price for the Solo Operator plan - no base/additional
-// split, since there's exactly one CPO and no Management seats at all.
-const SOLO_OPERATOR_MONTHLY_PRICE = 250;
+// Directional only - no billing integration exists. Owner-editable
+// (GET/PATCH /companies/pricing below, backed by pricingConfigTable)
+// rather than hardcoded, so the Owner can actually set these numbers
+// instead of them being buried in code - still just what the Owner
+// says they are, never derived from an actual invoice/subscription.
+async function getOrCreatePricingConfig() {
+  const [existing] = await db.select().from(pricingConfigTable).limit(1);
+  if (existing) return existing;
+  const [created] = await db.insert(pricingConfigTable).values({}).returning();
+  return created;
+}
 
 function additionalSeatsTotal(company: { additionalManagerSeats: number; additionalOperationsSeats: number; additionalFinanceSeats: number; additionalHumanResourcesSeats: number }) {
   return company.additionalManagerSeats + company.additionalOperationsSeats + company.additionalFinanceSeats + company.additionalHumanResourcesSeats;
 }
 
-function estimatedMonthlyCharge(company: { planType: string } & Parameters<typeof additionalSeatsTotal>[0]) {
+function estimatedMonthlyCharge(
+  company: { planType: string } & Parameters<typeof additionalSeatsTotal>[0],
+  pricing: typeof pricingConfigTable.$inferSelect,
+) {
   return company.planType === "solo_operator"
-    ? SOLO_OPERATOR_MONTHLY_PRICE
-    : BASE_MONTHLY_PRICE + additionalSeatsTotal(company) * PRICE_PER_ADDITIONAL_SEAT;
+    ? pricing.soloOperatorMonthlyPrice
+    : pricing.baseMonthlyPrice + additionalSeatsTotal(company) * pricing.pricePerAdditionalSeat;
 }
 
 // Everything in this file is deliberately aggregate-only - counts and
@@ -65,6 +70,7 @@ function estimatedMonthlyCharge(company: { planType: string } & Parameters<typeo
 // page for why.
 async function buildCompanyRows() {
   const companies = await db.select().from(companiesTable).orderBy(asc(companiesTable.name));
+  const pricing = await getOrCreatePricingConfig();
 
   const [managementCountsByRole, cpoCounts, venueCounts, clientCounts, taskCounts, lastActivity] = await Promise.all([
     // Grouped by role too (not just company) so each Management role's
@@ -134,11 +140,12 @@ async function buildCompanyRows() {
       taskCount: taskMap[c.id] ?? 0,
       lastActivityAt: activityMap[c.id]?.toISOString() ?? null,
       createdAt: c.createdAt.toISOString(),
-      // Directional only - see estimatedMonthlyCharge's own pricing
-      // constants. What this company would be charged under the model,
-      // regardless of status - the summary tile below is the one place
-      // this is actually gated to status: "active".
-      estimatedMonthlyCharge: estimatedMonthlyCharge(c),
+      // Directional only - see the Owner-editable pricing config (GET/
+      // PATCH /companies/pricing). What this company would be charged
+      // under the current model, regardless of status - the summary
+      // tile below is the one place this is actually gated to status:
+      // "active".
+      estimatedMonthlyCharge: estimatedMonthlyCharge(c, pricing),
     };
   });
 }
@@ -158,21 +165,55 @@ router.get("/companies/summary", async (_req, res): Promise<void> => {
       additionalHumanResourcesSeats: companiesTable.additionalHumanResourcesSeats,
     })
     .from(companiesTable);
+  const pricing = await getOrCreatePricingConfig();
 
   const byStatus: Record<(typeof STATUSES)[number], number> = { trial: 0, active: 0, suspended: 0, cancelled: 0 };
   let monthlyRevenue = 0;
   for (const c of companies) {
     const status = c.status as (typeof STATUSES)[number];
     if (status in byStatus) byStatus[status]++;
-    if (status === "active") monthlyRevenue += estimatedMonthlyCharge(c);
+    if (status === "active") monthlyRevenue += estimatedMonthlyCharge(c, pricing);
   }
 
   res.json({
     totalCompanies: companies.length,
     byStatus,
-    // Directional figure only - see BASE_MONTHLY_PRICE/PRICE_PER_ADDITIONAL_SEAT comment above.
+    // Directional figure only - see the Owner-editable pricing config.
     estimatedMonthlyRevenue: monthlyRevenue,
   });
+});
+
+function formatPricingConfig(row: typeof pricingConfigTable.$inferSelect) {
+  return {
+    baseMonthlyPrice: row.baseMonthlyPrice,
+    pricePerAdditionalSeat: row.pricePerAdditionalSeat,
+    soloOperatorMonthlyPrice: row.soloOperatorMonthlyPrice,
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+router.get("/companies/pricing", async (_req, res): Promise<void> => {
+  res.json(formatPricingConfig(await getOrCreatePricingConfig()));
+});
+
+const PricingConfigUpdateSchema = z.object({
+  baseMonthlyPrice: z.number().int().min(0).optional(),
+  pricePerAdditionalSeat: z.number().int().min(0).optional(),
+  soloOperatorMonthlyPrice: z.number().int().min(0).optional(),
+});
+
+router.patch("/companies/pricing", async (req, res): Promise<void> => {
+  const parsed = PricingConfigUpdateSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const current = await getOrCreatePricingConfig();
+  const [updated] = await db
+    .update(pricingConfigTable)
+    .set(parsed.data)
+    .where(eq(pricingConfigTable.id, current.id))
+    .returning();
+
+  res.json(formatPricingConfig(updated));
 });
 
 router.get("/companies/:id", async (req, res): Promise<void> => {
