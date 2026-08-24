@@ -272,7 +272,11 @@ export default function SubscriptionsPage() {
                 <SelectTrigger className="h-8 text-sm w-28">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                {/* Explicit max-h - 31 currencies overflows the default
+                    Radix available-height variable in this spot, so it
+                    needs a hard cap to actually scroll instead of
+                    running off the bottom of the page. */}
+                <SelectContent className="max-h-72">
                   {SUPPORTED_CURRENCY_CODES.map((code) => (
                     <SelectItem key={code} value={code}>{code}</SelectItem>
                   ))}
