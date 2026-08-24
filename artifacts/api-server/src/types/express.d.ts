@@ -18,6 +18,10 @@ declare namespace Express {
       // True only when companyId above came from an active Preview
       // session rather than the user's own real company assignment.
       isPreviewing: boolean;
+      // The EFFECTIVE company's plan type - null for a plain Owner
+      // session (companyId null, not previewing). "solo_operator"
+      // drives the Management-route block in lib/auth.ts's requireAuth.
+      planType: "team" | "solo_operator" | null;
     };
   }
 }

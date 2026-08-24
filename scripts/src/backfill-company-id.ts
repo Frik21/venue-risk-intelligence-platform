@@ -115,6 +115,7 @@ async function addNullableColumns() {
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'trial',
+      plan_type TEXT NOT NULL DEFAULT 'team',
       additional_manager_seats INTEGER NOT NULL DEFAULT 0,
       additional_operations_seats INTEGER NOT NULL DEFAULT 0,
       additional_finance_seats INTEGER NOT NULL DEFAULT 0,

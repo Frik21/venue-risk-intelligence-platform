@@ -60,6 +60,9 @@ export interface SessionUser {
   // - see lib/api.ts's auth.enterPreview/exitPreview and the Owner
   // Console's "Preview" button, pages/owner/dashboard.tsx.
   isPreviewing: boolean;
+  // null for a plain Owner session (no company). "solo_operator" drives
+  // require-auth.tsx's redirect keeping the session inside /cpo.
+  planType: PlanType | null;
 }
 
 export interface Venue {
@@ -162,6 +165,11 @@ export interface Task {
 
 export type CompanyStatus = "trial" | "active" | "suspended" | "cancelled";
 export type ManagementRole = "manager" | "operations" | "finance" | "human_resources";
+// "team" (the default, Management + CPO) or "solo_operator" (a single
+// freelance CPO's own subscription - Operators Note only, no
+// Management seats). Enforced server-side, not just a display label -
+// see the backend's blockSoloOperatorFromManagement.
+export type PlanType = "team" | "solo_operator";
 
 // Single-plan model, no more Enterprise/Micro Enterprise tiers - every
 // company gets this same fixed base per Management-side role,
@@ -188,6 +196,7 @@ export interface Company {
   id: number;
   name: string;
   status: CompanyStatus;
+  planType: PlanType;
   // The Owner's own sandbox for testing the Management/CPO pages - see
   // SessionUser.isPreviewing. Only a company flagged true here can ever
   // be entered via auth.enterPreview, enforced server-side.
@@ -199,6 +208,10 @@ export interface Company {
   taskCount: number;
   lastActivityAt: string | null;
   createdAt: string;
+  // Directional only - see the backend's estimatedMonthlyCharge pricing
+  // constants. What this company would be charged under the model,
+  // computed regardless of status.
+  estimatedMonthlyCharge: number;
 }
 
 export interface CompanySummary {
@@ -879,6 +892,7 @@ export const api = {
       data: {
         name: string;
         status?: CompanyStatus;
+        planType?: PlanType;
         isInternal?: boolean;
         additionalManagerSeats?: number;
         additionalOperationsSeats?: number;

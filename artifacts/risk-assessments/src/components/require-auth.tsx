@@ -58,6 +58,19 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
     return <Redirect to="/change-password" />;
   }
 
+  // A Solo Operator plan session (see lib/api.ts's PlanType) is
+  // Operators Note only, per direct product direction - server-side
+  // enforced too (blockSoloOperatorFromManagement), this is just what
+  // keeps the UI itself from ever showing a dead Management page.
+  if (
+    user?.planType === "solo_operator" &&
+    location !== "/cpo" &&
+    !location.startsWith("/cpo/") &&
+    location !== "/change-password"
+  ) {
+    return <Redirect to="/cpo" />;
+  }
+
   if (location === "/owner" && user?.role !== "admin") {
     return <Redirect to={homeRoute} />;
   }

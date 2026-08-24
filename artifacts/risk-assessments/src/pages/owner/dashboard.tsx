@@ -1,14 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "wouter";
-import { api, BASE_SEATS_BY_ROLE, type Company, type CompanySummary, type CompanyStatus, type ManagementRole } from "@/lib/api";
+import { api, BASE_SEATS_BY_ROLE, type Company, type CompanySummary, type CompanyStatus, type ManagementRole, type PlanType } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, ShieldAlert, Building2, Users, UserCog, Wallet, TrendingUp, FlaskConical, Eye, Compass, Settings2 } from "lucide-react";
+import { Plus, ShieldAlert, Building2, Users, UserCog, Wallet, TrendingUp, FlaskConical, Eye, Compass, Settings2, ShieldCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatDate } from "@/lib/display-utils";
 import { cn } from "@/lib/utils";
@@ -33,6 +33,8 @@ const ROLE_LABELS: Record<ManagementRole, string> = {
 };
 
 type AdditionalSeats = Record<ManagementRole, number>;
+
+const PLAN_LABELS: Record<PlanType, string> = { team: "Team", solo_operator: "Solo Operator" };
 
 // Shared by both the "onboard a new company" and "edit an existing
 // company's seats" dialogs - four small number inputs, one per
@@ -65,27 +67,81 @@ function SeatInputs({ value, onChange }: { value: AdditionalSeats; onChange: (ro
 
 function NewCompanyDialog({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
+  const [planType, setPlanType] = useState<PlanType>("team");
   const [seats, setSeats] = useState<AdditionalSeats>({ manager: 0, operations: 0, finance: 0, human_resources: 0 });
+  const [cpoName, setCpoName] = useState("");
+  const [cpoEmail, setCpoEmail] = useState("");
+  const [createdPassword, setCreatedPassword] = useState<string | null>(null);
   const qc = useQueryClient();
   const { toast } = useToast();
 
+  // Solo Operator has no self-serve signup path yet (Owner Console
+  // only, per direct product direction) - so onboarding one means
+  // creating both the company AND its one CPO account in this same
+  // dialog, chained. A Team company still only creates the company row
+  // itself - its first Manager signs up separately via /register or is
+  // added later from /admin/users.
   const mutation = useMutation({
-    mutationFn: () =>
-      api.companies.create({
+    mutationFn: async () => {
+      const company = await api.companies.create({
         name,
         status: "trial",
-        additionalManagerSeats: seats.manager,
-        additionalOperationsSeats: seats.operations,
-        additionalFinanceSeats: seats.finance,
-        additionalHumanResourcesSeats: seats.human_resources,
-      }),
-    onSuccess: () => {
+        planType,
+        ...(planType === "team"
+          ? {
+              additionalManagerSeats: seats.manager,
+              additionalOperationsSeats: seats.operations,
+              additionalFinanceSeats: seats.finance,
+              additionalHumanResourcesSeats: seats.human_resources,
+            }
+          : {}),
+      });
+      if (planType === "solo_operator") {
+        const cpo = await api.users.create({ companyId: company.id, name: cpoName, email: cpoEmail, role: "cpo" });
+        return { initialPassword: cpo.initialPassword as string | null } as const;
+      }
+      return { initialPassword: null };
+    },
+    onSuccess: ({ initialPassword }) => {
       qc.invalidateQueries({ queryKey: ["companies"] });
-      toast({ title: "Company onboarded" });
-      onClose();
+      if (initialPassword) {
+        setCreatedPassword(initialPassword);
+      } else {
+        toast({ title: "Company onboarded" });
+        onClose();
+      }
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
+
+  // No email infrastructure exists to send a real invite yet - shown
+  // here exactly once (matches the same pattern as admin/users.tsx's
+  // NewUserDialog), it won't be retrievable again after this closes.
+  if (createdPassword) {
+    return (
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md my-8 p-6 space-y-4">
+          <h2 className="text-lg font-bold">Solo Operator Onboarded</h2>
+          <p className="text-sm text-slate-500">
+            Share this temporary password with {cpoName} - they'll be asked to set their own on first login. It won't be shown again.
+          </p>
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
+            <code className="flex-1 font-mono text-sm text-slate-900">{createdPassword}</code>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => { navigator.clipboard.writeText(createdPassword); toast({ title: "Copied" }); }}
+            >
+              Copy
+            </Button>
+          </div>
+          <Button className="w-full" onClick={onClose}>Done</Button>
+        </div>
+      </div>
+    );
+  }
+
+  const canSubmit = name.trim() && (planType === "team" || (cpoName.trim() && cpoEmail.trim()));
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto">
@@ -95,15 +151,41 @@ function NewCompanyDialog({ onClose }: { onClose: () => void }) {
           <Label>Company Name *</Label>
           <Input placeholder="e.g. Sentinel Protective Services" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
-        <div className="border-t border-slate-100 pt-3">
-          <Label className="text-xs text-slate-500 uppercase tracking-wide">Additional Seats</Label>
-          <div className="mt-2">
-            <SeatInputs value={seats} onChange={(role, additional) => setSeats((s) => ({ ...s, [role]: additional }))} />
-          </div>
+        <div>
+          <Label>Plan</Label>
+          <Select value={planType} onValueChange={(v) => setPlanType(v as PlanType)}>
+            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="team">Team - full Management + Operators Note</SelectItem>
+              <SelectItem value="solo_operator">Solo Operator - Operators Note only</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
+        {planType === "team" ? (
+          <div className="border-t border-slate-100 pt-3">
+            <Label className="text-xs text-slate-500 uppercase tracking-wide">Additional Seats</Label>
+            <div className="mt-2">
+              <SeatInputs value={seats} onChange={(role, additional) => setSeats((s) => ({ ...s, [role]: additional }))} />
+            </div>
+          </div>
+        ) : (
+          <div className="border-t border-slate-100 pt-3 space-y-3">
+            <p className="text-xs text-slate-500">
+              A Solo Operator company has exactly one CPO account and no Management side at all - create that account now.
+            </p>
+            <div>
+              <Label>CPO Name *</Label>
+              <Input value={cpoName} onChange={(e) => setCpoName(e.target.value)} />
+            </div>
+            <div>
+              <Label>CPO Email *</Label>
+              <Input type="email" value={cpoEmail} onChange={(e) => setCpoEmail(e.target.value)} />
+            </div>
+          </div>
+        )}
         <p className="text-xs text-slate-400">New companies start on Trial status - activate once billing is confirmed.</p>
         <div className="flex gap-3 pt-2">
-          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !name.trim()}>
+          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !canSubmit}>
             {mutation.isPending ? "Creating..." : "Onboard Company"}
           </Button>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
@@ -275,8 +357,10 @@ export default function OwnerDashboard() {
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500">
                     <th className="text-left px-4 py-2.5">Company</th>
+                    <th className="text-left px-4 py-2.5">Plan</th>
                     <th className="text-left px-4 py-2.5">Status</th>
                     <th className="text-left px-4 py-2.5">Seats</th>
+                    <th className="text-left px-4 py-2.5">Est. Charge</th>
                     <th className="text-left px-4 py-2.5">Last Activity</th>
                     <th className="text-left px-4 py-2.5">Signed Up</th>
                     <th className="text-left px-4 py-2.5">Test Company</th>
@@ -297,6 +381,15 @@ export default function OwnerDashboard() {
                           )}
                         </td>
                         <td className="px-4 py-2.5">
+                          {c.planType === "solo_operator" ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-sky-700 bg-sky-50 border border-sky-200 rounded px-1.5 py-0.5 whitespace-nowrap">
+                              <ShieldCheck className="w-3 h-3" /> {PLAN_LABELS.solo_operator}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-500">{PLAN_LABELS.team}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5">
                           <Select value={c.status} onValueChange={(v) => updateMutation.mutate({ id: c.id, data: { status: v as CompanyStatus } })}>
                             <SelectTrigger className={cn("h-7 w-32 text-xs border", sc.color)}><SelectValue /></SelectTrigger>
                             <SelectContent>
@@ -307,30 +400,38 @@ export default function OwnerDashboard() {
                           </Select>
                         </td>
                         <td className="px-4 py-2.5 text-slate-600">
-                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                            {MANAGEMENT_ROLES.map((role) => {
-                              const seat = c.seatsByRole[role];
-                              return (
-                                <span key={role} className="whitespace-nowrap">
-                                  <span className="text-slate-400">{ROLE_LABELS[role]}</span>{" "}
-                                  <span className="font-mono tabular-nums">{seat.used}/{seat.limit}</span>
-                                </span>
-                              );
-                            })}
+                          {c.planType === "solo_operator" ? (
                             <span className="whitespace-nowrap">
                               <span className="text-slate-400">CPO</span>{" "}
                               <span className="font-mono tabular-nums">{c.cpoCount}</span>
                             </span>
-                            <button
-                              type="button"
-                              className="text-slate-400 hover:text-slate-700"
-                              title="Manage seats"
-                              onClick={() => setEditingSeatsFor(c)}
-                            >
-                              <Settings2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                          ) : (
+                            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                              {MANAGEMENT_ROLES.map((role) => {
+                                const seat = c.seatsByRole[role];
+                                return (
+                                  <span key={role} className="whitespace-nowrap">
+                                    <span className="text-slate-400">{ROLE_LABELS[role]}</span>{" "}
+                                    <span className="font-mono tabular-nums">{seat.used}/{seat.limit}</span>
+                                  </span>
+                                );
+                              })}
+                              <span className="whitespace-nowrap">
+                                <span className="text-slate-400">CPO</span>{" "}
+                                <span className="font-mono tabular-nums">{c.cpoCount}</span>
+                              </span>
+                              <button
+                                type="button"
+                                className="text-slate-400 hover:text-slate-700"
+                                title="Manage seats"
+                                onClick={() => setEditingSeatsFor(c)}
+                              >
+                                <Settings2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </td>
+                        <td className="px-4 py-2.5 text-slate-500 font-mono tabular-nums">{c.estimatedMonthlyCharge.toLocaleString()}</td>
                         <td className="px-4 py-2.5 text-slate-500">{c.lastActivityAt ? formatDate(c.lastActivityAt) : "—"}</td>
                         <td className="px-4 py-2.5 text-slate-500">{formatDate(c.createdAt)}</td>
                         <td className="px-4 py-2.5">

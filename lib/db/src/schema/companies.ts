@@ -23,6 +23,14 @@ export const companiesTable = pgTable("companies", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   status: text("status").notNull().default("trial"),
+  // "team" (the default, full Management+CPO plan above) or
+  // "solo_operator" - a single freelance CPO's own subscription, per
+  // direct product direction: access restricted to Operators Note only,
+  // no Management-side seats apply at all. Set at company creation
+  // (Owner Console only for now, no self-serve path) and not changed
+  // after - see routes/companies.ts's PLAN_TYPES and the access-control
+  // check in lib/auth.ts's requireAuth for how this is enforced.
+  planType: text("plan_type").notNull().default("team"),
   additionalManagerSeats: integer("additional_manager_seats").notNull().default(0),
   additionalOperationsSeats: integer("additional_operations_seats").notNull().default(0),
   additionalFinanceSeats: integer("additional_finance_seats").notNull().default(0),

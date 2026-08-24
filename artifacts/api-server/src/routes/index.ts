@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, blockSoloOperatorFromManagement } from "../lib/auth";
 import healthRouter from "./health";
 import authRouter from "./auth";
 import assessmentsRouter from "./assessments";
@@ -46,6 +46,7 @@ const router: IRouter = Router();
 router.use(healthRouter);
 router.use(authRouter);
 router.use(requireAuth);
+router.use(blockSoloOperatorFromManagement);
 
 router.use(dashboardRouter);
 router.use(usersRouter);

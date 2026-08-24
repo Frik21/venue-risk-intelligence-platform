@@ -27,9 +27,13 @@ import {
 // Resources are extra entry points into that one dashboard, not
 // separately scoped views - per direct product direction, revisit if
 // role-scoped dashboards are wanted later. Landing Page links to "/"
-// itself (pages/landing.tsx) now that it's built; IT/Subscriptions/
-// Enterprise/Single Operator still have no destination (href: null) -
-// deliberately left as placeholders until each one actually exists.
+// itself (pages/landing.tsx); Subscriptions links to /owner, where
+// plan/status/seats actually live now (see the single-plan seat model
+// and Solo Operator plan notes in CLAUDE.md). IT/Enterprise/Single
+// Operator still have no destination (href: null) - deliberately left
+// as placeholders until each one actually exists. "Enterprise" is
+// stale now that tiers are gone (see the seat-model note) but left as
+// a placeholder rather than removed outright - not asked for.
 const TILES = [
   {
     href: "/cpo",
@@ -81,11 +85,11 @@ const TILES = [
     description: "The public marketing page - what a stranger sees before logging in.",
   },
   {
-    href: null,
+    href: "/owner",
     icon: CreditCard,
-    iconColor: "text-slate-400",
+    iconColor: "text-emerald-300",
     label: "Subscriptions",
-    description: "Not built yet.",
+    description: "Owner Console - plan, status, and seats for every subscriber.",
   },
   {
     href: null,

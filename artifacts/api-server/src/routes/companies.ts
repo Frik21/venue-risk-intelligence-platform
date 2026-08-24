@@ -12,6 +12,14 @@ router.use(requireRole("admin"));
 
 const STATUSES = ["trial", "active", "suspended", "cancelled"] as const;
 
+// "team" (the default) or "solo_operator" - a single freelance CPO's
+// own subscription, Operators Note only, no Management-side seats.
+// Enforced server-side by lib/auth.ts's blockSoloOperatorFromManagement,
+// not just a display label. Set at company creation, Owner Console
+// only for now - no self-serve signup path for this plan yet.
+export const PLAN_TYPES = ["team", "solo_operator"] as const;
+export type PlanType = (typeof PLAN_TYPES)[number];
+
 // Single-plan model - no more Enterprise/Micro Enterprise tiers, per
 // direct product direction. Every company gets this same fixed base
 // per Management-side role; companiesTable's additionalXSeats columns
@@ -34,9 +42,18 @@ const MANAGEMENT_ROLES = Object.keys(BASE_SEATS_BY_ROLE) as ManagementRole[];
 // summary tile; never derived from an actual invoice/subscription.
 const BASE_MONTHLY_PRICE = 1500;
 const PRICE_PER_ADDITIONAL_SEAT = 40;
+// Flat, single-seat price for the Solo Operator plan - no base/additional
+// split, since there's exactly one CPO and no Management seats at all.
+const SOLO_OPERATOR_MONTHLY_PRICE = 250;
 
 function additionalSeatsTotal(company: { additionalManagerSeats: number; additionalOperationsSeats: number; additionalFinanceSeats: number; additionalHumanResourcesSeats: number }) {
   return company.additionalManagerSeats + company.additionalOperationsSeats + company.additionalFinanceSeats + company.additionalHumanResourcesSeats;
+}
+
+function estimatedMonthlyCharge(company: { planType: string } & Parameters<typeof additionalSeatsTotal>[0]) {
+  return company.planType === "solo_operator"
+    ? SOLO_OPERATOR_MONTHLY_PRICE
+    : BASE_MONTHLY_PRICE + additionalSeatsTotal(company) * PRICE_PER_ADDITIONAL_SEAT;
 }
 
 // Everything in this file is deliberately aggregate-only - counts and
@@ -108,6 +125,7 @@ async function buildCompanyRows() {
       id: c.id,
       name: c.name,
       status: c.status as (typeof STATUSES)[number],
+      planType: c.planType as PlanType,
       isInternal: c.isInternal,
       seatsByRole,
       cpoCount: cpoMap[c.id] ?? 0,
@@ -116,6 +134,11 @@ async function buildCompanyRows() {
       taskCount: taskMap[c.id] ?? 0,
       lastActivityAt: activityMap[c.id]?.toISOString() ?? null,
       createdAt: c.createdAt.toISOString(),
+      // Directional only - see estimatedMonthlyCharge's own pricing
+      // constants. What this company would be charged under the model,
+      // regardless of status - the summary tile below is the one place
+      // this is actually gated to status: "active".
+      estimatedMonthlyCharge: estimatedMonthlyCharge(c),
     };
   });
 }
@@ -128,6 +151,7 @@ router.get("/companies/summary", async (_req, res): Promise<void> => {
   const companies = await db
     .select({
       status: companiesTable.status,
+      planType: companiesTable.planType,
       additionalManagerSeats: companiesTable.additionalManagerSeats,
       additionalOperationsSeats: companiesTable.additionalOperationsSeats,
       additionalFinanceSeats: companiesTable.additionalFinanceSeats,
@@ -140,7 +164,7 @@ router.get("/companies/summary", async (_req, res): Promise<void> => {
   for (const c of companies) {
     const status = c.status as (typeof STATUSES)[number];
     if (status in byStatus) byStatus[status]++;
-    if (status === "active") monthlyRevenue += BASE_MONTHLY_PRICE + additionalSeatsTotal(c) * PRICE_PER_ADDITIONAL_SEAT;
+    if (status === "active") monthlyRevenue += estimatedMonthlyCharge(c);
   }
 
   res.json({
@@ -164,6 +188,7 @@ router.get("/companies/:id", async (req, res): Promise<void> => {
 const CompanyInputSchema = z.object({
   name: z.string().trim().min(1).max(200),
   status: z.enum(STATUSES).optional(),
+  planType: z.enum(PLAN_TYPES).optional(),
   isInternal: z.boolean().optional(),
   additionalManagerSeats: z.number().int().min(0).optional(),
   additionalOperationsSeats: z.number().int().min(0).optional(),
@@ -176,6 +201,7 @@ function formatCompanyRecord(company: typeof companiesTable.$inferSelect) {
     id: company.id,
     name: company.name,
     status: company.status,
+    planType: company.planType,
     isInternal: company.isInternal,
     additionalManagerSeats: company.additionalManagerSeats,
     additionalOperationsSeats: company.additionalOperationsSeats,
@@ -194,6 +220,7 @@ router.post("/companies", async (req, res): Promise<void> => {
     .values({
       name: parsed.data.name,
       status: parsed.data.status ?? "trial",
+      planType: parsed.data.planType ?? "team",
       isInternal: parsed.data.isInternal ?? false,
       additionalManagerSeats: parsed.data.additionalManagerSeats ?? 0,
       additionalOperationsSeats: parsed.data.additionalOperationsSeats ?? 0,

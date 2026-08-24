@@ -40,16 +40,21 @@ async function formatSessionUser(row: typeof usersTable.$inferSelect, effective?
   // A non-Owner session can't hit GET /companies (Owner-only) to learn
   // its own company's name for display, so it rides along on the
   // session payload instead - the one place a name, not just an id, is
-  // needed outside the aggregate-only Owner surface.
+  // needed outside the aggregate-only Owner surface. planType rides
+  // along the same way - require-auth.tsx uses it to keep a
+  // Solo Operator session inside /cpo without an extra round trip.
   let companyName: string | null = null;
+  let planType: "team" | "solo_operator" | null = null;
   if (companyId != null) {
-    const [company] = await db.select({ name: companiesTable.name }).from(companiesTable).where(eq(companiesTable.id, companyId));
+    const [company] = await db.select({ name: companiesTable.name, planType: companiesTable.planType }).from(companiesTable).where(eq(companiesTable.id, companyId));
     companyName = company?.name ?? null;
+    planType = (company?.planType as "team" | "solo_operator" | undefined) ?? null;
   }
   return {
     id: row.id,
     companyId,
     companyName,
+    planType,
     isPreviewing,
     name: row.name,
     email: row.email,
