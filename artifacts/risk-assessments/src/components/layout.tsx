@@ -119,7 +119,7 @@ const hideShell = (location === "/cpo" || location === "/owner" || location === 
         <ShieldAlert className="w-5 h-5 text-blue-400 mr-2.5 shrink-0" />
         <div>
           <div className="text-sm font-bold text-white tracking-wide">VENUEGUARD</div>
-          <div className="text-[10px] text-slate-500 uppercase tracking-widest">Risk Intelligence</div>
+          <div className="text-[10px] text-slate-500 uppercase tracking-widest">Command Desk</div>
         </div>
       </div>
 
