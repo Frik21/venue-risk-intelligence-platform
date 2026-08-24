@@ -1,22 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "wouter";
-import { api, type Company, type CompanySummary, type CompanyTier, type CompanyStatus } from "@/lib/api";
+import { api, BASE_SEATS_BY_ROLE, type Company, type CompanySummary, type CompanyStatus, type ManagementRole } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, ShieldAlert, Building2, Users, UserCog, Wallet, TrendingUp, FlaskConical, Eye, Compass } from "lucide-react";
+import { Plus, ShieldAlert, Building2, Users, UserCog, Wallet, TrendingUp, FlaskConical, Eye, Compass, Settings2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatDate } from "@/lib/display-utils";
 import { cn } from "@/lib/utils";
-
-const TIER_LABELS: Record<CompanyTier, string> = {
-  enterprise: "Enterprise",
-  micro_enterprise: "Micro Enterprise",
-};
 
 const STATUS_CONFIG: Record<CompanyStatus, { label: string; color: string }> = {
   trial: { label: "Trial", color: "text-blue-700 bg-blue-50 border-blue-200" },
@@ -25,19 +20,65 @@ const STATUS_CONFIG: Record<CompanyStatus, { label: string; color: string }> = {
   cancelled: { label: "Cancelled", color: "text-red-700 bg-red-50 border-red-200" },
 };
 
-const SEAT_LIMITS: Record<CompanyTier, { management: number; cpo: number }> = {
-  enterprise: { management: 20, cpo: 20 },
-  micro_enterprise: { management: 10, cpo: 10 },
+// Single plan, no more Enterprise/Micro Enterprise tiers - every
+// company gets the same fixed base per role (BASE_SEATS_BY_ROLE), with
+// additional seats purchasable per role beyond that. CPO seats are
+// explicitly out of scope for this model, left untouched.
+const MANAGEMENT_ROLES: ManagementRole[] = ["manager", "operations", "finance", "human_resources"];
+const ROLE_LABELS: Record<ManagementRole, string> = {
+  manager: "Manager",
+  operations: "Operations",
+  finance: "Finance",
+  human_resources: "HR",
 };
+
+type AdditionalSeats = Record<ManagementRole, number>;
+
+// Shared by both the "onboard a new company" and "edit an existing
+// company's seats" dialogs - four small number inputs, one per
+// Management role, each showing that role's fixed base alongside the
+// additional count being set.
+function SeatInputs({ value, onChange }: { value: AdditionalSeats; onChange: (role: ManagementRole, additional: number) => void }) {
+  return (
+    <div className="space-y-3">
+      {MANAGEMENT_ROLES.map((role) => (
+        <div key={role} className="flex items-center justify-between gap-3">
+          <Label className="text-sm">
+            {ROLE_LABELS[role]} <span className="text-slate-400 font-normal">({BASE_SEATS_BY_ROLE[role]} base)</span>
+          </Label>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">+</span>
+            <Input
+              type="number"
+              min={0}
+              className="w-20 h-8 text-sm"
+              value={value[role]}
+              onChange={(e) => onChange(role, Math.max(0, Number(e.target.value) || 0))}
+            />
+            <span className="text-xs text-slate-400 w-24">= {BASE_SEATS_BY_ROLE[role] + value[role]} seats</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function NewCompanyDialog({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
-  const [tier, setTier] = useState<CompanyTier>("enterprise");
+  const [seats, setSeats] = useState<AdditionalSeats>({ manager: 0, operations: 0, finance: 0, human_resources: 0 });
   const qc = useQueryClient();
   const { toast } = useToast();
 
   const mutation = useMutation({
-    mutationFn: () => api.companies.create({ name, tier, status: "trial" }),
+    mutationFn: () =>
+      api.companies.create({
+        name,
+        status: "trial",
+        additionalManagerSeats: seats.manager,
+        additionalOperationsSeats: seats.operations,
+        additionalFinanceSeats: seats.finance,
+        additionalHumanResourcesSeats: seats.human_resources,
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["companies"] });
       toast({ title: "Company onboarded" });
@@ -54,20 +95,59 @@ function NewCompanyDialog({ onClose }: { onClose: () => void }) {
           <Label>Company Name *</Label>
           <Input placeholder="e.g. Sentinel Protective Services" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
-        <div>
-          <Label>Subscription Tier</Label>
-          <Select value={tier} onValueChange={(v) => setTier(v as CompanyTier)}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="enterprise">Enterprise (20 seats)</SelectItem>
-              <SelectItem value="micro_enterprise">Micro Enterprise (10 seats)</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="border-t border-slate-100 pt-3">
+          <Label className="text-xs text-slate-500 uppercase tracking-wide">Additional Seats</Label>
+          <div className="mt-2">
+            <SeatInputs value={seats} onChange={(role, additional) => setSeats((s) => ({ ...s, [role]: additional }))} />
+          </div>
         </div>
         <p className="text-xs text-slate-400">New companies start on Trial status - activate once billing is confirmed.</p>
         <div className="flex gap-3 pt-2">
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !name.trim()}>
             {mutation.isPending ? "Creating..." : "Onboard Company"}
+          </Button>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditSeatsDialog({ company, onClose }: { company: Company; onClose: () => void }) {
+  const [seats, setSeats] = useState<AdditionalSeats>({
+    manager: company.seatsByRole.manager.additional,
+    operations: company.seatsByRole.operations.additional,
+    finance: company.seatsByRole.finance.additional,
+    human_resources: company.seatsByRole.human_resources.additional,
+  });
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      api.companies.update(company.id, {
+        additionalManagerSeats: seats.manager,
+        additionalOperationsSeats: seats.operations,
+        additionalFinanceSeats: seats.finance,
+        additionalHumanResourcesSeats: seats.human_resources,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["companies"] });
+      toast({ title: "Seats updated" });
+      onClose();
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md my-8 p-6 space-y-4">
+        <h2 className="text-lg font-bold">Manage Seats - {company.name}</h2>
+        <SeatInputs value={seats} onChange={(role, additional) => setSeats((s) => ({ ...s, [role]: additional }))} />
+        <p className="text-xs text-slate-400">Additional seats beyond the base are billed separately once billing exists - tracked here regardless.</p>
+        <div className="flex gap-3 pt-2">
+          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+            {mutation.isPending ? "Saving..." : "Save"}
           </Button>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
         </div>
@@ -91,14 +171,15 @@ function StatTile({ icon: Icon, label, value }: { icon: typeof Building2; label:
 
 // The platform owner's own view of the VenueGuard business - strictly
 // account-level metadata and aggregates about each subscriber (name,
-// tier, status, seat usage, activity recency). Never a subscriber's
-// actual operational content (task titles, client names, quote
-// amounts, etc.) - that's the one hard boundary of this page. The
-// backend (routes/companies.ts) enforces this by construction: its
-// endpoints only ever return count()/max() aggregates grouped by
-// company_id, never a row from a tenant table.
+// status, seat usage, activity recency). Never a subscriber's actual
+// operational content (task titles, client names, quote amounts,
+// etc.) - that's the one hard boundary of this page. The backend
+// (routes/companies.ts) enforces this by construction: its endpoints
+// only ever return count()/max() aggregates grouped by company_id,
+// never a row from a tenant table.
 export default function OwnerDashboard() {
   const [showNewCompany, setShowNewCompany] = useState(false);
+  const [editingSeatsFor, setEditingSeatsFor] = useState<Company | null>(null);
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -106,7 +187,7 @@ export default function OwnerDashboard() {
   const { data: summary } = useQuery<CompanySummary>({ queryKey: ["companies-summary"], queryFn: api.companies.summary });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<{ tier: CompanyTier; status: CompanyStatus; isInternal: boolean }> }) =>
+    mutationFn: ({ id, data }: { id: number; data: Partial<{ status: CompanyStatus; isInternal: boolean }> }) =>
       api.companies.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["companies"] });
@@ -131,6 +212,7 @@ export default function OwnerDashboard() {
   return (
     <div className="min-h-screen bg-slate-100">
       {showNewCompany && <NewCompanyDialog onClose={() => setShowNewCompany(false)} />}
+      {editingSeatsFor && <EditSeatsDialog company={editingSeatsFor} onClose={() => setEditingSeatsFor(null)} />}
 
       <header className="h-14 flex items-center px-6 bg-slate-950 text-white gap-2.5">
         <ShieldAlert className="w-5 h-5 text-blue-400" />
@@ -193,9 +275,8 @@ export default function OwnerDashboard() {
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500">
                     <th className="text-left px-4 py-2.5">Company</th>
-                    <th className="text-left px-4 py-2.5">Tier</th>
                     <th className="text-left px-4 py-2.5">Status</th>
-                    <th className="text-right px-4 py-2.5">Seats</th>
+                    <th className="text-left px-4 py-2.5">Seats</th>
                     <th className="text-left px-4 py-2.5">Last Activity</th>
                     <th className="text-left px-4 py-2.5">Signed Up</th>
                     <th className="text-left px-4 py-2.5">Test Company</th>
@@ -205,7 +286,6 @@ export default function OwnerDashboard() {
                 <tbody className="divide-y divide-slate-100">
                   {companies.map((c) => {
                     const sc = STATUS_CONFIG[c.status];
-                    const limits = SEAT_LIMITS[c.tier];
                     return (
                       <tr key={c.id} className="hover:bg-slate-50/60">
                         <td className="px-4 py-2.5 font-medium text-slate-900 flex items-center gap-2">
@@ -217,15 +297,6 @@ export default function OwnerDashboard() {
                           )}
                         </td>
                         <td className="px-4 py-2.5">
-                          <Select value={c.tier} onValueChange={(v) => updateMutation.mutate({ id: c.id, data: { tier: v as CompanyTier } })}>
-                            <SelectTrigger className="h-7 w-40 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="enterprise">{TIER_LABELS.enterprise}</SelectItem>
-                              <SelectItem value="micro_enterprise">{TIER_LABELS.micro_enterprise}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="px-4 py-2.5">
                           <Select value={c.status} onValueChange={(v) => updateMutation.mutate({ id: c.id, data: { status: v as CompanyStatus } })}>
                             <SelectTrigger className={cn("h-7 w-32 text-xs border", sc.color)}><SelectValue /></SelectTrigger>
                             <SelectContent>
@@ -235,10 +306,30 @@ export default function OwnerDashboard() {
                             </SelectContent>
                           </Select>
                         </td>
-                        <td className="px-4 py-2.5 text-right text-slate-600">
-                          <span className="font-mono tabular-nums">{c.managementUserCount}/{limits.management}</span> mgmt
-                          <span className="text-slate-300 mx-1">·</span>
-                          <span className="font-mono tabular-nums">{c.cpoCount}/{limits.cpo}</span> CPO
+                        <td className="px-4 py-2.5 text-slate-600">
+                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                            {MANAGEMENT_ROLES.map((role) => {
+                              const seat = c.seatsByRole[role];
+                              return (
+                                <span key={role} className="whitespace-nowrap">
+                                  <span className="text-slate-400">{ROLE_LABELS[role]}</span>{" "}
+                                  <span className="font-mono tabular-nums">{seat.used}/{seat.limit}</span>
+                                </span>
+                              );
+                            })}
+                            <span className="whitespace-nowrap">
+                              <span className="text-slate-400">CPO</span>{" "}
+                              <span className="font-mono tabular-nums">{c.cpoCount}</span>
+                            </span>
+                            <button
+                              type="button"
+                              className="text-slate-400 hover:text-slate-700"
+                              title="Manage seats"
+                              onClick={() => setEditingSeatsFor(c)}
+                            >
+                              <Settings2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                         <td className="px-4 py-2.5 text-slate-500">{c.lastActivityAt ? formatDate(c.lastActivityAt) : "—"}</td>
                         <td className="px-4 py-2.5 text-slate-500">{formatDate(c.createdAt)}</td>

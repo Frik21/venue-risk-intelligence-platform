@@ -14,8 +14,6 @@ import {
   verifyPassword,
 } from "../lib/auth";
 
-const TIERS = ["enterprise", "micro_enterprise"] as const;
-
 // Deliberately NOT behind requireAuth (except /me and /change-password,
 // gated per-route below) - registered in routes/index.ts before the
 // central auth gate so login works with no session yet, and logout
@@ -86,10 +84,15 @@ router.post("/auth/login", async (req, res): Promise<void> => {
 
 const RegisterSchema = z.object({
   companyName: z.string().trim().min(1).max(200),
-  tier: z.enum(TIERS).optional(),
   name: z.string().trim().min(1).max(200),
   email: z.string().email(),
   password: z.string().min(8),
+  // Extra seats beyond the fixed per-role base (see companies.ts's
+  // BASE_SEATS_BY_ROLE) - optional, defaults to 0 for every role.
+  additionalManagerSeats: z.number().int().min(0).optional(),
+  additionalOperationsSeats: z.number().int().min(0).optional(),
+  additionalFinanceSeats: z.number().int().min(0).optional(),
+  additionalHumanResourcesSeats: z.number().int().min(0).optional(),
 });
 
 // Self-service company signup - the only path into VenueGuard that
@@ -122,7 +125,15 @@ router.post("/auth/register", async (req, res): Promise<void> => {
 
   const [company] = await db
     .insert(companiesTable)
-    .values({ name: parsed.data.companyName, tier: parsed.data.tier ?? "enterprise", status: "trial", isInternal: false })
+    .values({
+      name: parsed.data.companyName,
+      status: "trial",
+      isInternal: false,
+      additionalManagerSeats: parsed.data.additionalManagerSeats ?? 0,
+      additionalOperationsSeats: parsed.data.additionalOperationsSeats ?? 0,
+      additionalFinanceSeats: parsed.data.additionalFinanceSeats ?? 0,
+      additionalHumanResourcesSeats: parsed.data.additionalHumanResourcesSeats ?? 0,
+    })
     .returning();
 
   const initials = parsed.data.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);

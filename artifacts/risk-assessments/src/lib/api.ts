@@ -160,8 +160,26 @@ export interface Task {
   updatedAt: string;
 }
 
-export type CompanyTier = "enterprise" | "micro_enterprise";
 export type CompanyStatus = "trial" | "active" | "suspended" | "cancelled";
+export type ManagementRole = "manager" | "operations" | "finance" | "human_resources";
+
+// Single-plan model, no more Enterprise/Micro Enterprise tiers - every
+// company gets this same fixed base per Management-side role,
+// mirrored from the backend's BASE_SEATS_BY_ROLE (routes/companies.ts)
+// so the two can't drift apart.
+export const BASE_SEATS_BY_ROLE: Record<ManagementRole, number> = {
+  manager: 8,
+  operations: 5,
+  finance: 5,
+  human_resources: 5,
+};
+
+export interface CompanySeatUsage {
+  used: number;
+  base: number;
+  additional: number;
+  limit: number;
+}
 
 // A subscriber of VenueGuard itself - the Owner page's own entity, not
 // a company-side concept. Aggregate-only fields (counts, timestamps) -
@@ -169,13 +187,12 @@ export type CompanyStatus = "trial" | "active" | "suspended" | "cancelled";
 export interface Company {
   id: number;
   name: string;
-  tier: CompanyTier;
   status: CompanyStatus;
   // The Owner's own sandbox for testing the Management/CPO pages - see
   // SessionUser.isPreviewing. Only a company flagged true here can ever
   // be entered via auth.enterPreview, enforced server-side.
   isInternal: boolean;
-  managementUserCount: number;
+  seatsByRole: Record<ManagementRole, CompanySeatUsage>;
   cpoCount: number;
   venueCount: number;
   clientCount: number;
@@ -187,7 +204,6 @@ export interface Company {
 export interface CompanySummary {
   totalCompanies: number;
   byStatus: Record<CompanyStatus, number>;
-  byTier: Record<CompanyTier, number>;
   estimatedMonthlyRevenue: number;
 }
 
@@ -830,7 +846,18 @@ export const api = {
   auth: {
     login: (email: string, password: string) =>
       apiFetch<{ user: SessionUser }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
-    register: (data: { companyName: string; tier?: CompanyTier; name: string; email: string; password: string }) =>
+    register: (
+      data: {
+        companyName: string;
+        name: string;
+        email: string;
+        password: string;
+        additionalManagerSeats?: number;
+        additionalOperationsSeats?: number;
+        additionalFinanceSeats?: number;
+        additionalHumanResourcesSeats?: number;
+      },
+    ) =>
       // loggedIn is false when the caller already had an Owner session -
       // the company/user still get created for real, but that session is
       // left untouched rather than swapped for the new account. See
@@ -848,10 +875,29 @@ export const api = {
   companies: {
     list: () => apiFetch<Company[]>("/companies"),
     summary: () => apiFetch<CompanySummary>("/companies/summary"),
-    create: (data: { name: string; tier?: CompanyTier; status?: CompanyStatus; isInternal?: boolean }) =>
-      apiFetch<Company>("/companies", { method: "POST", body: JSON.stringify(data) }),
-    update: (id: number, data: Partial<{ name: string; tier: CompanyTier; status: CompanyStatus; isInternal: boolean }>) =>
-      apiFetch<Company>(`/companies/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    create: (
+      data: {
+        name: string;
+        status?: CompanyStatus;
+        isInternal?: boolean;
+        additionalManagerSeats?: number;
+        additionalOperationsSeats?: number;
+        additionalFinanceSeats?: number;
+        additionalHumanResourcesSeats?: number;
+      },
+    ) => apiFetch<Company>("/companies", { method: "POST", body: JSON.stringify(data) }),
+    update: (
+      id: number,
+      data: Partial<{
+        name: string;
+        status: CompanyStatus;
+        isInternal: boolean;
+        additionalManagerSeats: number;
+        additionalOperationsSeats: number;
+        additionalFinanceSeats: number;
+        additionalHumanResourcesSeats: number;
+      }>,
+    ) => apiFetch<Company>(`/companies/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   },
   offices: {
     list: () => apiFetch<Office[]>("/offices"),

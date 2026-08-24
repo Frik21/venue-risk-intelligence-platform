@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, asc, ne, count, max } from "drizzle-orm";
+import { eq, asc, count, max } from "drizzle-orm";
 import { db, companiesTable, usersTable, venuesTable, clientsTable, tasksTable } from "@workspace/db";
 import { z } from "zod";
 import { requireRole } from "../lib/auth";
@@ -10,16 +10,34 @@ const router: IRouter = Router();
 // own comment for the invariant this protects).
 router.use(requireRole("admin"));
 
-const TIERS = ["enterprise", "micro_enterprise"] as const;
 const STATUSES = ["trial", "active", "suspended", "cancelled"] as const;
 
-// Directional only - no billing integration exists. A static price-per-
-// tier map used purely to give the Owner a sense of platform revenue on
-// the summary tile; never derived from an actual invoice/subscription.
-const TIER_MONTHLY_PRICE: Record<(typeof TIERS)[number], number> = {
-  enterprise: 2500,
-  micro_enterprise: 900,
-};
+// Single-plan model - no more Enterprise/Micro Enterprise tiers, per
+// direct product direction. Every company gets this same fixed base
+// per Management-side role; companiesTable's additionalXSeats columns
+// track extra seats purchased beyond it, per role. CPO seats are
+// explicitly out of scope for this model, left untouched. Also
+// exported for the frontend (registration form, Owner Console) so the
+// base numbers can't drift out of sync between the two.
+export const BASE_SEATS_BY_ROLE = {
+  manager: 8,
+  operations: 5,
+  finance: 5,
+  human_resources: 5,
+} as const;
+type ManagementRole = keyof typeof BASE_SEATS_BY_ROLE;
+const MANAGEMENT_ROLES = Object.keys(BASE_SEATS_BY_ROLE) as ManagementRole[];
+
+// Directional only - no billing integration exists. A flat per-company
+// base plus a flat price per additional seat purchased (any role),
+// used purely to give the Owner a sense of platform revenue on the
+// summary tile; never derived from an actual invoice/subscription.
+const BASE_MONTHLY_PRICE = 1500;
+const PRICE_PER_ADDITIONAL_SEAT = 40;
+
+function additionalSeatsTotal(company: { additionalManagerSeats: number; additionalOperationsSeats: number; additionalFinanceSeats: number; additionalHumanResourcesSeats: number }) {
+  return company.additionalManagerSeats + company.additionalOperationsSeats + company.additionalFinanceSeats + company.additionalHumanResourcesSeats;
+}
 
 // Everything in this file is deliberately aggregate-only - counts and
 // timestamps grouped by company_id, never a row from a tenant table
@@ -31,12 +49,15 @@ const TIER_MONTHLY_PRICE: Record<(typeof TIERS)[number], number> = {
 async function buildCompanyRows() {
   const companies = await db.select().from(companiesTable).orderBy(asc(companiesTable.name));
 
-  const [managementCounts, cpoCounts, venueCounts, clientCounts, taskCounts, lastActivity] = await Promise.all([
+  const [managementCountsByRole, cpoCounts, venueCounts, clientCounts, taskCounts, lastActivity] = await Promise.all([
+    // Grouped by role too (not just company) so each Management role's
+    // usage can be checked against its own base+additional limit -
+    // non-Management roles (cpo, admin) come back here too but are
+    // filtered out below via MANAGEMENT_ROLES.includes(...).
     db
-      .select({ companyId: usersTable.companyId, value: count() })
+      .select({ companyId: usersTable.companyId, role: usersTable.role, value: count() })
       .from(usersTable)
-      .where(ne(usersTable.role, "cpo"))
-      .groupBy(usersTable.companyId),
+      .groupBy(usersTable.companyId, usersTable.role),
     db
       .select({ companyId: usersTable.companyId, value: count() })
       .from(usersTable)
@@ -53,27 +74,50 @@ async function buildCompanyRows() {
     for (const r of rows) if (r.companyId != null) map[r.companyId] = r.value;
     return map;
   };
-  const managementMap = toMap(managementCounts);
+  // Per-role usage: company id -> role -> count.
+  const managementByRoleMap: Record<number, Partial<Record<ManagementRole, number>>> = {};
+  for (const r of managementCountsByRole) {
+    if (r.companyId == null || !MANAGEMENT_ROLES.includes(r.role as ManagementRole)) continue;
+    (managementByRoleMap[r.companyId] ??= {})[r.role as ManagementRole] = r.value;
+  }
   const cpoMap = toMap(cpoCounts);
   const venueMap = toMap(venueCounts);
   const clientMap = toMap(clientCounts);
   const taskMap = toMap(taskCounts);
   const activityMap = toMap(lastActivity);
 
-  return companies.map((c) => ({
-    id: c.id,
-    name: c.name,
-    tier: c.tier as (typeof TIERS)[number],
-    status: c.status as (typeof STATUSES)[number],
-    isInternal: c.isInternal,
-    managementUserCount: managementMap[c.id] ?? 0,
-    cpoCount: cpoMap[c.id] ?? 0,
-    venueCount: venueMap[c.id] ?? 0,
-    clientCount: clientMap[c.id] ?? 0,
-    taskCount: taskMap[c.id] ?? 0,
-    lastActivityAt: activityMap[c.id]?.toISOString() ?? null,
-    createdAt: c.createdAt.toISOString(),
-  }));
+  return companies.map((c) => {
+    const roleUsage = managementByRoleMap[c.id] ?? {};
+    const seatsByRole = MANAGEMENT_ROLES.reduce(
+      (acc, role) => {
+        const additional =
+          role === "manager"
+            ? c.additionalManagerSeats
+            : role === "operations"
+              ? c.additionalOperationsSeats
+              : role === "finance"
+                ? c.additionalFinanceSeats
+                : c.additionalHumanResourcesSeats;
+        acc[role] = { used: roleUsage[role] ?? 0, base: BASE_SEATS_BY_ROLE[role], additional, limit: BASE_SEATS_BY_ROLE[role] + additional };
+        return acc;
+      },
+      {} as Record<ManagementRole, { used: number; base: number; additional: number; limit: number }>,
+    );
+
+    return {
+      id: c.id,
+      name: c.name,
+      status: c.status as (typeof STATUSES)[number],
+      isInternal: c.isInternal,
+      seatsByRole,
+      cpoCount: cpoMap[c.id] ?? 0,
+      venueCount: venueMap[c.id] ?? 0,
+      clientCount: clientMap[c.id] ?? 0,
+      taskCount: taskMap[c.id] ?? 0,
+      lastActivityAt: activityMap[c.id]?.toISOString() ?? null,
+      createdAt: c.createdAt.toISOString(),
+    };
+  });
 }
 
 router.get("/companies", async (_req, res): Promise<void> => {
@@ -81,24 +125,28 @@ router.get("/companies", async (_req, res): Promise<void> => {
 });
 
 router.get("/companies/summary", async (_req, res): Promise<void> => {
-  const companies = await db.select({ tier: companiesTable.tier, status: companiesTable.status }).from(companiesTable);
+  const companies = await db
+    .select({
+      status: companiesTable.status,
+      additionalManagerSeats: companiesTable.additionalManagerSeats,
+      additionalOperationsSeats: companiesTable.additionalOperationsSeats,
+      additionalFinanceSeats: companiesTable.additionalFinanceSeats,
+      additionalHumanResourcesSeats: companiesTable.additionalHumanResourcesSeats,
+    })
+    .from(companiesTable);
 
   const byStatus: Record<(typeof STATUSES)[number], number> = { trial: 0, active: 0, suspended: 0, cancelled: 0 };
-  const byTier: Record<(typeof TIERS)[number], number> = { enterprise: 0, micro_enterprise: 0 };
   let monthlyRevenue = 0;
   for (const c of companies) {
     const status = c.status as (typeof STATUSES)[number];
-    const tier = c.tier as (typeof TIERS)[number];
     if (status in byStatus) byStatus[status]++;
-    if (tier in byTier) byTier[tier]++;
-    if (status === "active") monthlyRevenue += TIER_MONTHLY_PRICE[tier] ?? 0;
+    if (status === "active") monthlyRevenue += BASE_MONTHLY_PRICE + additionalSeatsTotal(c) * PRICE_PER_ADDITIONAL_SEAT;
   }
 
   res.json({
     totalCompanies: companies.length,
     byStatus,
-    byTier,
-    // Directional figure only - see TIER_MONTHLY_PRICE comment above.
+    // Directional figure only - see BASE_MONTHLY_PRICE/PRICE_PER_ADDITIONAL_SEAT comment above.
     estimatedMonthlyRevenue: monthlyRevenue,
   });
 });
@@ -115,18 +163,24 @@ router.get("/companies/:id", async (req, res): Promise<void> => {
 
 const CompanyInputSchema = z.object({
   name: z.string().trim().min(1).max(200),
-  tier: z.enum(TIERS).optional(),
   status: z.enum(STATUSES).optional(),
   isInternal: z.boolean().optional(),
+  additionalManagerSeats: z.number().int().min(0).optional(),
+  additionalOperationsSeats: z.number().int().min(0).optional(),
+  additionalFinanceSeats: z.number().int().min(0).optional(),
+  additionalHumanResourcesSeats: z.number().int().min(0).optional(),
 });
 
 function formatCompanyRecord(company: typeof companiesTable.$inferSelect) {
   return {
     id: company.id,
     name: company.name,
-    tier: company.tier,
     status: company.status,
     isInternal: company.isInternal,
+    additionalManagerSeats: company.additionalManagerSeats,
+    additionalOperationsSeats: company.additionalOperationsSeats,
+    additionalFinanceSeats: company.additionalFinanceSeats,
+    additionalHumanResourcesSeats: company.additionalHumanResourcesSeats,
     createdAt: company.createdAt.toISOString(),
   };
 }
@@ -139,9 +193,12 @@ router.post("/companies", async (req, res): Promise<void> => {
     .insert(companiesTable)
     .values({
       name: parsed.data.name,
-      tier: parsed.data.tier ?? "enterprise",
       status: parsed.data.status ?? "trial",
       isInternal: parsed.data.isInternal ?? false,
+      additionalManagerSeats: parsed.data.additionalManagerSeats ?? 0,
+      additionalOperationsSeats: parsed.data.additionalOperationsSeats ?? 0,
+      additionalFinanceSeats: parsed.data.additionalFinanceSeats ?? 0,
+      additionalHumanResourcesSeats: parsed.data.additionalHumanResourcesSeats ?? 0,
     })
     .returning();
 

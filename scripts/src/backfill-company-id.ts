@@ -114,8 +114,12 @@ async function addNullableColumns() {
     CREATE TABLE IF NOT EXISTS companies (
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
-      tier TEXT NOT NULL DEFAULT 'enterprise',
       status TEXT NOT NULL DEFAULT 'trial',
+      additional_manager_seats INTEGER NOT NULL DEFAULT 0,
+      additional_operations_seats INTEGER NOT NULL DEFAULT 0,
+      additional_finance_seats INTEGER NOT NULL DEFAULT 0,
+      additional_human_resources_seats INTEGER NOT NULL DEFAULT 0,
+      is_internal BOOLEAN NOT NULL DEFAULT false,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
@@ -165,7 +169,7 @@ async function main() {
   if (!defaultCompany) {
     [defaultCompany] = await db
       .insert(companiesTable)
-      .values({ name: "Default Company", tier: "enterprise", status: "active" })
+      .values({ name: "Default Company", status: "active" })
       .returning();
   }
   console.log(`Default company: id=${defaultCompany.id}`);

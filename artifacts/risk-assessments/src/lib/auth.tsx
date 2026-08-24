@@ -7,7 +7,16 @@ interface AuthContextValue {
   user: SessionUser | null;
   status: AuthStatus;
   login: (email: string, password: string) => Promise<void>;
-  register: (data: { companyName: string; tier?: "enterprise" | "micro_enterprise"; name: string; email: string; password: string }) => Promise<void>;
+  register: (data: {
+    companyName: string;
+    name: string;
+    email: string;
+    password: string;
+    additionalManagerSeats?: number;
+    additionalOperationsSeats?: number;
+    additionalFinanceSeats?: number;
+    additionalHumanResourcesSeats?: number;
+  }) => Promise<void>;
   logout: () => Promise<void>;
 }
 
