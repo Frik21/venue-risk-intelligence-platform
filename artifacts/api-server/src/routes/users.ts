@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, companiesTable } from "@workspace/db";
 import { z } from "zod";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, count } from "drizzle-orm";
 import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 import { generateInitialPassword, hashPassword } from "../lib/auth";
 
@@ -69,6 +69,28 @@ router.post("/users", async (req, res): Promise<void> => {
       : req.user!.role === "admin"
         ? await resolveCompanyId(parsed.data.companyId)
         : req.user!.companyId;
+
+  // A Solo Operator company (see companies.ts's planType) is exactly
+  // one CPO seat by definition - the Owner Console's onboarding flow
+  // only ever creates that one account, but nothing else stopped a
+  // second POST /users(role: "cpo") against the same company. This is
+  // that hard cap - the only other route that ever creates a "cpo" user
+  // (the onboarding operational-access grant, routes/onboarding.ts)
+  // isn't reachable at all for a Solo Operator company in the first
+  // place, since Operator Database is a Management-side page.
+  if (parsed.data.role === "cpo" && companyId != null) {
+    const [company] = await db.select({ planType: companiesTable.planType }).from(companiesTable).where(eq(companiesTable.id, companyId));
+    if (company?.planType === "solo_operator") {
+      const [existing] = await db
+        .select({ value: count() })
+        .from(usersTable)
+        .where(and(eq(usersTable.companyId, companyId), eq(usersTable.role, "cpo"), eq(usersTable.active, true)));
+      if ((existing?.value ?? 0) >= 1) {
+        res.status(409).json({ error: "A Solo Operator company can only have one CPO account" });
+        return;
+      }
+    }
+  }
 
   // Admin-generated, shown once in this response - no email
   // infrastructure exists yet to send a real invite/reset link.
