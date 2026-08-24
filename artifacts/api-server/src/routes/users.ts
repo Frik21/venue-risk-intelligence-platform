@@ -4,7 +4,7 @@ import { z } from "zod";
 import { eq, desc, and, count } from "drizzle-orm";
 import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 import { generateInitialPassword, hashPassword } from "../lib/auth";
-import { BASE_SEATS_BY_ROLE, MANAGEMENT_ROLES, type ManagementRole } from "./companies";
+import { BASE_SEATS_BY_ROLE, MANAGEMENT_ROLES, getOrCreatePricingConfig, type ManagementRole } from "./companies";
 
 const router: IRouter = Router();
 
@@ -142,6 +142,10 @@ async function buildSeatsByRole(companyId: number) {
 // same looseness this whole page already has ("No team grouping or
 // granular per-user permissions exist yet"). CPO seats deliberately
 // excluded - those live on Operator Database instead, not here.
+// pricePerAdditionalSeat rides along too - the Owner-set price
+// (routes/companies.ts's pricing config) isn't tenant-sensitive like
+// the rest of that file, and a company adding seats should be able to
+// see what each one costs before committing to it, not just the Owner.
 // Registered ahead of PATCH /users/:id below - "seats" would otherwise
 // match that route's :id param first.
 router.get("/users/seats", async (req, res): Promise<void> => {
@@ -150,7 +154,8 @@ router.get("/users/seats", async (req, res): Promise<void> => {
 
   const seatsByRole = await buildSeatsByRole(companyId);
   if (!seatsByRole) { res.status(404).json({ error: "Company not found" }); return; }
-  res.json({ seatsByRole });
+  const pricing = await getOrCreatePricingConfig();
+  res.json({ seatsByRole, pricePerAdditionalSeat: pricing.pricePerAdditionalSeat });
 });
 
 const SeatsUpdateSchema = z.object({
@@ -171,7 +176,8 @@ router.patch("/users/seats", async (req, res): Promise<void> => {
 
   const seatsByRole = await buildSeatsByRole(companyId);
   if (!seatsByRole) { res.status(404).json({ error: "Company not found" }); return; }
-  res.json({ seatsByRole });
+  const pricing = await getOrCreatePricingConfig();
+  res.json({ seatsByRole, pricePerAdditionalSeat: pricing.pricePerAdditionalSeat });
 });
 
 const UserUpdateSchema = z.object({

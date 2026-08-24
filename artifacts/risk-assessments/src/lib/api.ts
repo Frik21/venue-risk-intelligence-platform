@@ -831,13 +831,19 @@ export const api = {
     // Command Desk's own self-service seat view - distinct from the
     // Owner Console's aggregate-only /companies surface (Owner-only).
     // Any Management-side role can call these for its own company.
-    seats: () => apiFetch<{ seatsByRole: Record<ManagementRole, CompanySeatUsage> }>("/users/seats"),
+    // pricePerAdditionalSeat rides along - the Owner-set price, so a
+    // company can see what each extra seat costs before adding one.
+    seats: () => apiFetch<{ seatsByRole: Record<ManagementRole, CompanySeatUsage>; pricePerAdditionalSeat: number }>("/users/seats"),
     updateSeats: (data: Partial<{
       additionalManagerSeats: number;
       additionalOperationsSeats: number;
       additionalFinanceSeats: number;
       additionalHumanResourcesSeats: number;
-    }>) => apiFetch<{ seatsByRole: Record<ManagementRole, CompanySeatUsage> }>("/users/seats", { method: "PATCH", body: JSON.stringify(data) }),
+    }>) =>
+      apiFetch<{ seatsByRole: Record<ManagementRole, CompanySeatUsage>; pricePerAdditionalSeat: number }>("/users/seats", {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
   },
   venues: {
     list: () => apiFetch<Venue[]>("/venues"),

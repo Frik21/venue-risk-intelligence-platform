@@ -53,7 +53,7 @@ const MANAGEMENT_ROLES: ManagementRole[] = ["manager", "operations", "finance", 
 // seats, via GET/PATCH /users/seats (self-service, not admin-only).
 // CPO seats deliberately excluded - those live on Operator Database.
 function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
-  const { data, isLoading } = useQuery<{ seatsByRole: Record<ManagementRole, CompanySeatUsage> }>({
+  const { data, isLoading } = useQuery<{ seatsByRole: Record<ManagementRole, CompanySeatUsage>; pricePerAdditionalSeat: number }>({
     queryKey: ["users-seats"],
     queryFn: api.users.seats,
   });
@@ -65,6 +65,10 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
   });
   const qc = useQueryClient();
   const { toast } = useToast();
+
+  const price = data?.pricePerAdditionalSeat ?? 0;
+  const totalAdditionalSeats = MANAGEMENT_ROLES.reduce((sum, role) => sum + additional[role], 0);
+  const totalAdditionalCost = totalAdditionalSeats * price;
 
   useEffect(() => {
     if (!data) return;
@@ -104,26 +108,34 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
         {isLoading ? (
           <div className="space-y-3">{Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
         ) : (
-          <div className="space-y-3">
-            {MANAGEMENT_ROLES.map((role) => (
-              <div key={role} className="flex items-center justify-between gap-3">
-                <Label className="text-sm">
-                  {ROLE_LABELS[role]} <span className="text-slate-400 font-normal">({BASE_SEATS_BY_ROLE[role]} base)</span>
-                </Label>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400">+</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    className="w-20 h-8 text-sm"
-                    value={additional[role]}
-                    onChange={(e) => setAdditional((s) => ({ ...s, [role]: Math.max(0, Number(e.target.value) || 0) }))}
-                  />
-                  <span className="text-xs text-slate-400 w-24">= {BASE_SEATS_BY_ROLE[role] + additional[role]} seats</span>
+          <>
+            <div className="space-y-3">
+              {MANAGEMENT_ROLES.map((role) => (
+                <div key={role} className="flex items-center justify-between gap-3">
+                  <Label className="text-sm">
+                    {ROLE_LABELS[role]} <span className="text-slate-400 font-normal">({BASE_SEATS_BY_ROLE[role]} base · ${price}/seat)</span>
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400">+</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      className="w-20 h-8 text-sm"
+                      value={additional[role]}
+                      onChange={(e) => setAdditional((s) => ({ ...s, [role]: Math.max(0, Number(e.target.value) || 0) }))}
+                    />
+                    <span className="text-xs text-slate-400 w-24">= {BASE_SEATS_BY_ROLE[role] + additional[role]} seats</span>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-sm">
+              <span className="text-slate-500">Additional seats cost</span>
+              <span className="font-mono tabular-nums font-semibold text-slate-900">
+                {totalAdditionalSeats} × ${price} = ${totalAdditionalCost.toLocaleString()}/mo
+              </span>
+            </div>
+          </>
         )}
         <div className="flex gap-3 pt-2">
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || isLoading}>
@@ -238,7 +250,7 @@ export default function UsersPage() {
     queryKey: ["users"],
     queryFn: api.users.list,
   });
-  const { data: seatsData } = useQuery<{ seatsByRole: Record<ManagementRole, CompanySeatUsage> }>({
+  const { data: seatsData } = useQuery<{ seatsByRole: Record<ManagementRole, CompanySeatUsage>; pricePerAdditionalSeat: number }>({
     queryKey: ["users-seats"],
     queryFn: api.users.seats,
   });

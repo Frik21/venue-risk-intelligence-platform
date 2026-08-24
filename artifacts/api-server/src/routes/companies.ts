@@ -48,7 +48,12 @@ export const CPO_BASE_SEATS = 12;
 // rather than hardcoded, so the Owner can actually set these numbers
 // instead of them being buried in code - still just what the Owner
 // says they are, never derived from an actual invoice/subscription.
-async function getOrCreatePricingConfig() {
+// Exported so routes/users.ts's own self-service seats endpoint can
+// surface pricePerAdditionalSeat to a regular company session too
+// (this data isn't tenant-sensitive, unlike everything else in this
+// file - just a number every company already needs to see the cost of
+// adding a seat).
+export async function getOrCreatePricingConfig() {
   const [existing] = await db.select().from(pricingConfigTable).limit(1);
   if (existing) return existing;
   const [created] = await db.insert(pricingConfigTable).values({}).returning();
