@@ -4,7 +4,15 @@ import { z } from "zod";
 import { eq, desc, and, count } from "drizzle-orm";
 import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 import { generateInitialPassword, hashPassword } from "../lib/auth";
-import { BASE_SEATS_BY_ROLE, CPO_BASE_SEATS, MANAGEMENT_ROLES, getOrCreatePricingConfig, type ManagementRole } from "./companies";
+import {
+  BASE_SEATS_BY_ROLE,
+  CPO_BASE_SEATS,
+  MANAGEMENT_ROLES,
+  PRICE_FIELD_BY_ROLE,
+  CPO_PRICE_FIELD,
+  getOrCreatePricingConfig,
+  type ManagementRole,
+} from "./companies";
 
 const router: IRouter = Router();
 
@@ -121,6 +129,15 @@ async function buildSeats(companyId: number) {
     else if (r.role === "cpo") cpoUsed = r.value;
   }
 
+  // pricePerSeat rides along on each role's own usage object - the
+  // Owner-set price (routes/companies.ts's pricing config) isn't
+  // tenant-sensitive like the rest of that file, and a company adding
+  // seats should be able to see what each one costs before committing
+  // to it, not just the Owner. Per direct product direction, every
+  // role prices individually now - no more one shared price for all of
+  // Manager/Operations/Finance/HR/CPO.
+  const pricing = await getOrCreatePricingConfig();
+
   const seatsByRole = MANAGEMENT_ROLES.reduce(
     (acc, role) => {
       const additional =
@@ -131,10 +148,16 @@ async function buildSeats(companyId: number) {
             : role === "finance"
               ? company.additionalFinanceSeats
               : company.additionalHumanResourcesSeats;
-      acc[role] = { used: usedByRole[role] ?? 0, base: BASE_SEATS_BY_ROLE[role], additional, limit: BASE_SEATS_BY_ROLE[role] + additional };
+      acc[role] = {
+        used: usedByRole[role] ?? 0,
+        base: BASE_SEATS_BY_ROLE[role],
+        additional,
+        limit: BASE_SEATS_BY_ROLE[role] + additional,
+        pricePerSeat: pricing[PRICE_FIELD_BY_ROLE[role]],
+      };
       return acc;
     },
-    {} as Record<ManagementRole, { used: number; base: number; additional: number; limit: number }>,
+    {} as Record<ManagementRole, { used: number; base: number; additional: number; limit: number; pricePerSeat: number }>,
   );
 
   // CPO seats (Operators note) - same base+additional shape, tracked
@@ -148,6 +171,7 @@ async function buildSeats(companyId: number) {
     base: CPO_BASE_SEATS,
     additional: company.additionalCpoSeats,
     limit: CPO_BASE_SEATS + company.additionalCpoSeats,
+    pricePerSeat: pricing[CPO_PRICE_FIELD],
   };
 
   return { seatsByRole, cpoSeatUsage };
@@ -158,11 +182,7 @@ async function buildSeats(companyId: number) {
 // Any Management-side role can view/adjust its own company's seats
 // (both the four Management roles and CPO/Operators note), same
 // looseness this whole page already has ("No team grouping or
-// granular per-user permissions exist yet"). pricePerAdditionalSeat
-// rides along too - the Owner-set price (routes/companies.ts's
-// pricing config) isn't tenant-sensitive like the rest of that file,
-// and a company adding seats should be able to see what each one
-// costs before committing to it, not just the Owner.
+// granular per-user permissions exist yet").
 // Registered ahead of PATCH /users/:id below - "seats" would otherwise
 // match that route's :id param first.
 router.get("/users/seats", async (req, res): Promise<void> => {
@@ -171,8 +191,7 @@ router.get("/users/seats", async (req, res): Promise<void> => {
 
   const seats = await buildSeats(companyId);
   if (!seats) { res.status(404).json({ error: "Company not found" }); return; }
-  const pricing = await getOrCreatePricingConfig();
-  res.json({ ...seats, pricePerAdditionalSeat: pricing.pricePerAdditionalSeat });
+  res.json(seats);
 });
 
 const SeatsUpdateSchema = z.object({
@@ -194,8 +213,7 @@ router.patch("/users/seats", async (req, res): Promise<void> => {
 
   const seats = await buildSeats(companyId);
   if (!seats) { res.status(404).json({ error: "Company not found" }); return; }
-  const pricing = await getOrCreatePricingConfig();
-  res.json({ ...seats, pricePerAdditionalSeat: pricing.pricePerAdditionalSeat });
+  res.json(seats);
 });
 
 const UserUpdateSchema = z.object({

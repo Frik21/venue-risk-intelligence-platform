@@ -58,7 +58,6 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
   const { data, isLoading } = useQuery<{
     seatsByRole: Record<ManagementRole, CompanySeatUsage>;
     cpoSeatUsage: CompanySeatUsage;
-    pricePerAdditionalSeat: number;
   }>({
     queryKey: ["users-seats"],
     queryFn: api.users.seats,
@@ -73,15 +72,12 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  const price = data?.pricePerAdditionalSeat ?? 0;
-  // Adding a seat is a one-off configuration change, not a repeated
-  // purchase - but its cost then folds into the recurring monthly
-  // bill every month after, via the same math the Owner Console's
-  // Est. Monthly Charge uses (routes/companies.ts's
-  // estimatedMonthlyCharge) - hence "/mo" on the total below, not a
-  // one-time charge.
-  const totalAdditionalSeats = MANAGEMENT_ROLES.reduce((sum, role) => sum + additional[role], 0) + additionalCpo;
-  const totalAdditionalCost = totalAdditionalSeats * price;
+  // Every role prices individually now (Owner-set, routes/companies.ts's
+  // pricing config) - pricePerSeat rides along on each role's own usage
+  // object rather than one shared price for all of them.
+  const totalAdditionalCost =
+    MANAGEMENT_ROLES.reduce((sum, role) => sum + additional[role] * (data?.seatsByRole[role].pricePerSeat ?? 0), 0) +
+    additionalCpo * (data?.cpoSeatUsage.pricePerSeat ?? 0);
 
   useEffect(() => {
     if (!data) return;
@@ -131,7 +127,10 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
               {MANAGEMENT_ROLES.map((role) => (
                 <div key={role} className="flex items-center justify-between gap-3">
                   <Label className="text-sm">
-                    {ROLE_LABELS[role]} <span className="text-slate-400 font-normal">({BASE_SEATS_BY_ROLE[role]} base · ${price}/seat)</span>
+                    {ROLE_LABELS[role]}{" "}
+                    <span className="text-slate-400 font-normal">
+                      ({BASE_SEATS_BY_ROLE[role]} base · ${data?.seatsByRole[role].pricePerSeat ?? 0}/seat)
+                    </span>
                   </Label>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-slate-400">+</span>
@@ -149,7 +148,7 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
               <p className="text-[11px] text-slate-400 uppercase tracking-wide pt-1">Operators note</p>
               <div className="flex items-center justify-between gap-3">
                 <Label className="text-sm">
-                  CPO <span className="text-slate-400 font-normal">({CPO_BASE_SEATS} base · ${price}/seat)</span>
+                  CPO <span className="text-slate-400 font-normal">({CPO_BASE_SEATS} base · ${data?.cpoSeatUsage.pricePerSeat ?? 0}/seat)</span>
                 </Label>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-400">+</span>
@@ -166,9 +165,7 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
             </div>
             <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-sm">
               <span className="text-slate-500">Additional seats cost</span>
-              <span className="font-mono tabular-nums font-semibold text-slate-900">
-                {totalAdditionalSeats} × ${price} = ${totalAdditionalCost.toLocaleString()}/mo
-              </span>
+              <span className="font-mono tabular-nums font-semibold text-slate-900">${totalAdditionalCost.toLocaleString()}/mo</span>
             </div>
           </>
         )}
@@ -285,7 +282,7 @@ export default function UsersPage() {
     queryKey: ["users"],
     queryFn: api.users.list,
   });
-  const { data: seatsData } = useQuery<{ seatsByRole: Record<ManagementRole, CompanySeatUsage>; pricePerAdditionalSeat: number }>({
+  const { data: seatsData } = useQuery<{ seatsByRole: Record<ManagementRole, CompanySeatUsage> }>({
     queryKey: ["users-seats"],
     queryFn: api.users.seats,
   });

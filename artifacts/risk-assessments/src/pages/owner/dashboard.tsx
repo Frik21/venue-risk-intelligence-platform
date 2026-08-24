@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
-import { api, BASE_SEATS_BY_ROLE, CPO_BASE_SEATS, type Company, type CompanySummary, type CompanyStatus, type ManagementRole, type PlanType, type PricingConfig } from "@/lib/api";
+import { api, BASE_SEATS_BY_ROLE, CPO_BASE_SEATS, type Company, type CompanySummary, type CompanyStatus, type ManagementRole, type PlanType } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -281,116 +281,6 @@ function EditSeatsDialog({ company, onClose }: { company: Company; onClose: () =
   );
 }
 
-// Both subscriptions and their prices in one place, editable - closes
-// the "just tell me what the subscriptions are and let me set the
-// prices" ask. Seat bases (BASE_SEATS_BY_ROLE) stay fixed/read-only
-// here - this dialog is about dollar amounts, not seat counts, which
-// is its own separate, not-yet-decided product question.
-function SubscriptionPricingDialog({ onClose, estimatedMonthlyRevenue }: { onClose: () => void; estimatedMonthlyRevenue?: number }) {
-  const { data: pricing, isLoading } = useQuery<PricingConfig>({ queryKey: ["pricing-config"], queryFn: api.companies.pricing });
-  const [baseMonthlyPrice, setBaseMonthlyPrice] = useState(0);
-  const [pricePerAdditionalSeat, setPricePerAdditionalSeat] = useState(0);
-  const [soloOperatorMonthlyPrice, setSoloOperatorMonthlyPrice] = useState(0);
-  const qc = useQueryClient();
-  const { toast } = useToast();
-
-  useEffect(() => {
-    if (!pricing) return;
-    setBaseMonthlyPrice(pricing.baseMonthlyPrice);
-    setPricePerAdditionalSeat(pricing.pricePerAdditionalSeat);
-    setSoloOperatorMonthlyPrice(pricing.soloOperatorMonthlyPrice);
-  }, [pricing]);
-
-  const mutation = useMutation({
-    mutationFn: () => api.companies.updatePricing({ baseMonthlyPrice, pricePerAdditionalSeat, soloOperatorMonthlyPrice }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["pricing-config"] });
-      qc.invalidateQueries({ queryKey: ["companies"] });
-      qc.invalidateQueries({ queryKey: ["companies-summary"] });
-      toast({ title: "Pricing updated" });
-      onClose();
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
-
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md my-8 p-6 space-y-4">
-        <div>
-          <h2 className="text-lg font-bold">Subscriptions</h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Directional pricing only - no payment processor is connected yet, this just controls the estimates shown on this page.
-          </p>
-          {estimatedMonthlyRevenue != null && (
-            <p className="text-xs text-slate-500 mt-2">
-              Est. Monthly Revenue (active companies, current prices): <span className="font-mono tabular-nums font-semibold text-slate-900">{estimatedMonthlyRevenue.toLocaleString()}</span>
-            </p>
-          )}
-        </div>
-
-        {isLoading ? (
-          <div className="space-y-3">{Array(2).fill(0).map((_, i) => <Skeleton key={i} className="h-24" />)}</div>
-        ) : (
-          <>
-            <div className="border border-slate-200 rounded-lg p-3 space-y-3">
-              <div>
-                <div className="text-sm font-semibold text-slate-900">Team</div>
-                <div className="text-xs text-slate-400">
-                  Management + Operators Note - includes {BASE_SEATS_BY_ROLE.manager} Manager / {BASE_SEATS_BY_ROLE.operations} Operations / {BASE_SEATS_BY_ROLE.finance} Finance / {BASE_SEATS_BY_ROLE.human_resources} HR seats free
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs">Base price / month</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  className="mt-1 h-8"
-                  value={baseMonthlyPrice}
-                  onChange={(e) => setBaseMonthlyPrice(Math.max(0, Number(e.target.value) || 0))}
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Price per additional seat</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  className="mt-1 h-8"
-                  value={pricePerAdditionalSeat}
-                  onChange={(e) => setPricePerAdditionalSeat(Math.max(0, Number(e.target.value) || 0))}
-                />
-              </div>
-            </div>
-
-            <div className="border border-slate-200 rounded-lg p-3 space-y-3">
-              <div>
-                <div className="text-sm font-semibold text-slate-900">Solo Operator</div>
-                <div className="text-xs text-slate-400">One individual, Operators Note only - one CPO seat, no Management side</div>
-              </div>
-              <div>
-                <Label className="text-xs">Price / month</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  className="mt-1 h-8"
-                  value={soloOperatorMonthlyPrice}
-                  onChange={(e) => setSoloOperatorMonthlyPrice(Math.max(0, Number(e.target.value) || 0))}
-                />
-              </div>
-            </div>
-          </>
-        )}
-
-        <div className="flex gap-3 pt-2">
-          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || isLoading}>
-            {mutation.isPending ? "Saving..." : "Save"}
-          </Button>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function StatTile({ icon: Icon, label, value }: { icon: typeof Building2; label: string; value: string | number }) {
   return (
     <Card>
@@ -415,7 +305,6 @@ function StatTile({ icon: Icon, label, value }: { icon: typeof Building2; label:
 export default function OwnerDashboard() {
   const [showNewCompany, setShowNewCompany] = useState(false);
   const [editingSeatsFor, setEditingSeatsFor] = useState<Company | null>(null);
-  const [showPricing, setShowPricing] = useState(false);
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -449,9 +338,6 @@ export default function OwnerDashboard() {
     <div className="min-h-screen bg-slate-100">
       {showNewCompany && <NewCompanyDialog onClose={() => setShowNewCompany(false)} />}
       {editingSeatsFor && <EditSeatsDialog company={editingSeatsFor} onClose={() => setEditingSeatsFor(null)} />}
-      {showPricing && (
-        <SubscriptionPricingDialog onClose={() => setShowPricing(false)} estimatedMonthlyRevenue={summary?.estimatedMonthlyRevenue} />
-      )}
 
       <header className="h-14 flex items-center px-6 bg-slate-950 text-white gap-2.5">
         <ShieldAlert className="w-5 h-5 text-blue-400" />
@@ -492,7 +378,7 @@ export default function OwnerDashboard() {
             <StatTile icon={Building2} label="Total Companies" value={summary.totalCompanies} />
             <StatTile icon={TrendingUp} label="Active" value={summary.byStatus.active} />
             <StatTile icon={Users} label="Trial" value={summary.byStatus.trial} />
-            <button type="button" onClick={() => setShowPricing(true)} className="text-left">
+            <Link href="/owner/subscriptions" className="text-left">
               <Card className="h-full cursor-pointer border-blue-200 bg-blue-50/60 hover:bg-blue-50 hover:border-blue-300 transition-colors">
                 <CardContent className="p-4 h-full flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-sm font-semibold text-blue-700">
@@ -501,7 +387,7 @@ export default function OwnerDashboard() {
                   <span className="text-xs text-blue-600">View & edit →</span>
                 </CardContent>
               </Card>
-            </button>
+            </Link>
           </div>
         )}
 

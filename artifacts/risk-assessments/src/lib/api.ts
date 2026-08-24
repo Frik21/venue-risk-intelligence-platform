@@ -194,6 +194,7 @@ export interface CompanySeatUsage {
   base: number;
   additional: number;
   limit: number;
+  pricePerSeat: number;
 }
 
 // A subscriber of VenueGuard itself - the Owner page's own entity, not
@@ -231,12 +232,41 @@ export interface CompanySummary {
 // Owner-editable, platform-wide (not per-company) subscription pricing
 // - see the backend's pricingConfigTable. Directional only, no billing
 // integration exists - but a real, changeable number instead of one
-// buried in code.
+// buried in code. Per direct product direction, every seat role prices
+// individually now - no more one shared price for all of
+// Manager/Operations/Finance/HR/CPO.
 export interface PricingConfig {
   baseMonthlyPrice: number;
-  pricePerAdditionalSeat: number;
+  pricePerManagerSeat: number;
+  pricePerOperationsSeat: number;
+  pricePerFinanceSeat: number;
+  pricePerHumanResourcesSeat: number;
+  pricePerCpoSeat: number;
   soloOperatorMonthlyPrice: number;
   updatedAt: string;
+}
+
+export type PricingField =
+  | "baseMonthlyPrice"
+  | "pricePerManagerSeat"
+  | "pricePerOperationsSeat"
+  | "pricePerFinanceSeat"
+  | "pricePerHumanResourcesSeat"
+  | "pricePerCpoSeat"
+  | "soloOperatorMonthlyPrice";
+
+// One row per price change, whether entered as a direct new dollar
+// value or as a percentage increase - see the backend's
+// POST /companies/pricing/change. percentageChange is always present,
+// computed server-side either way, so history reads consistently
+// regardless of which control was used to make the change.
+export interface PricingHistoryEntry {
+  id: number;
+  field: PricingField;
+  previousValue: number;
+  newValue: number;
+  percentageChange: number;
+  changedAt: string;
 }
 
 export interface Office {
@@ -832,10 +862,11 @@ export const api = {
     // Owner Console's aggregate-only /companies surface (Owner-only).
     // Any Management-side role can call these for its own company,
     // covering both the four Management roles and CPO (Operators
-    // note). pricePerAdditionalSeat rides along - the Owner-set price,
-    // so a company can see what each extra seat costs before adding one.
+    // note). pricePerSeat rides along on each role's own usage object -
+    // the Owner-set price, so a company can see what each extra seat
+    // costs before adding one. Every role prices individually now.
     seats: () =>
-      apiFetch<{ seatsByRole: Record<ManagementRole, CompanySeatUsage>; cpoSeatUsage: CompanySeatUsage; pricePerAdditionalSeat: number }>(
+      apiFetch<{ seatsByRole: Record<ManagementRole, CompanySeatUsage>; cpoSeatUsage: CompanySeatUsage }>(
         "/users/seats",
       ),
     updateSeats: (data: Partial<{
@@ -845,7 +876,7 @@ export const api = {
       additionalHumanResourcesSeats: number;
       additionalCpoSeats: number;
     }>) =>
-      apiFetch<{ seatsByRole: Record<ManagementRole, CompanySeatUsage>; cpoSeatUsage: CompanySeatUsage; pricePerAdditionalSeat: number }>(
+      apiFetch<{ seatsByRole: Record<ManagementRole, CompanySeatUsage>; cpoSeatUsage: CompanySeatUsage }>(
         "/users/seats",
         { method: "PATCH", body: JSON.stringify(data) },
       ),
@@ -930,8 +961,16 @@ export const api = {
     list: () => apiFetch<Company[]>("/companies"),
     summary: () => apiFetch<CompanySummary>("/companies/summary"),
     pricing: () => apiFetch<PricingConfig>("/companies/pricing"),
-    updatePricing: (data: Partial<{ baseMonthlyPrice: number; pricePerAdditionalSeat: number; soloOperatorMonthlyPrice: number }>) =>
-      apiFetch<PricingConfig>("/companies/pricing", { method: "PATCH", body: JSON.stringify(data) }),
+    pricingHistory: () => apiFetch<PricingHistoryEntry[]>("/companies/pricing/history"),
+    // Exactly one of newValue ("set the current price") or
+    // percentageChange ("increase by X%") - see the backend's
+    // POST /companies/pricing/change, which derives the other and logs
+    // both to pricing_history either way.
+    changePricing: (data: { field: PricingField } & ({ newValue: number } | { percentageChange: number })) =>
+      apiFetch<{ config: PricingConfig; entry: PricingHistoryEntry }>("/companies/pricing/change", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
     create: (
       data: {
         name: string;

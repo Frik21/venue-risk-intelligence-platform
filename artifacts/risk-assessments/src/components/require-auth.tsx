@@ -71,7 +71,7 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
     return <Redirect to="/cpo" />;
   }
 
-  if (location === "/owner" && user?.role !== "admin") {
+  if ((location === "/owner" || location === "/owner/subscriptions") && user?.role !== "admin") {
     return <Redirect to={homeRoute} />;
   }
 
@@ -96,9 +96,17 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   // empty-looking UI. Once they've entered Preview (pages/owner/
   // dashboard.tsx's "Preview" button), companyId is set and these
   // routes work normally, so this only applies pre-preview. /quick-
-  // access and /register are exempt the same way /owner is - neither
-  // makes any tenant-scoped API call of its own.
-  if (user?.role === "admin" && !user.isPreviewing && location !== "/owner" && location !== "/quick-access" && location !== "/register") {
+  // access, /register, and /owner/subscriptions are exempt the same way
+  // /owner is - none makes any tenant-scoped API call of its own
+  // (Subscriptions is platform-wide pricing, not per-company data).
+  if (
+    user?.role === "admin" &&
+    !user.isPreviewing &&
+    location !== "/owner" &&
+    location !== "/owner/subscriptions" &&
+    location !== "/quick-access" &&
+    location !== "/register"
+  ) {
     return <Redirect to="/owner" />;
   }
 

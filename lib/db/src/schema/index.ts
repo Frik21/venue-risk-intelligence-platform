@@ -25,3 +25,4 @@ export * from "./invoices";
 export * from "./payroll";
 export * from "./announcements";
 export * from "./pricing-config";
+export * from "./pricing-history";

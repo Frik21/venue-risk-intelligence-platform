@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, asc, count, max } from "drizzle-orm";
-import { db, companiesTable, usersTable, venuesTable, clientsTable, tasksTable, pricingConfigTable } from "@workspace/db";
+import { eq, asc, desc, count, max } from "drizzle-orm";
+import { db, companiesTable, usersTable, venuesTable, clientsTable, tasksTable, pricingConfigTable, pricingHistoryTable } from "@workspace/db";
 import { z } from "zod";
 import { requireRole } from "../lib/auth";
 
@@ -43,13 +43,43 @@ export const MANAGEMENT_ROLES = Object.keys(BASE_SEATS_BY_ROLE) as ManagementRol
 // (routes/users.ts), unrelated to this.
 export const CPO_BASE_SEATS = 12;
 
+// The seven Owner-editable dollar figures on pricingConfigTable - kept
+// as one list so the change-history endpoint (POST /companies/pricing/
+// change below) can validate `field` against real column names without
+// a separate place having to be kept in sync by hand. Per direct
+// product direction, every seat role prices individually - no more one
+// shared "price per additional seat" for all of Manager/Operations/
+// Finance/HR/CPO.
+export const PRICING_FIELDS = [
+  "baseMonthlyPrice",
+  "pricePerManagerSeat",
+  "pricePerOperationsSeat",
+  "pricePerFinanceSeat",
+  "pricePerHumanResourcesSeat",
+  "pricePerCpoSeat",
+  "soloOperatorMonthlyPrice",
+] as const;
+export type PricingField = (typeof PRICING_FIELDS)[number];
+
+// Maps each Management role to its own pricing column - lets
+// buildCompanyRows/buildSeats (routes/users.ts) look up "what does an
+// additional seat of this role cost" without a role-by-role if/else at
+// every call site.
+export const PRICE_FIELD_BY_ROLE: Record<ManagementRole, PricingField> = {
+  manager: "pricePerManagerSeat",
+  operations: "pricePerOperationsSeat",
+  finance: "pricePerFinanceSeat",
+  human_resources: "pricePerHumanResourcesSeat",
+};
+export const CPO_PRICE_FIELD: PricingField = "pricePerCpoSeat";
+
 // Directional only - no billing integration exists. Owner-editable
 // (GET/PATCH /companies/pricing below, backed by pricingConfigTable)
 // rather than hardcoded, so the Owner can actually set these numbers
 // instead of them being buried in code - still just what the Owner
 // says they are, never derived from an actual invoice/subscription.
 // Exported so routes/users.ts's own self-service seats endpoint can
-// surface pricePerAdditionalSeat to a regular company session too
+// surface each role's per-seat price to a regular company session too
 // (this data isn't tenant-sensitive, unlike everything else in this
 // file - just a number every company already needs to see the cost of
 // adding a seat).
@@ -60,29 +90,26 @@ export async function getOrCreatePricingConfig() {
   return created;
 }
 
-function additionalSeatsTotal(company: {
-  additionalManagerSeats: number;
-  additionalOperationsSeats: number;
-  additionalFinanceSeats: number;
-  additionalHumanResourcesSeats: number;
-  additionalCpoSeats: number;
-}) {
-  return (
-    company.additionalManagerSeats +
-    company.additionalOperationsSeats +
-    company.additionalFinanceSeats +
-    company.additionalHumanResourcesSeats +
-    company.additionalCpoSeats
-  );
-}
-
 function estimatedMonthlyCharge(
-  company: { planType: string } & Parameters<typeof additionalSeatsTotal>[0],
+  company: {
+    planType: string;
+    additionalManagerSeats: number;
+    additionalOperationsSeats: number;
+    additionalFinanceSeats: number;
+    additionalHumanResourcesSeats: number;
+    additionalCpoSeats: number;
+  },
   pricing: typeof pricingConfigTable.$inferSelect,
 ) {
-  return company.planType === "solo_operator"
-    ? pricing.soloOperatorMonthlyPrice
-    : pricing.baseMonthlyPrice + additionalSeatsTotal(company) * pricing.pricePerAdditionalSeat;
+  if (company.planType === "solo_operator") return pricing.soloOperatorMonthlyPrice;
+  return (
+    pricing.baseMonthlyPrice +
+    company.additionalManagerSeats * pricing.pricePerManagerSeat +
+    company.additionalOperationsSeats * pricing.pricePerOperationsSeat +
+    company.additionalFinanceSeats * pricing.pricePerFinanceSeat +
+    company.additionalHumanResourcesSeats * pricing.pricePerHumanResourcesSeat +
+    company.additionalCpoSeats * pricing.pricePerCpoSeat
+  );
 }
 
 // Everything in this file is deliberately aggregate-only - counts and
@@ -145,10 +172,16 @@ async function buildCompanyRows() {
               : role === "finance"
                 ? c.additionalFinanceSeats
                 : c.additionalHumanResourcesSeats;
-        acc[role] = { used: roleUsage[role] ?? 0, base: BASE_SEATS_BY_ROLE[role], additional, limit: BASE_SEATS_BY_ROLE[role] + additional };
+        acc[role] = {
+          used: roleUsage[role] ?? 0,
+          base: BASE_SEATS_BY_ROLE[role],
+          additional,
+          limit: BASE_SEATS_BY_ROLE[role] + additional,
+          pricePerSeat: pricing[PRICE_FIELD_BY_ROLE[role]],
+        };
         return acc;
       },
-      {} as Record<ManagementRole, { used: number; base: number; additional: number; limit: number }>,
+      {} as Record<ManagementRole, { used: number; base: number; additional: number; limit: number; pricePerSeat: number }>,
     );
 
     const cpoUsed = cpoMap[c.id] ?? 0;
@@ -161,7 +194,13 @@ async function buildCompanyRows() {
       isInternal: c.isInternal,
       seatsByRole,
       cpoCount: cpoUsed,
-      cpoSeatUsage: { used: cpoUsed, base: CPO_BASE_SEATS, additional: c.additionalCpoSeats, limit: CPO_BASE_SEATS + c.additionalCpoSeats },
+      cpoSeatUsage: {
+        used: cpoUsed,
+        base: CPO_BASE_SEATS,
+        additional: c.additionalCpoSeats,
+        limit: CPO_BASE_SEATS + c.additionalCpoSeats,
+        pricePerSeat: pricing[CPO_PRICE_FIELD],
+      },
       venueCount: venueMap[c.id] ?? 0,
       clientCount: clientMap[c.id] ?? 0,
       taskCount: taskMap[c.id] ?? 0,
@@ -214,7 +253,11 @@ router.get("/companies/summary", async (_req, res): Promise<void> => {
 function formatPricingConfig(row: typeof pricingConfigTable.$inferSelect) {
   return {
     baseMonthlyPrice: row.baseMonthlyPrice,
-    pricePerAdditionalSeat: row.pricePerAdditionalSeat,
+    pricePerManagerSeat: row.pricePerManagerSeat,
+    pricePerOperationsSeat: row.pricePerOperationsSeat,
+    pricePerFinanceSeat: row.pricePerFinanceSeat,
+    pricePerHumanResourcesSeat: row.pricePerHumanResourcesSeat,
+    pricePerCpoSeat: row.pricePerCpoSeat,
     soloOperatorMonthlyPrice: row.soloOperatorMonthlyPrice,
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -224,24 +267,70 @@ router.get("/companies/pricing", async (_req, res): Promise<void> => {
   res.json(formatPricingConfig(await getOrCreatePricingConfig()));
 });
 
-const PricingConfigUpdateSchema = z.object({
-  baseMonthlyPrice: z.number().int().min(0).optional(),
-  pricePerAdditionalSeat: z.number().int().min(0).optional(),
-  soloOperatorMonthlyPrice: z.number().int().min(0).optional(),
+function formatPricingHistory(row: typeof pricingHistoryTable.$inferSelect) {
+  return {
+    id: row.id,
+    field: row.field as PricingField,
+    previousValue: row.previousValue,
+    newValue: row.newValue,
+    percentageChange: row.percentageChange,
+    changedAt: row.changedAt.toISOString(),
+  };
+}
+
+router.get("/companies/pricing/history", async (_req, res): Promise<void> => {
+  const rows = await db.select().from(pricingHistoryTable).orderBy(desc(pricingHistoryTable.changedAt));
+  res.json(rows.map(formatPricingHistory));
 });
 
-router.patch("/companies/pricing", async (req, res): Promise<void> => {
-  const parsed = PricingConfigUpdateSchema.safeParse(req.body);
+// One field per call, either as a direct new dollar value ("set the
+// current price") or as a percentage change ("increase by X%") - per
+// direct product direction, the Owner Console needs both. Whichever is
+// given, the other is derived server-side so pricing_history's own
+// record of what happened can never disagree with what actually got
+// saved to pricingConfigTable. percentageChange is stored as entered
+// when given directly (not re-derived from the rounded newValue, which
+// would drift); when newValue is given directly instead, percentageChange
+// is computed from it (0 if previousValue was itself 0 - nothing to
+// express as a percentage of zero).
+const PricingChangeSchema = z
+  .object({
+    field: z.enum(PRICING_FIELDS),
+    newValue: z.number().int().min(0).optional(),
+    percentageChange: z.number().finite().optional(),
+  })
+  .refine((d) => (d.newValue != null) !== (d.percentageChange != null), {
+    message: "Provide exactly one of newValue or percentageChange",
+  });
+
+router.post("/companies/pricing/change", async (req, res): Promise<void> => {
+  const parsed = PricingChangeSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const current = await getOrCreatePricingConfig();
-  const [updated] = await db
+  const previousValue = current[parsed.data.field];
+
+  let newValue: number;
+  let percentageChange: number;
+  if (parsed.data.newValue != null) {
+    newValue = parsed.data.newValue;
+    percentageChange = previousValue === 0 ? 0 : ((newValue - previousValue) / previousValue) * 100;
+  } else {
+    percentageChange = parsed.data.percentageChange!;
+    newValue = Math.max(0, Math.round(previousValue * (1 + percentageChange / 100)));
+  }
+
+  const [updatedConfig] = await db
     .update(pricingConfigTable)
-    .set(parsed.data)
+    .set({ [parsed.data.field]: newValue })
     .where(eq(pricingConfigTable.id, current.id))
     .returning();
+  const [entry] = await db
+    .insert(pricingHistoryTable)
+    .values({ field: parsed.data.field, previousValue, newValue, percentageChange })
+    .returning();
 
-  res.json(formatPricingConfig(updated));
+  res.json({ config: formatPricingConfig(updatedConfig), entry: formatPricingHistory(entry) });
 });
 
 router.get("/companies/:id", async (req, res): Promise<void> => {
