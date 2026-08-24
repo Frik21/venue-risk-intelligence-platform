@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
-import { db, usersTable, companiesTable } from "@workspace/db";
+import { db, usersTable, companiesTable, officesTable } from "@workspace/db";
 import { z } from "zod";
-import { eq, desc, and, count } from "drizzle-orm";
+import { eq, desc, and, count, asc } from "drizzle-orm";
 import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 import { generateInitialPassword, hashPassword } from "../lib/auth";
+import { resolveCurrency } from "../lib/currency";
 import {
   BASE_SEATS_BY_ROLE,
   CPO_BASE_SEATS,
@@ -174,7 +175,23 @@ async function buildSeats(companyId: number) {
     pricePerSeat: pricing[CPO_PRICE_FIELD],
   };
 
-  return { seatsByRole, cpoSeatUsage };
+  // Every pricePerSeat above is USD, the canonical currency the Master
+  // Console's own prices are set in (routes/companies.ts) - currency
+  // rides alongside as the conversion multiplier for the frontend to
+  // apply, rather than converting server-side, so the USD figure stays
+  // available too. Derived from the company's own offices (see
+  // lib/currency.ts) - {code: "USD", rate: 1} whenever there's no
+  // confident signal otherwise (no office yet, an unrecognized country,
+  // or a currency the rate source doesn't cover).
+  const [earliestOffice] = await db
+    .select({ country: officesTable.country })
+    .from(officesTable)
+    .where(eq(officesTable.companyId, companyId))
+    .orderBy(asc(officesTable.createdAt))
+    .limit(1);
+  const currency = await resolveCurrency(earliestOffice?.country ?? null);
+
+  return { seatsByRole, cpoSeatUsage, currency };
 }
 
 // Command Desk's own self-service seat view - distinct from the Owner

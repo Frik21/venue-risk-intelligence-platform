@@ -197,6 +197,18 @@ export interface CompanySeatUsage {
   pricePerSeat: number;
 }
 
+// Command Desk's own seat prices convert to the company's local
+// currency (derived from the company's own offices - see the backend's
+// lib/currency.ts) - the Master Console keeps setting canonical prices
+// in USD, this is purely a display conversion. rate is a USD
+// multiplier - 1 (code "USD") whenever there's no confident signal
+// otherwise (no office yet, an unrecognized country, or a currency the
+// rate source doesn't cover).
+export interface CompanyCurrency {
+  code: string;
+  rate: number;
+}
+
 // A subscriber of VenueGuard itself - the Owner page's own entity, not
 // a company-side concept. Aggregate-only fields (counts, timestamps) -
 // never row-level content from that company's own data.
@@ -866,7 +878,7 @@ export const api = {
     // the Owner-set price, so a company can see what each extra seat
     // costs before adding one. Every role prices individually now.
     seats: () =>
-      apiFetch<{ seatsByRole: Record<ManagementRole, CompanySeatUsage>; cpoSeatUsage: CompanySeatUsage }>(
+      apiFetch<{ seatsByRole: Record<ManagementRole, CompanySeatUsage>; cpoSeatUsage: CompanySeatUsage; currency: CompanyCurrency }>(
         "/users/seats",
       ),
     updateSeats: (data: Partial<{

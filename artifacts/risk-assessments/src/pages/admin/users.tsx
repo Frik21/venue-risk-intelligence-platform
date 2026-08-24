@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, BASE_SEATS_BY_ROLE, CPO_BASE_SEATS, type User, type Office, type UserRole, type ManagementRole, type CompanySeatUsage } from "@/lib/api";
+import { api, BASE_SEATS_BY_ROLE, CPO_BASE_SEATS, type User, type Office, type UserRole, type ManagementRole, type CompanySeatUsage, type CompanyCurrency } from "@/lib/api";
 import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -58,6 +58,7 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
   const { data, isLoading } = useQuery<{
     seatsByRole: Record<ManagementRole, CompanySeatUsage>;
     cpoSeatUsage: CompanySeatUsage;
+    currency: CompanyCurrency;
   }>({
     queryKey: ["users-seats"],
     queryFn: api.users.seats,
@@ -74,7 +75,16 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
 
   // Every role prices individually now (Owner-set, routes/companies.ts's
   // pricing config) - pricePerSeat rides along on each role's own usage
-  // object rather than one shared price for all of them.
+  // object rather than one shared price for all of them. Prices are
+  // canonically USD - currency.rate converts to the company's own
+  // currency (derived from its offices, see the backend's
+  // lib/currency.ts), a display conversion only, never round-tripped
+  // back into what's actually stored/billed.
+  const rate = data?.currency.rate ?? 1;
+  const currencyCode = data?.currency.code ?? "USD";
+  const formatMoney = (usdAmount: number) =>
+    new Intl.NumberFormat(undefined, { style: "currency", currency: currencyCode, maximumFractionDigits: 0 }).format(usdAmount * rate);
+
   const totalAdditionalCost =
     MANAGEMENT_ROLES.reduce((sum, role) => sum + additional[role] * (data?.seatsByRole[role].pricePerSeat ?? 0), 0) +
     additionalCpo * (data?.cpoSeatUsage.pricePerSeat ?? 0);
@@ -118,6 +128,9 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
           <p className="text-xs text-amber-600 mt-1">
             No payment processor is connected yet - Buy applies the seats without an actual charge.
           </p>
+          {currencyCode !== "USD" && (
+            <p className="text-xs text-slate-400 mt-1">Prices converted to {currencyCode} at today's exchange rate.</p>
+          )}
         </div>
         {isLoading ? (
           <div className="space-y-3">{Array(5).fill(0).map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
@@ -129,7 +142,7 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
                   <Label className="text-sm">
                     {ROLE_LABELS[role]}{" "}
                     <span className="text-slate-400 font-normal">
-                      ({BASE_SEATS_BY_ROLE[role]} base · ${data?.seatsByRole[role].pricePerSeat ?? 0}/seat)
+                      ({BASE_SEATS_BY_ROLE[role]} base · {formatMoney(data?.seatsByRole[role].pricePerSeat ?? 0)}/seat)
                     </span>
                   </Label>
                   <div className="flex items-center gap-2">
@@ -148,7 +161,7 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
               <p className="text-[11px] text-slate-400 uppercase tracking-wide pt-1">Operators note</p>
               <div className="flex items-center justify-between gap-3">
                 <Label className="text-sm">
-                  CPO <span className="text-slate-400 font-normal">({CPO_BASE_SEATS} base · ${data?.cpoSeatUsage.pricePerSeat ?? 0}/seat)</span>
+                  CPO <span className="text-slate-400 font-normal">({CPO_BASE_SEATS} base · {formatMoney(data?.cpoSeatUsage.pricePerSeat ?? 0)}/seat)</span>
                 </Label>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-400">+</span>
@@ -165,13 +178,13 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
             </div>
             <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-sm">
               <span className="text-slate-500">Additional seats cost</span>
-              <span className="font-mono tabular-nums font-semibold text-slate-900">${totalAdditionalCost.toLocaleString()}/mo</span>
+              <span className="font-mono tabular-nums font-semibold text-slate-900">{formatMoney(totalAdditionalCost)}/mo</span>
             </div>
           </>
         )}
         <div className="flex gap-3 pt-2">
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || isLoading}>
-            {mutation.isPending ? "Processing..." : `Buy${totalAdditionalCost > 0 ? ` - $${totalAdditionalCost.toLocaleString()}/mo` : ""}`}
+            {mutation.isPending ? "Processing..." : `Buy${totalAdditionalCost > 0 ? ` - ${formatMoney(totalAdditionalCost)}/mo` : ""}`}
           </Button>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
         </div>
