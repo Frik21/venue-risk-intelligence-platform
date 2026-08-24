@@ -9,7 +9,8 @@ import { useAuth } from "@/lib/auth";
 import type { CompanyTier } from "@/lib/api";
 
 export default function RegisterPage() {
-  const { register } = useAuth();
+  const { user, register } = useAuth();
+  const isOwnerTesting = user?.role === "admin";
   const [, navigate] = useLocation();
   const [companyName, setCompanyName] = useState("");
   const [tier, setTier] = useState<CompanyTier>("enterprise");
@@ -27,7 +28,7 @@ export default function RegisterPage() {
       await register({ companyName, tier, name, email, password });
       // register() reloads the page on success - this line only runs if
       // it somehow returns without navigating, as a fallback.
-      navigate("/admin");
+      navigate(isOwnerTesting ? "/owner" : "/admin");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
       setSubmitting(false);
@@ -44,6 +45,12 @@ export default function RegisterPage() {
             <div className="text-xs text-slate-500 uppercase tracking-widest">Risk Intelligence</div>
           </div>
         </div>
+
+        {isOwnerTesting && (
+          <div className="bg-violet-500/10 border border-violet-500/30 text-violet-300 text-xs rounded-lg p-3 text-center">
+            You're signed in as the Owner - this creates a real company, but you'll stay logged in as yourself and return to the Owner Console.
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
           <div>
@@ -100,11 +107,13 @@ export default function RegisterPage() {
             className="w-full"
             disabled={submitting || !companyName || !name || !email || password.length < 8}
           >
-            {submitting ? "Creating account..." : "Create Account"}
+            {submitting ? "Creating..." : isOwnerTesting ? "Create Company" : "Create Account"}
           </Button>
-          <p className="text-xs text-center text-slate-500">
-            Already have an account? <Link href="/login" className="text-blue-400 hover:underline">Log in</Link>
-          </p>
+          {!isOwnerTesting && (
+            <p className="text-xs text-center text-slate-500">
+              Already have an account? <Link href="/login" className="text-blue-400 hover:underline">Log in</Link>
+            </p>
+          )}
         </form>
       </div>
     </div>

@@ -40,7 +40,17 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   // else -> the Management Dashboard.
   const homeRoute = user?.role === "cpo" ? "/cpo" : user?.role === "admin" ? "/owner" : "/admin";
 
-  if (location === "/login" || location === "/register") {
+  if (location === "/login") {
+    return <Redirect to={user?.mustChangePassword ? "/change-password" : homeRoute} />;
+  }
+
+  // /register stays reachable for an already-authenticated Owner (see
+  // routes/auth.ts's own comment on POST /auth/register) - lets them
+  // run through the real signup form from inside /owner without it
+  // logging them out of their own session. Every other already-
+  // authenticated role gets the same "you don't need this page"
+  // redirect /login gets.
+  if (location === "/register" && user?.role !== "admin") {
     return <Redirect to={user?.mustChangePassword ? "/change-password" : homeRoute} />;
   }
 
@@ -73,10 +83,9 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   // empty-looking UI. Once they've entered Preview (pages/owner/
   // dashboard.tsx's "Preview" button), companyId is set and these
   // routes work normally, so this only applies pre-preview. /quick-
-  // access itself is exempt (same as /owner) - it's just a static tile
-  // grid, no API calls of its own, and it's the whole point of the
-  // header button that links there while previewing.
-  if (user?.role === "admin" && !user.isPreviewing && location !== "/owner" && location !== "/quick-access") {
+  // access and /register are exempt the same way /owner is - neither
+  // makes any tenant-scoped API call of its own.
+  if (user?.role === "admin" && !user.isPreviewing && location !== "/owner" && location !== "/quick-access" && location !== "/register") {
     return <Redirect to="/owner" />;
   }
 

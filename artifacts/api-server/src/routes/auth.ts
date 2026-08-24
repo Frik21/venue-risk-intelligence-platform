@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
-import { db, usersTable, companiesTable } from "@workspace/db";
+import { and, eq, gt } from "drizzle-orm";
+import { db, usersTable, companiesTable, sessionsTable } from "@workspace/db";
 import {
   SESSION_COOKIE,
   createSession,
@@ -102,6 +102,16 @@ const RegisterSchema = z.object({
 // admin-created users, the password is the one the person just typed
 // themselves, so there's no initialPassword/mustChangePassword song
 // and dance - they're logged straight into their new company.
+//
+// Exception: if the caller already has a valid Owner session (checked
+// against the real signed cookie below, not a client-supplied flag -
+// this is the actual trust boundary, not just UI framing), the
+// company/user are still created for real, but the Owner's own
+// session is left completely untouched - no new cookie is set. This
+// is what lets the Owner run through the real signup form from inside
+// /owner (require-auth.tsx exempts them from the usual "already
+// logged in, skip this page" redirect) without it silently logging
+// them out of their own account.
 router.post("/auth/register", async (req, res): Promise<void> => {
   const parsed = RegisterSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
@@ -130,9 +140,23 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     })
     .returning();
 
-  const sessionId = await createSession(user.id);
-  res.cookie(SESSION_COOKIE, sessionId, cookieOptions);
-  res.status(201).json({ user: await formatSessionUser(user) });
+  const existingSessionId = req.signedCookies?.[SESSION_COOKIE];
+  let callerIsOwner = false;
+  if (existingSessionId && typeof existingSessionId === "string") {
+    const [callerRow] = await db
+      .select({ role: usersTable.role })
+      .from(sessionsTable)
+      .innerJoin(usersTable, eq(sessionsTable.userId, usersTable.id))
+      .where(and(eq(sessionsTable.id, existingSessionId), gt(sessionsTable.expiresAt, new Date())));
+    callerIsOwner = callerRow?.role === "admin";
+  }
+
+  if (!callerIsOwner) {
+    const sessionId = await createSession(user.id);
+    res.cookie(SESSION_COOKIE, sessionId, cookieOptions);
+  }
+
+  res.status(201).json({ user: await formatSessionUser(user), loggedIn: !callerIsOwner });
 });
 
 router.post("/auth/logout", async (req, res): Promise<void> => {

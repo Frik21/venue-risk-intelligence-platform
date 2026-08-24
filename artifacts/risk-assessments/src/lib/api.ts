@@ -831,7 +831,11 @@ export const api = {
     login: (email: string, password: string) =>
       apiFetch<{ user: SessionUser }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
     register: (data: { companyName: string; tier?: CompanyTier; name: string; email: string; password: string }) =>
-      apiFetch<{ user: SessionUser }>("/auth/register", { method: "POST", body: JSON.stringify(data) }),
+      // loggedIn is false when the caller already had an Owner session -
+      // the company/user still get created for real, but that session is
+      // left untouched rather than swapped for the new account. See
+      // routes/auth.ts's POST /auth/register for the actual boundary.
+      apiFetch<{ user: SessionUser; loggedIn: boolean }>("/auth/register", { method: "POST", body: JSON.stringify(data) }),
     logout: () => apiFetch<void>("/auth/logout", { method: "POST" }),
     me: () => apiFetch<{ user: SessionUser }>("/auth/me"),
     changePassword: (currentPassword: string, newPassword: string) =>

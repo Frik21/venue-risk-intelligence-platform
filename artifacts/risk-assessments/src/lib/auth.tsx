@@ -52,10 +52,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const register = async (data: { companyName: string; tier?: "enterprise" | "micro_enterprise"; name: string; email: string; password: string }) => {
-    await api.auth.register(data);
-    // A freshly self-registered account is always role: "manager" (see
-    // routes/auth.ts's POST /auth/register) - no role branching needed.
-    window.location.href = "/admin";
+    const { loggedIn } = await api.auth.register(data);
+    // loggedIn is false when this was the Owner running the real signup
+    // form from inside /owner (see routes/auth.ts's POST /auth/register)
+    // - the company/user were created for real, but the Owner's own
+    // session was left untouched, so send them back to /owner rather
+    // than /admin, which would otherwise look broken (a companyId: null
+    // Owner session has nothing to show there - see require-auth.tsx).
+    window.location.href = loggedIn ? "/admin" : "/owner";
   };
 
   const logout = async () => {
