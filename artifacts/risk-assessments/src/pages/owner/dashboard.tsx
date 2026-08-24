@@ -75,16 +75,21 @@ function NewCompanyDialog({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  // Solo Operator has no self-serve signup path yet (Owner Console
-  // only, per direct product direction) - so onboarding one means
-  // creating both the company AND its one CPO account in this same
-  // dialog, chained. A Team company still only creates the company row
-  // itself - its first Manager signs up separately via /register or is
-  // added later from /admin/users.
+  // Solo Operator is for an individual, not a company - per direct
+  // product direction, it never asks for a "company name" at all, it's
+  // just that person's own name (the underlying companies row still
+  // exists under the hood, since company_id is how every table is
+  // scoped platform-wide, but nothing in this flow frames it as
+  // onboarding a company). Has no self-serve signup path yet (Owner
+  // Console only) - so onboarding one means creating that account AND
+  // its one CPO login in this same dialog, chained. A Team company
+  // still only creates the company row itself - its first Manager
+  // signs up separately via /register or is added later from
+  // /admin/users.
   const mutation = useMutation({
     mutationFn: async () => {
       const company = await api.companies.create({
-        name,
+        name: planType === "solo_operator" ? cpoName : name,
         status: "trial",
         planType,
         ...(planType === "team"
@@ -141,52 +146,54 @@ function NewCompanyDialog({ onClose }: { onClose: () => void }) {
     );
   }
 
-  const canSubmit = name.trim() && (planType === "team" || (cpoName.trim() && cpoEmail.trim()));
+  const canSubmit = planType === "team" ? name.trim() : cpoName.trim() && cpoEmail.trim();
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md my-8 p-6 space-y-4">
-        <h2 className="text-lg font-bold">Onboard Company</h2>
-        <div>
-          <Label>Company Name *</Label>
-          <Input placeholder="e.g. Sentinel Protective Services" value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
+        <h2 className="text-lg font-bold">{planType === "team" ? "Onboard Company" : "Onboard Solo Operator"}</h2>
         <div>
           <Label>Plan</Label>
           <Select value={planType} onValueChange={(v) => setPlanType(v as PlanType)}>
             <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="team">Team - full Management + Operators Note</SelectItem>
-              <SelectItem value="solo_operator">Solo Operator - Operators Note only</SelectItem>
+              <SelectItem value="team">Team - a company, full Management + Operators Note</SelectItem>
+              <SelectItem value="solo_operator">Solo Operator - an individual, Operators Note only</SelectItem>
             </SelectContent>
           </Select>
         </div>
         {planType === "team" ? (
-          <div className="border-t border-slate-100 pt-3">
-            <Label className="text-xs text-slate-500 uppercase tracking-wide">Additional Seats</Label>
-            <div className="mt-2">
-              <SeatInputs value={seats} onChange={(role, additional) => setSeats((s) => ({ ...s, [role]: additional }))} />
+          <>
+            <div>
+              <Label>Company Name *</Label>
+              <Input placeholder="e.g. Sentinel Protective Services" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
-          </div>
+            <div className="border-t border-slate-100 pt-3">
+              <Label className="text-xs text-slate-500 uppercase tracking-wide">Additional Seats</Label>
+              <div className="mt-2">
+                <SeatInputs value={seats} onChange={(role, additional) => setSeats((s) => ({ ...s, [role]: additional }))} />
+              </div>
+            </div>
+          </>
         ) : (
-          <div className="border-t border-slate-100 pt-3 space-y-3">
+          <div className="space-y-3">
             <p className="text-xs text-slate-500">
-              A Solo Operator company has exactly one CPO account and no Management side at all - create that account now.
+              Solo Operator is for one individual, not a company - no company name, no Management side, just their own login into Operators Note.
             </p>
             <div>
-              <Label>CPO Name *</Label>
+              <Label>Name *</Label>
               <Input value={cpoName} onChange={(e) => setCpoName(e.target.value)} />
             </div>
             <div>
-              <Label>CPO Email *</Label>
+              <Label>Email *</Label>
               <Input type="email" value={cpoEmail} onChange={(e) => setCpoEmail(e.target.value)} />
             </div>
           </div>
         )}
-        <p className="text-xs text-slate-400">New companies start on Trial status - activate once billing is confirmed.</p>
+        <p className="text-xs text-slate-400">New subscriptions start on Trial status - activate once billing is confirmed.</p>
         <div className="flex gap-3 pt-2">
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !canSubmit}>
-            {mutation.isPending ? "Creating..." : "Onboard Company"}
+            {mutation.isPending ? "Creating..." : planType === "team" ? "Onboard Company" : "Onboard Solo Operator"}
           </Button>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
         </div>
@@ -326,7 +333,7 @@ export default function OwnerDashboard() {
             </p>
           </div>
           <Button onClick={() => setShowNewCompany(true)}>
-            <Plus className="w-4 h-4 mr-1.5" /> Onboard Company
+            <Plus className="w-4 h-4 mr-1.5" /> Onboard Subscriber
           </Button>
         </div>
 
@@ -345,9 +352,9 @@ export default function OwnerDashboard() {
           <Card>
             <CardContent className="py-16 text-center">
               <Building2 className="w-10 h-10 mx-auto mb-3 text-slate-300" />
-              <h3 className="font-medium text-slate-600 mb-1">No companies yet</h3>
+              <h3 className="font-medium text-slate-600 mb-1">No subscribers yet</h3>
               <p className="text-sm text-slate-400 mb-4">Onboard the first subscriber to get started</p>
-              <Button onClick={() => setShowNewCompany(true)}><Plus className="w-4 h-4 mr-1.5" />Onboard Company</Button>
+              <Button onClick={() => setShowNewCompany(true)}><Plus className="w-4 h-4 mr-1.5" />Onboard Subscriber</Button>
             </CardContent>
           </Card>
         ) : (
@@ -356,7 +363,7 @@ export default function OwnerDashboard() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500">
-                    <th className="text-left px-4 py-2.5">Company</th>
+                    <th className="text-left px-4 py-2.5">Subscriber</th>
                     <th className="text-left px-4 py-2.5">Plan</th>
                     <th className="text-left px-4 py-2.5">Status</th>
                     <th className="text-left px-4 py-2.5">Seats</th>
