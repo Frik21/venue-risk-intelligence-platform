@@ -16,6 +16,7 @@ interface AuthContextValue {
     additionalOperationsSeats?: number;
     additionalFinanceSeats?: number;
     additionalHumanResourcesSeats?: number;
+    additionalCpoSeats?: number;
   }) => Promise<void>;
   logout: () => Promise<void>;
 }

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
-import { api, BASE_SEATS_BY_ROLE, type Company, type CompanySummary, type CompanyStatus, type ManagementRole, type PlanType, type PricingConfig } from "@/lib/api";
+import { api, BASE_SEATS_BY_ROLE, CPO_BASE_SEATS, type Company, type CompanySummary, type CompanyStatus, type ManagementRole, type PlanType, type PricingConfig } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,8 +22,10 @@ const STATUS_CONFIG: Record<CompanyStatus, { label: string; color: string }> = {
 
 // Single plan, no more Enterprise/Micro Enterprise tiers - every
 // company gets the same fixed base per role (BASE_SEATS_BY_ROLE), with
-// additional seats purchasable per role beyond that. CPO seats are
-// explicitly out of scope for this model, left untouched.
+// additional seats purchasable per role beyond that. CPO seats
+// (Operators note) follow the same shape but are tracked completely
+// separately, via CPO_BASE_SEATS/CpoSeatInput below - not a fifth
+// Management role.
 const MANAGEMENT_ROLES: ManagementRole[] = ["manager", "operations", "finance", "human_resources"];
 const ROLE_LABELS: Record<ManagementRole, string> = {
   manager: "Manager",
@@ -65,10 +67,39 @@ function SeatInputs({ value, onChange }: { value: AdditionalSeats; onChange: (ro
   );
 }
 
+// CPO seats (Operators note) - a single row, visually separated from
+// the four Management roles above since it's a completely separate
+// pool, not a fifth Management role. Shared by NewCompanyDialog and
+// EditSeatsDialog the same way SeatInputs is.
+function CpoSeatInput({ value, onChange }: { value: number; onChange: (additional: number) => void }) {
+  return (
+    <div className="space-y-2">
+      <p className="text-[11px] text-slate-400 uppercase tracking-wide">Operators note</p>
+      <div className="flex items-center justify-between gap-3">
+        <Label className="text-sm">
+          CPO <span className="text-slate-400 font-normal">({CPO_BASE_SEATS} base)</span>
+        </Label>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-400">+</span>
+          <Input
+            type="number"
+            min={0}
+            className="w-20 h-8 text-sm"
+            value={value}
+            onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))}
+          />
+          <span className="text-xs text-slate-400 w-24">= {CPO_BASE_SEATS + value} seats</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NewCompanyDialog({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
   const [planType, setPlanType] = useState<PlanType>("team");
   const [seats, setSeats] = useState<AdditionalSeats>({ manager: 0, operations: 0, finance: 0, human_resources: 0 });
+  const [additionalCpoSeats, setAdditionalCpoSeats] = useState(0);
   const [cpoName, setCpoName] = useState("");
   const [cpoEmail, setCpoEmail] = useState("");
   const [createdPassword, setCreatedPassword] = useState<string | null>(null);
@@ -98,6 +129,7 @@ function NewCompanyDialog({ onClose }: { onClose: () => void }) {
               additionalOperationsSeats: seats.operations,
               additionalFinanceSeats: seats.finance,
               additionalHumanResourcesSeats: seats.human_resources,
+              additionalCpoSeats,
             }
           : {}),
       });
@@ -170,8 +202,9 @@ function NewCompanyDialog({ onClose }: { onClose: () => void }) {
             </div>
             <div className="border-t border-slate-100 pt-3">
               <Label className="text-xs text-slate-500 uppercase tracking-wide">Additional Seats</Label>
-              <div className="mt-2">
+              <div className="mt-2 space-y-3">
                 <SeatInputs value={seats} onChange={(role, additional) => setSeats((s) => ({ ...s, [role]: additional }))} />
+                <CpoSeatInput value={additionalCpoSeats} onChange={setAdditionalCpoSeats} />
               </div>
             </div>
           </>
@@ -209,6 +242,7 @@ function EditSeatsDialog({ company, onClose }: { company: Company; onClose: () =
     finance: company.seatsByRole.finance.additional,
     human_resources: company.seatsByRole.human_resources.additional,
   });
+  const [additionalCpoSeats, setAdditionalCpoSeats] = useState(company.cpoSeatUsage.additional);
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -219,6 +253,7 @@ function EditSeatsDialog({ company, onClose }: { company: Company; onClose: () =
         additionalOperationsSeats: seats.operations,
         additionalFinanceSeats: seats.finance,
         additionalHumanResourcesSeats: seats.human_resources,
+        additionalCpoSeats,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["companies"] });
@@ -233,6 +268,7 @@ function EditSeatsDialog({ company, onClose }: { company: Company; onClose: () =
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md my-8 p-6 space-y-4">
         <h2 className="text-lg font-bold">Manage Seats - {company.name}</h2>
         <SeatInputs value={seats} onChange={(role, additional) => setSeats((s) => ({ ...s, [role]: additional }))} />
+        <CpoSeatInput value={additionalCpoSeats} onChange={setAdditionalCpoSeats} />
         <p className="text-xs text-slate-400">Additional seats beyond the base are billed separately once billing exists - tracked here regardless.</p>
         <div className="flex gap-3 pt-2">
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
@@ -548,7 +584,7 @@ export default function OwnerDashboard() {
                               })}
                               <span className="whitespace-nowrap">
                                 <span className="text-slate-400">CPO</span>{" "}
-                                <span className="font-mono tabular-nums">{c.cpoCount}</span>
+                                <span className="font-mono tabular-nums">{c.cpoSeatUsage.used}/{c.cpoSeatUsage.limit}</span>
                               </span>
                               <button
                                 type="button"

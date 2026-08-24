@@ -23,10 +23,9 @@ export type PlanType = (typeof PLAN_TYPES)[number];
 // Single-plan model - no more Enterprise/Micro Enterprise tiers, per
 // direct product direction. Every company gets this same fixed base
 // per Management-side role; companiesTable's additionalXSeats columns
-// track extra seats purchased beyond it, per role. CPO seats are
-// explicitly out of scope for this model, left untouched. Also
-// exported for the frontend (registration form, Owner Console) so the
-// base numbers can't drift out of sync between the two.
+// track extra seats purchased beyond it, per role. Also exported for
+// the frontend (registration form, Owner Console) so the base numbers
+// can't drift out of sync between the two.
 export const BASE_SEATS_BY_ROLE = {
   manager: 8,
   operations: 5,
@@ -35,6 +34,14 @@ export const BASE_SEATS_BY_ROLE = {
 } as const;
 type ManagementRole = keyof typeof BASE_SEATS_BY_ROLE;
 const MANAGEMENT_ROLES = Object.keys(BASE_SEATS_BY_ROLE) as ManagementRole[];
+
+// CPO seats (Operators note) follow the same base+additional shape but
+// are tracked completely separately from the four Management roles
+// above - per direct product direction, CPOs are their own seat-
+// limited pool, not a fifth Management role. Only meaningful for a
+// Team company - Solo Operator is hardcoded to exactly one CPO seat
+// (routes/users.ts), unrelated to this.
+export const CPO_BASE_SEATS = 12;
 
 // Directional only - no billing integration exists. Owner-editable
 // (GET/PATCH /companies/pricing below, backed by pricingConfigTable)
@@ -48,8 +55,20 @@ async function getOrCreatePricingConfig() {
   return created;
 }
 
-function additionalSeatsTotal(company: { additionalManagerSeats: number; additionalOperationsSeats: number; additionalFinanceSeats: number; additionalHumanResourcesSeats: number }) {
-  return company.additionalManagerSeats + company.additionalOperationsSeats + company.additionalFinanceSeats + company.additionalHumanResourcesSeats;
+function additionalSeatsTotal(company: {
+  additionalManagerSeats: number;
+  additionalOperationsSeats: number;
+  additionalFinanceSeats: number;
+  additionalHumanResourcesSeats: number;
+  additionalCpoSeats: number;
+}) {
+  return (
+    company.additionalManagerSeats +
+    company.additionalOperationsSeats +
+    company.additionalFinanceSeats +
+    company.additionalHumanResourcesSeats +
+    company.additionalCpoSeats
+  );
 }
 
 function estimatedMonthlyCharge(
@@ -127,6 +146,8 @@ async function buildCompanyRows() {
       {} as Record<ManagementRole, { used: number; base: number; additional: number; limit: number }>,
     );
 
+    const cpoUsed = cpoMap[c.id] ?? 0;
+
     return {
       id: c.id,
       name: c.name,
@@ -134,7 +155,8 @@ async function buildCompanyRows() {
       planType: c.planType as PlanType,
       isInternal: c.isInternal,
       seatsByRole,
-      cpoCount: cpoMap[c.id] ?? 0,
+      cpoCount: cpoUsed,
+      cpoSeatUsage: { used: cpoUsed, base: CPO_BASE_SEATS, additional: c.additionalCpoSeats, limit: CPO_BASE_SEATS + c.additionalCpoSeats },
       venueCount: venueMap[c.id] ?? 0,
       clientCount: clientMap[c.id] ?? 0,
       taskCount: taskMap[c.id] ?? 0,
@@ -163,6 +185,7 @@ router.get("/companies/summary", async (_req, res): Promise<void> => {
       additionalOperationsSeats: companiesTable.additionalOperationsSeats,
       additionalFinanceSeats: companiesTable.additionalFinanceSeats,
       additionalHumanResourcesSeats: companiesTable.additionalHumanResourcesSeats,
+      additionalCpoSeats: companiesTable.additionalCpoSeats,
     })
     .from(companiesTable);
   const pricing = await getOrCreatePricingConfig();
@@ -235,6 +258,7 @@ const CompanyInputSchema = z.object({
   additionalOperationsSeats: z.number().int().min(0).optional(),
   additionalFinanceSeats: z.number().int().min(0).optional(),
   additionalHumanResourcesSeats: z.number().int().min(0).optional(),
+  additionalCpoSeats: z.number().int().min(0).optional(),
 });
 
 function formatCompanyRecord(company: typeof companiesTable.$inferSelect) {
@@ -248,6 +272,7 @@ function formatCompanyRecord(company: typeof companiesTable.$inferSelect) {
     additionalOperationsSeats: company.additionalOperationsSeats,
     additionalFinanceSeats: company.additionalFinanceSeats,
     additionalHumanResourcesSeats: company.additionalHumanResourcesSeats,
+    additionalCpoSeats: company.additionalCpoSeats,
     createdAt: company.createdAt.toISOString(),
   };
 }
@@ -267,6 +292,7 @@ router.post("/companies", async (req, res): Promise<void> => {
       additionalOperationsSeats: parsed.data.additionalOperationsSeats ?? 0,
       additionalFinanceSeats: parsed.data.additionalFinanceSeats ?? 0,
       additionalHumanResourcesSeats: parsed.data.additionalHumanResourcesSeats ?? 0,
+      additionalCpoSeats: parsed.data.additionalCpoSeats ?? 0,
     })
     .returning();
 

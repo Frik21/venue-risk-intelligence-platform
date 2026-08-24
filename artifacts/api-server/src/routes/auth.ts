@@ -93,11 +93,13 @@ const RegisterSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   // Extra seats beyond the fixed per-role base (see companies.ts's
-  // BASE_SEATS_BY_ROLE) - optional, defaults to 0 for every role.
+  // BASE_SEATS_BY_ROLE/CPO_BASE_SEATS) - optional, defaults to 0 for
+  // every role.
   additionalManagerSeats: z.number().int().min(0).optional(),
   additionalOperationsSeats: z.number().int().min(0).optional(),
   additionalFinanceSeats: z.number().int().min(0).optional(),
   additionalHumanResourcesSeats: z.number().int().min(0).optional(),
+  additionalCpoSeats: z.number().int().min(0).optional(),
 });
 
 // Self-service company signup - the only path into VenueGuard that
@@ -138,6 +140,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       additionalOperationsSeats: parsed.data.additionalOperationsSeats ?? 0,
       additionalFinanceSeats: parsed.data.additionalFinanceSeats ?? 0,
       additionalHumanResourcesSeats: parsed.data.additionalHumanResourcesSeats ?? 0,
+      additionalCpoSeats: parsed.data.additionalCpoSeats ?? 0,
     })
     .returning();
 

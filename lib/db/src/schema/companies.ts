@@ -17,8 +17,13 @@ import { z } from "zod/v4";
 // tracked here regardless, since the number itself is real even
 // before charging for it is). Deliberately per-role, not one shared
 // pool - a company needing more Finance seats shouldn't eat into its
-// Operations allowance. CPO seats are explicitly out of scope for
-// this model for now - untouched, revisit separately.
+// Operations allowance. CPO seats (additionalCpoSeats below) follow
+// the exact same base+additional shape but are tracked completely
+// separately from the four Management roles - CPOs are their own
+// seat-limited pool per the Product Vision (Operators note isn't an
+// admin-managed role, it's inventory tied to the subscription), only
+// meaningful for a Team company (Solo Operator is hardcoded to exactly
+// one CPO seat, unrelated to this column - see routes/users.ts).
 export const companiesTable = pgTable("companies", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -35,6 +40,7 @@ export const companiesTable = pgTable("companies", {
   additionalOperationsSeats: integer("additional_operations_seats").notNull().default(0),
   additionalFinanceSeats: integer("additional_finance_seats").notNull().default(0),
   additionalHumanResourcesSeats: integer("additional_human_resources_seats").notNull().default(0),
+  additionalCpoSeats: integer("additional_cpo_seats").notNull().default(0),
   // The Owner's own sandbox for testing/QA-ing the Management and CPO
   // pages (see lib/auth.ts's preview session mechanism) - never a real
   // subscriber. Only a company flagged true here can ever be entered

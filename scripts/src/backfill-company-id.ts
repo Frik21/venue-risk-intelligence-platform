@@ -120,6 +120,7 @@ async function addNullableColumns() {
       additional_operations_seats INTEGER NOT NULL DEFAULT 0,
       additional_finance_seats INTEGER NOT NULL DEFAULT 0,
       additional_human_resources_seats INTEGER NOT NULL DEFAULT 0,
+      additional_cpo_seats INTEGER NOT NULL DEFAULT 0,
       is_internal BOOLEAN NOT NULL DEFAULT false,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );

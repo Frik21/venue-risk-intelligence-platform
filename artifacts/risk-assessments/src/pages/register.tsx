@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
-import { BASE_SEATS_BY_ROLE, type ManagementRole } from "@/lib/api";
+import { BASE_SEATS_BY_ROLE, CPO_BASE_SEATS, type ManagementRole } from "@/lib/api";
 
 const MANAGEMENT_ROLES: ManagementRole[] = ["manager", "operations", "finance", "human_resources"];
 const ROLE_LABELS: Record<ManagementRole, string> = {
@@ -26,6 +26,7 @@ export default function RegisterPage() {
     finance: 0,
     human_resources: 0,
   });
+  const [additionalCpoSeats, setAdditionalCpoSeats] = useState(0);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -46,6 +47,7 @@ export default function RegisterPage() {
         additionalOperationsSeats: additionalSeats.operations,
         additionalFinanceSeats: additionalSeats.finance,
         additionalHumanResourcesSeats: additionalSeats.human_resources,
+        additionalCpoSeats,
       });
       // register() reloads the page on success - this line only runs if
       // it somehow returns without navigating, as a fallback.
@@ -108,6 +110,22 @@ export default function RegisterPage() {
                   </div>
                 </div>
               ))}
+            </div>
+            <p className="text-[11px] text-slate-500 uppercase tracking-wide mt-3 mb-1.5">Operators note</p>
+            <div className="flex items-center justify-between gap-2 bg-slate-950 border border-slate-800 rounded-md px-3 py-1.5">
+              <span className="text-sm text-slate-300">
+                CPO <span className="text-slate-500">({CPO_BASE_SEATS} base)</span>
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-slate-500">+</span>
+                <Input
+                  type="number"
+                  min={0}
+                  className="w-16 h-7 text-sm bg-slate-900 border-slate-800 text-white"
+                  value={additionalCpoSeats}
+                  onChange={(e) => setAdditionalCpoSeats(Math.max(0, Number(e.target.value) || 0))}
+                />
+              </div>
             </div>
           </div>
           <div className="border-t border-slate-800 pt-4">

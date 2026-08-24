@@ -182,6 +182,13 @@ export const BASE_SEATS_BY_ROLE: Record<ManagementRole, number> = {
   human_resources: 5,
 };
 
+// CPO seats (Operators note) - tracked separately from the four
+// Management roles above, per direct product direction (CPOs are
+// their own seat-limited pool, not a fifth Management role). Only
+// meaningful for a Team company. Mirrored from the backend's
+// CPO_BASE_SEATS (routes/companies.ts).
+export const CPO_BASE_SEATS = 12;
+
 export interface CompanySeatUsage {
   used: number;
   base: number;
@@ -203,6 +210,7 @@ export interface Company {
   isInternal: boolean;
   seatsByRole: Record<ManagementRole, CompanySeatUsage>;
   cpoCount: number;
+  cpoSeatUsage: CompanySeatUsage;
   venueCount: number;
   clientCount: number;
   taskCount: number;
@@ -880,6 +888,7 @@ export const api = {
         additionalOperationsSeats?: number;
         additionalFinanceSeats?: number;
         additionalHumanResourcesSeats?: number;
+        additionalCpoSeats?: number;
       },
     ) =>
       // loggedIn is false when the caller already had an Owner session -
@@ -912,6 +921,7 @@ export const api = {
         additionalOperationsSeats?: number;
         additionalFinanceSeats?: number;
         additionalHumanResourcesSeats?: number;
+        additionalCpoSeats?: number;
       },
     ) => apiFetch<Company>("/companies", { method: "POST", body: JSON.stringify(data) }),
     update: (
@@ -924,6 +934,7 @@ export const api = {
         additionalOperationsSeats: number;
         additionalFinanceSeats: number;
         additionalHumanResourcesSeats: number;
+        additionalCpoSeats: number;
       }>,
     ) => apiFetch<Company>(`/companies/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   },
