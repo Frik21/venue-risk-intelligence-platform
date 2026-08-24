@@ -830,20 +830,25 @@ export const api = {
       apiFetch<User>(`/users/${id}/rates`, { method: "PATCH", body: JSON.stringify(data) }),
     // Command Desk's own self-service seat view - distinct from the
     // Owner Console's aggregate-only /companies surface (Owner-only).
-    // Any Management-side role can call these for its own company.
-    // pricePerAdditionalSeat rides along - the Owner-set price, so a
-    // company can see what each extra seat costs before adding one.
-    seats: () => apiFetch<{ seatsByRole: Record<ManagementRole, CompanySeatUsage>; pricePerAdditionalSeat: number }>("/users/seats"),
+    // Any Management-side role can call these for its own company,
+    // covering both the four Management roles and CPO (Operators
+    // note). pricePerAdditionalSeat rides along - the Owner-set price,
+    // so a company can see what each extra seat costs before adding one.
+    seats: () =>
+      apiFetch<{ seatsByRole: Record<ManagementRole, CompanySeatUsage>; cpoSeatUsage: CompanySeatUsage; pricePerAdditionalSeat: number }>(
+        "/users/seats",
+      ),
     updateSeats: (data: Partial<{
       additionalManagerSeats: number;
       additionalOperationsSeats: number;
       additionalFinanceSeats: number;
       additionalHumanResourcesSeats: number;
+      additionalCpoSeats: number;
     }>) =>
-      apiFetch<{ seatsByRole: Record<ManagementRole, CompanySeatUsage>; pricePerAdditionalSeat: number }>("/users/seats", {
-        method: "PATCH",
-        body: JSON.stringify(data),
-      }),
+      apiFetch<{ seatsByRole: Record<ManagementRole, CompanySeatUsage>; cpoSeatUsage: CompanySeatUsage; pricePerAdditionalSeat: number }>(
+        "/users/seats",
+        { method: "PATCH", body: JSON.stringify(data) },
+      ),
   },
   venues: {
     list: () => apiFetch<Venue[]>("/venues"),

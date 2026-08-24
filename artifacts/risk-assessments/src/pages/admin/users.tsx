@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, BASE_SEATS_BY_ROLE, type User, type Office, type UserRole, type ManagementRole, type CompanySeatUsage } from "@/lib/api";
+import { api, BASE_SEATS_BY_ROLE, CPO_BASE_SEATS, type User, type Office, type UserRole, type ManagementRole, type CompanySeatUsage } from "@/lib/api";
 import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,9 +51,15 @@ const MANAGEMENT_ROLES: ManagementRole[] = ["manager", "operations", "finance", 
 // Console's version of the same idea (pages/owner/dashboard.tsx) - a
 // Manager/Finance/HR/Operations user adjusting their own company's
 // seats, via GET/PATCH /users/seats (self-service, not admin-only).
-// CPO seats deliberately excluded - those live on Operator Database.
+// Covers both the four Management roles and CPO (Operators note) -
+// the CPO row is visually separated to match the Owner Console's own
+// treatment of it as a completely separate pool, not a fifth role.
 function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
-  const { data, isLoading } = useQuery<{ seatsByRole: Record<ManagementRole, CompanySeatUsage>; pricePerAdditionalSeat: number }>({
+  const { data, isLoading } = useQuery<{
+    seatsByRole: Record<ManagementRole, CompanySeatUsage>;
+    cpoSeatUsage: CompanySeatUsage;
+    pricePerAdditionalSeat: number;
+  }>({
     queryKey: ["users-seats"],
     queryFn: api.users.seats,
   });
@@ -63,11 +69,18 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
     finance: 0,
     human_resources: 0,
   });
+  const [additionalCpo, setAdditionalCpo] = useState(0);
   const qc = useQueryClient();
   const { toast } = useToast();
 
   const price = data?.pricePerAdditionalSeat ?? 0;
-  const totalAdditionalSeats = MANAGEMENT_ROLES.reduce((sum, role) => sum + additional[role], 0);
+  // Adding a seat is a one-off configuration change, not a repeated
+  // purchase - but its cost then folds into the recurring monthly
+  // bill every month after, via the same math the Owner Console's
+  // Est. Monthly Charge uses (routes/companies.ts's
+  // estimatedMonthlyCharge) - hence "/mo" on the total below, not a
+  // one-time charge.
+  const totalAdditionalSeats = MANAGEMENT_ROLES.reduce((sum, role) => sum + additional[role], 0) + additionalCpo;
   const totalAdditionalCost = totalAdditionalSeats * price;
 
   useEffect(() => {
@@ -78,6 +91,7 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
       finance: data.seatsByRole.finance.additional,
       human_resources: data.seatsByRole.human_resources.additional,
     });
+    setAdditionalCpo(data.cpoSeatUsage.additional);
   }, [data]);
 
   const mutation = useMutation({
@@ -87,6 +101,7 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
         additionalOperationsSeats: additional.operations,
         additionalFinanceSeats: additional.finance,
         additionalHumanResourcesSeats: additional.human_resources,
+        additionalCpoSeats: additionalCpo,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["users-seats"] });
@@ -106,7 +121,7 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
           </p>
         </div>
         {isLoading ? (
-          <div className="space-y-3">{Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
+          <div className="space-y-3">{Array(5).fill(0).map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
         ) : (
           <>
             <div className="space-y-3">
@@ -128,6 +143,23 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
                   </div>
                 </div>
               ))}
+              <p className="text-[11px] text-slate-400 uppercase tracking-wide pt-1">Operators note</p>
+              <div className="flex items-center justify-between gap-3">
+                <Label className="text-sm">
+                  CPO <span className="text-slate-400 font-normal">({CPO_BASE_SEATS} base · ${price}/seat)</span>
+                </Label>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">+</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    className="w-20 h-8 text-sm"
+                    value={additionalCpo}
+                    onChange={(e) => setAdditionalCpo(Math.max(0, Number(e.target.value) || 0))}
+                  />
+                  <span className="text-xs text-slate-400 w-24">= {CPO_BASE_SEATS + additionalCpo} seats</span>
+                </div>
+              </div>
             </div>
             <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-sm">
               <span className="text-slate-500">Additional seats cost</span>

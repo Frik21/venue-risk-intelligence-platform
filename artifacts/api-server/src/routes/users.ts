@@ -4,7 +4,7 @@ import { z } from "zod";
 import { eq, desc, and, count } from "drizzle-orm";
 import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 import { generateInitialPassword, hashPassword } from "../lib/auth";
-import { BASE_SEATS_BY_ROLE, MANAGEMENT_ROLES, getOrCreatePricingConfig, type ManagementRole } from "./companies";
+import { BASE_SEATS_BY_ROLE, CPO_BASE_SEATS, MANAGEMENT_ROLES, getOrCreatePricingConfig, type ManagementRole } from "./companies";
 
 const router: IRouter = Router();
 
@@ -105,7 +105,7 @@ router.post("/users", async (req, res): Promise<void> => {
   res.status(201).json({ ...formatUser(user), initialPassword });
 });
 
-async function buildSeatsByRole(companyId: number) {
+async function buildSeats(companyId: number) {
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId));
   if (!company) return null;
 
@@ -115,11 +115,13 @@ async function buildSeatsByRole(companyId: number) {
     .where(and(eq(usersTable.companyId, companyId), eq(usersTable.active, true)))
     .groupBy(usersTable.role);
   const usedByRole: Partial<Record<ManagementRole, number>> = {};
+  let cpoUsed = 0;
   for (const r of counts) {
     if (MANAGEMENT_ROLES.includes(r.role as ManagementRole)) usedByRole[r.role as ManagementRole] = r.value;
+    else if (r.role === "cpo") cpoUsed = r.value;
   }
 
-  return MANAGEMENT_ROLES.reduce(
+  const seatsByRole = MANAGEMENT_ROLES.reduce(
     (acc, role) => {
       const additional =
         role === "manager"
@@ -134,28 +136,43 @@ async function buildSeatsByRole(companyId: number) {
     },
     {} as Record<ManagementRole, { used: number; base: number; additional: number; limit: number }>,
   );
+
+  // CPO seats (Operators note) - same base+additional shape, tracked
+  // completely separately from the four Management roles above, per
+  // direct product direction. Only meaningful here since this whole
+  // page (Command Desk) is unreachable for a Solo Operator company
+  // anyway (blockSoloOperatorFromManagement), so no plan-type check
+  // needed - a company that got this far is always Team.
+  const cpoSeatUsage = {
+    used: cpoUsed,
+    base: CPO_BASE_SEATS,
+    additional: company.additionalCpoSeats,
+    limit: CPO_BASE_SEATS + company.additionalCpoSeats,
+  };
+
+  return { seatsByRole, cpoSeatUsage };
 }
 
 // Command Desk's own self-service seat view - distinct from the Owner
 // Console's aggregate-only surface (routes/companies.ts, admin-only).
-// Any Management-side role can view/adjust its own company's seats,
-// same looseness this whole page already has ("No team grouping or
-// granular per-user permissions exist yet"). CPO seats deliberately
-// excluded - those live on Operator Database instead, not here.
-// pricePerAdditionalSeat rides along too - the Owner-set price
-// (routes/companies.ts's pricing config) isn't tenant-sensitive like
-// the rest of that file, and a company adding seats should be able to
-// see what each one costs before committing to it, not just the Owner.
+// Any Management-side role can view/adjust its own company's seats
+// (both the four Management roles and CPO/Operators note), same
+// looseness this whole page already has ("No team grouping or
+// granular per-user permissions exist yet"). pricePerAdditionalSeat
+// rides along too - the Owner-set price (routes/companies.ts's
+// pricing config) isn't tenant-sensitive like the rest of that file,
+// and a company adding seats should be able to see what each one
+// costs before committing to it, not just the Owner.
 // Registered ahead of PATCH /users/:id below - "seats" would otherwise
 // match that route's :id param first.
 router.get("/users/seats", async (req, res): Promise<void> => {
   const companyId = requireCompanyId(req, res);
   if (companyId == null) return;
 
-  const seatsByRole = await buildSeatsByRole(companyId);
-  if (!seatsByRole) { res.status(404).json({ error: "Company not found" }); return; }
+  const seats = await buildSeats(companyId);
+  if (!seats) { res.status(404).json({ error: "Company not found" }); return; }
   const pricing = await getOrCreatePricingConfig();
-  res.json({ seatsByRole, pricePerAdditionalSeat: pricing.pricePerAdditionalSeat });
+  res.json({ ...seats, pricePerAdditionalSeat: pricing.pricePerAdditionalSeat });
 });
 
 const SeatsUpdateSchema = z.object({
@@ -163,6 +180,7 @@ const SeatsUpdateSchema = z.object({
   additionalOperationsSeats: z.number().int().min(0).optional(),
   additionalFinanceSeats: z.number().int().min(0).optional(),
   additionalHumanResourcesSeats: z.number().int().min(0).optional(),
+  additionalCpoSeats: z.number().int().min(0).optional(),
 });
 
 router.patch("/users/seats", async (req, res): Promise<void> => {
@@ -174,10 +192,10 @@ router.patch("/users/seats", async (req, res): Promise<void> => {
 
   await db.update(companiesTable).set(parsed.data).where(eq(companiesTable.id, companyId));
 
-  const seatsByRole = await buildSeatsByRole(companyId);
-  if (!seatsByRole) { res.status(404).json({ error: "Company not found" }); return; }
+  const seats = await buildSeats(companyId);
+  if (!seats) { res.status(404).json({ error: "Company not found" }); return; }
   const pricing = await getOrCreatePricingConfig();
-  res.json({ seatsByRole, pricePerAdditionalSeat: pricing.pricePerAdditionalSeat });
+  res.json({ ...seats, pricePerAdditionalSeat: pricing.pricePerAdditionalSeat });
 });
 
 const UserUpdateSchema = z.object({
