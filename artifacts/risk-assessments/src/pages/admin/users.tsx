@@ -105,7 +105,7 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["users-seats"] });
-      toast({ title: "Seats updated" });
+      toast({ title: "Seats purchased" });
       onClose();
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -117,7 +117,10 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
         <div>
           <h2 className="text-lg font-bold">Additional Seats</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Every role starts with a fixed free base - add more if you need them. Additional seats are billed separately once billing exists; tracked here regardless.
+            Every role starts with a fixed free base - select how many more you need, then Buy. Seats are available immediately.
+          </p>
+          <p className="text-xs text-amber-600 mt-1">
+            No payment processor is connected yet - Buy applies the seats without an actual charge.
           </p>
         </div>
         {isLoading ? (
@@ -171,7 +174,7 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
         )}
         <div className="flex gap-3 pt-2">
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || isLoading}>
-            {mutation.isPending ? "Saving..." : "Save"}
+            {mutation.isPending ? "Processing..." : `Buy${totalAdditionalCost > 0 ? ` - $${totalAdditionalCost.toLocaleString()}/mo` : ""}`}
           </Button>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
         </div>
