@@ -24,75 +24,29 @@ function normalizeCountryName(name: string): string {
     .trim();
 }
 
-// Country name (normalized) -> ISO 4217 currency code. Broad coverage
-// (not just currencies the rate source below actually supports) plus
-// the common aliases most likely to actually get typed into a freeform
-// field (official name, short name, colloquial name).
+// Country name (normalized) -> ISO 4217 currency code. Deliberately
+// small - per direct product direction, only 5 currencies exist in
+// this system at all: South Africa gets ZAR, Europe gets EUR, China
+// gets CNY, England/the UK gets GBP, and literally everywhere else
+// (including the US) gets USD. Anything not explicitly listed here
+// falls through to resolveCurrency's own USD fallback below, so there
+// is no need to enumerate the rest of the world - USD already is the
+// "everywhere else" answer.
 const COUNTRY_TO_CURRENCY: Record<string, string> = {
-  "united states": "USD", "united states of america": "USD", usa: "USD", us: "USD", america: "USD",
-  "united kingdom": "GBP", uk: "GBP", britain: "GBP", "great britain": "GBP", england: "GBP", scotland: "GBP", wales: "GBP", "northern ireland": "GBP",
   "south africa": "ZAR",
-  canada: "CAD",
-  australia: "AUD",
-  "new zealand": "NZD",
+  "united kingdom": "GBP", uk: "GBP", britain: "GBP", "great britain": "GBP", england: "GBP", scotland: "GBP", wales: "GBP", "northern ireland": "GBP",
+  china: "CNY", "people's republic of china": "CNY",
   germany: "EUR", france: "EUR", spain: "EUR", italy: "EUR", netherlands: "EUR", "the netherlands": "EUR",
   belgium: "EUR", austria: "EUR", ireland: "EUR", portugal: "EUR", greece: "EUR", finland: "EUR",
   luxembourg: "EUR", slovenia: "EUR", slovakia: "EUR", estonia: "EUR", latvia: "EUR", lithuania: "EUR",
   cyprus: "EUR", malta: "EUR", croatia: "EUR",
-  switzerland: "CHF",
-  japan: "JPY",
-  china: "CNY", "people's republic of china": "CNY",
-  "hong kong": "HKD",
-  singapore: "SGD",
-  india: "INR",
-  brazil: "BRL",
-  mexico: "MXN",
-  "south korea": "KRW", "republic of korea": "KRW", korea: "KRW",
-  norway: "NOK",
-  sweden: "SEK",
-  denmark: "DKK",
-  poland: "PLN",
-  "czech republic": "CZK", czechia: "CZK",
-  hungary: "HUF",
-  romania: "RON",
-  bulgaria: "BGN",
-  iceland: "ISK",
-  turkey: "TRY", turkiye: "TRY",
-  israel: "ILS",
-  indonesia: "IDR",
-  malaysia: "MYR",
-  philippines: "PHP",
-  thailand: "THB",
-  "united arab emirates": "AED", uae: "AED",
-  "saudi arabia": "SAR",
-  nigeria: "NGN",
-  kenya: "KES",
-  egypt: "EGP",
-  ghana: "GHS",
-  zimbabwe: "USD",
-  namibia: "NAD",
-  botswana: "BWP",
-  argentina: "ARS",
-  chile: "CLP",
-  colombia: "COP",
-  peru: "PEN",
-  russia: "RUB", "russian federation": "RUB",
-  ukraine: "UAH",
-  pakistan: "PKR",
-  bangladesh: "BDT",
-  vietnam: "VND",
-  taiwan: "TWD",
+  "united states": "USD", "united states of america": "USD", usa: "USD", us: "USD", america: "USD",
 };
 
-// The rate source below (Frankfurter, ECB reference rates) only covers
-// major currencies - free, no API key, updated daily on ECB business
-// days. Anything outside this set falls back to USD display rather
-// than showing a currency label with no real rate behind it.
-export const SUPPORTED_CURRENCY_CODES = [
-  "AUD", "BGN", "BRL", "CAD", "CHF", "CNY", "CZK", "DKK", "EUR", "GBP",
-  "HKD", "HUF", "IDR", "ILS", "INR", "ISK", "JPY", "KRW", "MXN", "MYR",
-  "NOK", "NZD", "PHP", "PLN", "RON", "SEK", "SGD", "THB", "TRY", "USD", "ZAR",
-] as const;
+// The complete set of currencies this system knows about - per direct
+// product direction, exactly these 5. Also what the Master Console's
+// working-currency selector offers.
+export const SUPPORTED_CURRENCY_CODES = ["ZAR", "USD", "EUR", "GBP", "CNY"] as const;
 const SUPPORTED_BY_RATE_SOURCE = new Set<string>(SUPPORTED_CURRENCY_CODES);
 
 // Exported directly for the Master Console's "use my location" currency

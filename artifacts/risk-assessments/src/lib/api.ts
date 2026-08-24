@@ -209,17 +209,15 @@ export interface CompanyCurrency {
   rate: number;
 }
 
-// Currencies the live-rate engine actually covers (mirrors the
+// The complete set of currencies this system knows about (mirrors the
 // backend's lib/currency.ts SUPPORTED_CURRENCY_CODES - duplicated with
 // an explicit sync comment rather than a shared package, matching this
 // codebase's small-explicit-helper convention already used for
-// BASE_SEATS_BY_ROLE below). Backs the Master Console's own currency
-// selector - only currencies with a real rate behind them are offered.
-export const SUPPORTED_CURRENCY_CODES = [
-  "AUD", "BGN", "BRL", "CAD", "CHF", "CNY", "CZK", "DKK", "EUR", "GBP",
-  "HKD", "HUF", "IDR", "ILS", "INR", "ISK", "JPY", "KRW", "MXN", "MYR",
-  "NOK", "NZD", "PHP", "PLN", "RON", "SEK", "SGD", "THB", "TRY", "USD", "ZAR",
-] as const;
+// BASE_SEATS_BY_ROLE below). Deliberately just 5, per direct product
+// direction - South Africa/ZAR, Europe/EUR, China/CNY, UK/GBP, and USD
+// for the US plus everywhere else. Backs the Master Console's own
+// working-currency selector.
+export const SUPPORTED_CURRENCY_CODES = ["ZAR", "USD", "EUR", "GBP", "CNY"] as const;
 
 // A subscriber of VenueGuard itself - the Owner page's own entity, not
 // a company-side concept. Aggregate-only fields (counts, timestamps) -
