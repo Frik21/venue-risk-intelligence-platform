@@ -7,6 +7,7 @@ interface AuthContextValue {
   user: SessionUser | null;
   status: AuthStatus;
   login: (email: string, password: string) => Promise<void>;
+  register: (data: { companyName: string; tier?: "enterprise" | "micro_enterprise"; name: string; email: string; password: string }) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -42,10 +43,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // login-as-someone-else could otherwise serve stale, wrong-tenant
     // data from an in-memory cache built under the previous session.
     // Destination is decided right here (not left to RequireAuth to
-    // infer from "/") so "/" itself stays a reachable manual nav aid
-    // afterward instead of becoming an unreachable redirect trap.
+    // infer from "/") since "/" always shows the public landing page
+    // now, for authenticated sessions too (see require-auth.tsx) -
+    // redirecting there after login would just show marketing copy
+    // instead of the app.
     const home = user.role === "cpo" ? "/cpo" : user.role === "admin" ? "/owner" : "/admin";
     window.location.href = user.mustChangePassword ? "/change-password" : home;
+  };
+
+  const register = async (data: { companyName: string; tier?: "enterprise" | "micro_enterprise"; name: string; email: string; password: string }) => {
+    await api.auth.register(data);
+    // A freshly self-registered account is always role: "manager" (see
+    // routes/auth.ts's POST /auth/register) - no role branching needed.
+    window.location.href = "/admin";
   };
 
   const logout = async () => {
@@ -53,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = "/";
   };
 
-  return <AuthContext.Provider value={{ user, status, login, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, status, login, register, logout }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextValue {

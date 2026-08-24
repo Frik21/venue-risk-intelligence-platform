@@ -103,9 +103,10 @@ useEffect(() => {
 // manual chooser back to /cpo or /admin (a different concept entirely
 // from this company-scoped Management shell, which carries the Office
 // switcher) - none want this sidebar/header chrome, nor do the
-// full-bleed auth pages. "/" itself no longer renders anything (see
-// require-auth.tsx) so it's not listed here.
-const hideShell = (location === "/cpo" || location === "/owner" || location === "/quick-access" || location === "/login" || location === "/change-password") && !showShell;
+// full-bleed auth pages. "/" itself renders the public landing page
+// directly from require-auth.tsx, never reaching this component at
+// all, so it's not listed here either.
+const hideShell = (location === "/cpo" || location === "/owner" || location === "/quick-access" || location === "/login" || location === "/register" || location === "/change-password") && !showShell;
   // "/admin" needs the same exact-match treatment as "/" - otherwise
   // it'd also read as active on "/admin/users" (a real, distinct nav
   // item), since that path also starts with "/admin".

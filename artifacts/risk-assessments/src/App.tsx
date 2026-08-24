@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 import Layout from "@/components/layout";
 import Dashboard from "@/pages/dashboard";
 import LoginPage from "@/pages/login";
+import RegisterPage from "@/pages/register";
 import ChangePasswordPage from "@/pages/change-password";
 import { AuthProvider } from "@/lib/auth";
 import RequireAuth from "@/components/require-auth";
@@ -64,6 +65,7 @@ function Router() {
       <Layout>
       <Switch>
         <Route path="/login" component={LoginPage} />
+        <Route path="/register" component={RegisterPage} />
         <Route path="/change-password" component={ChangePasswordPage} />
         <Route path="/owner" component={OwnerDashboard} />
         <Route path="/quick-access" component={RoleSelect} />

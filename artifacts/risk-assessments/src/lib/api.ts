@@ -830,6 +830,8 @@ export const api = {
   auth: {
     login: (email: string, password: string) =>
       apiFetch<{ user: SessionUser }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+    register: (data: { companyName: string; tier?: CompanyTier; name: string; email: string; password: string }) =>
+      apiFetch<{ user: SessionUser }>("/auth/register", { method: "POST", body: JSON.stringify(data) }),
     logout: () => apiFetch<void>("/auth/logout", { method: "POST" }),
     me: () => apiFetch<{ user: SessionUser }>("/auth/me"),
     changePassword: (currentPassword: string, newPassword: string) =>

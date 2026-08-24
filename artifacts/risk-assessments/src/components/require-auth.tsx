@@ -27,9 +27,10 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
 
   if (status === "unauthenticated") {
     // "/" is the one page a logged-out visitor actually sees - the
-    // public marketing page (pages/landing.tsx). Everything else still
+    // public marketing page (pages/landing.tsx). /login and /register
+    // are the two real entry points from there. Everything else still
     // bounces straight to /login.
-    if (location === "/login") return <>{children}</>;
+    if (location === "/login" || location === "/register") return <>{children}</>;
     if (location === "/") return <LandingPage />;
     return <Redirect to="/login" />;
   }
@@ -39,7 +40,9 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   // else -> the Management Dashboard.
   const homeRoute = user?.role === "cpo" ? "/cpo" : user?.role === "admin" ? "/owner" : "/admin";
 
-  if (location === "/login") return <Redirect to={user?.mustChangePassword ? "/change-password" : homeRoute} />;
+  if (location === "/login" || location === "/register") {
+    return <Redirect to={user?.mustChangePassword ? "/change-password" : homeRoute} />;
+  }
 
   if (user?.mustChangePassword && location !== "/change-password") {
     return <Redirect to="/change-password" />;

@@ -13,14 +13,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-// Public marketing page, shown at "/" for anyone who isn't logged in
-// (see require-auth.tsx - this is the one page an unauthenticated
-// visitor actually gets to see, everything else redirects straight to
-// /login). No self-serve signup exists yet, so the only call to
-// action is "Log In" - per direct product direction, this is
-// deliberately pure marketing/informational for now, not a lead-
-// capture funnel. Content pulled from real, already-built features
-// and the Product Constitution's own language (docs/Product-
+// Public marketing page, shown at "/" for anyone who isn't logged in,
+// and for authenticated sessions too (see require-auth.tsx - being
+// logged in doesn't change what the homepage itself shows). Two calls
+// to action - "Register" (self-serve company signup, pages/
+// register.tsx) and "Log In" - both reachable from anywhere on this
+// page without scrolling. Content pulled from real, already-built
+// features and the Product Constitution's own language (docs/Product-
 // Constitution.md) rather than invented copy - nothing described here
 // is aspirational.
 const FEATURES = [
@@ -134,11 +133,16 @@ export default function LandingPage() {
             <div className="text-[10px] text-slate-500 uppercase tracking-widest leading-none mt-0.5">Risk Intelligence</div>
           </div>
         </div>
-        <Link href="/login">
-          <Button variant="outline" size="sm" className="border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white">
-            Log In
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2.5">
+          <Link href="/login">
+            <Button variant="outline" size="sm" className="border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white">
+              Log In
+            </Button>
+          </Link>
+          <Link href="/register">
+            <Button size="sm">Register</Button>
+          </Link>
+        </div>
       </header>
 
       <section className="px-6 md:px-10 py-20 md:py-28 max-w-4xl mx-auto text-center">
@@ -150,9 +154,14 @@ export default function LandingPage() {
           VenueGuard helps security professionals begin every operation with confidence, clarity, and context - from the field brief to the back office.
         </p>
         <div className="mt-10 flex items-center justify-center gap-4">
-          <Link href="/login">
+          <Link href="/register">
             <Button size="lg" className="gap-2">
-              Log In <ArrowRight className="w-4 h-4" />
+              Register <ArrowRight className="w-4 h-4" />
+            </Button>
+          </Link>
+          <Link href="/login">
+            <Button size="lg" variant="outline" className="border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white">
+              Log In
             </Button>
           </Link>
         </div>
@@ -208,11 +217,16 @@ export default function LandingPage() {
           <ShieldAlert className="w-4 h-4" />
           VenueGuard Risk Intelligence
         </div>
-        <Link href="/login">
-          <Button variant="outline" size="sm" className="border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white">
-            Log In
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2.5">
+          <Link href="/login">
+            <Button variant="outline" size="sm" className="border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white">
+              Log In
+            </Button>
+          </Link>
+          <Link href="/register">
+            <Button size="sm">Register</Button>
+          </Link>
+        </div>
       </footer>
     </div>
   );

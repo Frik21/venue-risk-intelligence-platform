@@ -14,6 +14,8 @@ import {
   verifyPassword,
 } from "../lib/auth";
 
+const TIERS = ["enterprise", "micro_enterprise"] as const;
+
 // Deliberately NOT behind requireAuth (except /me and /change-password,
 // gated per-route below) - registered in routes/index.ts before the
 // central auth gate so login works with no session yet, and logout
@@ -80,6 +82,57 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   const sessionId = await createSession(user.id);
   res.cookie(SESSION_COOKIE, sessionId, cookieOptions);
   res.json({ user: await formatSessionUser(user) });
+});
+
+const RegisterSchema = z.object({
+  companyName: z.string().trim().min(1).max(200),
+  tier: z.enum(TIERS).optional(),
+  name: z.string().trim().min(1).max(200),
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+
+// Self-service company signup - the only path into VenueGuard that
+// doesn't require an existing Owner/Manager to onboard you by hand.
+// Creates a brand-new company (status: "trial", matching every other
+// company-creation path - see companies.ts's POST /companies) and its
+// first user as role: "manager" (the natural "runs their own company"
+// role among the four company-side roles - "admin" is reserved for
+// the platform Owner and is never reachable from here). Unlike
+// admin-created users, the password is the one the person just typed
+// themselves, so there's no initialPassword/mustChangePassword song
+// and dance - they're logged straight into their new company.
+router.post("/auth/register", async (req, res): Promise<void> => {
+  const parsed = RegisterSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const email = parsed.data.email.toLowerCase();
+  const [existing] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, email));
+  if (existing) { res.status(409).json({ error: "An account with that email already exists" }); return; }
+
+  const [company] = await db
+    .insert(companiesTable)
+    .values({ name: parsed.data.companyName, tier: parsed.data.tier ?? "enterprise", status: "trial", isInternal: false })
+    .returning();
+
+  const initials = parsed.data.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+  const passwordHash = await hashPassword(parsed.data.password);
+  const [user] = await db
+    .insert(usersTable)
+    .values({
+      companyId: company.id,
+      name: parsed.data.name,
+      email,
+      role: "manager",
+      avatarInitials: initials,
+      passwordHash,
+      mustChangePassword: false,
+    })
+    .returning();
+
+  const sessionId = await createSession(user.id);
+  res.cookie(SESSION_COOKIE, sessionId, cookieOptions);
+  res.status(201).json({ user: await formatSessionUser(user) });
 });
 
 router.post("/auth/logout", async (req, res): Promise<void> => {
