@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ShieldAlert,
   ShieldCheck,
@@ -54,9 +56,62 @@ const FEATURES = [
   },
 ] as const;
 
+// Brief brand intro on arrival - the logo/wordmark rolls in, holds
+// briefly, then the whole overlay fades out as the real page fades in
+// underneath. Deliberately short (~1s total) so it reads as a
+// polished touch, not a delay - this is the first thing a stranger
+// clicking through from Google sees, not a splash screen someone has
+// to sit through on every visit thereafter (it's only ever mounted
+// once per page load, same as the rest of this component).
+function LogoIntro() {
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 bg-slate-950 flex items-center justify-center"
+      initial={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.35, ease: "easeInOut" }}
+    >
+      <motion.div
+        className="flex flex-col items-center gap-3"
+        initial={{ opacity: 0, scale: 0.85 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.45, ease: "easeOut" }}
+      >
+        <ShieldAlert className="w-10 h-10 text-blue-400" />
+        <div className="text-center overflow-hidden">
+          <motion.div
+            className="text-xl font-bold tracking-wide"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.15, ease: "easeOut" }}
+          >
+            VENUEGUARD
+          </motion.div>
+          <motion.div
+            className="text-xs text-slate-500 uppercase tracking-widest mt-0.5"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.35, delay: 0.25 }}
+          >
+            Risk Intelligence
+          </motion.div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 export default function LandingPage() {
+  const [showIntro, setShowIntro] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowIntro(false), 850);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-950 text-white">
+      <AnimatePresence>{showIntro && <LogoIntro />}</AnimatePresence>
       <header className="flex items-center justify-between px-6 md:px-10 h-16 border-b border-slate-900">
         <div className="flex items-center gap-2.5">
           <ShieldAlert className="w-5 h-5 text-blue-400" />
