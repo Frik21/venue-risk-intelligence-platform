@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { useAuth } from "@/lib/auth";
 import {
   ShieldCheck,
   Gauge,
@@ -34,9 +35,20 @@ import {
 // as placeholders until each one actually exists. "Enterprise" is
 // stale now that tiers are gone (see the seat-model note) but left as
 // a placeholder rather than removed outright - not asked for.
+//
+// requiresPreview: true tiles (CPO/Management/Operations/Finance/HR)
+// land on a company-scoped page with no company context unless the
+// Owner is actively previewing a Test Company - require-auth.tsx's
+// catch-all bounces a plain (non-previewing) Owner straight back to
+// /owner, since there's nothing real to show. Previously that just
+// silently kicked you back with no explanation, reported directly as
+// "clicking Quick Access takes me to the Owner Console." Fixed by
+// disabling those specific tiles up front (matching the "Coming soon"
+// treatment, but explaining why) until a Preview is actually running.
 const TILES = [
   {
     href: "/cpo",
+    requiresPreview: true,
     icon: ShieldCheck,
     iconColor: "text-sky-300",
     label: "CPO",
@@ -44,6 +56,7 @@ const TILES = [
   },
   {
     href: "/admin",
+    requiresPreview: true,
     icon: Gauge,
     iconColor: "text-amber-300",
     label: "Management",
@@ -51,6 +64,7 @@ const TILES = [
   },
   {
     href: "/admin",
+    requiresPreview: true,
     icon: Workflow,
     iconColor: "text-emerald-300",
     label: "Operations",
@@ -58,6 +72,7 @@ const TILES = [
   },
   {
     href: "/admin",
+    requiresPreview: true,
     icon: Wallet,
     iconColor: "text-violet-300",
     label: "Finance",
@@ -65,6 +80,7 @@ const TILES = [
   },
   {
     href: "/admin",
+    requiresPreview: true,
     icon: Users2,
     iconColor: "text-rose-300",
     label: "Human Resources",
@@ -72,6 +88,7 @@ const TILES = [
   },
   {
     href: null,
+    requiresPreview: false,
     icon: Cpu,
     iconColor: "text-slate-400",
     label: "IT",
@@ -79,6 +96,7 @@ const TILES = [
   },
   {
     href: "/",
+    requiresPreview: false,
     icon: Globe,
     iconColor: "text-cyan-300",
     label: "Landing Page",
@@ -86,6 +104,7 @@ const TILES = [
   },
   {
     href: "/owner",
+    requiresPreview: false,
     icon: CreditCard,
     iconColor: "text-emerald-300",
     label: "Subscriptions",
@@ -93,6 +112,7 @@ const TILES = [
   },
   {
     href: null,
+    requiresPreview: false,
     icon: Building2,
     iconColor: "text-slate-400",
     label: "Enterprise",
@@ -100,14 +120,18 @@ const TILES = [
   },
   {
     href: null,
+    requiresPreview: false,
     icon: UserCog,
     iconColor: "text-slate-400",
     label: "Single Operator",
     description: "Not built yet.",
   },
-] as const satisfies readonly { href: string | null; icon: typeof Cpu; iconColor: string; label: string; description: string }[];
+] as const satisfies readonly { href: string | null; requiresPreview: boolean; icon: typeof Cpu; iconColor: string; label: string; description: string }[];
 
 export default function RoleSelect() {
+  const { user } = useAuth();
+  const isPreviewing = user?.isPreviewing ?? false;
+
   return (
     <div className="min-h-screen bg-slate-950 text-white p-8 flex items-center justify-center relative">
       <Link
@@ -129,11 +153,17 @@ export default function RoleSelect() {
         <div>
           <p className="text-sky-300 text-sm">Quick Access</p>
           <h1 className="text-3xl font-bold mt-1">Where do you want to go?</h1>
+          {!isPreviewing && (
+            <p className="text-xs text-slate-500 mt-2 max-w-md mx-auto">
+              Start a Preview on your Test Company from the Owner Console to unlock the CPO/Management tiles below.
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-left">
-          {TILES.map((tile) =>
-            tile.href ? (
+          {TILES.map((tile) => {
+            const locked = tile.requiresPreview && !isPreviewing;
+            return tile.href && !locked ? (
               <Link
                 key={tile.label}
                 href={tile.href}
@@ -155,13 +185,15 @@ export default function RoleSelect() {
                 <div className="flex items-center justify-between">
                   <h2 className="text-xl font-bold text-slate-500">{tile.label}</h2>
                   <span className="text-[10px] uppercase tracking-widest text-slate-600 border border-slate-700 rounded px-1.5 py-0.5">
-                    Coming soon
+                    {locked ? "Start Preview first" : "Coming soon"}
                   </span>
                 </div>
-                <p className="text-sm text-slate-500 mt-1">{tile.description}</p>
+                <p className="text-sm text-slate-500 mt-1">
+                  {locked ? "Requires an active Preview on your Test Company." : tile.description}
+                </p>
               </div>
-            ),
-          )}
+            );
+          })}
         </div>
       </div>
     </div>
