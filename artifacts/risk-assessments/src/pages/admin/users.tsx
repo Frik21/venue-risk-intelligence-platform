@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 // Manager, Finance, Human Resources, Operations: a subscribed
 // company's own Management-side seats - what this page manages. CPOs
 // and Admin (VenueGuard's own platform-owner role, repurposed as the
-// real Owner Console at /owner) are deliberately not managed here:
+// real Master Console at /owner) are deliberately not managed here:
 // CPOs are a separate, seat-limited pool onboarded via Operator
 // Database instead; Admin isn't tied to any one company at all, so it
 // can't be a selectable role on a company-scoped Users page.
@@ -52,7 +52,7 @@ const MANAGEMENT_ROLES: ManagementRole[] = ["manager", "operations", "finance", 
 // Manager/Finance/HR/Operations user adjusting their own company's
 // seats, via GET/PATCH /users/seats (self-service, not admin-only).
 // Covers both the four Management roles and CPO (Operators note) -
-// the CPO row is visually separated to match the Owner Console's own
+// the CPO row is visually separated to match the Master Console's own
 // treatment of it as a completely separate pool, not a fifth role.
 function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
   const { data, isLoading } = useQuery<{
@@ -290,7 +290,7 @@ export default function UsersPage() {
   // Neither CPOs nor Admin are managed from here. CPOs are a separate,
   // seat-limited pool onboarded via Operator Database instead, per
   // direct product direction. Admin is VenueGuard's own platform-owner
-  // role (see the Owner Console at /owner) - not tied to any one
+  // role (see the Master Console at /owner) - not tied to any one
   // company, so it can't appear on a company-scoped Users page at all.
   // Filtered out before office-scoping so neither shows up in the
   // roster below or the role-count tiles.

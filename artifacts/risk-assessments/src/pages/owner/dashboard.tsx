@@ -343,7 +343,7 @@ export default function OwnerDashboard() {
         <ShieldAlert className="w-5 h-5 text-blue-400" />
         <div>
           <div className="text-sm font-bold tracking-wide">VENUEGUARD</div>
-          <div className="text-[10px] text-slate-500 uppercase tracking-widest -mt-0.5">Owner Console</div>
+          <div className="text-[10px] text-slate-500 uppercase tracking-widest -mt-0.5">Master Console</div>
         </div>
         <div className="flex-1" />
         {/* Owner-only manual chooser (/quick-access, see require-auth.tsx

@@ -70,7 +70,7 @@ router.post("/users", async (req, res): Promise<void> => {
   // in its own company (the client-supplied companyId is ignored, not
   // trusted). The Owner is the one exception: they have no company of
   // their own, so *their* client-supplied companyId is what lets them
-  // seed a company's first Manager from the Owner Console - falling
+  // seed a company's first Manager from the Master Console - falling
   // back to resolveCompanyId's "first company" only if they omit it.
   const companyId =
     parsed.data.role === "admin"
@@ -80,7 +80,7 @@ router.post("/users", async (req, res): Promise<void> => {
         : req.user!.companyId;
 
   // A Solo Operator company (see companies.ts's planType) is exactly
-  // one CPO seat by definition - the Owner Console's onboarding flow
+  // one CPO seat by definition - the Master Console's onboarding flow
   // only ever creates that one account, but nothing else stopped a
   // second POST /users(role: "cpo") against the same company. This is
   // that hard cap - the only other route that ever creates a "cpo" user

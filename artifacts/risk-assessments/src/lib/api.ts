@@ -859,7 +859,7 @@ export const api = {
     updateRates: (id: number, data: { dayRate: number | null; nightRate: number | null }) =>
       apiFetch<User>(`/users/${id}/rates`, { method: "PATCH", body: JSON.stringify(data) }),
     // Command Desk's own self-service seat view - distinct from the
-    // Owner Console's aggregate-only /companies surface (Owner-only).
+    // Master Console's aggregate-only /companies surface (Owner-only).
     // Any Management-side role can call these for its own company,
     // covering both the four Management roles and CPO (Operators
     // note). pricePerSeat rides along on each role's own usage object -

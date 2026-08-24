@@ -15,7 +15,7 @@ const STATUSES = ["trial", "active", "suspended", "cancelled"] as const;
 // "team" (the default) or "solo_operator" - a single freelance CPO's
 // own subscription, Operators Note only, no Management-side seats.
 // Enforced server-side by lib/auth.ts's blockSoloOperatorFromManagement,
-// not just a display label. Set at company creation, Owner Console
+// not just a display label. Set at company creation, Master Console
 // only for now - no self-serve signup path for this plan yet.
 export const PLAN_TYPES = ["team", "solo_operator"] as const;
 export type PlanType = (typeof PLAN_TYPES)[number];
@@ -24,7 +24,7 @@ export type PlanType = (typeof PLAN_TYPES)[number];
 // direct product direction. Every company gets this same fixed base
 // per Management-side role; companiesTable's additionalXSeats columns
 // track extra seats purchased beyond it, per role. Also exported for
-// the frontend (registration form, Owner Console) so the base numbers
+// the frontend (registration form, Master Console) so the base numbers
 // can't drift out of sync between the two.
 export const BASE_SEATS_BY_ROLE = {
   manager: 8,
@@ -285,7 +285,7 @@ router.get("/companies/pricing/history", async (_req, res): Promise<void> => {
 
 // One field per call, either as a direct new dollar value ("set the
 // current price") or as a percentage change ("increase by X%") - per
-// direct product direction, the Owner Console needs both. Whichever is
+// direct product direction, the Master Console needs both. Whichever is
 // given, the other is derived server-side so pricing_history's own
 // record of what happened can never disagree with what actually got
 // saved to pricingConfigTable. percentageChange is stored as entered

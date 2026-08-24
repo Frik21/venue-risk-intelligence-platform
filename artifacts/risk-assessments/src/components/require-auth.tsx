@@ -36,7 +36,7 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   }
 
   // Where a logged-in session actually belongs - cpo -> its own
-  // Operational Canvas, admin (Owner) -> the Owner Console, everyone
+  // Operational Canvas, admin (Owner) -> the Master Console, everyone
   // else -> the Management Dashboard.
   const homeRoute = user?.role === "cpo" ? "/cpo" : user?.role === "admin" ? "/owner" : "/admin";
 

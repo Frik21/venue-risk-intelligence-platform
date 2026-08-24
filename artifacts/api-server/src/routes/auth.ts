@@ -194,7 +194,7 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
 // Lets the Owner browse the Management/CPO pages for testing/QA,
 // scoped to the internal test company only - never a real subscriber.
 // The isInternal check here is the actual enforcement of that boundary
-// (not just the Owner Console UI only showing a Preview button on that
+// (not just the Master Console UI only showing a Preview button on that
 // one row) - a request for any other company's id is rejected outright.
 router.post("/auth/preview/:companyId", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
   const companyId = Number(req.params.companyId);

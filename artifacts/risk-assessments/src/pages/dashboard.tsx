@@ -1535,7 +1535,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
                 }}
               >
                 <Building2 className="w-4 h-4" />
-                Back to Owner Console
+                Back to Master Console
               </button>
             )}
             <button

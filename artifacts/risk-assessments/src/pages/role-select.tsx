@@ -19,7 +19,7 @@ import {
 // Owner-only fast-path (see require-auth.tsx - non-admin sessions
 // never reach this route). Used to be the default landing page at "/"
 // before real auth existed; now it's a manual shortcut reachable via a
-// button on the Owner Console header (pages/owner/dashboard.tsx), for
+// button on the Master Console header (pages/owner/dashboard.tsx), for
 // jumping straight into whatever's currently the Test Company's
 // Management/CPO pages during Preview, without digging through either
 // app's own nav. Not a role/auth gate itself - the tiles with an href
@@ -42,7 +42,7 @@ import {
 // catch-all bounces a plain (non-previewing) Owner straight back to
 // /owner, since there's nothing real to show. Previously that just
 // silently kicked you back with no explanation, reported directly as
-// "clicking Quick Access takes me to the Owner Console." Fixed by
+// "clicking Quick Access takes me to the Master Console." Fixed by
 // disabling those specific tiles up front (matching the "Coming soon"
 // treatment, but explaining why) until a Preview is actually running.
 const TILES = [
@@ -108,7 +108,7 @@ const TILES = [
     icon: CreditCard,
     iconColor: "text-emerald-300",
     label: "Subscriptions",
-    description: "Owner Console - plan, status, and seats for every subscriber.",
+    description: "Master Console - plan, status, and seats for every subscriber.",
   },
   {
     href: null,
@@ -139,7 +139,7 @@ export default function RoleSelect() {
         className="absolute top-6 left-6 flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
-        Owner Console
+        Master Console
       </Link>
       <div className="max-w-5xl w-full mx-auto space-y-10 text-center">
         <div className="flex flex-col items-center gap-3">
@@ -155,7 +155,7 @@ export default function RoleSelect() {
           <h1 className="text-3xl font-bold mt-1">Where do you want to go?</h1>
           {!isPreviewing && (
             <p className="text-xs text-slate-500 mt-2 max-w-md mx-auto">
-              Start a Preview on your Test Company from the Owner Console to unlock the CPO/Management tiles below.
+              Start a Preview on your Test Company from the Master Console to unlock the CPO/Management tiles below.
             </p>
           )}
         </div>

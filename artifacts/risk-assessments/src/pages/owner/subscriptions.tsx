@@ -142,12 +142,12 @@ export default function SubscriptionsPage() {
         <ShieldAlert className="w-5 h-5 text-blue-400" />
         <div>
           <div className="text-sm font-bold tracking-wide">VENUEGUARD</div>
-          <div className="text-[10px] text-slate-500 uppercase tracking-widest -mt-0.5">Owner Console</div>
+          <div className="text-[10px] text-slate-500 uppercase tracking-widest -mt-0.5">Master Console</div>
         </div>
         <div className="flex-1" />
         <Link href="/owner" className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors">
           <ArrowLeft className="w-3.5 h-3.5" />
-          Owner Console
+          Master Console
         </Link>
       </header>
 
@@ -155,7 +155,7 @@ export default function SubscriptionsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Subscriptions</h1>
           <p className="text-slate-500 text-sm mt-0.5">
-            Directional pricing only - no payment processor is connected yet, this controls the estimates shown across the Owner Console.
+            Directional pricing only - no payment processor is connected yet, this controls the estimates shown across the Master Console.
           </p>
           {summary && (
             <p className="text-slate-400 text-xs mt-1">

@@ -50,7 +50,7 @@ export default function RegisterPage() {
 
         {isOwnerTesting && (
           <div className="bg-violet-500/10 border border-violet-500/30 text-violet-300 text-xs rounded-lg p-3 text-center">
-            You're signed in as the Owner - this creates a real company, but you'll stay logged in as yourself and return to the Owner Console.
+            You're signed in as the Owner - this creates a real company, but you'll stay logged in as yourself and return to the Master Console.
           </div>
         )}
 

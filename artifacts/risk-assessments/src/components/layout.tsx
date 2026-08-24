@@ -99,7 +99,7 @@ useEffect(() => {
   };
 }, []);
 // "/cpo" is the CPO's own full-screen Operational Canvas, "/owner" is
-// the platform Owner's own console, and "/quick-access" is the Owner's
+// the platform Owner's own Master Console, and "/quick-access" is the Owner's
 // manual chooser back to /cpo or /admin (a different concept entirely
 // from this company-scoped Management shell, which carries the Office
 // switcher) - none want this sidebar/header chrome, nor do the
@@ -265,7 +265,7 @@ const hideShell = (location === "/cpo" || location === "/owner" || location === 
               {/* Back to /owner without ending Preview - distinct from
                   "Exit Preview" below, which does end the session. */}
               <Link href="/owner" className="underline decoration-dotted hover:text-violet-900">
-                Owner Console
+                Master Console
               </Link>
               <span className="text-violet-300">·</span>
               <button
