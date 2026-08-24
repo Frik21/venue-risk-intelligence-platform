@@ -3,6 +3,7 @@ import { eq, asc, desc, count, max } from "drizzle-orm";
 import { db, companiesTable, usersTable, venuesTable, clientsTable, tasksTable, pricingConfigTable, pricingHistoryTable } from "@workspace/db";
 import { z } from "zod";
 import { requireRole } from "../lib/auth";
+import { getExchangeRate, currencyForCountry, SUPPORTED_CURRENCY_CODES } from "../lib/currency";
 
 const router: IRouter = Router();
 // Owner-only - the one surface a companyId: null session is allowed to
@@ -281,6 +282,39 @@ function formatPricingHistory(row: typeof pricingHistoryTable.$inferSelect) {
 router.get("/companies/pricing/history", async (_req, res): Promise<void> => {
   const rows = await db.select().from(pricingHistoryTable).orderBy(desc(pricingHistoryTable.changedAt));
   res.json(rows.map(formatPricingHistory));
+});
+
+export const PRICING_CURRENCY_CODES = SUPPORTED_CURRENCY_CODES;
+
+// Backs the Master Console's own "which currency am I working in"
+// selector (pages/owner/subscriptions.tsx) - lets the Owner view/set
+// prices in a currency other than the canonical USD everything is
+// actually stored in (pricingConfigTable, pricing_history). The
+// frontend converts both directions around this rate; the backend
+// itself never receives or stores anything but USD, so nothing here
+// changes what /companies/pricing/change actually persists.
+router.get("/companies/pricing/fx", async (req, res): Promise<void> => {
+  const code = String(req.query.currency ?? "USD").toUpperCase();
+  if (!(SUPPORTED_CURRENCY_CODES as readonly string[]).includes(code)) {
+    res.status(400).json({ error: "Unsupported currency" });
+    return;
+  }
+  const rate = await getExchangeRate(code);
+  res.json({ code, rate });
+});
+
+// Backs the Master Console's "use my location" button - the CPO
+// Operational Canvas already has a real location engine (browser
+// geolocation + reverse geocoding, see components/location-search.tsx's
+// resolveCurrentLocation) that resolves a country name; this endpoint
+// is the missing link turning that country into a currency the working-
+// currency selector can actually use, via the same map the subscriber-
+// facing engine resolves through - not a second implementation.
+router.get("/companies/pricing/currency-for-country", async (req, res): Promise<void> => {
+  const country = String(req.query.country ?? "");
+  const code = country ? currencyForCountry(country) : null;
+  const supported = code != null && (SUPPORTED_CURRENCY_CODES as readonly string[]).includes(code);
+  res.json({ code: supported ? code : null });
 });
 
 // One field per call, either as a direct new dollar value ("set the

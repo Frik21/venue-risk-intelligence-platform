@@ -88,13 +88,18 @@ const COUNTRY_TO_CURRENCY: Record<string, string> = {
 // major currencies - free, no API key, updated daily on ECB business
 // days. Anything outside this set falls back to USD display rather
 // than showing a currency label with no real rate behind it.
-const SUPPORTED_BY_RATE_SOURCE = new Set([
+export const SUPPORTED_CURRENCY_CODES = [
   "AUD", "BGN", "BRL", "CAD", "CHF", "CNY", "CZK", "DKK", "EUR", "GBP",
   "HKD", "HUF", "IDR", "ILS", "INR", "ISK", "JPY", "KRW", "MXN", "MYR",
   "NOK", "NZD", "PHP", "PLN", "RON", "SEK", "SGD", "THB", "TRY", "USD", "ZAR",
-]);
+] as const;
+const SUPPORTED_BY_RATE_SOURCE = new Set<string>(SUPPORTED_CURRENCY_CODES);
 
-function currencyForCountry(country: string): string | null {
+// Exported directly for the Master Console's "use my location" currency
+// detection (routes/companies.ts's GET /companies/pricing/currency-for-
+// country) - reuses the exact same map the subscriber-facing engine
+// below resolves through, rather than a second copy that could drift.
+export function currencyForCountry(country: string): string | null {
   return COUNTRY_TO_CURRENCY[normalizeCountryName(country)] ?? null;
 }
 
@@ -127,7 +132,11 @@ async function fetchLiveRate(code: string): Promise<number | null> {
   }
 }
 
-async function getExchangeRate(code: string): Promise<number> {
+// Exported directly for the Master Console's own "which currency am I
+// working in" selector (routes/companies.ts's GET /companies/pricing/fx)
+// - unlike resolveCurrency below, this isn't derived from any office,
+// it's a straight rate lookup for a currency code the Owner picked.
+export async function getExchangeRate(code: string): Promise<number> {
   if (code === "USD") return 1;
   if (!SUPPORTED_BY_RATE_SOURCE.has(code)) return 1;
 

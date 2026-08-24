@@ -209,6 +209,18 @@ export interface CompanyCurrency {
   rate: number;
 }
 
+// Currencies the live-rate engine actually covers (mirrors the
+// backend's lib/currency.ts SUPPORTED_CURRENCY_CODES - duplicated with
+// an explicit sync comment rather than a shared package, matching this
+// codebase's small-explicit-helper convention already used for
+// BASE_SEATS_BY_ROLE below). Backs the Master Console's own currency
+// selector - only currencies with a real rate behind them are offered.
+export const SUPPORTED_CURRENCY_CODES = [
+  "AUD", "BGN", "BRL", "CAD", "CHF", "CNY", "CZK", "DKK", "EUR", "GBP",
+  "HKD", "HUF", "IDR", "ILS", "INR", "ISK", "JPY", "KRW", "MXN", "MYR",
+  "NOK", "NZD", "PHP", "PLN", "RON", "SEK", "SGD", "THB", "TRY", "USD", "ZAR",
+] as const;
+
 // A subscriber of VenueGuard itself - the Owner page's own entity, not
 // a company-side concept. Aggregate-only fields (counts, timestamps) -
 // never row-level content from that company's own data.
@@ -974,6 +986,19 @@ export const api = {
     summary: () => apiFetch<CompanySummary>("/companies/summary"),
     pricing: () => apiFetch<PricingConfig>("/companies/pricing"),
     pricingHistory: () => apiFetch<PricingHistoryEntry[]>("/companies/pricing/history"),
+    // Backs the Master Console's "which currency am I working in"
+    // selector (pages/owner/subscriptions.tsx) - a live rate for the
+    // picked code, via the same engine (lib/currency.ts) that converts
+    // Command Desk's own subscriber-facing seat prices. Pure display/
+    // input conversion - prices are still stored and logged in USD
+    // regardless of what currency this dialog is set to.
+    pricingFx: (currency: string) => apiFetch<CompanyCurrency>(`/companies/pricing/fx?currency=${currency}`),
+    // "Use my location" on the working-currency selector - the CPO
+    // Operational Canvas's own location engine (resolveCurrentLocation,
+    // components/location-search.tsx) resolves a country name; this
+    // turns it into a currency code, or null if unrecognized/unsupported.
+    currencyForCountry: (country: string) =>
+      apiFetch<{ code: string | null }>(`/companies/pricing/currency-for-country?country=${encodeURIComponent(country)}`),
     // Exactly one of newValue ("set the current price") or
     // percentageChange ("increase by X%") - see the backend's
     // POST /companies/pricing/change, which derives the other and logs
