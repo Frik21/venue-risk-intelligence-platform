@@ -1,6 +1,7 @@
 import { useLocation, Redirect } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { ShieldAlert } from "lucide-react";
+import LandingPage from "@/pages/landing";
 
 // Wraps App.tsx's whole <Switch> (outside <Layout>, so /login itself
 // renders full-bleed with no sidebar chrome). Redirects to /login when
@@ -25,7 +26,12 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   }
 
   if (status === "unauthenticated") {
-    return location === "/login" ? <>{children}</> : <Redirect to="/login" />;
+    // "/" is the one page a logged-out visitor actually sees - the
+    // public marketing page (pages/landing.tsx). Everything else still
+    // bounces straight to /login.
+    if (location === "/login") return <>{children}</>;
+    if (location === "/") return <LandingPage />;
+    return <Redirect to="/login" />;
   }
 
   // Where a logged-in session actually belongs - cpo -> its own
