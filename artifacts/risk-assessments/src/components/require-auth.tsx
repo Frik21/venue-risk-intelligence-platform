@@ -49,14 +49,14 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
     return <Redirect to={homeRoute} />;
   }
 
-  // "/" isn't a real page anymore (role-select.tsx's manual "Where do
-  // you want to go?" chooser moved to /quick-access, Owner-only -
-  // Preview mode already covers what "/" itself was for, and it
-  // doubled as a way for any logged-in user to poke into another
-  // department's dashboard). Anyone landing on the bare root just gets
-  // sent to their own home route.
+  // "/" shows the same public landing page a logged-out visitor sees,
+  // even for an already-authenticated session - being logged in
+  // shouldn't change what the homepage itself shows, same as any real
+  // marketing site (visiting google.com doesn't skip you into Gmail
+  // just because you're signed in). Getting into the actual app is
+  // still one click away via the page's own "Log In" button.
   if (location === "/") {
-    return <Redirect to={homeRoute} />;
+    return <LandingPage />;
   }
 
   if (location === "/quick-access" && user?.role !== "admin") {
