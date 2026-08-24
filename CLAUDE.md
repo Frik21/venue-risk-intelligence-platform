@@ -14,6 +14,8 @@ Never silently redesign VenueGuard. Engineering serves the product. The Product 
 
 # Product Vision & Business Model
 
+VenueGuard is the product name (still subject to change later, per direct product direction). The company behind it is **Vivarium** - surfaced today as a "Powered by Vivarium" attribution in the landing page's logo intro animation (`pages/landing.tsx`), the one place this is currently referenced in the app.
+
 VenueGuard has two sides:
 
 - **Management side**: the full admin app (Tasks, Quotes, Invoices, Clients, Vendors, Operator Database, Users, etc.) - used by Manager/Finance/Human Resources/Operations staff.
