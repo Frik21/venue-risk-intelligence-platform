@@ -58,7 +58,7 @@ const FEATURES = [
 
 // Brief brand intro on arrival - the logo/wordmark rolls in, holds
 // briefly, then the whole overlay fades out as the real page fades in
-// underneath. Deliberately short (~1s total) so it reads as a
+// underneath. Deliberately short (~1.5s total) so it reads as a
 // polished touch, not a delay - this is the first thing a stranger
 // clicking through from Google sees, not a splash screen someone has
 // to sit through on every visit thereafter (it's only ever mounted
@@ -105,7 +105,7 @@ export default function LandingPage() {
   const [showIntro, setShowIntro] = useState(true);
 
   useEffect(() => {
-    const timer = setTimeout(() => setShowIntro(false), 850);
+    const timer = setTimeout(() => setShowIntro(false), 1500);
     return () => clearTimeout(timer);
   }, []);
 
