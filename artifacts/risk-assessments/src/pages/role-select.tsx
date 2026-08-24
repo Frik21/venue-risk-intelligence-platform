@@ -26,9 +26,10 @@ import {
 // like clicking into them normally would. Operations/Finance/Human
 // Resources are extra entry points into that one dashboard, not
 // separately scoped views - per direct product direction, revisit if
-// role-scoped dashboards are wanted later. IT has no destination yet
-// (href: null) - deliberately left as a placeholder, not wired to
-// /admin like the others, until there's an actual IT-specific surface.
+// role-scoped dashboards are wanted later. Landing Page links to "/"
+// itself (pages/landing.tsx) now that it's built; IT/Subscriptions/
+// Enterprise/Single Operator still have no destination (href: null) -
+// deliberately left as placeholders until each one actually exists.
 const TILES = [
   {
     href: "/cpo",
@@ -73,11 +74,11 @@ const TILES = [
     description: "Not built yet.",
   },
   {
-    href: null,
+    href: "/",
     icon: Globe,
-    iconColor: "text-slate-400",
+    iconColor: "text-cyan-300",
     label: "Landing Page",
-    description: "Not built yet.",
+    description: "The public marketing page - what a stranger sees before logging in.",
   },
   {
     href: null,
