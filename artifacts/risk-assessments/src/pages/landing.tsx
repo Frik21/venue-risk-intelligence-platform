@@ -97,6 +97,20 @@ function LogoIntro() {
           </motion.div>
         </div>
       </motion.div>
+
+      {/* VenueGuard is the product name; Vivarium is the company
+          behind it (product name still subject to change later, per
+          direct product direction) - a quiet attribution, not part of
+          the main brand reveal above, so it's smaller/more muted and
+          fades in last. */}
+      <motion.div
+        className="absolute bottom-6 right-6 text-[11px] text-slate-600 tracking-wide"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.35, delay: 0.4 }}
+      >
+        Powered by Vivarium
+      </motion.div>
     </motion.div>
   );
 }
