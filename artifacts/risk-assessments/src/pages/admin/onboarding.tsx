@@ -669,7 +669,7 @@ export default function OnboardingPage() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Operator Onboarding</h1>
-          <p className="text-slate-500 text-sm mt-0.5">Checklist progress and document verification for every CPO</p>
+          <p className="text-slate-500 text-sm mt-0.5">Checklist progress and document verification for every CPO using Operators note</p>
         </div>
         <Button onClick={() => setShowAdd(true)} className="shrink-0">
           <Plus className="w-4 h-4 mr-1.5" /> Add Operator

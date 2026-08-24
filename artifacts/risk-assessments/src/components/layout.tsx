@@ -186,12 +186,13 @@ const hideShell = (location === "/cpo" || location === "/owner" || location === 
       </div>
 
       <div className="p-3 border-t border-slate-800 shrink-0 space-y-2">
-        {/* Leaves this admin/manager shell entirely for the CPO's own
-            full-screen Operational Canvas (its own login/brief flow,
-            no persistent sidebar) - the reverse direction lives in
-            that flow's own operator menu ("Admin Dashboard"). Owner-
-            only sessions skip this: they have no company to preview a
-            CPO's (company-scoped) view as. */}
+        {/* Leaves this admin/manager shell (Command Desk) entirely for
+            the CPO's own full-screen Operational Canvas (Operators
+            note - its own login/brief flow, no persistent sidebar).
+            Labeled with that brand name directly (not the generic
+            "Operator View" it used to say) so it's clear which app
+            this jumps into. Owner-only sessions skip this: they have
+            no company to preview a CPO's (company-scoped) view as. */}
         {user?.role !== "admin" && (
           <Link
             href="/cpo"
@@ -199,7 +200,7 @@ const hideShell = (location === "/cpo" || location === "/owner" || location === 
             className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors border border-slate-800"
           >
             <ArrowLeftRight className="w-4 h-4 shrink-0" />
-            Operator View
+            Operators note
           </Link>
         )}
         <div className="flex items-center gap-2 px-2 py-2 rounded-md text-slate-400">
