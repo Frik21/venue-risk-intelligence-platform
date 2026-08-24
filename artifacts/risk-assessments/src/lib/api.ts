@@ -828,6 +828,16 @@ export const api = {
       apiFetch<User>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     updateRates: (id: number, data: { dayRate: number | null; nightRate: number | null }) =>
       apiFetch<User>(`/users/${id}/rates`, { method: "PATCH", body: JSON.stringify(data) }),
+    // Command Desk's own self-service seat view - distinct from the
+    // Owner Console's aggregate-only /companies surface (Owner-only).
+    // Any Management-side role can call these for its own company.
+    seats: () => apiFetch<{ seatsByRole: Record<ManagementRole, CompanySeatUsage> }>("/users/seats"),
+    updateSeats: (data: Partial<{
+      additionalManagerSeats: number;
+      additionalOperationsSeats: number;
+      additionalFinanceSeats: number;
+      additionalHumanResourcesSeats: number;
+    }>) => apiFetch<{ seatsByRole: Record<ManagementRole, CompanySeatUsage> }>("/users/seats", { method: "PATCH", body: JSON.stringify(data) }),
   },
   venues: {
     list: () => apiFetch<Venue[]>("/venues"),

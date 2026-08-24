@@ -32,8 +32,8 @@ export const BASE_SEATS_BY_ROLE = {
   finance: 5,
   human_resources: 5,
 } as const;
-type ManagementRole = keyof typeof BASE_SEATS_BY_ROLE;
-const MANAGEMENT_ROLES = Object.keys(BASE_SEATS_BY_ROLE) as ManagementRole[];
+export type ManagementRole = keyof typeof BASE_SEATS_BY_ROLE;
+export const MANAGEMENT_ROLES = Object.keys(BASE_SEATS_BY_ROLE) as ManagementRole[];
 
 // CPO seats (Operators note) follow the same base+additional shape but
 // are tracked completely separately from the four Management roles

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type User, type Office, type UserRole } from "@/lib/api";
+import { api, BASE_SEATS_BY_ROLE, type User, type Office, type UserRole, type ManagementRole, type CompanySeatUsage } from "@/lib/api";
 import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Users, Plus, ShieldCheck, Shield, Wallet, Users2, Workflow } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
@@ -44,6 +44,97 @@ const ROLE_LABELS: Partial<Record<UserRole, string>> = {
   human_resources: "Human Resources",
   operations:      "Operations",
 };
+
+const MANAGEMENT_ROLES: ManagementRole[] = ["manager", "operations", "finance", "human_resources"];
+
+// The Command Desk side of seat management, distinct from the Owner
+// Console's version of the same idea (pages/owner/dashboard.tsx) - a
+// Manager/Finance/HR/Operations user adjusting their own company's
+// seats, via GET/PATCH /users/seats (self-service, not admin-only).
+// CPO seats deliberately excluded - those live on Operator Database.
+function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
+  const { data, isLoading } = useQuery<{ seatsByRole: Record<ManagementRole, CompanySeatUsage> }>({
+    queryKey: ["users-seats"],
+    queryFn: api.users.seats,
+  });
+  const [additional, setAdditional] = useState<Record<ManagementRole, number>>({
+    manager: 0,
+    operations: 0,
+    finance: 0,
+    human_resources: 0,
+  });
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (!data) return;
+    setAdditional({
+      manager: data.seatsByRole.manager.additional,
+      operations: data.seatsByRole.operations.additional,
+      finance: data.seatsByRole.finance.additional,
+      human_resources: data.seatsByRole.human_resources.additional,
+    });
+  }, [data]);
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      api.users.updateSeats({
+        additionalManagerSeats: additional.manager,
+        additionalOperationsSeats: additional.operations,
+        additionalFinanceSeats: additional.finance,
+        additionalHumanResourcesSeats: additional.human_resources,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users-seats"] });
+      toast({ title: "Seats updated" });
+      onClose();
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md my-8 p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-bold">Additional Seats</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Every role starts with a fixed free base - add more if you need them. Additional seats are billed separately once billing exists; tracked here regardless.
+          </p>
+        </div>
+        {isLoading ? (
+          <div className="space-y-3">{Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
+        ) : (
+          <div className="space-y-3">
+            {MANAGEMENT_ROLES.map((role) => (
+              <div key={role} className="flex items-center justify-between gap-3">
+                <Label className="text-sm">
+                  {ROLE_LABELS[role]} <span className="text-slate-400 font-normal">({BASE_SEATS_BY_ROLE[role]} base)</span>
+                </Label>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">+</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    className="w-20 h-8 text-sm"
+                    value={additional[role]}
+                    onChange={(e) => setAdditional((s) => ({ ...s, [role]: Math.max(0, Number(e.target.value) || 0) }))}
+                  />
+                  <span className="text-xs text-slate-400 w-24">= {BASE_SEATS_BY_ROLE[role] + additional[role]} seats</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-3 pt-2">
+          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || isLoading}>
+            {mutation.isPending ? "Saving..." : "Save"}
+          </Button>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function NewUserDialog({ onClose }: { onClose: () => void }) {
   const { data: offices = [] } = useQuery<Office[]>({ queryKey: ["offices"], queryFn: api.offices.list });
@@ -141,10 +232,15 @@ function NewUserDialog({ onClose }: { onClose: () => void }) {
 
 export default function UsersPage() {
   const [showNew, setShowNew] = useState(false);
+  const [showSeats, setShowSeats] = useState(false);
 
   const { data: allUsers = [], isLoading } = useQuery<User[]>({
     queryKey: ["users"],
     queryFn: api.users.list,
+  });
+  const { data: seatsData } = useQuery<{ seatsByRole: Record<ManagementRole, CompanySeatUsage> }>({
+    queryKey: ["users-seats"],
+    queryFn: api.users.seats,
   });
   const [selectedOfficeId] = useSelectedOfficeId();
   // Neither CPOs nor Admin are managed from here. CPOs are a separate,
@@ -159,6 +255,7 @@ export default function UsersPage() {
   return (
     <div className="space-y-5">
       {showNew && <NewUserDialog onClose={() => setShowNew(false)} />}
+      {showSeats && <AdditionalSeatsDialog onClose={() => setShowSeats(false)} />}
 
       <div className="flex items-center justify-between gap-4">
         <div>
@@ -167,25 +264,34 @@ export default function UsersPage() {
             Manage Management-side users and access roles. No team grouping or granular per-user permissions exist yet - access is controlled entirely by the roles below. CPOs are managed separately, via Operator Database.
           </p>
         </div>
-        <Button onClick={() => setShowNew(true)}>
-          <Plus className="w-4 h-4 mr-1.5" /> Add User
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setShowSeats(true)}>
+            <Plus className="w-4 h-4 mr-1.5" /> Additional Seats
+          </Button>
+          <Button onClick={() => setShowNew(true)}>
+            <Plus className="w-4 h-4 mr-1.5" /> Add User
+          </Button>
+        </div>
       </div>
 
-      {/* Role explanation */}
+      {/* Role explanation - shows real seat usage (used/limit) once
+          the company's seat data has loaded (see AdditionalSeatsDialog
+          above for where the limit itself gets adjusted); falls back to
+          a plain office-scoped count on first load so the tiles aren't
+          empty while that query is still in flight. */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {(["manager", "finance", "human_resources", "operations"] as const).map((role) => {
           const Icon = ROLE_ICONS[role] ?? Shield;
           const inRole = users.filter(u => u.role === role);
-          const activeCount = inRole.filter(u => u.active).length;
+          const seat = seatsData?.seatsByRole[role];
           return (
             <Card key={role}>
               <CardContent className="p-4">
                 <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center mb-2", ROLE_COLORS[role])}>
                   <Icon className="w-4 h-4" />
                 </div>
-                <div className="text-xl font-bold">{inRole.length}</div>
-                <div className="text-xs text-slate-500">{ROLE_LABELS[role]}{inRole.length > 0 && ` · ${activeCount} active`}</div>
+                <div className="text-xl font-bold">{seat ? `${seat.used}/${seat.limit}` : inRole.length}</div>
+                <div className="text-xs text-slate-500">{ROLE_LABELS[role]}</div>
               </CardContent>
             </Card>
           );

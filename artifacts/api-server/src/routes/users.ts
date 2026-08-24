@@ -4,6 +4,7 @@ import { z } from "zod";
 import { eq, desc, and, count } from "drizzle-orm";
 import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 import { generateInitialPassword, hashPassword } from "../lib/auth";
+import { BASE_SEATS_BY_ROLE, MANAGEMENT_ROLES, type ManagementRole } from "./companies";
 
 const router: IRouter = Router();
 
@@ -102,6 +103,75 @@ router.post("/users", async (req, res): Promise<void> => {
     .values({ ...parsed.data, companyId, avatarInitials: initials, passwordHash, mustChangePassword: true })
     .returning();
   res.status(201).json({ ...formatUser(user), initialPassword });
+});
+
+async function buildSeatsByRole(companyId: number) {
+  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId));
+  if (!company) return null;
+
+  const counts = await db
+    .select({ role: usersTable.role, value: count() })
+    .from(usersTable)
+    .where(and(eq(usersTable.companyId, companyId), eq(usersTable.active, true)))
+    .groupBy(usersTable.role);
+  const usedByRole: Partial<Record<ManagementRole, number>> = {};
+  for (const r of counts) {
+    if (MANAGEMENT_ROLES.includes(r.role as ManagementRole)) usedByRole[r.role as ManagementRole] = r.value;
+  }
+
+  return MANAGEMENT_ROLES.reduce(
+    (acc, role) => {
+      const additional =
+        role === "manager"
+          ? company.additionalManagerSeats
+          : role === "operations"
+            ? company.additionalOperationsSeats
+            : role === "finance"
+              ? company.additionalFinanceSeats
+              : company.additionalHumanResourcesSeats;
+      acc[role] = { used: usedByRole[role] ?? 0, base: BASE_SEATS_BY_ROLE[role], additional, limit: BASE_SEATS_BY_ROLE[role] + additional };
+      return acc;
+    },
+    {} as Record<ManagementRole, { used: number; base: number; additional: number; limit: number }>,
+  );
+}
+
+// Command Desk's own self-service seat view - distinct from the Owner
+// Console's aggregate-only surface (routes/companies.ts, admin-only).
+// Any Management-side role can view/adjust its own company's seats,
+// same looseness this whole page already has ("No team grouping or
+// granular per-user permissions exist yet"). CPO seats deliberately
+// excluded - those live on Operator Database instead, not here.
+// Registered ahead of PATCH /users/:id below - "seats" would otherwise
+// match that route's :id param first.
+router.get("/users/seats", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+
+  const seatsByRole = await buildSeatsByRole(companyId);
+  if (!seatsByRole) { res.status(404).json({ error: "Company not found" }); return; }
+  res.json({ seatsByRole });
+});
+
+const SeatsUpdateSchema = z.object({
+  additionalManagerSeats: z.number().int().min(0).optional(),
+  additionalOperationsSeats: z.number().int().min(0).optional(),
+  additionalFinanceSeats: z.number().int().min(0).optional(),
+  additionalHumanResourcesSeats: z.number().int().min(0).optional(),
+});
+
+router.patch("/users/seats", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+
+  const parsed = SeatsUpdateSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  await db.update(companiesTable).set(parsed.data).where(eq(companiesTable.id, companyId));
+
+  const seatsByRole = await buildSeatsByRole(companyId);
+  if (!seatsByRole) { res.status(404).json({ error: "Company not found" }); return; }
+  res.json({ seatsByRole });
 });
 
 const UserUpdateSchema = z.object({
