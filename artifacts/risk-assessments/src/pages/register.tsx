@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
-import { ShieldAlert, ShieldCheck, Gauge, ArrowLeft } from "lucide-react";
+import { ShieldAlert, ShieldCheck, Gauge, ArrowLeft, X, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { api, MANAGEMENT_HOME_ROUTE, type PlanType, type ManagementRole } from "@/lib/api";
 
@@ -45,6 +46,7 @@ const PLAN_CHOICES: { value: PlanType; label: string; description: string; icon:
 
 export default function RegisterPage() {
   const { user, register } = useAuth();
+  const { toast } = useToast();
   const isOwnerTesting = user?.role === "admin";
   const [, navigate] = useLocation();
   const [planType, setPlanType] = useState<PlanType | null>(null);
@@ -56,6 +58,8 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [agreedToPrice, setAgreedToPrice] = useState(false);
+  const [paymentPanelOpen, setPaymentPanelOpen] = useState(false);
+  const [cardSaved, setCardSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -239,7 +243,12 @@ export default function RegisterPage() {
             <label className="flex items-start gap-2.5 cursor-pointer">
               <Checkbox
                 checked={agreedToPrice}
-                onCheckedChange={(checked) => setAgreedToPrice(checked === true)}
+                onCheckedChange={(checked) => {
+                  const isChecked = checked === true;
+                  setAgreedToPrice(isChecked);
+                  setPaymentPanelOpen(isChecked);
+                  if (!isChecked) setCardSaved(false);
+                }}
                 className="mt-0.5 border-slate-700"
               />
               <span className="text-xs text-slate-400">
@@ -248,6 +257,7 @@ export default function RegisterPage() {
                   {monthlyPrice != null ? `$${monthlyPrice}/month` : "..."}
                 </span>{" "}
                 subscription for {isSolo ? "Solo Operator" : "Management system"}.
+                {cardSaved && <span className="text-emerald-400 ml-1">Payment method saved.</span>}
               </span>
             </label>
             {error && <p className="text-sm text-red-400">{error}</p>}
@@ -262,6 +272,67 @@ export default function RegisterPage() {
           </form>
         )}
       </div>
+
+      {paymentPanelOpen && (
+        <>
+          <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setPaymentPanelOpen(false)} />
+          <div className="fixed inset-y-0 right-0 z-50 w-full max-w-sm bg-slate-900 border-l border-slate-800 p-6 overflow-y-auto animate-in slide-in-from-right duration-300">
+            <div className="flex items-start justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-blue-400" />
+                <h2 className="text-lg font-semibold text-white">Payment Details</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPaymentPanelOpen(false)}
+                className="text-slate-500 hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-5">
+              {monthlyPrice != null ? `$${monthlyPrice}/month` : "..."} - {isSolo ? "Solo Operator" : "Management system"}
+            </p>
+
+            <div className="bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs rounded-lg p-3 mb-5">
+              No payment processor is connected yet - Save Card applies no actual charge.
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <Label className="text-slate-300">Name on Card</Label>
+                <Input placeholder="Full name" className="bg-slate-950 border-slate-800 text-white mt-1" />
+              </div>
+              <div>
+                <Label className="text-slate-300">Card Number</Label>
+                <Input placeholder="1234 1234 1234 1234" autoComplete="cc-number" className="bg-slate-950 border-slate-800 text-white mt-1" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-slate-300">Expiry</Label>
+                  <Input placeholder="MM/YY" autoComplete="cc-exp" className="bg-slate-950 border-slate-800 text-white mt-1" />
+                </div>
+                <div>
+                  <Label className="text-slate-300">CVC</Label>
+                  <Input placeholder="123" autoComplete="cc-csc" className="bg-slate-950 border-slate-800 text-white mt-1" />
+                </div>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              className="w-full mt-6"
+              onClick={() => {
+                setCardSaved(true);
+                setPaymentPanelOpen(false);
+                toast({ title: "Payment method saved" });
+              }}
+            >
+              {`Save Card${monthlyPrice != null ? ` - $${monthlyPrice}/mo` : ""}`}
+            </Button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
