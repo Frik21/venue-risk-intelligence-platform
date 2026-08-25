@@ -208,17 +208,18 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   const [existing] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, email));
   if (existing) { res.status(409).json({ error: "An account with that email already exists" }); return; }
 
-  // Once a real Stripe account is connected, a validated card is
-  // required to register - re-checked here rather than trusting the
-  // frontend's own gating, matching this route's existing
-  // no-client-trust posture. Before Stripe is connected (this
-  // environment today), this block is a no-op and registration works
-  // exactly as it always has.
-  if (isStripeConfigured()) {
-    if (!parsed.data.stripeSetupIntentId || !(await verifySetupIntentSucceeded(parsed.data.stripeSetupIntentId))) {
-      res.status(400).json({ error: "Card validation is required" });
-      return;
-    }
+  // A card is only required for the "subscribe now" signup path, not
+  // the 14-day free trial (which deliberately collects no card at all,
+  // per direct product direction) - so this can't be gated on
+  // isStripeConfigured() alone the way it used to be, since a trial
+  // signup legitimately has no stripeSetupIntentId even with Stripe
+  // connected. Whenever the frontend does send one, it's still
+  // re-verified server-side rather than trusted as a client claim,
+  // matching this route's existing no-client-trust posture (e.g.
+  // callerIsOwner below).
+  if (parsed.data.stripeSetupIntentId && !(await verifySetupIntentSucceeded(parsed.data.stripeSetupIntentId))) {
+    res.status(400).json({ error: "Card validation is required" });
+    return;
   }
 
   const isSoloOperator = parsed.data.planType === "solo_operator";

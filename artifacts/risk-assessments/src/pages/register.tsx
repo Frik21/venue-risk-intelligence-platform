@@ -259,7 +259,13 @@ export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [agreedToPrice, setAgreedToPrice] = useState(false);
+  // Two mutually exclusive paths, per direct product direction: someone
+  // who already knows VenueGuard and wants to subscribe directly goes
+  // straight into the card panel and starts on the paid plan; someone
+  // starting the 14-day free trial skips card collection entirely -
+  // nothing to validate or charge for a trial, so the panel never opens
+  // for that path.
+  const [signupPath, setSignupPath] = useState<"subscribe" | "trial" | null>(null);
   const [paymentPanelOpen, setPaymentPanelOpen] = useState(false);
   const [cardSaved, setCardSaved] = useState(false);
   const [stripeSetupIntentId, setStripeSetupIntentId] = useState<string | null>(null);
@@ -294,8 +300,27 @@ export default function RegisterPage() {
     name.trim() &&
     email.trim() &&
     password.length >= 8 &&
-    agreedToPrice &&
-    (!stripeEnabled || cardSaved);
+    signupPath != null &&
+    (signupPath !== "subscribe" || cardSaved);
+
+  // Selecting "Subscribe now" and "Start 14-day free trial" are
+  // exclusive - picking one always clears the other's state rather than
+  // letting both be active. Re-picking the already-selected option
+  // deselects it, matching the tick-box interaction the panel started
+  // from.
+  const selectSignupPath = (path: "subscribe" | "trial") => {
+    if (signupPath === path) {
+      setSignupPath(null);
+      setPaymentPanelOpen(false);
+      setCardSaved(false);
+      setStripeSetupIntentId(null);
+      return;
+    }
+    setSignupPath(path);
+    setCardSaved(false);
+    setStripeSetupIntentId(null);
+    setPaymentPanelOpen(path === "subscribe");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -463,29 +488,31 @@ export default function RegisterPage() {
               />
               <p className="text-xs text-slate-500 mt-1">At least 8 characters.</p>
             </div>
-            <label className="flex items-start gap-2.5 cursor-pointer">
-              <Checkbox
-                checked={agreedToPrice}
-                onCheckedChange={(checked) => {
-                  const isChecked = checked === true;
-                  setAgreedToPrice(isChecked);
-                  setPaymentPanelOpen(isChecked);
-                  if (!isChecked) {
-                    setCardSaved(false);
-                    setStripeSetupIntentId(null);
-                  }
-                }}
-                className="mt-0.5 border-slate-700"
-              />
-              <span className="text-xs text-slate-400">
-                I agree to the{" "}
-                <span className="text-white font-medium">
-                  {monthlyPrice != null ? `$${monthlyPrice}/month` : "..."}
-                </span>{" "}
-                subscription for {isSolo ? "Solo Operator" : "Management system"}.
-                {cardSaved && <span className="text-emerald-400 ml-1">Payment method saved.</span>}
-              </span>
-            </label>
+            <div className="space-y-2.5">
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <Checkbox
+                  checked={signupPath === "subscribe"}
+                  onCheckedChange={() => selectSignupPath("subscribe")}
+                  className="mt-0.5 border-slate-700"
+                />
+                <span className="text-xs text-slate-400">
+                  I already know VenueGuard - subscribe now at{" "}
+                  <span className="text-white font-medium">
+                    {monthlyPrice != null ? `$${monthlyPrice}/month` : "..."}
+                  </span>{" "}
+                  for {isSolo ? "Solo Operator" : "Management system"}.
+                  {cardSaved && <span className="text-emerald-400 ml-1">Payment method saved.</span>}
+                </span>
+              </label>
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <Checkbox
+                  checked={signupPath === "trial"}
+                  onCheckedChange={() => selectSignupPath("trial")}
+                  className="mt-0.5 border-slate-700"
+                />
+                <span className="text-xs text-slate-400">Start 14-day free trial - no card required.</span>
+              </label>
+            </div>
             {error && <p className="text-sm text-red-400">{error}</p>}
             <Button type="submit" className="w-full" disabled={submitting || !canSubmit}>
               {submitting ? "Creating..." : isOwnerTesting ? "Register" : "Create Account"}
