@@ -22,11 +22,13 @@ import {
 // jumping straight into whatever's currently the Test Company's
 // Management/CPO pages during Preview, without digging through either
 // app's own nav. Not a role/auth gate itself - the tiles with an href
-// land on either /cpo or the same /admin Management Dashboard, exactly
-// like clicking into them normally would. Operations/Finance/Human
-// Resources are extra entry points into that one dashboard, not
-// separately scoped views - per direct product direction, revisit if
-// role-scoped dashboards are wanted later. Landing Page links to "/"
+// land wherever clicking into them normally would. Operations/Human
+// Resources are still extra entry points into the general /admin
+// Management Dashboard, not separately scoped views - per direct
+// product direction, revisit if role-scoped dashboards are wanted for
+// those two as well. Finance now IS separately scoped, at
+// /admin/finance (Quotations/Invoices/Payroll) - the first of these to
+// get its own real dashboard, see CLAUDE.md's own note on it. Landing Page links to "/"
 // itself (pages/landing.tsx); Subscriptions links to /owner, where
 // plan/status/seats actually live now (see the single-plan seat model
 // and Solo Operator plan notes in CLAUDE.md). IT links to /owner/it -
@@ -76,12 +78,12 @@ const TILES = [
     description: "Management Dashboard - tasks, operators, costs, and reporting.",
   },
   {
-    href: "/admin",
+    href: "/admin/finance",
     requiresPreview: true,
     icon: Wallet,
     iconColor: "text-violet-300",
     label: "Finance",
-    description: "Management Dashboard - tasks, operators, costs, and reporting.",
+    description: "Finance Dashboard - Quotations, Invoices, and Payroll.",
   },
   {
     href: "/admin",
