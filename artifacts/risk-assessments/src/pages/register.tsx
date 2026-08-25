@@ -1,12 +1,14 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
 import { ShieldAlert, ShieldCheck, Gauge, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/lib/auth";
-import { MANAGEMENT_HOME_ROUTE, type PlanType, type ManagementRole } from "@/lib/api";
+import { api, MANAGEMENT_HOME_ROUTE, type PlanType, type ManagementRole } from "@/lib/api";
 
 // Same four roles/labels as Command Desk's own "Add User" dialog
 // (pages/admin/users.tsx) - "Position" on the signup form is really
@@ -53,11 +55,21 @@ export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [agreedToPrice, setAgreedToPrice] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Base subscription price, shown just above Register so the person
+  // signing up sees what they're committing to before the account is
+  // created - per direct product direction. Unauthenticated endpoint
+  // (routes/auth.ts's GET /auth/pricing) since no session/company
+  // exists yet at this point; always USD for the same reason (no office
+  // yet for the currency engine to derive a local currency from).
+  const { data: pricing } = useQuery({ queryKey: ["auth-pricing"], queryFn: api.auth.pricing });
+
   const isSolo = planType === "solo_operator";
-  const canSubmit = (isSolo || companyName.trim()) && name.trim() && email.trim() && password.length >= 8;
+  const monthlyPrice = isSolo ? pricing?.soloOperatorMonthlyPrice : pricing?.baseMonthlyPrice;
+  const canSubmit = (isSolo || companyName.trim()) && name.trim() && email.trim() && password.length >= 8 && agreedToPrice;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -224,6 +236,20 @@ export default function RegisterPage() {
               />
               <p className="text-xs text-slate-500 mt-1">At least 8 characters.</p>
             </div>
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <Checkbox
+                checked={agreedToPrice}
+                onCheckedChange={(checked) => setAgreedToPrice(checked === true)}
+                className="mt-0.5 border-slate-700"
+              />
+              <span className="text-xs text-slate-400">
+                I agree to the{" "}
+                <span className="text-white font-medium">
+                  {monthlyPrice != null ? `$${monthlyPrice}/month` : "..."}
+                </span>{" "}
+                subscription for {isSolo ? "Solo Operator" : "Management system"}.
+              </span>
+            </label>
             {error && <p className="text-sm text-red-400">{error}</p>}
             <Button type="submit" className="w-full" disabled={submitting || !canSubmit}>
               {submitting ? "Creating..." : isOwnerTesting ? "Register" : "Create Account"}

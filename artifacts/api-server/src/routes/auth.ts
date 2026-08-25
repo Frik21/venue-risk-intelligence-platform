@@ -13,6 +13,7 @@ import {
   requireRole,
   verifyPassword,
 } from "../lib/auth";
+import { getOrCreatePricingConfig } from "./companies";
 
 // Deliberately NOT behind requireAuth (except /me and /change-password,
 // gated per-route below) - registered in routes/index.ts before the
@@ -85,6 +86,18 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   const sessionId = await createSession(user.id);
   res.cookie(SESSION_COOKIE, sessionId, cookieOptions);
   res.json({ user: await formatSessionUser(user) });
+});
+
+// Unauthenticated - the /register page needs to show the base
+// subscription price before a company/session exists at all, so this
+// can't sit behind companies.ts's admin-only /companies/pricing. Only
+// the two flat base figures (no per-seat prices, no history) - seats
+// aren't collected at signup (see the RegisterSchema comment below),
+// and always USD since there's no company/office yet for the currency
+// engine to derive a local currency from.
+router.get("/auth/pricing", async (_req, res): Promise<void> => {
+  const pricing = await getOrCreatePricingConfig();
+  res.json({ baseMonthlyPrice: pricing.baseMonthlyPrice, soloOperatorMonthlyPrice: pricing.soloOperatorMonthlyPrice });
 });
 
 const RegisterSchema = z

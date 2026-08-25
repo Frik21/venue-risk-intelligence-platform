@@ -1004,6 +1004,9 @@ export const api = {
   auth: {
     login: (email: string, password: string) =>
       apiFetch<{ user: SessionUser }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+    // Unauthenticated - the flat base subscription price for each plan,
+    // shown on /register before a company/session exists. Always USD.
+    pricing: () => apiFetch<{ baseMonthlyPrice: number; soloOperatorMonthlyPrice: number }>("/auth/pricing"),
     register: (
       data: {
         planType?: PlanType;
