@@ -254,6 +254,13 @@ export interface Company {
   taskCount: number;
   lastActivityAt: string | null;
   createdAt: string;
+  // Set once, at creation, for any company that started on status:
+  // "trial" (self-serve registration's trial path, or the Owner
+  // Console's own trial-by-default onboarding) - createdAt + 14 days.
+  // Null for a company that never started on trial. Informational only
+  // - nothing currently moves a company off trial automatically when
+  // this passes.
+  trialEndsAt: string | null;
   // Directional only - see the backend's estimatedMonthlyCharge pricing
   // constants. What this company would be charged under the model,
   // computed regardless of status.

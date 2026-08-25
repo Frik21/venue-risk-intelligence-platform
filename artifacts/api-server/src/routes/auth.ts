@@ -13,7 +13,7 @@ import {
   requireRole,
   verifyPassword,
 } from "../lib/auth";
-import { getOrCreatePricingConfig } from "./companies";
+import { getOrCreatePricingConfig, trialEndsAtFor } from "./companies";
 import { createCardValidationSetupIntent, getStripePublishableKey, isStripeConfigured, verifySetupIntentSucceeded } from "../lib/stripe";
 
 // Deliberately NOT behind requireAuth (except /me and /change-password,
@@ -229,6 +229,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       name: isSoloOperator ? parsed.data.name : parsed.data.companyName!,
       planType: parsed.data.planType,
       status: "trial",
+      trialEndsAt: trialEndsAtFor("trial"),
       isInternal: false,
       additionalManagerSeats: parsed.data.additionalManagerSeats ?? 0,
       additionalOperationsSeats: parsed.data.additionalOperationsSeats ?? 0,

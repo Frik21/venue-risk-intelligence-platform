@@ -49,6 +49,16 @@ export const companiesTable = pgTable("companies", {
   // every other company can never be bypassed by URL/API manipulation.
   isInternal: boolean("is_internal").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // Set once, at creation, whenever a company starts on status: "trial"
+  // (self-serve registration's "Start 14-day free trial" path, and the
+  // Owner Console's own "Onboard Company" default) - createdAt + 14
+  // days, computed server-side at insert time. Null for a company that
+  // never started on trial (e.g. Owner-created with an explicit
+  // non-trial status). Purely informational, same as every other
+  // billing-adjacent field in this table - nothing reads this to
+  // actually enforce an expiry yet (no scheduled job moves a company
+  // off trial when it passes), that's still Outstanding.
+  trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
 });
 
 export const insertCompanySchema = createInsertSchema(companiesTable).omit({ id: true, createdAt: true });

@@ -13,6 +13,18 @@ router.use(requireRole("admin"));
 
 const STATUSES = ["trial", "active", "suspended", "cancelled"] as const;
 
+// A company that starts on "trial" gets a trialEndsAt 14 days out,
+// computed here so both real company-creation paths (this route's own
+// POST /companies, and routes/auth.ts's self-serve POST /auth/register)
+// share one definition of "14 days" rather than two. Exported for that
+// reuse, same pattern as getOrCreatePricingConfig below. Null for
+// anything not starting on trial - see companiesTable.trialEndsAt's own
+// comment for why this is informational only, not enforced anywhere yet.
+const TRIAL_DURATION_MS = 14 * 24 * 60 * 60 * 1000;
+export function trialEndsAtFor(status: string): Date | null {
+  return status === "trial" ? new Date(Date.now() + TRIAL_DURATION_MS) : null;
+}
+
 // "team" (the default) or "solo_operator" - a single freelance CPO's
 // own subscription, Operators Note only, no Management-side seats.
 // Enforced server-side by lib/auth.ts's blockSoloOperatorFromManagement,
@@ -207,6 +219,7 @@ async function buildCompanyRows() {
       taskCount: taskMap[c.id] ?? 0,
       lastActivityAt: activityMap[c.id]?.toISOString() ?? null,
       createdAt: c.createdAt.toISOString(),
+      trialEndsAt: c.trialEndsAt?.toISOString() ?? null,
       // Directional only - see the Owner-editable pricing config (GET/
       // PATCH /companies/pricing). What this company would be charged
       // under the current model, regardless of status - the summary
@@ -402,6 +415,7 @@ function formatCompanyRecord(company: typeof companiesTable.$inferSelect) {
     additionalHumanResourcesSeats: company.additionalHumanResourcesSeats,
     additionalCpoSeats: company.additionalCpoSeats,
     createdAt: company.createdAt.toISOString(),
+    trialEndsAt: company.trialEndsAt?.toISOString() ?? null,
   };
 }
 
@@ -409,11 +423,12 @@ router.post("/companies", async (req, res): Promise<void> => {
   const parsed = CompanyInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const status = parsed.data.status ?? "trial";
   const [company] = await db
     .insert(companiesTable)
     .values({
       name: parsed.data.name,
-      status: parsed.data.status ?? "trial",
+      status,
       planType: parsed.data.planType ?? "team",
       isInternal: parsed.data.isInternal ?? false,
       additionalManagerSeats: parsed.data.additionalManagerSeats ?? 0,
@@ -421,6 +436,7 @@ router.post("/companies", async (req, res): Promise<void> => {
       additionalFinanceSeats: parsed.data.additionalFinanceSeats ?? 0,
       additionalHumanResourcesSeats: parsed.data.additionalHumanResourcesSeats ?? 0,
       additionalCpoSeats: parsed.data.additionalCpoSeats ?? 0,
+      trialEndsAt: trialEndsAtFor(status),
     })
     .returning();
 

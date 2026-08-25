@@ -450,6 +450,9 @@ export default function OwnerDashboard() {
                               ))}
                             </SelectContent>
                           </Select>
+                          {c.status === "trial" && c.trialEndsAt && (
+                            <p className="text-[10px] text-slate-400 mt-1 whitespace-nowrap">Ends {formatDate(c.trialEndsAt)}</p>
+                          )}
                         </td>
                         <td className="px-4 py-2.5 text-slate-600">
                           {c.planType === "solo_operator" ? (
