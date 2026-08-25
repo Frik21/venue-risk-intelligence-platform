@@ -1,18 +1,40 @@
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
-import { ShieldAlert } from "lucide-react";
+import { ShieldAlert, ShieldCheck, Gauge, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
 import type { PlanType } from "@/lib/api";
+
+// Two display-label-only names, "Solo Operator" and "Management
+// system" - per direct product direction ("when you click register it
+// needs to give me the option to select 'Solo Operator' or
+// 'Management system'"). "Management system" is a signup-flow-only
+// label for the "team" plan (the internal planType value, route
+// names, and every other surface's own "Team" label are unchanged -
+// same display-label-vs-identifier split as Command Desk/Operators
+// note elsewhere in this app).
+const PLAN_CHOICES: { value: PlanType; label: string; description: string; icon: typeof ShieldCheck }[] = [
+  {
+    value: "solo_operator",
+    label: "Solo Operator",
+    description: "Just you, a freelance CPO - Operators Note only, no Management side.",
+    icon: ShieldCheck,
+  },
+  {
+    value: "team",
+    label: "Management system",
+    description: "Full Command Desk + Operators Note for your whole team.",
+    icon: Gauge,
+  },
+];
 
 export default function RegisterPage() {
   const { user, register } = useAuth();
   const isOwnerTesting = user?.role === "admin";
   const [, navigate] = useLocation();
-  const [planType, setPlanType] = useState<PlanType>("team");
+  const [planType, setPlanType] = useState<PlanType | null>(null);
   const [companyName, setCompanyName] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -25,6 +47,7 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!planType) return;
     setError(null);
     setSubmitting(true);
     try {
@@ -64,73 +87,97 @@ export default function RegisterPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
-          <div>
-            <Label className="text-slate-300">Plan</Label>
-            <Select value={planType} onValueChange={(v) => setPlanType(v as PlanType)}>
-              <SelectTrigger className="bg-slate-950 border-slate-800 text-white mt-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="team">Team - full Management + Operators Note</SelectItem>
-                <SelectItem value="solo_operator">Solo Operator - an individual, Operators Note only</SelectItem>
-              </SelectContent>
-            </Select>
+        {planType === null ? (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-400 text-center">What are you signing up for?</p>
+            {PLAN_CHOICES.map((choice) => {
+              const Icon = choice.icon;
+              return (
+                <button
+                  key={choice.value}
+                  type="button"
+                  onClick={() => setPlanType(choice.value)}
+                  className="w-full text-left bg-slate-900 border border-slate-800 rounded-2xl p-5 flex items-start gap-3 hover:border-blue-500/50 hover:bg-slate-900/70 transition-colors"
+                >
+                  <Icon className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-semibold text-white">{choice.label}</div>
+                    <div className="text-xs text-slate-400 mt-0.5">{choice.description}</div>
+                  </div>
+                </button>
+              );
+            })}
+            {!isOwnerTesting && (
+              <p className="text-xs text-center text-slate-500 pt-2">
+                Already have an account? <Link href="/login" className="text-blue-400 hover:underline">Log in</Link>
+              </p>
+            )}
           </div>
-          {isSolo ? (
-            <p className="text-xs text-slate-500">
-              Solo Operator is for one individual, not a company - no company name, no Management side, just your own login into Operators Note.
-            </p>
-          ) : (
-            <div>
-              <Label className="text-slate-300">Company Name</Label>
+        ) : (
+          <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+            <button
+              type="button"
+              onClick={() => setPlanType(null)}
+              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              {PLAN_CHOICES.find((c) => c.value === planType)?.label}
+            </button>
+            {isSolo ? (
+              <p className="text-xs text-slate-500">
+                Solo Operator is for one individual, not a company - no company name, no Management side, just your own login into Operators Note.
+              </p>
+            ) : (
+              <div>
+                <Label className="text-slate-300">Company Name</Label>
+                <Input
+                  autoFocus
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  className="bg-slate-950 border-slate-800 text-white mt-1"
+                />
+              </div>
+            )}
+            <div className="border-t border-slate-800 pt-4">
+              <Label className="text-slate-300">Your Name</Label>
               <Input
-                autoFocus
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 className="bg-slate-950 border-slate-800 text-white mt-1"
               />
             </div>
-          )}
-          <div className="border-t border-slate-800 pt-4">
-            <Label className="text-slate-300">Your Name</Label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="bg-slate-950 border-slate-800 text-white mt-1"
-            />
-          </div>
-          <div>
-            <Label className="text-slate-300">Email</Label>
-            <Input
-              type="email"
-              autoComplete="username"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="bg-slate-950 border-slate-800 text-white mt-1"
-            />
-          </div>
-          <div>
-            <Label className="text-slate-300">Password</Label>
-            <Input
-              type="password"
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="bg-slate-950 border-slate-800 text-white mt-1"
-            />
-            <p className="text-xs text-slate-500 mt-1">At least 8 characters.</p>
-          </div>
-          {error && <p className="text-sm text-red-400">{error}</p>}
-          <Button type="submit" className="w-full" disabled={submitting || !canSubmit}>
-            {submitting ? "Creating..." : isOwnerTesting ? (isSolo ? "Onboard Solo Operator" : "Create Company") : "Create Account"}
-          </Button>
-          {!isOwnerTesting && (
-            <p className="text-xs text-center text-slate-500">
-              Already have an account? <Link href="/login" className="text-blue-400 hover:underline">Log in</Link>
-            </p>
-          )}
-        </form>
+            <div>
+              <Label className="text-slate-300">Email</Label>
+              <Input
+                type="email"
+                autoComplete="username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="bg-slate-950 border-slate-800 text-white mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-slate-300">Password</Label>
+              <Input
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="bg-slate-950 border-slate-800 text-white mt-1"
+              />
+              <p className="text-xs text-slate-500 mt-1">At least 8 characters.</p>
+            </div>
+            {error && <p className="text-sm text-red-400">{error}</p>}
+            <Button type="submit" className="w-full" disabled={submitting || !canSubmit}>
+              {submitting ? "Creating..." : isOwnerTesting ? (isSolo ? "Onboard Solo Operator" : "Create Company") : "Create Account"}
+            </Button>
+            {!isOwnerTesting && (
+              <p className="text-xs text-center text-slate-500">
+                Already have an account? <Link href="/login" className="text-blue-400 hover:underline">Log in</Link>
+              </p>
+            )}
+          </form>
+        )}
       </div>
     </div>
   );
