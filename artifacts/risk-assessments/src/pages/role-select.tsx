@@ -12,7 +12,6 @@ import {
   Cpu,
   Globe,
   CreditCard,
-  Building2,
   UserCog,
 } from "lucide-react";
 
@@ -37,9 +36,9 @@ import {
 // links to /cpo (requiresPreview: true) - a Solo Operator company
 // redirects there automatically (require-auth.tsx), so this tile is
 // really just "preview it, and remember to set your Test Company to
-// that plan first." "Enterprise" is the one remaining placeholder
-// (href: null) - stale now that tiers are gone (see the seat-model
-// note) but left rather than removed outright, not asked for.
+// that plan first." "Enterprise" (the old tier system's leftover, per
+// the seat-model note) has been removed outright rather than left as a
+// placeholder - per direct product direction, no longer needed.
 //
 // requiresPreview: true tiles (CPO/Management/Operations/Finance/HR/
 // Single Operator) land on a company-scoped page with no company
@@ -115,14 +114,6 @@ const TILES = [
     iconColor: "text-emerald-300",
     label: "Subscriptions",
     description: "Master Console - plan, status, and seats for every subscriber.",
-  },
-  {
-    href: null,
-    requiresPreview: false,
-    icon: Building2,
-    iconColor: "text-slate-400",
-    label: "Enterprise",
-    description: "Not built yet.",
   },
   {
     href: "/cpo",
