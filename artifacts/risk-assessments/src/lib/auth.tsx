@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, SESSION_EXPIRED_EVENT, type SessionUser, type PlanType, type ManagementRole } from "./api";
+import { api, SESSION_EXPIRED_EVENT, MANAGEMENT_HOME_ROUTE, type SessionUser, type PlanType, type ManagementRole } from "./api";
 
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // now, for authenticated sessions too (see require-auth.tsx) -
     // redirecting there after login would just show marketing copy
     // instead of the app.
-    const home = user.role === "cpo" ? "/cpo" : user.role === "admin" ? "/owner" : user.role === "finance" ? "/admin/finance" : "/admin";
+    const home = user.role === "cpo" ? "/cpo" : user.role === "admin" ? "/owner" : MANAGEMENT_HOME_ROUTE[user.role] ?? "/admin";
     window.location.href = user.mustChangePassword ? "/change-password" : home;
   };
 
@@ -88,17 +88,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // than the new account's own home, which would otherwise look
     // broken (a companyId: null Owner session has nothing to show
     // there - see require-auth.tsx). Otherwise land on the new
-    // account's real home - /cpo for Solo Operator, /admin/finance for
-    // a Finance Position, /admin for everything else - rather than
-    // always /admin and relying on require-auth.tsx's redirect to
-    // correct it after the fact.
+    // account's real home - /cpo for Solo Operator, the matching
+    // scoped dashboard for a Finance/HR/Operations Position
+    // (MANAGEMENT_HOME_ROUTE), /admin for everything else - rather
+    // than always /admin and relying on require-auth.tsx's redirect
+    // to correct it after the fact.
     window.location.href = !loggedIn
       ? "/owner"
       : user.planType === "solo_operator"
         ? "/cpo"
-        : user.role === "finance"
-          ? "/admin/finance"
-          : "/admin";
+        : MANAGEMENT_HOME_ROUTE[user.role] ?? "/admin";
   };
 
   const logout = async () => {

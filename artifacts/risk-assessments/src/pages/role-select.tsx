@@ -22,13 +22,12 @@ import {
 // jumping straight into whatever's currently the Test Company's
 // Management/CPO pages during Preview, without digging through either
 // app's own nav. Not a role/auth gate itself - the tiles with an href
-// land wherever clicking into them normally would. Operations/Human
-// Resources are still extra entry points into the general /admin
-// Management Dashboard, not separately scoped views - per direct
-// product direction, revisit if role-scoped dashboards are wanted for
-// those two as well. Finance now IS separately scoped, at
-// /admin/finance (Quotations/Invoices/Payroll) - the first of these to
-// get its own real dashboard, see CLAUDE.md's own note on it. Landing Page links to "/"
+// land wherever clicking into them normally would. Finance, Operations,
+// and Human Resources are each separately scoped now - /admin/finance
+// (Quotations/Invoices/Payroll), /admin/operations (Tasks/Operator
+// Deployment/Schedule), /admin/hr (Operator Database/Users) - see
+// CLAUDE.md's own notes on them. Only "Management" still lands on the
+// general /admin Management Dashboard. Landing Page links to "/"
 // itself (pages/landing.tsx); Subscriptions links to /owner, where
 // plan/status/seats actually live now (see the single-plan seat model
 // and Solo Operator plan notes in CLAUDE.md). IT links to /owner/it -
@@ -70,12 +69,12 @@ const TILES = [
     description: "Management Dashboard - tasks, operators, costs, and reporting.",
   },
   {
-    href: "/admin",
+    href: "/admin/operations",
     requiresPreview: true,
     icon: Workflow,
     iconColor: "text-emerald-300",
     label: "Operations",
-    description: "Management Dashboard - tasks, operators, costs, and reporting.",
+    description: "Operations Dashboard - Tasks, Operator Deployment, and Schedule.",
   },
   {
     href: "/admin/finance",
@@ -86,12 +85,12 @@ const TILES = [
     description: "Finance Dashboard - Quotations, Invoices, and Payroll.",
   },
   {
-    href: "/admin",
+    href: "/admin/hr",
     requiresPreview: true,
     icon: Users2,
     iconColor: "text-rose-300",
     label: "Human Resources",
-    description: "Management Dashboard - tasks, operators, costs, and reporting.",
+    description: "HR Dashboard - Operator Database and Users.",
   },
   {
     href: "/owner/it",

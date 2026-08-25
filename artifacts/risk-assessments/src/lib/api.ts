@@ -40,6 +40,21 @@ export type AlertPriority = "low" | "medium" | "high" | "critical";
 export type AlertStatus = "pending" | "reviewed" | "dismissed" | "escalated";
 export type OsintStatus = "pending" | "accepted" | "rejected";
 export type UserRole = "admin" | "manager" | "cpo" | "finance" | "human_resources" | "operations";
+
+// Where a logged-in Management-side session lands after login/
+// registration instead of the general Management Dashboard - only
+// roles with their own scoped dashboard are listed (Finance/HR/
+// Operations, see /admin/finance, /admin/hr, /admin/operations in
+// CLAUDE.md); "manager" and any role not listed here falls through to
+// the caller's own "/admin" default. cpo and admin (Owner) are handled
+// separately by callers, since their destinations depend on more than
+// just role (Solo Operator plan, Owner Console, etc.).
+export const MANAGEMENT_HOME_ROUTE: Partial<Record<UserRole, string>> = {
+  finance: "/admin/finance",
+  human_resources: "/admin/hr",
+  operations: "/admin/operations",
+};
+
 export type RouteType =
   | "primary_extraction" | "secondary_extraction" | "medical_evacuation"
   | "vip_arrival" | "vip_departure" | "staff_access" | "supplier_route" | "emergency_access";

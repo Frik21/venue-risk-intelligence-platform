@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
-import type { PlanType, ManagementRole } from "@/lib/api";
+import { MANAGEMENT_HOME_ROUTE, type PlanType, type ManagementRole } from "@/lib/api";
 
 // Same four roles/labels as Command Desk's own "Add User" dialog
 // (pages/admin/users.tsx) - "Position" on the signup form is really
@@ -87,7 +87,7 @@ export default function RegisterPage() {
       });
       // register() reloads the page on success - this line only runs if
       // it somehow returns without navigating, as a fallback.
-      navigate(isOwnerTesting ? "/owner" : isSolo ? "/cpo" : role === "finance" ? "/admin/finance" : "/admin");
+      navigate(isOwnerTesting ? "/owner" : isSolo ? "/cpo" : MANAGEMENT_HOME_ROUTE[role] ?? "/admin");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
       setSubmitting(false);
