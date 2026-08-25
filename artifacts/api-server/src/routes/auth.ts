@@ -87,31 +87,50 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   res.json({ user: await formatSessionUser(user) });
 });
 
-const RegisterSchema = z.object({
-  companyName: z.string().trim().min(1).max(200),
-  name: z.string().trim().min(1).max(200),
-  email: z.string().email(),
-  password: z.string().min(8),
-  // Extra seats beyond the fixed per-role base (see companies.ts's
-  // BASE_SEATS_BY_ROLE/CPO_BASE_SEATS) - optional, defaults to 0 for
-  // every role.
-  additionalManagerSeats: z.number().int().min(0).optional(),
-  additionalOperationsSeats: z.number().int().min(0).optional(),
-  additionalFinanceSeats: z.number().int().min(0).optional(),
-  additionalHumanResourcesSeats: z.number().int().min(0).optional(),
-  additionalCpoSeats: z.number().int().min(0).optional(),
-});
+const RegisterSchema = z
+  .object({
+    // "team" (default) or "solo_operator" - per direct product
+    // direction, self-serve signup now covers both plans, not just
+    // Team. companyName is conditionally required below (Solo
+    // Operator is for an individual, not a company - same convention
+    // the Owner Console's own onboarding dialog already follows).
+    planType: z.enum(["team", "solo_operator"]).default("team"),
+    companyName: z.string().trim().max(200).optional(),
+    name: z.string().trim().min(1).max(200),
+    email: z.string().email(),
+    password: z.string().min(8),
+    // Extra seats beyond the fixed per-role base (see companies.ts's
+    // BASE_SEATS_BY_ROLE/CPO_BASE_SEATS) - optional, defaults to 0 for
+    // every role. Meaningless for Solo Operator (hard-capped to
+    // exactly one CPO seat regardless), so simply ignored for that plan.
+    additionalManagerSeats: z.number().int().min(0).optional(),
+    additionalOperationsSeats: z.number().int().min(0).optional(),
+    additionalFinanceSeats: z.number().int().min(0).optional(),
+    additionalHumanResourcesSeats: z.number().int().min(0).optional(),
+    additionalCpoSeats: z.number().int().min(0).optional(),
+  })
+  .refine((d) => d.planType !== "team" || !!d.companyName?.trim(), {
+    message: "Company name is required",
+    path: ["companyName"],
+  });
 
-// Self-service company signup - the only path into VenueGuard that
-// doesn't require an existing Owner/Manager to onboard you by hand.
-// Creates a brand-new company (status: "trial", matching every other
+// Self-service signup - the only path into VenueGuard that doesn't
+// require an existing Owner/Manager to onboard you by hand. Creates a
+// brand-new company (status: "trial", matching every other
 // company-creation path - see companies.ts's POST /companies) and its
-// first user as role: "manager" (the natural "runs their own company"
-// role among the four company-side roles - "admin" is reserved for
-// the platform Owner and is never reachable from here). Unlike
-// admin-created users, the password is the one the person just typed
-// themselves, so there's no initialPassword/mustChangePassword song
-// and dance - they're logged straight into their new company.
+// first user. For "team" (the default), that's role: "manager" - the
+// natural "runs their own company" role among the four company-side
+// roles ("admin" is reserved for the platform Owner and is never
+// reachable from here). For "solo_operator", it's role: "cpo" instead
+// - the company row is named after the person directly (no separate
+// companyName field, same convention the Owner Console's own
+// onboarding dialog uses), and since this is a brand-new company with
+// no other users yet, the "exactly one CPO" hard cap (routes/users.ts's
+// POST /users) can never be an issue here. Unlike admin-created users,
+// the password is the one the person just typed themselves, so
+// there's no initialPassword/mustChangePassword song and dance -
+// they're logged straight in (a Solo Operator session then lands on
+// /cpo automatically, per require-auth.tsx).
 //
 // Exception: if the caller already has a valid Owner session (checked
 // against the real signed cookie below, not a client-supplied flag -
@@ -130,10 +149,12 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   const [existing] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, email));
   if (existing) { res.status(409).json({ error: "An account with that email already exists" }); return; }
 
+  const isSoloOperator = parsed.data.planType === "solo_operator";
   const [company] = await db
     .insert(companiesTable)
     .values({
-      name: parsed.data.companyName,
+      name: isSoloOperator ? parsed.data.name : parsed.data.companyName!,
+      planType: parsed.data.planType,
       status: "trial",
       isInternal: false,
       additionalManagerSeats: parsed.data.additionalManagerSeats ?? 0,
@@ -152,7 +173,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       companyId: company.id,
       name: parsed.data.name,
       email,
-      role: "manager",
+      role: isSoloOperator ? "cpo" : "manager",
       avatarInitials: initials,
       passwordHash,
       mustChangePassword: false,

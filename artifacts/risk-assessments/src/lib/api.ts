@@ -991,7 +991,8 @@ export const api = {
       apiFetch<{ user: SessionUser }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
     register: (
       data: {
-        companyName: string;
+        planType?: PlanType;
+        companyName?: string;
         name: string;
         email: string;
         password: string;

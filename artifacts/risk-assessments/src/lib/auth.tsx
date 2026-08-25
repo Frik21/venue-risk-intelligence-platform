@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, SESSION_EXPIRED_EVENT, type SessionUser } from "./api";
+import { api, SESSION_EXPIRED_EVENT, type SessionUser, type PlanType } from "./api";
 
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
@@ -8,7 +8,8 @@ interface AuthContextValue {
   status: AuthStatus;
   login: (email: string, password: string) => Promise<void>;
   register: (data: {
-    companyName: string;
+    planType?: PlanType;
+    companyName?: string;
     name: string;
     email: string;
     password: string;
@@ -61,15 +62,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = user.mustChangePassword ? "/change-password" : home;
   };
 
-  const register = async (data: { companyName: string; tier?: "enterprise" | "micro_enterprise"; name: string; email: string; password: string }) => {
-    const { loggedIn } = await api.auth.register(data);
+  const register = async (data: {
+    planType?: PlanType;
+    companyName?: string;
+    name: string;
+    email: string;
+    password: string;
+    additionalManagerSeats?: number;
+    additionalOperationsSeats?: number;
+    additionalFinanceSeats?: number;
+    additionalHumanResourcesSeats?: number;
+    additionalCpoSeats?: number;
+  }) => {
+    const { user, loggedIn } = await api.auth.register(data);
     // loggedIn is false when this was the Owner running the real signup
     // form from inside /owner (see routes/auth.ts's POST /auth/register)
     // - the company/user were created for real, but the Owner's own
     // session was left untouched, so send them back to /owner rather
-    // than /admin, which would otherwise look broken (a companyId: null
-    // Owner session has nothing to show there - see require-auth.tsx).
-    window.location.href = loggedIn ? "/admin" : "/owner";
+    // than the new account's own home, which would otherwise look
+    // broken (a companyId: null Owner session has nothing to show
+    // there - see require-auth.tsx). Otherwise land on the new
+    // account's real home - /cpo for Solo Operator, /admin for Team -
+    // rather than always /admin and relying on require-auth.tsx's
+    // redirect to correct it after the fact.
+    window.location.href = !loggedIn ? "/owner" : user.planType === "solo_operator" ? "/cpo" : "/admin";
   };
 
   const logout = async () => {
