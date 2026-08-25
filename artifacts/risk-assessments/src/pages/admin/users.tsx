@@ -256,7 +256,7 @@ function NewUserDialog({ onClose }: { onClose: () => void }) {
           <Select value={form.role} onValueChange={v => set("role", v)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="manager">Manager — Assigns and oversees CPOs</SelectItem>
+              <SelectItem value="manager">Manager</SelectItem>
               <SelectItem value="finance">Finance</SelectItem>
               <SelectItem value="human_resources">Human Resources</SelectItem>
               <SelectItem value="operations">Operations</SelectItem>
