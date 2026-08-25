@@ -4,8 +4,19 @@ import { ShieldAlert, ShieldCheck, Gauge, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
-import type { PlanType } from "@/lib/api";
+import type { PlanType, ManagementRole } from "@/lib/api";
+
+// Same four roles/labels as Command Desk's own "Add User" dialog
+// (pages/admin/users.tsx) - "Position" on the signup form is really
+// just picking which of those the person signing up is.
+const POSITIONS: { value: ManagementRole; label: string }[] = [
+  { value: "manager", label: "Manager" },
+  { value: "finance", label: "Finance" },
+  { value: "human_resources", label: "Human Resources" },
+  { value: "operations", label: "Operations" },
+];
 
 // Two display-label-only names, "Solo Operator" and "Management
 // system" - per direct product direction ("when you click register it
@@ -36,6 +47,9 @@ export default function RegisterPage() {
   const [, navigate] = useLocation();
   const [planType, setPlanType] = useState<PlanType | null>(null);
   const [companyName, setCompanyName] = useState("");
+  const [role, setRole] = useState<ManagementRole>("manager");
+  const [officeCity, setOfficeCity] = useState("");
+  const [officeCountry, setOfficeCountry] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -57,10 +71,20 @@ export default function RegisterPage() {
       // new Team company starts on the base-only seat counts (0
       // additional for every role); an Owner/Manager can add more
       // later. Meaningless for Solo Operator (a single, hard-capped
-      // CPO seat), so companyName is simply omitted for that plan too -
-      // the company row gets named after the person directly, same
-      // convention the Owner Console's own onboarding dialog follows.
-      await register({ planType, companyName: isSolo ? undefined : companyName, name, email, password });
+      // CPO seat), so companyName/role/office are simply omitted for
+      // that plan too - the company row gets named after the person
+      // directly, same convention the Owner Console's own onboarding
+      // dialog follows, and the account is always role: "cpo".
+      await register({
+        planType,
+        companyName: isSolo ? undefined : companyName,
+        role: isSolo ? undefined : role,
+        officeCity: isSolo ? undefined : officeCity,
+        officeCountry: isSolo ? undefined : officeCountry,
+        name,
+        email,
+        password,
+      });
       // register() reloads the page on success - this line only runs if
       // it somehow returns without navigating, as a fallback.
       navigate(isOwnerTesting ? "/owner" : isSolo ? "/cpo" : "/admin");
@@ -128,15 +152,48 @@ export default function RegisterPage() {
                 Solo Operator is for one individual, not a company - no company name, no Management side, just your own login into Operators Note.
               </p>
             ) : (
-              <div>
-                <Label className="text-slate-300">Company Name</Label>
-                <Input
-                  autoFocus
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  className="bg-slate-950 border-slate-800 text-white mt-1"
-                />
-              </div>
+              <>
+                <div>
+                  <Label className="text-slate-300">Company Name</Label>
+                  <Input
+                    autoFocus
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    className="bg-slate-950 border-slate-800 text-white mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-slate-300">Position</Label>
+                  <Select value={role} onValueChange={(v) => setRole(v as ManagementRole)}>
+                    <SelectTrigger className="bg-slate-950 border-slate-800 text-white mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {POSITIONS.map((p) => (
+                        <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-slate-300">Office Location</Label>
+                  <p className="text-xs text-slate-500 mt-0.5 mb-1.5">Optional - add more offices later from Command Desk.</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="City"
+                      value={officeCity}
+                      onChange={(e) => setOfficeCity(e.target.value)}
+                      className="bg-slate-950 border-slate-800 text-white"
+                    />
+                    <Input
+                      placeholder="Country"
+                      value={officeCountry}
+                      onChange={(e) => setOfficeCountry(e.target.value)}
+                      className="bg-slate-950 border-slate-800 text-white"
+                    />
+                  </div>
+                </div>
+              </>
             )}
             <div className="border-t border-slate-800 pt-4">
               <Label className="text-slate-300">Your Name</Label>

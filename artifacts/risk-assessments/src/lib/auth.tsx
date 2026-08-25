@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, SESSION_EXPIRED_EVENT, type SessionUser, type PlanType } from "./api";
+import { api, SESSION_EXPIRED_EVENT, type SessionUser, type PlanType, type ManagementRole } from "./api";
 
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
@@ -10,6 +10,9 @@ interface AuthContextValue {
   register: (data: {
     planType?: PlanType;
     companyName?: string;
+    officeCity?: string;
+    officeCountry?: string;
+    role?: ManagementRole;
     name: string;
     email: string;
     password: string;
@@ -65,6 +68,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = async (data: {
     planType?: PlanType;
     companyName?: string;
+    officeCity?: string;
+    officeCountry?: string;
+    role?: ManagementRole;
     name: string;
     email: string;
     password: string;

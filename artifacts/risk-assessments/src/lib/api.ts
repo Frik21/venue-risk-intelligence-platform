@@ -993,6 +993,9 @@ export const api = {
       data: {
         planType?: PlanType;
         companyName?: string;
+        officeCity?: string;
+        officeCountry?: string;
+        role?: ManagementRole;
         name: string;
         email: string;
         password: string;

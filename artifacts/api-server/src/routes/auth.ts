@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { and, eq, gt } from "drizzle-orm";
-import { db, usersTable, companiesTable, sessionsTable } from "@workspace/db";
+import { db, usersTable, companiesTable, sessionsTable, officesTable } from "@workspace/db";
 import {
   SESSION_COOKIE,
   createSession,
@@ -96,6 +96,20 @@ const RegisterSchema = z
     // the Owner Console's own onboarding dialog already follows).
     planType: z.enum(["team", "solo_operator"]).default("team"),
     companyName: z.string().trim().max(200).optional(),
+    // Optional - Team only (Solo Operator has no offices at all, no
+    // Management side to manage them from). Just city+country, the two
+    // fields that actually matter: country is what the currency engine
+    // (lib/currency.ts's resolveCurrency) derives a company's currency
+    // from via its earliest office, so filling this in at signup gives
+    // Command Desk's seat prices a real currency signal from day one
+    // instead of falling back to USD until someone adds an office by
+    // hand later.
+    officeCity: z.string().trim().max(200).optional(),
+    officeCountry: z.string().trim().max(200).optional(),
+    // "Position" on the signup form - which of the four Management
+    // roles the person signing up actually is. Team only; Solo
+    // Operator's single account is always role: "cpo", not one of these.
+    role: z.enum(["manager", "operations", "finance", "human_resources"]).default("manager"),
     name: z.string().trim().min(1).max(200),
     email: z.string().email(),
     password: z.string().min(8),
@@ -118,11 +132,11 @@ const RegisterSchema = z
 // require an existing Owner/Manager to onboard you by hand. Creates a
 // brand-new company (status: "trial", matching every other
 // company-creation path - see companies.ts's POST /companies) and its
-// first user. For "team" (the default), that's role: "manager" - the
-// natural "runs their own company" role among the four company-side
-// roles ("admin" is reserved for the platform Owner and is never
-// reachable from here). For "solo_operator", it's role: "cpo" instead
-// - the company row is named after the person directly (no separate
+// first user. For "team" (the default), that's whichever of the four
+// Management roles the "Position" field picked (defaults to "manager"
+// - "admin" is reserved for the platform Owner and is never reachable
+// from here). For "solo_operator", it's role: "cpo" instead - the
+// company row is named after the person directly (no separate
 // companyName field, same convention the Owner Console's own
 // onboarding dialog uses), and since this is a brand-new company with
 // no other users yet, the "exactly one CPO" hard cap (routes/users.ts's
@@ -173,12 +187,27 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       companyId: company.id,
       name: parsed.data.name,
       email,
-      role: isSoloOperator ? "cpo" : "manager",
+      role: isSoloOperator ? "cpo" : parsed.data.role,
       avatarInitials: initials,
       passwordHash,
       mustChangePassword: false,
     })
     .returning();
+
+  // Optional Team-only office at signup (see the schema comment above)
+  // - skipped entirely for Solo Operator (no offices concept there) or
+  // if left blank. managerId points at the account that was just
+  // created, matching the "office has a manager" convention Command
+  // Desk's own Offices page already follows.
+  if (!isSoloOperator && parsed.data.officeCity?.trim() && parsed.data.officeCountry?.trim()) {
+    await db.insert(officesTable).values({
+      companyId: company.id,
+      name: `${parsed.data.officeCity.trim()} HQ`,
+      city: parsed.data.officeCity.trim(),
+      country: parsed.data.officeCountry.trim(),
+      managerId: user.id,
+    });
+  }
 
   const existingSessionId = req.signedCookies?.[SESSION_COOKIE];
   let callerIsOwner = false;
