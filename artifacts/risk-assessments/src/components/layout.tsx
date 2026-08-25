@@ -24,6 +24,7 @@ import {
   Wallet,
   LogOut,
   FlaskConical,
+  LifeBuoy,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ import { api, type Office } from "@/lib/api";
 import { useSelectedOfficeId } from "@/lib/office-scope";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
+import { ReportIssueDialog } from "@/components/report-issue-dialog";
 
 const USER_ROLE_LABELS: Record<string, string> = {
   admin: "Owner",
@@ -81,6 +83,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [offices, setOffices] = useState<Office[]>([]);
   const [selectedOfficeId, setSelectedOfficeId] = useSelectedOfficeId();
+  const [showReportIssue, setShowReportIssue] = useState(false);
   useEffect(() => {
     api.offices.list().then(setOffices).catch((err) => console.error("Failed to load offices:", err));
   }, []);
@@ -106,7 +109,7 @@ useEffect(() => {
 // full-bleed auth pages. "/" itself renders the public landing page
 // directly from require-auth.tsx, never reaching this component at
 // all, so it's not listed here either.
-const hideShell = (location === "/cpo" || location === "/owner" || location === "/owner/subscriptions" || location === "/quick-access" || location === "/login" || location === "/register" || location === "/change-password") && !showShell;
+const hideShell = (location === "/cpo" || location === "/owner" || location === "/owner/subscriptions" || location === "/owner/it" || location === "/quick-access" || location === "/login" || location === "/register" || location === "/change-password") && !showShell;
   // "/admin" needs the same exact-match treatment as "/" - otherwise
   // it'd also read as active on "/admin/users" (a real, distinct nav
   // item), since that path also starts with "/admin".
@@ -203,6 +206,20 @@ const hideShell = (location === "/cpo" || location === "/owner" || location === 
             Operators note
           </Link>
         )}
+        {/* The real "support channel for subscribers" - lands in the
+            Owner's own IT inbox (/owner/it, routes/support-tickets.ts).
+            Owner-only sessions skip this too (companyId: null - see the
+            Operators note link above), same reasoning. */}
+        {user?.role !== "admin" && (
+          <button
+            type="button"
+            onClick={() => setShowReportIssue(true)}
+            className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors w-full text-left"
+          >
+            <LifeBuoy className="w-4 h-4 shrink-0" />
+            Report an Issue
+          </button>
+        )}
         <div className="flex items-center gap-2 px-2 py-2 rounded-md text-slate-400">
           <div className="w-7 h-7 rounded bg-blue-600/30 flex items-center justify-center text-blue-300 text-xs font-bold shrink-0">
             {user?.avatarInitials ?? user?.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() ?? "?"}
@@ -225,6 +242,7 @@ const hideShell = (location === "/cpo" || location === "/owner" || location === 
 
   return (
     <div className="min-h-screen flex bg-slate-100 font-sans">
+      {showReportIssue && <ReportIssueDialog source="command_desk" onClose={() => setShowReportIssue(false)} />}
       {/* Desktop sidebar */}
       <div className={cn("hidden md:flex flex-col shrink-0 h-screen sticky top-0", hideShell && "md:hidden")}>
         <Sidebar />

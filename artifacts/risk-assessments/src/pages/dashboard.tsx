@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, ChangeEvent } from "react";
-import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet, LifeBuoy } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -46,6 +46,7 @@ import type {
 } from "@/lib/api";
 import { LocationSearch, resolveCurrentLocation } from "@/components/location-search";
 import type { LocationSearchResult } from "@/components/location-search";
+import { ReportIssueDialog } from "@/components/report-issue-dialog";
 import { projectToOperationalGeometry } from "@/lib/map-projection";
 import { timeAgo } from "@/lib/display-utils";
 
@@ -1286,6 +1287,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
   // above. null until that lookup resolves, so the operator area falls
   // back to the original static "Frik"/"F" until then.
   const [profileDisplay, setProfileDisplay] = useState<{ name: string; avatarInitials: string | null } | null>(null);
+  const [showReportIssue, setShowReportIssue] = useState(false);
 
   useEffect(() => {
     const reopenMenu = () => setBrandMenuOpen(true);
@@ -1521,6 +1523,17 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
               <UserIcon className="w-4 h-4" />
               Profile
             </button>
+            <button
+              type="button"
+              className="top-banner-operator-menu-item"
+              onClick={() => {
+                setShowReportIssue(true);
+                setOperatorMenuOpen(false);
+              }}
+            >
+              <LifeBuoy className="w-4 h-4" />
+              Report an Issue
+            </button>
             {/* Owner-only, only shown while actively previewing a Test
                 Company (see require-auth.tsx) - lets the Owner jump back
                 to /owner without ending Preview, same idea as the
@@ -1549,6 +1562,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
           </div>
         )}
       </div>
+      {showReportIssue && <ReportIssueDialog source="operators_note" onClose={() => setShowReportIssue(false)} />}
     </header>
   );
 }

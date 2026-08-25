@@ -30,21 +30,27 @@ import {
 // role-scoped dashboards are wanted later. Landing Page links to "/"
 // itself (pages/landing.tsx); Subscriptions links to /owner, where
 // plan/status/seats actually live now (see the single-plan seat model
-// and Solo Operator plan notes in CLAUDE.md). IT/Enterprise/Single
-// Operator still have no destination (href: null) - deliberately left
-// as placeholders until each one actually exists. "Enterprise" is
-// stale now that tiers are gone (see the seat-model note) but left as
-// a placeholder rather than removed outright - not asked for.
+// and Solo Operator plan notes in CLAUDE.md). IT links to /owner/it -
+// system status plus the support-ticket inbox (routes/support-tickets.ts),
+// per direct product direction ("this needs to monitor the website/App
+// health, were logged tickets get send to all off IT"). Single Operator
+// links to /cpo (requiresPreview: true) - a Solo Operator company
+// redirects there automatically (require-auth.tsx), so this tile is
+// really just "preview it, and remember to set your Test Company to
+// that plan first." "Enterprise" is the one remaining placeholder
+// (href: null) - stale now that tiers are gone (see the seat-model
+// note) but left rather than removed outright, not asked for.
 //
-// requiresPreview: true tiles (CPO/Management/Operations/Finance/HR)
-// land on a company-scoped page with no company context unless the
-// Owner is actively previewing a Test Company - require-auth.tsx's
-// catch-all bounces a plain (non-previewing) Owner straight back to
-// /owner, since there's nothing real to show. Previously that just
-// silently kicked you back with no explanation, reported directly as
-// "clicking Quick Access takes me to the Master Console." Fixed by
-// disabling those specific tiles up front (matching the "Coming soon"
-// treatment, but explaining why) until a Preview is actually running.
+// requiresPreview: true tiles (CPO/Management/Operations/Finance/HR/
+// Single Operator) land on a company-scoped page with no company
+// context unless the Owner is actively previewing a Test Company -
+// require-auth.tsx's catch-all bounces a plain (non-previewing) Owner
+// straight back to /owner, since there's nothing real to show.
+// Previously that just silently kicked you back with no explanation,
+// reported directly as "clicking Quick Access takes me to the Master
+// Console." Fixed by disabling those specific tiles up front (matching
+// the "Coming soon" treatment, but explaining why) until a Preview is
+// actually running.
 const TILES = [
   {
     href: "/cpo",
@@ -87,12 +93,12 @@ const TILES = [
     description: "Management Dashboard - tasks, operators, costs, and reporting.",
   },
   {
-    href: null,
+    href: "/owner/it",
     requiresPreview: false,
     icon: Cpu,
-    iconColor: "text-slate-400",
+    iconColor: "text-sky-300",
     label: "IT",
-    description: "Not built yet.",
+    description: "System status and the support-ticket inbox for every subscriber.",
   },
   {
     href: "/",
@@ -119,12 +125,12 @@ const TILES = [
     description: "Not built yet.",
   },
   {
-    href: null,
-    requiresPreview: false,
+    href: "/cpo",
+    requiresPreview: true,
     icon: UserCog,
-    iconColor: "text-slate-400",
+    iconColor: "text-violet-300",
     label: "Single Operator",
-    description: "Not built yet.",
+    description: "Preview Operators Note for a Solo Operator company - set your Test Company to that plan first.",
   },
 ] as const satisfies readonly { href: string | null; requiresPreview: boolean; icon: typeof Cpu; iconColor: string; label: string; description: string }[];
 

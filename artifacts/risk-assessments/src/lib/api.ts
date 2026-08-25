@@ -245,10 +245,47 @@ export interface Company {
   estimatedMonthlyCharge: number;
 }
 
+// Owner-only technical status view (see api.system.status). Deliberately
+// modest - just what's actually checkable today (DB reachability, basic
+// process/runtime facts), not a substitute for real monitoring.
+export interface SystemStatus {
+  dbStatus: "ok" | "error";
+  dbError: string | null;
+  serverUptimeSeconds: number;
+  nodeVersion: string;
+  environment: string;
+  serverTime: string;
+}
+
 export interface CompanySummary {
   totalCompanies: number;
   byStatus: Record<CompanyStatus, number>;
   estimatedMonthlyRevenue: number;
+}
+
+export type TicketStatus = "open" | "in_progress" | "resolved" | "closed";
+export type TicketPriority = "low" | "normal" | "high";
+export type TicketSource = "command_desk" | "operators_note";
+
+// The real "support channel for subscribers" - a Command Desk or
+// Operators Note user submits one (api.supportTickets.create), it lands
+// in the Owner's own IT inbox (api.supportTickets.list, Owner-only). No
+// email delivery - "sent to all of IT" means visible here to any
+// Owner-role account, matching how the rest of Master Console works.
+export interface SupportTicket {
+  id: number;
+  companyId: number;
+  companyName: string | null;
+  userId: number;
+  userName: string | null;
+  subject: string;
+  description: string;
+  source: TicketSource;
+  status: TicketStatus;
+  priority: TicketPriority;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // Owner-editable, platform-wide (not per-company) subscription pricing
@@ -1032,6 +1069,23 @@ export const api = {
         additionalCpoSeats: number;
       }>,
     ) => apiFetch<Company>(`/companies/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  },
+  // Owner-only technical status view (the "IT" tile on /quick-access) -
+  // deliberately modest, real error tracking/uptime monitoring is still
+  // on the roadmap and doesn't exist yet, this just reports what's
+  // actually checkable today.
+  system: {
+    status: () => apiFetch<SystemStatus>("/system/status"),
+  },
+  // create is open to any company-scoped user (Command Desk or
+  // Operators Note, "Report an Issue"); list/update are Owner-only (the
+  // IT inbox on /owner/it).
+  supportTickets: {
+    create: (data: { subject: string; description: string; source: TicketSource }) =>
+      apiFetch<SupportTicket>("/support-tickets", { method: "POST", body: JSON.stringify(data) }),
+    list: () => apiFetch<SupportTicket[]>("/support-tickets"),
+    update: (id: number, data: Partial<{ status: TicketStatus; priority: TicketPriority }>) =>
+      apiFetch<SupportTicket>(`/support-tickets/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   },
   offices: {
     list: () => apiFetch<Office[]>("/offices"),

@@ -49,6 +49,7 @@ import ClientDetailPage from "@/pages/admin/client-detail";
 import OnboardingPage from "@/pages/admin/onboarding";
 import OwnerDashboard from "@/pages/owner/dashboard";
 import SubscriptionsPage from "@/pages/owner/subscriptions";
+import ItPage from "@/pages/owner/it";
 import RoleSelect from "@/pages/role-select";
 
 const queryClient = new QueryClient({
@@ -70,6 +71,7 @@ function Router() {
         <Route path="/change-password" component={ChangePasswordPage} />
         <Route path="/owner" component={OwnerDashboard} />
         <Route path="/owner/subscriptions" component={SubscriptionsPage} />
+        <Route path="/owner/it" component={ItPage} />
         <Route path="/quick-access" component={RoleSelect} />
         <Route path="/cpo" component={Dashboard} />
 

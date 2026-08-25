@@ -167,6 +167,7 @@ const CPO_SURFACE_PATH_PREFIXES = [
   "/venues",
   "/plans",
   "/countries",
+  "/support-tickets",
 ];
 
 export function blockSoloOperatorFromManagement(req: Request, res: Response, next: NextFunction): void {

@@ -26,3 +26,4 @@ export * from "./payroll";
 export * from "./announcements";
 export * from "./pricing-config";
 export * from "./pricing-history";
+export * from "./support-tickets";
