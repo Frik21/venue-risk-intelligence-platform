@@ -226,7 +226,7 @@ export default function RegisterPage() {
             </div>
             {error && <p className="text-sm text-red-400">{error}</p>}
             <Button type="submit" className="w-full" disabled={submitting || !canSubmit}>
-              {submitting ? "Creating..." : isOwnerTesting ? (isSolo ? "Onboard Solo Operator" : "Create Company") : "Create Account"}
+              {submitting ? "Creating..." : isOwnerTesting ? (isSolo ? "Onboard Solo Operator" : "Register") : "Create Account"}
             </Button>
             {!isOwnerTesting && (
               <p className="text-xs text-center text-slate-500">
