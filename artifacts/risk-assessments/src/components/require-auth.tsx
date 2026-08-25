@@ -36,9 +36,10 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   }
 
   // Where a logged-in session actually belongs - cpo -> its own
-  // Operational Canvas, admin (Owner) -> the Master Console, everyone
-  // else -> the Management Dashboard.
-  const homeRoute = user?.role === "cpo" ? "/cpo" : user?.role === "admin" ? "/owner" : "/admin";
+  // Operational Canvas, admin (Owner) -> the Master Console, finance ->
+  // its own scoped Finance dashboard (Quotations/Invoices/Payroll),
+  // everyone else -> the general Management Dashboard.
+  const homeRoute = user?.role === "cpo" ? "/cpo" : user?.role === "admin" ? "/owner" : user?.role === "finance" ? "/admin/finance" : "/admin";
 
   if (location === "/login") {
     return <Redirect to={user?.mustChangePassword ? "/change-password" : homeRoute} />;

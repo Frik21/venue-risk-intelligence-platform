@@ -87,7 +87,7 @@ export default function RegisterPage() {
       });
       // register() reloads the page on success - this line only runs if
       // it somehow returns without navigating, as a fallback.
-      navigate(isOwnerTesting ? "/owner" : isSolo ? "/cpo" : "/admin");
+      navigate(isOwnerTesting ? "/owner" : isSolo ? "/cpo" : role === "finance" ? "/admin/finance" : "/admin");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
       setSubmitting(false);

@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // now, for authenticated sessions too (see require-auth.tsx) -
     // redirecting there after login would just show marketing copy
     // instead of the app.
-    const home = user.role === "cpo" ? "/cpo" : user.role === "admin" ? "/owner" : "/admin";
+    const home = user.role === "cpo" ? "/cpo" : user.role === "admin" ? "/owner" : user.role === "finance" ? "/admin/finance" : "/admin";
     window.location.href = user.mustChangePassword ? "/change-password" : home;
   };
 
@@ -88,10 +88,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // than the new account's own home, which would otherwise look
     // broken (a companyId: null Owner session has nothing to show
     // there - see require-auth.tsx). Otherwise land on the new
-    // account's real home - /cpo for Solo Operator, /admin for Team -
-    // rather than always /admin and relying on require-auth.tsx's
-    // redirect to correct it after the fact.
-    window.location.href = !loggedIn ? "/owner" : user.planType === "solo_operator" ? "/cpo" : "/admin";
+    // account's real home - /cpo for Solo Operator, /admin/finance for
+    // a Finance Position, /admin for everything else - rather than
+    // always /admin and relying on require-auth.tsx's redirect to
+    // correct it after the fact.
+    window.location.href = !loggedIn
+      ? "/owner"
+      : user.planType === "solo_operator"
+        ? "/cpo"
+        : user.role === "finance"
+          ? "/admin/finance"
+          : "/admin";
   };
 
   const logout = async () => {

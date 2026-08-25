@@ -25,6 +25,7 @@ import {
   LogOut,
   FlaskConical,
   LifeBuoy,
+  Landmark,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -61,6 +62,7 @@ const navGroups = [
       { href: "/tasks", label: "Tasks", icon: ListChecks },
       { href: "/admin/communications", label: "Communications", icon: MessageSquare },
       { href: "/admin/clients", label: "Clients", icon: Briefcase },
+      { href: "/admin/finance", label: "Finance", icon: Landmark },
       { href: "/admin/costs", label: "Quotations", icon: DollarSign },
       { href: "/admin/invoices", label: "Invoices", icon: Receipt },
       { href: "/admin/cpo-deployment", label: "Operator Deployment", icon: UserCog },
