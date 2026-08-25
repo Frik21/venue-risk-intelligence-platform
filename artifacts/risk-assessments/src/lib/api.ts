@@ -1007,6 +1007,15 @@ export const api = {
     // Unauthenticated - the flat base subscription price for each plan,
     // shown on /register before a company/session exists. Always USD.
     pricing: () => apiFetch<{ baseMonthlyPrice: number; soloOperatorMonthlyPrice: number }>("/auth/pricing"),
+    // Unauthenticated - whether a real Stripe account is connected yet
+    // (lib/stripe.ts on the backend). /register uses this to decide
+    // between the real card-collection panel and the non-functional
+    // stub, with no frontend redeploy needed once Stripe is connected.
+    stripeConfig: () => apiFetch<{ enabled: boolean; publishableKey: string | null }>("/auth/stripe/config"),
+    // Unauthenticated - starts a SetupIntent to validate a card is real
+    // without charging or storing it. See lib/stripe.ts for why no
+    // Customer/PaymentMethod is ever persisted.
+    createStripeSetupIntent: () => apiFetch<{ clientSecret: string }>("/auth/stripe/setup-intent", { method: "POST" }),
     register: (
       data: {
         planType?: PlanType;
@@ -1022,6 +1031,7 @@ export const api = {
         additionalFinanceSeats?: number;
         additionalHumanResourcesSeats?: number;
         additionalCpoSeats?: number;
+        stripeSetupIntentId?: string;
       },
     ) =>
       // loggedIn is false when the caller already had an Owner session -

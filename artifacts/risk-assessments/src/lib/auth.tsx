@@ -21,6 +21,7 @@ interface AuthContextValue {
     additionalFinanceSeats?: number;
     additionalHumanResourcesSeats?: number;
     additionalCpoSeats?: number;
+    stripeSetupIntentId?: string;
   }) => Promise<void>;
   logout: () => Promise<void>;
 }
