@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, real, text, timestamp, unique, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, real, text, timestamp, unique, boolean, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -52,9 +52,10 @@ export const timesheetEntriesTable = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   },
-  (table) => ({
-    userDateTaskUnique: unique().on(table.userId, table.date, table.taskId),
-  }),
+  (table) => [
+    unique("timesheet_entries_user_id_date_task_id_unique").on(table.userId, table.date, table.taskId),
+    index("idx_timesheet_entries_company_id").on(table.companyId),
+  ],
 );
 
 export const insertTimesheetEntrySchema = createInsertSchema(timesheetEntriesTable).omit({

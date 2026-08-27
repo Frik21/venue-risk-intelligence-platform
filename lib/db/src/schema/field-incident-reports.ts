@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, real, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, real, timestamp, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { companiesTable } from "./companies";
@@ -31,7 +31,7 @@ export const fieldIncidentReportsTable = pgTable("field_incident_reports", {
   // list.tsx's Field Incident Reports panel. Null means still needs review.
   reviewedBy: integer("reviewed_by").references(() => usersTable.id),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
-});
+}, (table) => [index("idx_field_incident_reports_company_id").on(table.companyId)]);
 
 export const insertFieldIncidentReportSchema = createInsertSchema(fieldIncidentReportsTable).omit({ id: true, occurredAt: true });
 export type InsertFieldIncidentReport = z.infer<typeof insertFieldIncidentReportSchema>;

@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, real, jsonb, timestamp, unique } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, real, jsonb, timestamp, unique, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { tasksTable } from "./tasks";
@@ -48,9 +48,10 @@ export const taskRoutesTable = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   },
-  (table) => ({
-    taskSlotUnique: unique().on(table.taskId, table.slotIndex),
-  }),
+  (table) => [
+    unique("task_routes_task_id_slot_index_unique").on(table.taskId, table.slotIndex),
+    index("idx_task_routes_company_id").on(table.companyId),
+  ],
 );
 
 export const insertTaskRouteSchema = createInsertSchema(taskRoutesTable).omit({

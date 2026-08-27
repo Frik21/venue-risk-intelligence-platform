@@ -1,4 +1,4 @@
-import { pgTable, text, serial, real, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, real, timestamp, integer, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { companiesTable } from "./companies";
@@ -19,7 +19,7 @@ export const venuesTable = pgTable("venues", {
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (table) => [index("idx_venues_company_id").on(table.companyId)]);
 
 export const insertVenueSchema = createInsertSchema(venuesTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertVenue = z.infer<typeof insertVenueSchema>;
