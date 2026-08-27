@@ -49,6 +49,7 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
     operatorsRequired: String(task.operatorsRequired),
     armedRequired: task.armedRequired,
     vehiclesRequired: String(task.vehiclesRequired),
+    checkInIntervalMinutes: task.checkInIntervalMinutes != null ? String(task.checkInIntervalMinutes) : "",
   });
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -71,6 +72,7 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
         operatorsRequired: Number(form.operatorsRequired) || 0,
         armedRequired: form.armedRequired,
         vehiclesRequired: Number(form.vehiclesRequired) || 0,
+        checkInIntervalMinutes: form.checkInIntervalMinutes ? Number(form.checkInIntervalMinutes) : null,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tasks"] });
@@ -167,6 +169,19 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
             value={form.quotationStatus}
             onChange={(v) => setForm((f) => ({ ...f, quotationStatus: v }))}
           />
+        </div>
+        <div>
+          <Label>Check-In Interval (minutes)</Label>
+          <Input
+            type="number"
+            min={1}
+            placeholder="No scheduled check-ins"
+            value={form.checkInIntervalMinutes}
+            onChange={(e) => set("checkInIntervalMinutes", e.target.value)}
+          />
+          <p className="text-xs text-slate-500 mt-1">
+            While this task is In Progress, each assigned CPO is expected to check in this often - leave blank for no scheduled check-ins.
+          </p>
         </div>
         <div className="flex gap-3 pt-2">
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>

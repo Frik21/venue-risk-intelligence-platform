@@ -62,6 +62,9 @@ function formatTask(
     alertReviewedBucket: row.alertReviewedBucket ?? null,
     alertReviewedAt: row.alertReviewedAt?.toISOString() ?? null,
     alertReviewedByName: alertReviewedByName ?? null,
+    // See checkins.ts's own schema comment - opt-in per task, null means
+    // no scheduled check-in is expected.
+    checkInIntervalMinutes: row.checkInIntervalMinutes,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -156,6 +159,7 @@ const TaskInputSchema = z.object({
   vehiclesRequired: z.number().int().min(0).optional(),
   estimatedCost: z.number().min(0).nullable().optional(),
   estimatedCostCurrency: z.string().min(1).max(10).optional(),
+  checkInIntervalMinutes: z.number().int().min(1).nullable().optional(),
 });
 
 async function setRoster(taskId: number, companyId: number, assigneeIds: number[]) {
@@ -217,6 +221,7 @@ router.post("/tasks", async (req, res): Promise<void> => {
       vehiclesRequired: parsed.data.vehiclesRequired ?? 0,
       estimatedCost: parsed.data.estimatedCost ?? null,
       estimatedCostCurrency: parsed.data.estimatedCostCurrency ?? "ZAR",
+      checkInIntervalMinutes: parsed.data.checkInIntervalMinutes ?? null,
     })
     .returning();
 
@@ -266,6 +271,7 @@ const TaskUpdateSchema = z.object({
   // to mark reviewed, or null to clear it. alertReviewedBy is who did it.
   alertReviewedBucket: z.string().nullable().optional(),
   alertReviewedBy: z.number().int().nullable().optional(),
+  checkInIntervalMinutes: z.number().int().min(1).nullable().optional(),
 });
 
 router.patch("/tasks/:id", async (req, res): Promise<void> => {
@@ -346,6 +352,7 @@ router.post("/tasks/:id/duplicate", async (req, res): Promise<void> => {
       vehiclesRequired: source.vehiclesRequired,
       estimatedCost: source.estimatedCost,
       estimatedCostCurrency: source.estimatedCostCurrency,
+      checkInIntervalMinutes: source.checkInIntervalMinutes,
     })
     .returning();
 

@@ -2355,6 +2355,7 @@ function OperationalCanvas({
     alertReviewedBucket: null,
     alertReviewedAt: null,
     alertReviewedByName: null,
+    checkInIntervalMinutes: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -2374,6 +2375,38 @@ function OperationalCanvas({
     if (response === "accepted") {
       setPlanningTaskId(taskId);
       setActivePanel("task-planning");
+    }
+  }
+
+  // The live duty-of-care signal - a routine "ok" check-in, or the
+  // CPO's own "panic" trigger, real either way (unlike taskAcceptance
+  // above), since this is exactly the thing a Manager's response
+  // depends on. Location is captured via the same resolveCurrentLocation()
+  // already used for "Current Area" - best-effort, not required, since a
+  // denied/unavailable geolocation permission shouldn't block sending
+  // the signal itself. Per direct product direction (Following Roadmap,
+  // Tier 1 item 1).
+  const [checkinState, setCheckinState] = useState<Record<number, { submitting: boolean; lastResult?: "ok" | "panic" | "error" }>>({});
+
+  async function sendCheckin(taskId: number, type: "ok" | "panic") {
+    if (taskId === MOCK_TASK_ID) {
+      setCheckinState((prev) => ({ ...prev, [taskId]: { submitting: false, lastResult: type } }));
+      return;
+    }
+    setCheckinState((prev) => ({ ...prev, [taskId]: { submitting: true } }));
+    let location: { latitude?: number; longitude?: number; locationLabel?: string } = {};
+    try {
+      const resolved = await resolveCurrentLocation();
+      location = { latitude: resolved.lat ?? undefined, longitude: resolved.lng ?? undefined, locationLabel: resolved.label };
+    } catch (err) {
+      console.error("Could not resolve location for check-in:", err);
+    }
+    try {
+      await api.checkins.create({ taskId, type, ...location });
+      setCheckinState((prev) => ({ ...prev, [taskId]: { submitting: false, lastResult: type } }));
+    } catch (err) {
+      console.error(`Failed to send ${type} check-in for task ${taskId}:`, err);
+      setCheckinState((prev) => ({ ...prev, [taskId]: { submitting: false, lastResult: "error" } }));
     }
   }
 
@@ -4007,6 +4040,39 @@ function OperationalCanvas({
                     <p className={`task-row-response-status task-row-response-status-${response}`}>
                       {response === "accepted" ? "Accepted - see Task Planning" : "Declined"}
                     </p>
+                  )}
+
+                  {task.status === "in_progress" && (
+                    <>
+                      <div className="task-row-checkin">
+                        <button
+                          type="button"
+                          className="checkin-btn checkin-btn-ok"
+                          disabled={checkinState[task.id]?.submitting}
+                          onClick={() => sendCheckin(task.id, "ok")}
+                        >
+                          {checkinState[task.id]?.submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                          Check In
+                        </button>
+                        <button
+                          type="button"
+                          className="checkin-btn checkin-btn-panic"
+                          disabled={checkinState[task.id]?.submitting}
+                          onClick={() => {
+                            if (window.confirm("Send a panic alert to your Command Desk now?")) sendCheckin(task.id, "panic");
+                          }}
+                        >
+                          <ShieldAlert className="w-3.5 h-3.5" /> Panic
+                        </button>
+                      </div>
+                      {checkinState[task.id]?.lastResult && (
+                        <p className={`checkin-status checkin-status-${checkinState[task.id]?.lastResult}`}>
+                          {checkinState[task.id]?.lastResult === "ok" && "Checked in."}
+                          {checkinState[task.id]?.lastResult === "panic" && "Panic alert sent to your Command Desk."}
+                          {checkinState[task.id]?.lastResult === "error" && "Couldn't send - try again."}
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               );

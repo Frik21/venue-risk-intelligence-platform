@@ -1468,6 +1468,74 @@
   color: rgba(252, 165, 165, 0.95);
 }
 
+/* Check-In / Panic (Tasks panel) - the live duty-of-care signal for an
+   in_progress task. Panic is visually the loudest control in this
+   panel on purpose - see the Following Roadmap's Tier 1 item 1. */
+.task-row-checkin {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.checkin-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.checkin-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.checkin-btn-ok {
+  color: rgba(134, 239, 172, 0.95);
+}
+
+.checkin-btn-ok:hover:not(:disabled) {
+  background: rgba(74, 222, 128, 0.16);
+  border-color: rgba(74, 222, 128, 0.4);
+}
+
+.checkin-btn-panic {
+  color: rgba(254, 202, 202, 0.95);
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.checkin-btn-panic:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.24);
+  border-color: rgba(248, 113, 113, 0.6);
+}
+
+.checkin-status {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.checkin-status-ok {
+  color: rgba(134, 239, 172, 0.95);
+}
+
+.checkin-status-panic {
+  color: rgba(252, 165, 165, 0.95);
+}
+
+.checkin-status-error {
+  color: rgba(252, 165, 165, 0.95);
+}
+
 /* Task Planning (Planner, Step 1) - the pre-op readiness checklist. */
 .task-plan-checklist {
   display: flex;

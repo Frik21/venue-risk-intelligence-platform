@@ -174,8 +174,34 @@ export interface Task {
   alertReviewedBucket: string | null;
   alertReviewedAt: string | null;
   alertReviewedByName: string | null;
+  // Optional - when set, every CPO on this task's roster is expected to
+  // check in at least this often while the task is in_progress (see
+  // Checkin below); null means no scheduled check-in is expected.
+  checkInIntervalMinutes: number | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// A CPO's own duty-of-care signal from the field - "ok" (a routine
+// check-in), "panic" (their own emergency trigger), or "missed" (the
+// backend's own finding when a scheduled check-in is overdue - see
+// lib/checkin-monitor.ts). Surfaced on Command Desk's Safety Alerts
+// panel (pages/alerts/list.tsx).
+export type CheckinType = "ok" | "panic" | "missed";
+export interface Checkin {
+  id: number;
+  taskId: number;
+  taskTitle: string | null;
+  cpoId: number;
+  cpoName: string | null;
+  type: CheckinType;
+  latitude: number | null;
+  longitude: number | null;
+  locationLabel: string | null;
+  triggeredAt: string;
+  acknowledgedBy: number | null;
+  acknowledgedByName: string | null;
+  acknowledgedAt: string | null;
 }
 
 export type CompanyStatus = "trial" | "active" | "suspended" | "cancelled";
@@ -992,6 +1018,7 @@ export const api = {
       clientId?: number | null; clientName?: string; clientContact?: string; clientRequirements?: string;
       operatorsRequired?: number; armedRequired?: boolean; vehiclesRequired?: number;
       estimatedCost?: number | null; estimatedCostCurrency?: string;
+      checkInIntervalMinutes?: number | null;
     }) => apiFetch<Task>("/tasks", { method: "POST", body: JSON.stringify(data) }),
     updateStatus: (id: number, data: { status: TaskStatus; completionNote?: string }) =>
       apiFetch<Task>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
@@ -1005,8 +1032,18 @@ export const api = {
       estimatedCost: number | null; estimatedCostCurrency: string;
       quotationLineItems: { description: string; amount: number }[];
       alertReviewedBucket: string | null; alertReviewedBy: number | null;
+      checkInIntervalMinutes: number | null;
     }>) => apiFetch<Task>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     duplicate: (id: number) => apiFetch<Task>(`/tasks/${id}/duplicate`, { method: "POST" }),
+  },
+  checkins: {
+    // Company-wide, newest first - Command Desk's Safety Alerts panel
+    // filters this to unacknowledged panic/missed rows; Operators Note
+    // filters it to the session's own cpoId to show "last checked in".
+    list: () => apiFetch<Checkin[]>("/checkins"),
+    create: (data: { taskId: number; type: "ok" | "panic"; latitude?: number; longitude?: number; locationLabel?: string }) =>
+      apiFetch<Checkin>("/checkins", { method: "POST", body: JSON.stringify(data) }),
+    acknowledge: (id: number) => apiFetch<Checkin>(`/checkins/${id}`, { method: "PATCH", body: JSON.stringify({}) }),
   },
   auth: {
     login: (email: string, password: string) =>

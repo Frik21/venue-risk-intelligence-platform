@@ -38,6 +38,7 @@ import announcementsRouter from "./announcements";
 import companiesRouter from "./companies";
 import systemRouter from "./system";
 import supportTicketsRouter from "./support-tickets";
+import checkinsRouter from "./checkins";
 
 const router: IRouter = Router();
 
@@ -86,5 +87,6 @@ router.use(announcementsRouter);
 router.use(companiesRouter);
 router.use(systemRouter);
 router.use(supportTicketsRouter);
+router.use(checkinsRouter);
 
 export default router;

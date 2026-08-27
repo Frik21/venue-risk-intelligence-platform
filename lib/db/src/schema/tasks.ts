@@ -114,6 +114,18 @@ export const tasksTable = pgTable("tasks", {
   alertReviewedBucket: text("alert_reviewed_bucket"),
   alertReviewedAt: timestamp("alert_reviewed_at", { withTimezone: true }),
   alertReviewedBy: integer("alert_reviewed_by").references(() => usersTable.id),
+  // Optional - when set, every CPO on this task's roster is expected to
+  // submit an "ok" check-in (schema/checkins.ts) at least this often
+  // while the task is in_progress; a gap longer than this raises a
+  // "missed" check-in (see lib/checkin-monitor.ts's background scan).
+  // Null means no scheduled check-in is expected for this task - a CPO
+  // can still trigger a panic alert regardless, since that's not tied
+  // to a schedule. Per direct product direction (Following Roadmap
+  // Tier 1, "where has this been all my life" for a CPO business
+  // owner's duty-of-care obligation) - not every job needs this (e.g. a
+  // low-risk static post), so it's opt-in per task rather than a
+  // blanket company setting.
+  checkInIntervalMinutes: integer("check_in_interval_minutes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

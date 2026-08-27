@@ -1,15 +1,95 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Alert, type AlertStatus, type Task, type User } from "@/lib/api";
+import { api, type Alert, type AlertStatus, type Checkin, type Task, type User } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
-import { Bell, CheckCheck, EyeOff, ArrowUpRight, ClipboardList } from "lucide-react";
+import { Bell, CheckCheck, EyeOff, ArrowUpRight, ClipboardList, ShieldAlert, MapPin } from "lucide-react";
 import { getPriorityColor, timeAgo } from "@/lib/display-utils";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { type TaskBucket, BUCKET_CONFIG, taskBucket } from "@/lib/task-bucket";
+
+// The live duty-of-care signal - a CPO's own "panic" trigger, or the
+// system's own "missed" finding when a scheduled check-in goes overdue
+// (see lib/checkin-monitor.ts on the backend). Per direct product
+// direction (Following Roadmap, Tier 1 item 1), this is the strongest
+// "where has this been all my life" feature in the whole platform, so
+// it sits first on this page, above the OSINT-driven alerts below -
+// nothing here should wait behind a review queue. "ok" check-ins never
+// show up here; this panel is only ever what needs a response.
+function SafetyAlertsPanel() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: checkins = [], isLoading } = useQuery<Checkin[]>({ queryKey: ["checkins"], queryFn: api.checkins.list });
+
+  const mutation = useMutation({
+    mutationFn: (id: number) => api.checkins.acknowledge(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["checkins"] });
+      toast({ title: "Acknowledged" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const needsAttention = checkins
+    .filter((c) => (c.type === "panic" || c.type === "missed") && c.acknowledgedAt == null)
+    .sort((a, b) => new Date(b.triggeredAt).getTime() - new Date(a.triggeredAt).getTime());
+
+  if (isLoading) return <Skeleton className="h-24" />;
+  if (needsAttention.length === 0) return null;
+
+  return (
+    <Card className="border-red-200">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <ShieldAlert className="w-4 h-4 text-red-500" /> Safety Alerts
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-red-700 bg-red-50 border-red-200">
+            {needsAttention.length} need attention
+          </span>
+        </CardTitle>
+        <p className="text-slate-500 text-xs mt-0.5">CPO panic alerts and missed scheduled check-ins.</p>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {needsAttention.map((c) => (
+          <div key={c.id} className="flex items-center gap-3 py-2 border-b border-slate-100 last:border-0">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                <span
+                  className={cn(
+                    "text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase",
+                    c.type === "panic" ? "text-red-700 bg-red-50 border-red-200" : "text-amber-700 bg-amber-50 border-amber-200",
+                  )}
+                >
+                  {c.type === "panic" ? "Panic" : "Missed Check-In"}
+                </span>
+                <span className="text-xs text-slate-400">{timeAgo(c.triggeredAt)}</span>
+              </div>
+              <div className="font-semibold text-slate-900 text-sm">{c.cpoName ?? "Unknown operator"}</div>
+              {c.taskTitle && <p className="text-xs text-slate-500">{c.taskTitle}</p>}
+              {c.locationLabel && (
+                <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                  <MapPin className="w-3 h-3 shrink-0" /> {c.locationLabel}
+                </p>
+              )}
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs h-7 shrink-0 border-red-200 text-red-600 hover:bg-red-50"
+              onClick={() => mutation.mutate(c.id)}
+              disabled={mutation.isPending}
+            >
+              <CheckCheck className="w-3 h-3 mr-1" /> Acknowledge
+            </Button>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
 
 // Buckets that get flagged here for a Manager's attention - Running
 // isn't included, it's just "in progress as expected", nothing to flag.
@@ -154,6 +234,7 @@ export default function AlertsList() {
         </Select>
       </div>
 
+      <SafetyAlertsPanel />
       <TaskFlagsPanel />
 
       {isLoading ? (
