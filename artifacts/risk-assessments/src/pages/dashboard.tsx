@@ -43,6 +43,7 @@ import type {
   Expense,
   ExpenseCategory,
   Announcement,
+  NearbyEmergencyInfo,
 } from "@/lib/api";
 import { LocationSearch, resolveCurrentLocation } from "@/components/location-search";
 import type { LocationSearchResult } from "@/components/location-search";
@@ -2410,6 +2411,33 @@ function OperationalCanvas({
     }
   }
 
+  // One-tap emergency info (Following Roadmap Tier 1, item 5) - nearest
+  // hospital/police station/embassy to wherever the CPO actually is
+  // right now, via the same resolveCurrentLocation() engine used for
+  // "Current Area" and check-ins above. Always a fresh lookup on tap
+  // rather than cached, since the whole point is "where am I right
+  // now," not "where was I last time."
+  const [emergencyInfoState, setEmergencyInfoState] = useState<
+    Record<number, { loading: boolean; data?: NearbyEmergencyInfo; error?: string }>
+  >({});
+
+  async function fetchNearbyHelp(taskId: number) {
+    setEmergencyInfoState((prev) => ({ ...prev, [taskId]: { loading: true } }));
+    try {
+      const resolved = await resolveCurrentLocation();
+      if (resolved.lat == null || resolved.lng == null) throw new Error("No location available");
+      const data = await api.emergencyInfo.check(resolved.lat, resolved.lng);
+      setEmergencyInfoState((prev) => ({ ...prev, [taskId]: { loading: false, data } }));
+    } catch (err) {
+      console.error(`Failed to fetch nearby help for task ${taskId}:`, err);
+      setEmergencyInfoState((prev) => ({ ...prev, [taskId]: { loading: false, error: "Couldn't load nearby help - try again." } }));
+    }
+  }
+
+  function formatDistance(meters: number): string {
+    return meters >= 1000 ? `${(meters / 1000).toFixed(1)}km` : `${Math.round(meters)}m`;
+  }
+
   // Closes whichever panel is open and reopens the Operators note dropdown,
   // so switching panels is one motion instead of close-then-reclick-
   // Operators note. Same cross-sibling-component pattern as the
@@ -4071,6 +4099,49 @@ function OperationalCanvas({
                           {checkinState[task.id]?.lastResult === "panic" && "Panic alert sent to your Command Desk."}
                           {checkinState[task.id]?.lastResult === "error" && "Couldn't send - try again."}
                         </p>
+                      )}
+
+                      <button
+                        type="button"
+                        className="checkin-btn nearby-help-btn"
+                        disabled={emergencyInfoState[task.id]?.loading}
+                        onClick={() => fetchNearbyHelp(task.id)}
+                      >
+                        {emergencyInfoState[task.id]?.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />}
+                        Nearby Help
+                      </button>
+                      {emergencyInfoState[task.id]?.error && (
+                        <p className="checkin-status checkin-status-error">{emergencyInfoState[task.id]?.error}</p>
+                      )}
+                      {emergencyInfoState[task.id]?.data && (
+                        <div className="nearby-help-results">
+                          {(
+                            [
+                              ["Hospital", emergencyInfoState[task.id]!.data!.hospitals[0]],
+                              ["Police", emergencyInfoState[task.id]!.data!.policeStations[0]],
+                              ["Embassy", emergencyInfoState[task.id]!.data!.embassies[0]],
+                            ] as const
+                          ).map(([category, nearest]) => (
+                            <div key={category} className="nearby-help-row">
+                              <span className="nearby-help-category">{category}</span>
+                              {nearest ? (
+                                <>
+                                  <span className="nearby-help-name">{nearest.name} · {formatDistance(nearest.distanceMeters)}</span>
+                                  <a
+                                    href={`https://www.google.com/maps/dir/?api=1&destination=${nearest.lat},${nearest.lng}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="nearby-help-directions"
+                                  >
+                                    Directions
+                                  </a>
+                                </>
+                              ) : (
+                                <span className="nearby-help-name nearby-help-none">None found nearby</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </>
                   )}

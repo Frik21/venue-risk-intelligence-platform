@@ -39,6 +39,7 @@ import companiesRouter from "./companies";
 import systemRouter from "./system";
 import supportTicketsRouter from "./support-tickets";
 import checkinsRouter from "./checkins";
+import emergencyInfoRouter from "./emergency-info";
 
 const router: IRouter = Router();
 
@@ -88,5 +89,6 @@ router.use(companiesRouter);
 router.use(systemRouter);
 router.use(supportTicketsRouter);
 router.use(checkinsRouter);
+router.use(emergencyInfoRouter);
 
 export default router;

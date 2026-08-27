@@ -1536,6 +1536,59 @@
   color: rgba(252, 165, 165, 0.95);
 }
 
+/* Nearby Help (Tasks panel) - one-tap emergency info (nearest
+   hospital/police/embassy) for an in_progress task's own location. */
+.nearby-help-btn {
+  width: 100%;
+  margin-top: 8px;
+  color: rgba(191, 219, 254, 0.95);
+}
+
+.nearby-help-btn:hover:not(:disabled) {
+  background: rgba(96, 165, 250, 0.16);
+  border-color: rgba(96, 165, 250, 0.4);
+}
+
+.nearby-help-results {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nearby-help-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.nearby-help-category {
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 600;
+  min-width: 52px;
+  flex-shrink: 0;
+}
+
+.nearby-help-name {
+  color: rgba(255, 255, 255, 0.85);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nearby-help-none {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.nearby-help-directions {
+  color: rgba(96, 165, 250, 0.95);
+  text-decoration: underline;
+  flex-shrink: 0;
+}
+
 /* Task Planning (Planner, Step 1) - the pre-op readiness checklist. */
 .task-plan-checklist {
   display: flex;

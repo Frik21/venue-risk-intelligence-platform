@@ -630,6 +630,15 @@ export interface NearbyService {
   distanceMeters: number;
 }
 
+// One-tap emergency info (Following Roadmap Tier 1, item 5) - mirrors
+// the backend's NearbyEmergencyInfo, same reasoning as NearbyService
+// above.
+export interface NearbyEmergencyInfo {
+  hospitals: NearbyService[];
+  policeStations: NearbyService[];
+  embassies: NearbyService[];
+}
+
 export interface TaskRoute {
   id: number;
   taskId: number;
@@ -1386,6 +1395,11 @@ export const api = {
   traffic: {
     check: (lat: number, lng: number) =>
       apiFetch<{ condition: TrafficCondition | null }>(`/traffic?lat=${lat}&lng=${lng}`),
+  },
+  emergencyInfo: {
+    // One-tap emergency info (Following Roadmap Tier 1, item 5) -
+    // nearest hospital/police station/embassy to an arbitrary lat/lng.
+    check: (lat: number, lng: number) => apiFetch<NearbyEmergencyInfo>(`/emergency-info?lat=${lat}&lng=${lng}`),
   },
   assessments: {
     list: () => apiFetch<AssessmentSummary[]>("/assessments"),
