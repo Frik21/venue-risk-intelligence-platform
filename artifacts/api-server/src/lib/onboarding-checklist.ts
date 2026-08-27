@@ -30,7 +30,20 @@ export const ONBOARDING_CHECKLIST_ITEMS: OnboardingChecklistItem[] = [
   { key: "ready_for_deployment", label: "Ready for deployment" },
 ];
 
+// Cert/license types deliberately span the jurisdictions CPOs actually
+// work under (PSIRA in South Africa, SIA in the UK, state-level cards
+// elsewhere) rather than one generic "certification" bucket - per
+// direct product direction (Following Roadmap Tier 1, item 4). Every
+// type here shares the same expiryDate field on operator_documents;
+// "Other Certification / License" is the catch-all for anything not
+// explicitly listed.
 export const DOCUMENT_TYPES = [
   { value: "id_document", label: "ID Document" },
   { value: "passport", label: "Passport" },
+  { value: "psira_registration", label: "PSIRA Registration" },
+  { value: "sia_license", label: "SIA License" },
+  { value: "firearm_competency", label: "Firearm Competency Certificate" },
+  { value: "medical_certificate", label: "Medical / First Aid Certificate" },
+  { value: "drivers_license", label: "Driver's License" },
+  { value: "other_certification", label: "Other Certification / License" },
 ] as const;

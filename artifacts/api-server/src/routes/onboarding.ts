@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { db, operatorOnboardingTable, operatorDocumentsTable, usersTable } from "@workspace/db";
 import { z } from "zod";
 import { ONBOARDING_CHECKLIST_ITEMS, DOCUMENT_TYPES } from "../lib/onboarding-checklist";
@@ -415,6 +415,37 @@ router.post("/onboarding/:id/documents", async (req, res): Promise<void> => {
     .returning();
 
   res.status(201).json(formatDocument(doc));
+});
+
+// Company-wide, across every operator - powers the Expiring
+// Certifications view on /admin/onboarding and the HR dashboard's own
+// stat tiles (Following Roadmap Tier 1, item 4: "certification/license
+// expiry tracking per operator per jurisdiction"). Every other document
+// route above is scoped to one operator's own onboarding record; this
+// is the one place a Manager sees expiry across the whole roster at
+// once, which is the entire point - a lapsed PSIRA/SIA registration
+// buried in one operator's own file is easy to miss until it's already
+// a problem.
+router.get("/onboarding-documents", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+
+  const docs = await db.select().from(operatorDocumentsTable).where(eq(operatorDocumentsTable.companyId, companyId)).orderBy(desc(operatorDocumentsTable.createdAt));
+  const onboardingIds = [...new Set(docs.map((d) => d.operatorOnboardingId))];
+  const records = onboardingIds.length
+    ? await db
+        .select({ id: operatorOnboardingTable.id, candidateName: operatorOnboardingTable.candidateName, userId: operatorOnboardingTable.userId })
+        .from(operatorOnboardingTable)
+        .where(inArray(operatorOnboardingTable.id, onboardingIds))
+    : [];
+  const userIds = records.map((r) => r.userId).filter((id): id is number => id != null);
+  const users = userIds.length ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, userIds)) : [];
+  const userNameMap: Record<number, string> = {};
+  for (const u of users) userNameMap[u.id] = u.name;
+  const operatorNameMap: Record<number, string> = {};
+  for (const r of records) operatorNameMap[r.id] = (r.userId != null ? userNameMap[r.userId] : undefined) ?? r.candidateName;
+
+  res.json(docs.map((d) => ({ ...formatDocument(d), operatorName: operatorNameMap[d.operatorOnboardingId] ?? "Unknown operator" })));
 });
 
 const DocumentUpdateSchema = DocumentInputSchema.partial().extend({

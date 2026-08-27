@@ -21,7 +21,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useRef, useState } from "react";
-import { UserPlus, ChevronDown, ChevronUp, FileText, CheckCircle2, Trash2, Plus, Search, Pencil } from "lucide-react";
+import { UserPlus, ChevronDown, ChevronUp, FileText, CheckCircle2, Trash2, Plus, Search, Pencil, AlertTriangle } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -34,14 +34,34 @@ const STATUS_CONFIG: Record<OnboardingStatus, { label: string; color: string }> 
   denied: { label: "Denied", color: "text-red-700 bg-red-50 border-red-200" },
 };
 
+// Mirrors the backend's onboarding-checklist.ts DOCUMENT_TYPES -
+// jurisdiction-specific cert/license types (PSIRA, SIA, etc.) alongside
+// the original two, per direct product direction (Following Roadmap
+// Tier 1, item 4).
 const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
   { value: "id_document", label: "ID Document" },
   { value: "passport", label: "Passport" },
+  { value: "psira_registration", label: "PSIRA Registration" },
+  { value: "sia_license", label: "SIA License" },
+  { value: "firearm_competency", label: "Firearm Competency Certificate" },
+  { value: "medical_certificate", label: "Medical / First Aid Certificate" },
+  { value: "drivers_license", label: "Driver's License" },
+  { value: "other_certification", label: "Other Certification / License" },
 ];
 
 // Comfortably under the api-server's 10mb JSON body limit once
 // base64-encoded (~33% larger than the raw file) - see app.ts.
 const MAX_DOCUMENT_BYTES = 6 * 1024 * 1024;
+
+// Expiring Certifications (Following Roadmap Tier 1, item 4) - a
+// document's own expiryDate, days until it lapses (negative once it
+// already has). 30 days is a fixed heads-up window, not a company
+// setting, matching how other Following Roadmap items shipped without
+// adding new configuration surfaces.
+const EXPIRY_WARNING_DAYS = 30;
+function daysUntilExpiry(expiryDate: string): number {
+  return Math.ceil((new Date(expiryDate + "T00:00:00").getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+}
 
 // Always-shown either/or indicator for the two mutually-exclusive
 // "engagement_type" checklist items (see onboarding-checklist.ts) -
@@ -544,6 +564,18 @@ export default function OnboardingPage() {
     queryFn: api.onboarding.listAll,
   });
 
+  const { data: allDocuments = [] } = useQuery<(OnboardingDocument & { operatorName: string })[]>({
+    queryKey: ["onboarding-documents-all"],
+    queryFn: api.onboarding.listAllDocuments,
+  });
+  // Most urgent first - already-expired certs (negative days) sort
+  // ahead of ones still inside the warning window.
+  const expiringDocuments = allDocuments
+    .filter((d) => d.expiryDate != null)
+    .map((d) => ({ ...d, days: daysUntilExpiry(d.expiryDate!) }))
+    .filter((d) => d.days <= EXPIRY_WARNING_DAYS)
+    .sort((a, b) => a.days - b.days);
+
   // Scroll a manually-expanded card into view (e.g. after "Manage" on
   // a row further down the list).
   useEffect(() => {
@@ -693,6 +725,38 @@ export default function OnboardingPage() {
             </button>
           ))}
         </div>
+      )}
+
+      {expiringDocuments.length > 0 && (
+        <Card className="border-red-200">
+          <CardContent className="p-5">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2 mb-3">
+              <AlertTriangle className="w-4 h-4 text-red-500" /> Expiring Certifications
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-red-700 bg-red-50 border-red-200">
+                {expiringDocuments.length}
+              </span>
+            </h2>
+            <div className="space-y-2">
+              {expiringDocuments.map((doc) => {
+                const expired = doc.days < 0;
+                return (
+                  <div key={doc.id} className="flex items-center justify-between gap-3 text-sm border border-red-100 rounded-md px-3 py-2">
+                    <div className="min-w-0">
+                      <span className="text-slate-900">{doc.operatorName}</span>
+                      <span className="text-slate-400"> · {DOCUMENT_TYPES.find((t) => t.value === doc.documentType)?.label ?? doc.documentType}</span>
+                      {doc.label && doc.label !== DOCUMENT_TYPES.find((t) => t.value === doc.documentType)?.label && (
+                        <span className="text-slate-400"> ({doc.label})</span>
+                      )}
+                    </div>
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-red-700 bg-red-50 border-red-200 shrink-0 whitespace-nowrap">
+                      {expired ? `Expired ${Math.abs(doc.days)}d ago` : `Expires in ${doc.days}d`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {statusFilter != null && (

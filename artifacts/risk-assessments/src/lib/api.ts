@@ -766,7 +766,15 @@ export interface OnboardingOverviewRecord extends OnboardingRecord {
   documentCount: number;
 }
 
-export type DocumentType = "id_document" | "passport";
+export type DocumentType =
+  | "id_document"
+  | "passport"
+  | "psira_registration"
+  | "sia_license"
+  | "firearm_competency"
+  | "medical_certificate"
+  | "drivers_license"
+  | "other_certification";
 
 // fileDataUrl is a base64 data: URL (this app has no cloud file
 // storage) - same pattern as Expenses receipts. Attached to the
@@ -1347,6 +1355,9 @@ export const api = {
     setOperationalAccess: (onboardingId: number, granted: boolean) =>
       apiFetch<OnboardingRecord>(`/onboarding/${onboardingId}/operational-access`, { method: "PATCH", body: JSON.stringify({ granted }) }),
     listDocuments: (onboardingId: number) => apiFetch<OnboardingDocument[]>(`/onboarding/${onboardingId}/documents`),
+    // Every document across every operator, company-wide - powers the
+    // Expiring Certifications view (Following Roadmap Tier 1, item 4).
+    listAllDocuments: () => apiFetch<(OnboardingDocument & { operatorName: string })[]>("/onboarding-documents"),
     addDocument: (onboardingId: number, data: { documentType: DocumentType; label?: string; filename?: string; fileDataUrl?: string; expiryDate?: string }) =>
       apiFetch<OnboardingDocument>(`/onboarding/${onboardingId}/documents`, { method: "POST", body: JSON.stringify(data) }),
     updateDocument: (id: number, data: Partial<{ label: string; expiryDate: string; verified: boolean }>) =>

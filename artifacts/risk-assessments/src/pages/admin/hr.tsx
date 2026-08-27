@@ -1,10 +1,22 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { api, type OnboardingOverviewRecord, type User } from "@/lib/api";
+import { api, type OnboardingOverviewRecord, type OnboardingDocument, type User } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserPlus, Users as UsersIcon, type LucideIcon } from "lucide-react";
 import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
+import { cn } from "@/lib/utils";
+
+// Same 30-day heads-up window and expiry math as the Expiring
+// Certifications card on /admin/onboarding (Following Roadmap Tier 1,
+// item 4) - duplicated rather than shared since these are two small,
+// page-local helpers, matching this codebase's existing convention for
+// this kind of thing (see e.g. costs.tsx/invoices.tsx's own local
+// formatMoney).
+const EXPIRY_WARNING_DAYS = 30;
+function daysUntilExpiry(expiryDate: string): number {
+  return Math.ceil((new Date(expiryDate + "T00:00:00").getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+}
 
 function SectionCard({
   title,
@@ -35,10 +47,10 @@ function SectionCard({
   );
 }
 
-function StatTile({ label, value }: { label: string; value: string }) {
+function StatTile({ label, value, tone }: { label: string; value: string; tone?: "negative" }) {
   return (
-    <div className="border border-slate-100 rounded-lg p-3">
-      <div className="text-lg font-mono tabular-nums font-bold text-slate-900">{value}</div>
+    <div className={cn("border rounded-lg p-3", tone === "negative" ? "border-red-200 bg-red-50/50" : "border-slate-100")}>
+      <div className={cn("text-lg font-mono tabular-nums font-bold", tone === "negative" ? "text-red-700" : "text-slate-900")}>{value}</div>
       <div className="text-xs text-slate-500 mt-0.5">{label}</div>
     </div>
   );
@@ -59,10 +71,18 @@ export default function HrDashboard() {
     queryFn: api.onboarding.listAll,
   });
   const { data: allUsers = [], isLoading: usersLoading } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list });
+  const { data: allDocuments = [] } = useQuery<(OnboardingDocument & { operatorName: string })[]>({
+    queryKey: ["onboarding-documents-all"],
+    queryFn: api.onboarding.listAllDocuments,
+  });
 
   const inProgress = onboarding.filter((o) => o.status === "in_progress").length;
   const onboarded = onboarding.filter((o) => o.status === "onboarded").length;
   const denied = onboarding.filter((o) => o.status === "denied").length;
+
+  const expiryDays = allDocuments.filter((d) => d.expiryDate != null).map((d) => daysUntilExpiry(d.expiryDate!));
+  const expiredCerts = expiryDays.filter((d) => d < 0).length;
+  const expiringCerts = expiryDays.filter((d) => d >= 0 && d <= EXPIRY_WARNING_DAYS).length;
 
   const users = filterByOffice(allUsers.filter((u) => u.role !== "cpo" && u.role !== "admin"), selectedOfficeId);
   const activeUsers = users.filter((u) => u.active);
@@ -93,6 +113,8 @@ export default function HrDashboard() {
               <StatTile label="Pending" value={String(inProgress)} />
               <StatTile label="Onboarded" value={String(onboarded)} />
               <StatTile label="Denied" value={String(denied)} />
+              <StatTile label="Certs expiring" value={String(expiringCerts)} tone={expiringCerts > 0 ? "negative" : undefined} />
+              <StatTile label="Certs expired" value={String(expiredCerts)} tone={expiredCerts > 0 ? "negative" : undefined} />
             </div>
           </SectionCard>
 
