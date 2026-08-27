@@ -96,14 +96,17 @@ interface OperationalAlert {
 
 // Mock feed for the Alerts panel (OperationalCanvas) - distinct from the
 // daily Operational Brief: alerts are individual, timestamped events
-// rather than a single standing summary.
-const OPERATIONAL_ALERTS: OperationalAlert[] = [
+// rather than a single standing summary. No location field of its own -
+// it's stamped with the CPO's own current area (briefArea.area, same
+// field weatherAlert/roadClosureAlert below already use) at the point
+// this is actually rendered into feedAlerts, rather than a hardcoded
+// demo city that never matched wherever the CPO actually was.
+const OPERATIONAL_ALERTS: Omit<OperationalAlert, "location">[] = [
   {
     id: "alert-4",
     severity: "info",
     title: "Intelligence source refreshed",
     description: "Local activity feeds have been updated with the latest reporting.",
-    location: "Cape Town",
     timestamp: "2 hr ago",
   },
 ];
@@ -2662,7 +2665,7 @@ function OperationalCanvas({
           realAlertId: a.id,
           reviewed: a.status === "reviewed",
         }))
-      : OPERATIONAL_ALERTS;
+      : OPERATIONAL_ALERTS.map((a) => ({ ...a, location: briefArea.area }));
 
   // "Severe weather advisory issued" - real, driven by the same weather
   // engine as the Operational Brief (fetchWeatherFinding on the

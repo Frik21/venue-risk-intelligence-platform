@@ -147,6 +147,12 @@ Everything flagged as still-needed during this session's "what would it take to 
 - Basic security headers (`helmet` or equivalent) - not installed anywhere in the stack
 - Database indexes on every table's `company_id` column - added as a filter everywhere this session, but with no index yet; cheap to add, matters as row counts grow per tenant
 
+**Known rough edges / loose ends spotted in passing** (not a priority list, just a place to catch small latent bugs and stale demo content before they're forgotten - add to this rather than losing track of them mid-session):
+- ~~Report Incident/Report Issue dialogs rendered white-on-white when opened from Operators Note~~ - **Fixed**, see the panic-button-era Notes entry area (no explicit text color on the card, inherited `text-white` from the dark app shell).
+- ~~`companies.ts`/`system.ts`'s router-wide `requireRole("admin")` silently 403'd every route registered after them for non-Owner accounts~~ - **Fixed** - this had been breaking the live panic/check-in feature and support tickets for every real subscriber, not just Owner-only surfaces.
+- ~~Operators Note's Active Alerts panel showed a hardcoded "Cape Town" demo alert regardless of the CPO's actual location~~ - **Fixed** - now stamped with `briefArea.area` (the CPO's real current area), same field the weather/road-closure alerts already use.
+- Worth a deliberate sweep for more of the same pattern - other still-hardcoded demo/placeholder values (`OPERATIONAL_ALERTS`'s frozen "2 hr ago" timestamp is one likely candidate) that were fine as throwaway scaffolding early on but now sit next to real, live data without anyone having gone back to check.
+
 **Operational safety net:**
 - Error tracking / uptime monitoring (e.g. Sentry) - a crash today is only visible if someone's watching logs
 - CI running `pnpm run build`/typecheck automatically on every PR - none configured yet, all verification this session was manual
