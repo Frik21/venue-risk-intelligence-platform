@@ -69,7 +69,7 @@ export const ListUsersResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'analyst', 'reviewer', 'viewer']),
+  "role": zod.enum(['admin', 'manager', 'cpo']),
   "avatarInitials": zod.string().nullish(),
   "active": zod.boolean(),
   "createdAt": zod.string()
@@ -83,7 +83,7 @@ export const ListUsersResponse = zod.array(ListUsersResponseItem)
 export const CreateUserBody = zod.object({
   "name": zod.string(),
   "email": zod.string(),
-  "role": zod.enum(['admin', 'analyst', 'reviewer', 'viewer']),
+  "role": zod.enum(['admin', 'manager', 'cpo']),
   "avatarInitials": zod.string().optional()
 })
 
@@ -116,7 +116,7 @@ export const ListVenuesResponse = zod.array(ListVenuesResponseItem)
  */
 export const CreateVenueBody = zod.object({
   "name": zod.string(),
-  "venueType": zod.enum(['hotel', 'stadium', 'conference', 'embassy', 'airport', 'mall', 'government', 'restaurant', 'hospital', 'university', 'other']).optional(),
+  "venueType": zod.enum(['hotel', 'stadium', 'conference', 'embassy', 'airport', 'mall', 'government', 'restaurant', 'hospital', 'university', 'office', 'point_of_interest', 'area_of_operations', 'other']).optional(),
   "address": zod.string(),
   "city": zod.string(),
   "country": zod.string(),

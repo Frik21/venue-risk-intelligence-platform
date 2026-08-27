@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
-import { db, routesTable, routeFindingsTable, incidentsTable } from "@workspace/db";
+import { eq, and, desc } from "drizzle-orm";
+import { db, routesTable, routeFindingsTable, incidentsTable, venuesTable, assessmentsTable } from "@workspace/db";
 import { z } from "zod";
+import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -115,12 +116,15 @@ function formatFinding(f: typeof routeFindingsTable.$inferSelect) {
 
 // ── List routes ───────────────────────────────────────────────────────────────
 router.get("/routes", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
   const assessmentId = req.query.assessmentId ? Number(req.query.assessmentId) : null;
   const venueId = req.query.venueId ? Number(req.query.venueId) : null;
 
   let query = db.select().from(routesTable).orderBy(desc(routesTable.createdAt)).$dynamic();
-  if (assessmentId) query = query.where(eq(routesTable.assessmentId, assessmentId));
-  else if (venueId) query = query.where(eq(routesTable.venueId, venueId));
+  if (assessmentId) query = query.where(and(eq(routesTable.companyId, companyId), eq(routesTable.assessmentId, assessmentId)));
+  else if (venueId) query = query.where(and(eq(routesTable.companyId, companyId), eq(routesTable.venueId, venueId)));
+  else query = query.where(eq(routesTable.companyId, companyId));
 
   const routes = await query;
   res.json(routes.map(formatRoute));
@@ -167,8 +171,11 @@ router.post("/routes", async (req, res): Promise<void> => {
   // For freehand: store drawn geometry as both original + active geometry
   const originalDrawn = data.originalDrawnGeometryGeojson ?? (data.creationMethod === "freehand_draw" ? routeGeometryGeojson : null);
 
+  const companyId = await resolveCompanyId(req.user!.companyId);
+
   const [route] = await db.insert(routesTable).values({
     ...data,
+    companyId,
     estimatedDistance: estimatedDistance ?? null,
     estimatedTravelTime: estimatedTravelTime ?? null,
     routeGeometryGeojson: routeGeometryGeojson ?? null,
@@ -382,6 +389,7 @@ async function generateCorridorFindings(route: typeof routesTable.$inferSelect) 
   }
 
   const toInsert = nearby.map((inc) => ({
+    companyId: route.companyId,
     routeId: route.id,
     assessmentId: route.assessmentId ?? null,
     venueId: route.venueId ?? null,
@@ -409,7 +417,7 @@ function mapIncidentToFindingType(incidentType: string): string {
 }
 
 function buildMockFindings(route: typeof routesTable.$inferSelect) {
-  const base = { routeId: route.id, assessmentId: route.assessmentId ?? null, venueId: route.venueId ?? null, detectedAt: new Date(), verified: false, analystNotes: null, sourceUrl: null };
+  const base = { companyId: route.companyId, routeId: route.id, assessmentId: route.assessmentId ?? null, venueId: route.venueId ?? null, detectedAt: new Date(), verified: false, analystNotes: null, sourceUrl: null };
   const findings = [];
   if (route.routeType === "primary_extraction" || route.routeType === "secondary_extraction") {
     findings.push({ ...base, findingType: "traffic_disruption", severity: "low", summary: "No active road closures detected in corridor. Monitor for event-day traffic surges.", sourceName: "OSINT Auto-Analysis", distanceFromRoute: null });

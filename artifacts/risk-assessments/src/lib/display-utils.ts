@@ -160,6 +160,9 @@ export const VENUE_TYPES = [
   { value: 'restaurant', label: 'Restaurant' },
   { value: 'hospital', label: 'Hospital' },
   { value: 'university', label: 'University' },
+  { value: 'office', label: 'Office' },
+  { value: 'point_of_interest', label: 'Point of Interest' },
+  { value: 'area_of_operations', label: 'Area of Operations' },
   { value: 'other', label: 'Other' },
 ];
 

@@ -1,65 +1,122 @@
 import { Link, useLocation } from "wouter";
 import {
-  LayoutDashboard,
   Building2,
-  ClipboardList,
-  AlertTriangle,
-  Bell,
-  Map,
-  FolderOpen,
-  FileText,
   Users,
-  Radio,
+  ListChecks,
   ChevronDown,
   ShieldAlert,
   Search,
   Menu,
   X,
+  Gauge,
+  ArrowLeftRight,
+  UserCog,
+  DollarSign,
+  UserPlus,
+  CalendarDays,
+  Archive,
+  Bell,
+  Radio,
+  Briefcase,
+  Store,
+  MessageSquare,
+  Receipt,
+  Wallet,
+  LogOut,
+  FlaskConical,
+  LifeBuoy,
+  Landmark,
+  IdCard,
+  Workflow,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { api, type Checkin, type FieldIncidentReport, type Office } from "@/lib/api";
+import { useSelectedOfficeId } from "@/lib/office-scope";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from "@/lib/auth";
+import { ReportIssueDialog } from "@/components/report-issue-dialog";
 
+const USER_ROLE_LABELS: Record<string, string> = {
+  admin: "Owner",
+  manager: "Manager",
+  finance: "Finance",
+  human_resources: "Human Resources",
+  operations: "Operations",
+  cpo: "CPO",
+};
+
+// Deliberately lean - this is a dispatch console for Managers
+// (creating/costing task requests, assigning CPOs, tracking who's
+// deployed, office locations), not a general risk-intelligence
+// analyst tool. Venues/Assessments/Incidents/Alerts/Field
+// Intelligence/Evidence/Reports/Documents/Audit History are the
+// CPO's/analyst's concerns (the CPO's own Operational Canvas at "/"
+// covers assessments) - their routes still exist and work, they're
+// just not cluttering this nav per direct product direction.
 const navGroups = [
   {
-    label: "Overview",
+    label: "Management",
     items: [
-      { href: "/", label: "Dashboard", icon: LayoutDashboard },
-    ],
-  },
-  {
-    label: "Intelligence",
-    items: [
-      { href: "/venues", label: "Venues", icon: Building2 },
-      { href: "/assessments", label: "Assessments", icon: ClipboardList },
-      { href: "/incidents", label: "Incidents", icon: AlertTriangle },
-      { href: "/maps", label: "Maps", icon: Map },
-    ],
-  },
-  {
-    label: "Monitoring",
-    items: [
-      { href: "/alerts", label: "Alert Queue", icon: Bell },
+      { href: "/alerts", label: "Alerts", icon: Bell },
+      { href: "/admin", label: "Dashboard", icon: Gauge },
+      { href: "/admin/calendar", label: "Calendar", icon: CalendarDays },
+      { href: "/tasks", label: "Tasks", icon: ListChecks },
+      { href: "/admin/communications", label: "Communications", icon: MessageSquare },
+      { href: "/admin/clients", label: "Clients", icon: Briefcase },
+      { href: "/admin/finance", label: "Finance", icon: Landmark },
+      { href: "/admin/hr", label: "Human Resources", icon: IdCard },
+      { href: "/admin/operations", label: "Operations", icon: Workflow },
+      { href: "/admin/costs", label: "Quotations", icon: DollarSign },
+      { href: "/admin/invoices", label: "Invoices", icon: Receipt },
+      { href: "/admin/cpo-deployment", label: "Operator Deployment", icon: UserCog },
+      { href: "/admin/onboarding", label: "Operator Database", icon: UserPlus },
+      { href: "/admin/payroll", label: "Payroll", icon: Wallet },
       { href: "/osint", label: "OSINT", icon: Radio },
-    ],
-  },
-  {
-    label: "Repository",
-    items: [
-      { href: "/evidence", label: "Evidence", icon: FolderOpen },
-      { href: "/reports", label: "Reports", icon: FileText },
-    ],
-  },
-  {
-    label: "Admin",
-    items: [
+      { href: "/admin/vendors", label: "Vendors", icon: Store },
+      { href: "/admin/task-archive", label: "Task Archived", icon: Archive },
+      { href: "/admin/offices", label: "Offices", icon: Building2 },
       { href: "/admin/users", label: "Users", icon: Users },
     ],
   },
 ];
 
+const ALL_OFFICES = "all";
+
 export default function Layout({ children }: { children: React.ReactNode }) {
+  const { user, logout } = useAuth();
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [offices, setOffices] = useState<Office[]>([]);
+  const [selectedOfficeId, setSelectedOfficeId] = useSelectedOfficeId();
+  const [showReportIssue, setShowReportIssue] = useState(false);
+  useEffect(() => {
+    api.offices.list().then(setOffices).catch((err) => console.error("Failed to load offices:", err));
+  }, []);
+
+  // Same queryKey as the Safety Alerts panel (pages/alerts/list.tsx), so
+  // acknowledging one there invalidates this count too. Polled here since
+  // this sidebar stays mounted across every Command Desk page - a panic
+  // triggered while a Manager is elsewhere in the app shouldn't require a
+  // manual reload to surface as a badge on the Alerts nav item.
+  const { data: checkins = [] } = useQuery<Checkin[]>({
+    queryKey: ["checkins"],
+    queryFn: api.checkins.list,
+    enabled: !!user,
+    refetchInterval: 30000,
+  });
+  // Same queryKey as the Field Incident Reports panel (pages/alerts/
+  // list.tsx), for the same invalidate-on-review reasoning as checkins.
+  const { data: fieldIncidentReports = [] } = useQuery<FieldIncidentReport[]>({
+    queryKey: ["field-incident-reports"],
+    queryFn: api.fieldIncidentReports.list,
+    enabled: !!user,
+    refetchInterval: 30000,
+  });
+  const unacknowledgedAlertCount =
+    checkins.filter((c) => (c.type === "panic" || c.type === "missed") && c.acknowledgedAt == null).length +
+    fieldIncidentReports.filter((r) => r.reviewedAt == null).length;
   const [showShell, setShowShell] = useState(() => {
   return sessionStorage.getItem("venueguard-show-shell") === "true";
 });
@@ -68,16 +125,26 @@ useEffect(() => {
     sessionStorage.setItem("venueguard-show-shell", "true");
     setShowShell(true);
   };
-const hideShell = location === "/" && !showShell;
   window.addEventListener("venueguard-show-shell", handler);
 
   return () => {
     window.removeEventListener("venueguard-show-shell", handler);
   };
 }, []);
-const hideShell = location === "/" && !showShell;
+// "/cpo" is the CPO's own full-screen Operational Canvas, "/owner" is
+// the platform Owner's own Master Console, and "/quick-access" is the Owner's
+// manual chooser back to /cpo or /admin (a different concept entirely
+// from this company-scoped Management shell, which carries the Office
+// switcher) - none want this sidebar/header chrome, nor do the
+// full-bleed auth pages. "/" itself renders the public landing page
+// directly from require-auth.tsx, never reaching this component at
+// all, so it's not listed here either.
+const hideShell = (location === "/cpo" || location === "/owner" || location === "/owner/subscriptions" || location === "/owner/it" || location === "/quick-access" || location === "/login" || location === "/register" || location === "/change-password") && !showShell;
+  // "/admin" needs the same exact-match treatment as "/" - otherwise
+  // it'd also read as active on "/admin/users" (a real, distinct nav
+  // item), since that path also starts with "/admin".
   const isActive = (href: string) =>
-    href === "/" ? location === "/" : location.startsWith(href);
+    href === "/" || href === "/admin" ? location === href : location.startsWith(href);
 
   const Sidebar = () => (
     <aside className="w-64 bg-slate-950 text-slate-100 flex flex-col h-full">
@@ -85,9 +152,39 @@ const hideShell = location === "/" && !showShell;
         <ShieldAlert className="w-5 h-5 text-blue-400 mr-2.5 shrink-0" />
         <div>
           <div className="text-sm font-bold text-white tracking-wide">VENUEGUARD</div>
-          <div className="text-[10px] text-slate-500 uppercase tracking-widest">Risk Intelligence</div>
+          <div className="text-[10px] text-slate-500 uppercase tracking-widest">Command Desk</div>
         </div>
       </div>
+
+      {/* Office switcher - global filter, per direct product direction
+          ("companies will have different offices... select an office
+          and all the data from the allocated office"). Persists to
+          localStorage (see lib/office-scope.ts) so it survives
+          reloads/navigation, and every list page filters to it. Only
+          shown once there's actually more than one office to choose
+          between - with a single office it's indistinguishable from
+          "All Offices" and just reads as clutter next to the real
+          "Offices" management page in the nav below. */}
+      {offices.length > 1 && (
+        <div className="px-3 pt-3 pb-1 border-b border-slate-800 shrink-0">
+          <Building2 className="w-3 h-3 text-slate-500 inline mr-1.5 mb-2" />
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Office</span>
+          <Select
+            value={selectedOfficeId != null ? String(selectedOfficeId) : ALL_OFFICES}
+            onValueChange={(v) => setSelectedOfficeId(v === ALL_OFFICES ? null : Number(v))}
+          >
+            <SelectTrigger className="h-8 text-xs bg-slate-900 border-slate-800 text-slate-200 mt-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_OFFICES}>All Offices</SelectItem>
+              {offices.map((o) => (
+                <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto py-3 px-2 space-y-4">
         {navGroups.map((group) => (
@@ -99,6 +196,7 @@ const hideShell = location === "/" && !showShell;
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.href);
+                const alertBadge = item.href === "/alerts" ? unacknowledgedAlertCount : 0;
                 return (
                   <Link
                     key={item.href}
@@ -112,7 +210,12 @@ const hideShell = location === "/" && !showShell;
                     )}
                   >
                     <Icon className="w-4 h-4 mr-2.5 shrink-0" />
-                    {item.label}
+                    <span className="flex-1">{item.label}</span>
+                    {alertBadge > 0 && (
+                      <span className="ml-2 shrink-0 min-w-[1.25rem] h-5 px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center">
+                        {alertBadge > 99 ? "99+" : alertBadge}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
@@ -121,15 +224,53 @@ const hideShell = location === "/" && !showShell;
         ))}
       </div>
 
-      <div className="p-3 border-t border-slate-800 shrink-0">
-        <div className="flex items-center gap-3 px-2 py-2 rounded-md text-slate-400">
+      <div className="p-3 border-t border-slate-800 shrink-0 space-y-2">
+        {/* Leaves this admin/manager shell (Command Desk) entirely for
+            the CPO's own full-screen Operational Canvas (Operators
+            note - its own login/brief flow, no persistent sidebar).
+            Labeled with that brand name directly (not the generic
+            "Operator View" it used to say) so it's clear which app
+            this jumps into. Owner-only sessions skip this: they have
+            no company to preview a CPO's (company-scoped) view as. */}
+        {user?.role !== "admin" && (
+          <Link
+            href="/cpo"
+            onClick={() => setMobileOpen(false)}
+            className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors border border-slate-800"
+          >
+            <ArrowLeftRight className="w-4 h-4 shrink-0" />
+            Operators note
+          </Link>
+        )}
+        {/* The real "support channel for subscribers" - lands in the
+            Owner's own IT inbox (/owner/it, routes/support-tickets.ts).
+            Owner-only sessions skip this too (companyId: null - see the
+            Operators note link above), same reasoning. */}
+        {user?.role !== "admin" && (
+          <button
+            type="button"
+            onClick={() => setShowReportIssue(true)}
+            className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors w-full text-left"
+          >
+            <LifeBuoy className="w-4 h-4 shrink-0" />
+            Report an Issue
+          </button>
+        )}
+        <div className="flex items-center gap-2 px-2 py-2 rounded-md text-slate-400">
           <div className="w-7 h-7 rounded bg-blue-600/30 flex items-center justify-center text-blue-300 text-xs font-bold shrink-0">
-            SA
+            {user?.avatarInitials ?? user?.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() ?? "?"}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-medium text-slate-200 truncate">Senior Analyst</div>
-            <div className="text-[10px] text-slate-500 truncate">Admin Access</div>
+            <div className="text-xs font-medium text-slate-200 truncate">{user?.name ?? "—"}</div>
+            <div className="text-[10px] text-slate-500 truncate">{user ? (USER_ROLE_LABELS[user.role] ?? user.role) : ""}</div>
           </div>
+          <button
+            onClick={() => logout()}
+            title="Sign Out"
+            className="p-1.5 rounded hover:bg-slate-800 hover:text-white transition-colors shrink-0"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
     </aside>
@@ -137,6 +278,7 @@ const hideShell = location === "/" && !showShell;
 
   return (
     <div className="min-h-screen flex bg-slate-100 font-sans">
+      {showReportIssue && <ReportIssueDialog source="command_desk" onClose={() => setShowReportIssue(false)} />}
       {/* Desktop sidebar */}
       <div className={cn("hidden md:flex flex-col shrink-0 h-screen sticky top-0", hideShell && "md:hidden")}>
         <Sidebar />
@@ -170,6 +312,31 @@ const hideShell = location === "/" && !showShell;
             <ShieldAlert className="w-5 h-5 text-blue-600 mr-1.5" />
             <span className="font-bold text-sm text-slate-900">VenueGuard</span>
           </div>
+          {user?.isPreviewing && (
+            <div className="flex items-center gap-2 bg-violet-50 border border-violet-200 text-violet-700 text-xs font-medium px-3 py-1.5 rounded-md">
+              <FlaskConical className="w-3.5 h-3.5" />
+              <span>Previewing {user.companyName ?? "the test company"} - not a real subscriber</span>
+              {/* Back to /owner without ending Preview - distinct from
+                  "Exit Preview" below, which does end the session. */}
+              <Link href="/owner" className="underline decoration-dotted hover:text-violet-900">
+                Master Console
+              </Link>
+              <span className="text-violet-300">·</span>
+              <button
+                className="underline decoration-dotted hover:text-violet-900"
+                onClick={async () => {
+                  // Full reload (not client-side nav) - no react-query
+                  // cache in this app is keyed by company, so an
+                  // in-memory cache built while previewing shouldn't
+                  // bleed into the plain Owner view after exiting.
+                  await api.auth.exitPreview();
+                  window.location.href = "/owner";
+                }}
+              >
+                Exit Preview
+              </button>
+            </div>
+          )}
           <div className="flex-1" />
           <div className="hidden sm:flex items-center gap-2 text-sm text-slate-500 bg-slate-100 px-3 py-1.5 rounded-md">
             <Search className="w-4 h-4" />
@@ -177,7 +344,7 @@ const hideShell = location === "/" && !showShell;
             <kbd className="ml-1 px-1.5 py-0.5 text-xs bg-white border border-slate-200 rounded font-mono">⌘K</kbd>
           </div>
           <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
-            SA
+            {user?.avatarInitials ?? user?.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() ?? "?"}
           </div>
         </header>
 
@@ -187,7 +354,7 @@ const hideShell = location === "/" && !showShell;
     hideShell ? "p-0" : "p-4 md:p-6"
   )}
 >
-          <div className="max-w-7xl mx-auto w-full">
+          <div className={cn("w-full", !hideShell && "max-w-7xl mx-auto")}>
             {children}
           </div>
         </div>

@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
+import { requireAuth, blockSoloOperatorFromManagement } from "../lib/auth";
 import healthRouter from "./health";
+import authRouter from "./auth";
 import assessmentsRouter from "./assessments";
 import risksRouter from "./risks";
 import venuesRouter from "./venues";
@@ -11,10 +13,46 @@ import riskMatrixRouter from "./risk-matrix";
 import dashboardRouter from "./dashboard";
 import usersRouter from "./users";
 import routesRouter from "./routes";
+import countryIntelligenceRouter from "./country-intelligence";
+import searchPhrasesRouter from "./search-phrases";
+import tasksRouter from "./tasks";
+import plansRouter from "./plans";
+import venueRiskAssessmentsRouter from "./venue-risk-assessments";
+import weatherRouter from "./weather";
+import trafficRouter from "./traffic";
+import taskRoutesRouter from "./task-routes";
+import taskPdfRouter from "./task-pdf";
+import quotationPdfRouter from "./quotation-pdf";
+import timesheetRouter from "./timesheet";
+import expensesRouter from "./expenses";
+import officesRouter from "./offices";
+import clientsRouter from "./clients";
+import quotesRouter from "./quotes";
+import settingsRouter from "./settings";
+import personnelCostsRouter from "./personnel-costs";
+import onboardingRouter from "./onboarding";
+import vendorsRouter from "./vendors";
+import invoicesRouter from "./invoices";
+import payrollRouter from "./payroll";
+import announcementsRouter from "./announcements";
+import companiesRouter from "./companies";
+import systemRouter from "./system";
+import supportTicketsRouter from "./support-tickets";
+import checkinsRouter from "./checkins";
+import emergencyInfoRouter from "./emergency-info";
+import fieldIncidentReportsRouter from "./field-incident-reports";
 
 const router: IRouter = Router();
 
+// health and auth (login/logout, plus /auth/me and /auth/change-password
+// which gate themselves) must stay reachable without a session - every
+// router registered after requireAuth below is protected by this one
+// line instead of each of the ~33 files needing its own guard.
 router.use(healthRouter);
+router.use(authRouter);
+router.use(requireAuth);
+router.use(blockSoloOperatorFromManagement);
+
 router.use(dashboardRouter);
 router.use(usersRouter);
 router.use(venuesRouter);
@@ -26,5 +64,33 @@ router.use(alertsRouter);
 router.use(osintRouter);
 router.use(incidentsRouter);
 router.use(routesRouter);
+router.use(countryIntelligenceRouter);
+router.use(searchPhrasesRouter);
+router.use(tasksRouter);
+router.use(plansRouter);
+router.use(venueRiskAssessmentsRouter);
+router.use(weatherRouter);
+router.use(trafficRouter);
+router.use(taskRoutesRouter);
+router.use(taskPdfRouter);
+router.use(quotationPdfRouter);
+router.use(timesheetRouter);
+router.use(expensesRouter);
+router.use(officesRouter);
+router.use(clientsRouter);
+router.use(quotesRouter);
+router.use(settingsRouter);
+router.use(personnelCostsRouter);
+router.use(onboardingRouter);
+router.use(vendorsRouter);
+router.use(invoicesRouter);
+router.use(payrollRouter);
+router.use(announcementsRouter);
+router.use(companiesRouter);
+router.use(systemRouter);
+router.use(supportTicketsRouter);
+router.use(checkinsRouter);
+router.use(emergencyInfoRouter);
+router.use(fieldIncidentReportsRouter);
 
 export default router;

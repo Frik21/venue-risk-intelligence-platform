@@ -788,7 +788,7 @@ components:
           type: string
         role:
           type: string
-          enum: [admin, analyst, reviewer, viewer]
+          enum: [admin, manager, cpo]
         avatarInitials:
           type: ["string", "null"]
         active:
@@ -806,7 +806,7 @@ components:
           type: string
         role:
           type: string
-          enum: [admin, analyst, reviewer, viewer]
+          enum: [admin, manager, cpo]
         avatarInitials:
           type: string
 
@@ -867,7 +867,7 @@ components:
           type: string
         venueType:
           type: string
-          enum: [hotel, stadium, conference, embassy, airport, mall, government, restaurant, hospital, university, other]
+          enum: [hotel, stadium, conference, embassy, airport, mall, government, restaurant, hospital, university, office, point_of_interest, area_of_operations, other]
         address:
           type: string
         city:

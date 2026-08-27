@@ -20,5 +20,8 @@ export const VenueInputVenueType = {
   restaurant: 'restaurant',
   hospital: 'hospital',
   university: 'university',
+  office: 'office',
+  point_of_interest: 'point_of_interest',
+  area_of_operations: 'area_of_operations',
   other: 'other',
 } as const;

@@ -169,34 +169,2992 @@
     @apply bg-background text-foreground;
   }
 }
-.venueguard-breathing-marker {
-  animation: venueguard-marker-breathe 3.8s ease-in-out infinite;
-  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.75)) drop-shadow(0 0 16px rgba(56, 189, 248, 0.4));
+
+/* Top Banner - persistent bar above the Operations Centre. Takes up
+   permanent screen space (the canvas sits below it in a flex column,
+   see Dashboard's step === "centre" render) rather than floating over
+   the map like the panel triggers, per direct product direction. */
+.top-banner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 56px;
+  padding: 0 20px;
+  background: rgba(8, 11, 15, 0.96);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-@keyframes venueguard-marker-breathe {
-  0%, 100% {
-    opacity: 0.72;
-    stroke-width: 2;
-  }
-
-  50% {
-    opacity: 1;
-    stroke-width: 4;
-  }
+.top-banner-brand {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  min-width: 0;
 }
 
-.leaflet-tooltip.venueguard-marker-tooltip {
-  background: rgba(5, 8, 22, 0.95);
-  color: #e2e8f0;
+.top-banner-brand-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: none;
+  background: transparent;
+  padding: 6px 4px;
+  margin: -6px -4px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.top-banner-brand-trigger:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.top-banner-brand-chevron {
+  color: rgba(255, 255, 255, 0.4);
+  transition: transform 0.15s ease;
+}
+
+.top-banner-brand-chevron-open {
+  transform: rotate(180deg);
+}
+
+.top-banner-brand-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 200px;
+  padding: 6px;
+  background: rgba(11, 15, 20, 0.98);
   border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.top-banner-brand-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.top-banner-brand-menu-item:hover,
+.top-banner-brand-menu-item:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.top-banner-brand-menu-item svg {
+  color: rgba(125, 211, 252, 0.85);
+  flex-shrink: 0;
+}
+
+.top-banner-brand-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #fff;
+}
+
+.top-banner-brand-divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.top-banner-brand-context {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Search bar - Operational Search Index (Layer 6 follow-up), searches
+   country and city names and selects through the same Country Selection
+   Engine a map click does. Sits left of the operator group. */
+.top-banner-search-wrap {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 24px;
+}
+
+.top-banner-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 420px;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.top-banner-search:focus-within {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(125, 211, 252, 0.4);
+}
+
+.top-banner-search-icon {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.top-banner-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+}
+
+.top-banner-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Alerts trigger - lives in the persistent top banner, left of the
+   operator/Profile area, rather than floating over the canvas (see
+   TOGGLE_ALERTS_PANEL_EVENT/ALERTS_COUNT_EVENT in dashboard.tsx for
+   how it stays in sync with alertsPanelOpen/combinedAlerts, both of
+   which still live in OperationalCanvas). */
+/* The real panic button - always visible in the header, works with no
+   active task required (see sendGlobalPanic in dashboard.tsx). Styled
+   as the loudest control in the whole top banner on purpose. */
+.top-banner-panic-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-right: 12px;
+  padding: 8px 14px;
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  border-radius: 8px;
+  background: rgba(248, 113, 113, 0.16);
+  color: rgba(254, 202, 202, 0.95);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.top-banner-panic-trigger:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.3);
+  border-color: rgba(248, 113, 113, 0.75);
+}
+
+.top-banner-panic-trigger:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.top-banner-alerts-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-right: 16px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.top-banner-alerts-trigger:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(252, 165, 165, 0.4);
+}
+
+.top-banner-alerts-trigger-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(248, 113, 113, 0.9);
+  color: #1a0a0a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Offline-first sync status (Following Roadmap, Tier 2 item 6) - only
+   ever rendered while lib/offline-queue.ts actually has items, same
+   "nothing to show, render nothing" convention as SafetyAlertsPanel on
+   Command Desk. Amber (default trigger colors) while pending/syncing,
+   switches to the same red treatment as the panic button once anything
+   has genuinely failed to sync. */
+.top-banner-sync-status {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-right: 12px;
+}
+
+.top-banner-sync-status-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 8px;
+  background: rgba(251, 191, 36, 0.12);
+  color: rgba(253, 230, 138, 0.95);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.top-banner-sync-status-trigger:hover {
+  background: rgba(251, 191, 36, 0.22);
+}
+
+.top-banner-sync-status-trigger-failed {
+  border-color: rgba(248, 113, 113, 0.5);
+  background: rgba(248, 113, 113, 0.16);
+  color: rgba(254, 202, 202, 0.95);
+}
+
+.top-banner-sync-status-trigger-failed:hover {
+  background: rgba(248, 113, 113, 0.3);
+}
+
+.top-banner-sync-status-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 280px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 8px;
+  background: rgba(11, 15, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.top-banner-sync-status-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.top-banner-sync-status-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.top-banner-sync-status-row-kind {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.top-banner-sync-status-row-time {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.top-banner-sync-status-row-error {
+  font-size: 11px;
+  color: rgba(252, 165, 165, 0.85);
+}
+
+.top-banner-sync-status-row-pending {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: rgba(253, 230, 138, 0.85);
+  white-space: nowrap;
+}
+
+.top-banner-sync-status-row-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.top-banner-sync-status-row-actions button {
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 5px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.top-banner-sync-status-row-actions button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.top-banner-operator {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.top-banner-operator-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  padding: 6px 4px;
+  margin: -6px -4px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.top-banner-operator-trigger:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.top-banner-operator-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(125, 211, 252, 0.18);
+  color: rgba(125, 211, 252, 0.95);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.top-banner-operator-name {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.top-banner-operator-chevron {
+  color: rgba(255, 255, 255, 0.4);
+  transition: transform 0.15s ease;
+}
+
+.top-banner-operator-chevron-open {
+  transform: rotate(180deg);
+}
+
+.top-banner-operator-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 180px;
+  padding: 6px;
+  background: rgba(11, 15, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.top-banner-operator-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.top-banner-operator-menu-item:hover,
+.top-banner-operator-menu-item:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.top-banner-operator-menu-item svg {
+  color: rgba(125, 211, 252, 0.85);
+  flex-shrink: 0;
+}
+
+.top-banner-operator-menu-item-danger:hover,
+.top-banner-operator-menu-item-danger:focus-visible {
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.top-banner-operator-menu-item-danger svg {
+  color: rgba(248, 113, 113, 0.85);
+}
+
+/* Map & Country Focus Aesthetics Engine - the Operational Canvas's own
+   palette lives as CSS custom properties, set inline on .operational-canvas
+   from the single source of truth in src/lib/map-aesthetics.ts (not
+   duplicated here) so changing one constant is the whole aesthetic pass.
+   The var() fallbacks below only matter if that inline set is ever
+   missing, and reproduce the same values the engine currently ships. */
+.operational-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: radial-gradient(ellipse at center, var(--map-ocean-centre, #0b0f14) 0%, var(--map-ocean-edge, #0b0f14) 100%);
+  isolation: isolate;
+}
+
+.canvas-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.base-map-layer {
+  z-index: 1;
+  pointer-events: none;
+}
+
+.approved-base-map-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center center;
+  /* filter + transition are inline (Index 3.3/3.4 getBackgroundFocusStyle)
+     since the transition timing itself must be direction-aware - staggered
+     on the way in, a single uniform 450ms ease-out on the way back to the
+     world map. */
+}
+
+.operational-layers {
+  z-index: 2;
+  pointer-events: auto;
+}
+
+.operational-footprint-layer {
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* Operational Country Focus Engine (Index 3.3/3.4): the background dim/
+   blur overlay is always mounted while a country is rendered (never
+   conditionally removed) so it has something to fade from/to. opacity +
+   transition are inline (getDimOverlayStyle) for the same direction-aware
+   reason as the base map's filter above. */
+.country-focus-dim-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  background: rgba(11, 15, 20, 0.55);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+
+/* Operational Country Focus Engine (Index 3.3): the selected country is
+   the real approved map image, clipped to its own Operational Geometry -
+   no gold fill, no SVG polygon, no coloured overlay, no border/outline/
+   glow. The clip-path and the <image> both live in the same viewBox as
+   every other geometry overlay (Index 2.2C), so the cut-out aligns
+   pixel-for-pixel with the real map underneath before it ever moves. */
+.country-focus-image-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 11;
+  pointer-events: none;
+}
+
+.country-intelligence-layer {
+  z-index: 4;
+  pointer-events: none;
+}
+
+/* Country Boundary Debug Mode (Index 2.1) - temporary, alignment
+   verification only. Transparent fill, thin gold outline, no hover. */
+.country-boundary-debug-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.country-boundary-debug-path {
+  fill: none;
+  stroke: rgba(var(--map-accent-rgb, 255, 196, 87), 0.55);
+  stroke-width: 0.5;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Map & Country Focus Aesthetics Engine: only rendered at all when
+   MAP_FOCUS_BORDER_VISIBLE is true (see dashboard.tsx) - VenueGuard's
+   Country Focus Engine (Index 3.3) was explicitly built with no border/
+   outline/glow, so this stays dormant infrastructure until that's a
+   deliberate aesthetic decision. When enabled: a thin rim-light traces
+   the focused country's exact cutout shape (same clip path and transform
+   as the image itself - see focusRender in dashboard.tsx). Non-scaling
+   stroke keeps the line a constant screen-space width from Russia down
+   to a scale(30) Dominican Republic. Colour is its own "Aurora Glass"
+   neon blue (--map-focus-border-rgb), separate from the shared gold
+   --map-accent-rgb the debug grid still uses. */
+.country-focus-border-path {
+  fill: none;
+  stroke: rgba(var(--map-focus-border-rgb, 95, 212, 255), 0.85);
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+/* Selected-country paint: fill is the "Aurora Glass" diagonal gradient,
+   set inline (dashboard.tsx) via MAP_FOCUS_FILL_GRADIENT_STOPS; stroke
+   stays off here so this isn't a second outline (the rim-light above
+   already owns the edge). */
+.country-focus-fill-path {
+  stroke: none;
+  pointer-events: none;
+}
+
+/* Major cities (Index 5.1) - reference data only, deliberately quiet: a
+   small solid dot and a plain label, no glow, no animation. Each dot+
+   label already carries its own inverse-scale transform in dashboard.tsx
+   so it stays a constant screen size at any country zoom - these rules
+   only set its size/colour at that already-normalised scale. */
+.major-city-dot {
+  fill: #eae7f0;
+  fill-opacity: 0.85;
+  pointer-events: none;
+}
+
+.major-city-label {
+  fill: #eae7f0;
+  fill-opacity: 0.85;
+  font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+  font-size: 7px;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+
+.breathing-markers-layer {
+  z-index: 5;
+  pointer-events: none;
+}
+
+.debug-layer-number-layer {
+  z-index: 6;
+  pointer-events: none;
+}
+
+.debug-layer-badge-stack {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.debug-layer-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 196, 87, 0.28);
+  border-radius: 999px;
+  background: rgba(11, 15, 20, 0.72);
+  color: rgba(255, 236, 198, 0.86);
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  backdrop-filter: blur(8px);
+}
+
+.debug-layer-badge span {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(255, 196, 87, 0.18);
+  color: rgba(255, 214, 143, 0.96);
+  font-weight: 700;
+}
+
+.debug-layer-badge strong {
+  font-weight: 500;
+}
+
+.country-selection-engine {
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: auto;
+}
+
+.country-hit-zone {
+  fill: transparent;
+  stroke: transparent;
+  pointer-events: all;
+  cursor: pointer;
+}
+
+.country-hit-zone:hover,
+.country-hit-zone:focus,
+.country-hit-zone:active {
+  fill: transparent;
+  stroke: transparent;
+  outline: none;
+}
+
+.selected-country-dev-readout {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 20;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 196, 87, 0.22);
+  border-radius: 999px;
+  background: rgba(11, 15, 20, 0.72);
+  color: rgba(255, 236, 198, 0.72);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+
+.canvas-calibration-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.canvas-calibration-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 196, 87, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 196, 87, 0.16) 1px, transparent 1px);
+  background-size: 5% 5%;
+}
+
+.canvas-calibration-crosshair-x,
+.canvas-calibration-crosshair-y {
+  position: absolute;
+  background: rgba(255, 196, 87, 0.9);
+}
+
+.canvas-calibration-crosshair-x {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+.canvas-calibration-crosshair-y {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.canvas-calibration-readout {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 196, 87, 0.35);
+  border-radius: 8px;
+  background: rgba(11, 15, 20, 0.82);
+  color: rgba(255, 236, 198, 0.95);
+  font-size: 12px;
+  line-height: 1.45;
+  letter-spacing: 0.04em;
+  backdrop-filter: blur(8px);
+}
+
+/* Country Boundary QA Mode (Index 2.2) - product verification tool,
+   development only. Shows exactly one country's boundary at a time. */
+.country-qa-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.country-qa-path {
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.country-qa-panel {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 30;
+  width: 260px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 196, 87, 0.35);
+  border-radius: 10px;
+  background: rgba(11, 15, 20, 0.88);
+  color: rgba(255, 236, 198, 0.95);
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0.03em;
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.country-qa-panel-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+}
+
+.country-qa-panel-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.country-qa-panel-row button {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 196, 87, 0.35);
+  border-radius: 6px;
+  background: rgba(255, 196, 87, 0.12);
+  color: rgba(255, 236, 198, 0.95);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.country-qa-panel-row input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid rgba(255, 196, 87, 0.25);
+  border-radius: 6px;
+  background: rgba(11, 15, 20, 0.6);
+  color: rgba(255, 236, 198, 0.95);
+  font-size: 11px;
+}
+
+.country-qa-panel-row label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.country-qa-panel-row input[type="range"] {
+  flex: 1;
+}
+
+.country-qa-panel-details {
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 196, 87, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: rgba(255, 236, 198, 0.75);
+}
+
+.country-qa-panel-flagged {
+  color: rgba(255, 140, 140, 0.9);
+  font-weight: 600;
+}
+
+/* Operational Country Selection Engine debug proof (Index 3.0A) -
+   temporary, dev-only. Confirms click events reach the invisible
+   country geometry and update Active Country; no border/fill/highlight
+   on the country itself, per the Product Constitution. */
+.selection-debug-badge {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  z-index: 30;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 196, 87, 0.35);
+  border-radius: 8px;
+  background: rgba(11, 15, 20, 0.88);
+  color: rgba(255, 236, 198, 0.95);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+
+/* Operational Brief panel - recalls the mandatory pre-entry Brief inside
+   the Operations Centre, on demand (opened via the VenueGuard brand
+   menu in TopBanner). Deliberately non-modal: no dimming overlay, no
+   focus trap - the map remains the primary focus while the panel is
+   open. */
+.brief-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 29;
+  width: min(360px, 88vw);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+  background: rgba(8, 11, 15, 0.92);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+  color: #fff;
+  transform: translateX(-100%);
+  transition: transform 0.28s ease;
+  pointer-events: auto;
+}
+
+.brief-panel-open {
+  transform: translateX(0);
+}
+
+.brief-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brief-panel-eyebrow {
+  font-size: 12px;
+  color: rgba(125, 211, 252, 0.9);
+  margin: 0 0 4px;
+}
+
+.brief-panel-title {
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.brief-panel-close {
+  flex-shrink: 0;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+
+.brief-panel-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.brief-panel-stat {
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.brief-panel-stat-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  margin: 6px 0 2px;
+}
+
+.brief-panel-stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.brief-panel-stat-note {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 2px 0 0;
+}
+
+.brief-panel-locate-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(125, 211, 252, 0.85);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.brief-panel-locate-btn:hover:not(:disabled) {
+  color: rgba(125, 211, 252, 1);
+}
+
+.brief-panel-locate-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.brief-panel-section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.brief-panel-section p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0;
+}
+
+.brief-panel-advisories {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.brief-panel-advisory {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Communications (instructions from a Manager), Tasks (accept/decline),
+   and Risk Assessments (empty for now) panels - all part of the
+   VenueGuard menu's six mutually-exclusive panels (see activePanel in
+   dashboard.tsx), sharing this base layout. */
+.communications-panel,
+.tasks-panel,
+.risk-assessments-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 29;
+  width: min(360px, 88vw);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  background: rgba(8, 11, 15, 0.92);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+  color: #fff;
+  transform: translateX(-100%);
+  transition: transform 0.28s ease;
+  pointer-events: auto;
+}
+
+.communications-panel-open,
+.tasks-panel-open,
+.risk-assessments-panel-open {
+  transform: translateX(0);
+}
+
+/* Risk Assessments sub-navigation ("Venues," step 1 of a bigger
+   project) - a view switch inside this one panel, not a separate
+   sliding panel (see the comment on riskAssessmentsView in
+   dashboard.tsx for why). */
+.risk-assessments-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.risk-assessments-nav-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(125, 211, 252, 0.4);
+}
+
+.risk-assessments-nav-item-chevron {
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.venueguard-panel-back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(125, 211, 252, 0.85);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.venueguard-panel-back:hover {
+  color: rgba(125, 211, 252, 1);
+}
+
+.venue-assessment-add-btn {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid rgba(125, 211, 252, 0.3);
+  border-radius: 8px;
+  background: rgba(125, 211, 252, 0.1);
+  color: rgba(125, 211, 252, 0.9);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.venue-assessment-add-btn:hover:not(:disabled) {
+  background: rgba(125, 211, 252, 0.18);
+}
+
+.venue-assessment-add-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Per-venue dropdown showing the task connected to it - demo/local-only,
+   same as the rest of Risk Assessments > Venues so far. */
+.risk-assessments-venue-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.risk-assessments-venue-detail {
   padding: 10px 14px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  margin-left: 10px;
+  border-left: 2px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.risk-assessments-venue-detail-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Venue Risk Assessment - the CPO's in-field checklist, one per
+   (task, venue) pair (see VenueRiskAssessmentForm in dashboard.tsx). */
+.venue-assessment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.venue-assessment-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.venue-assessment-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.venue-assessment-meta-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.venue-assessment-meta-value {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  text-align: right;
+}
+
+.venue-assessment-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.venue-assessment-field textarea,
+.venue-assessment-field-input {
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  font-family: inherit;
+  resize: vertical;
+  width: 100%;
+}
+
+.venue-assessment-status {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.venue-assessment-status-draft {
+  background: rgba(251, 191, 36, 0.16);
+  color: rgba(253, 224, 71, 0.95);
+}
+
+.venue-assessment-status-submitted {
+  background: rgba(74, 222, 128, 0.16);
+  color: rgba(187, 247, 208, 0.95);
+}
+
+.venue-assessment-action-error {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: rgba(252, 165, 165, 0.95);
+  text-align: center;
+}
+
+.venue-assessment-save-btn {
+  width: 100%;
+  padding: 10px 16px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.venue-assessment-save-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.venue-assessment-save-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.tasks-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tasks-panel-eyebrow {
+  font-size: 12px;
+  color: rgba(134, 239, 172, 0.9);
+  margin: 0 0 4px;
+}
+
+.tasks-panel-title {
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.tasks-panel-close {
+  flex-shrink: 0;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+
+.tasks-panel-viewing-as {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.tasks-panel-viewing-as select {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 13px;
+}
+
+.tasks-panel-empty {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.tasks-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-row {
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.task-row-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.task-row-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.task-row-due {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.task-row-venue {
+  font-size: 12px;
+  color: rgba(125, 211, 252, 0.85);
+  margin: 4px 0 0;
+}
+
+.task-row-assigned-by {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  margin: 2px 0 0;
+}
+
+.task-row-status {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.task-status-btn {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.task-status-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.task-status-not_completed.task-status-active {
+  background: rgba(248, 113, 113, 0.16);
+  border-color: rgba(248, 113, 113, 0.4);
+  color: rgba(254, 202, 202, 0.95);
+}
+
+.task-status-in_progress.task-status-active {
+  background: rgba(250, 204, 21, 0.16);
+  border-color: rgba(250, 204, 21, 0.4);
+  color: rgba(254, 240, 138, 0.95);
+}
+
+.task-status-completed.task-status-active {
+  background: rgba(74, 222, 128, 0.16);
+  border-color: rgba(74, 222, 128, 0.4);
+  color: rgba(187, 247, 208, 0.95);
+}
+
+/* Task acceptance (Tasks panel) - a CPO's first response to an
+   assigned task, before Task Planning. Demo/local-only for now. */
+.task-row-response {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.task-response-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.task-response-accept {
+  color: rgba(187, 247, 208, 0.95);
+}
+
+.task-response-accept:hover {
+  background: rgba(74, 222, 128, 0.16);
+  border-color: rgba(74, 222, 128, 0.4);
+}
+
+.task-response-decline {
+  color: rgba(254, 202, 202, 0.95);
+}
+
+.task-response-decline:hover {
+  background: rgba(248, 113, 113, 0.16);
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.task-row-response-status {
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.task-row-response-status-accepted {
+  color: rgba(134, 239, 172, 0.95);
+}
+
+.task-row-response-status-declined {
+  color: rgba(252, 165, 165, 0.95);
+}
+
+/* Check-In / Panic (Tasks panel) - the live duty-of-care signal for an
+   in_progress task. Panic is visually the loudest control in this
+   panel on purpose - see the Following Roadmap's Tier 1 item 1. */
+.task-row-checkin {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.checkin-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.checkin-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.checkin-btn-ok {
+  color: rgba(134, 239, 172, 0.95);
+}
+
+.checkin-btn-ok:hover:not(:disabled) {
+  background: rgba(74, 222, 128, 0.16);
+  border-color: rgba(74, 222, 128, 0.4);
+}
+
+.checkin-btn-panic {
+  color: rgba(254, 202, 202, 0.95);
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.checkin-btn-panic:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.24);
+  border-color: rgba(248, 113, 113, 0.6);
+}
+
+.checkin-status {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.checkin-status-ok {
+  color: rgba(134, 239, 172, 0.95);
+}
+
+.checkin-status-panic {
+  color: rgba(252, 165, 165, 0.95);
+}
+
+.checkin-status-error {
+  color: rgba(252, 165, 165, 0.95);
+}
+
+/* Nearby Help (Tasks panel) - one-tap emergency info (nearest
+   hospital/police/embassy) for an in_progress task's own location. */
+.nearby-help-btn {
+  width: 100%;
+  margin-top: 8px;
+  color: rgba(191, 219, 254, 0.95);
+}
+
+.nearby-help-btn:hover:not(:disabled) {
+  background: rgba(96, 165, 250, 0.16);
+  border-color: rgba(96, 165, 250, 0.4);
+}
+
+.nearby-help-results {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nearby-help-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.nearby-help-category {
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 600;
+  min-width: 52px;
+  flex-shrink: 0;
+}
+
+.nearby-help-name {
+  color: rgba(255, 255, 255, 0.85);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nearby-help-none {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.nearby-help-directions {
+  color: rgba(96, 165, 250, 0.95);
+  text-decoration: underline;
+  flex-shrink: 0;
+}
+
+/* Task Planning (Planner, Step 1) - the pre-op readiness checklist. */
+.task-plan-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.task-plan-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+}
+
+.task-plan-checklist-item input[type="checkbox"] {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  accent-color: rgba(74, 222, 128, 0.9);
+}
+
+.task-plan-submit {
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.task-plan-submit-btn {
+  width: 100%;
+  padding: 10px 16px;
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  border-radius: 10px;
+  background: rgba(74, 222, 128, 0.14);
+  color: rgba(187, 247, 208, 0.95);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.task-plan-submit-btn:hover:not(:disabled) {
+  background: rgba(74, 222, 128, 0.22);
+}
+
+.task-plan-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.task-plan-submit-status {
+  margin-top: 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+}
+
+/* Collapsed state once a checklist is submitted - a closed folder, not
+   an editable/re-submittable form, since the Manager owns it from
+   here (see the planningTaskId submittedAt check in dashboard.tsx). */
+.task-plan-locked {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 16px;
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  border-radius: 12px;
+  background: rgba(74, 222, 128, 0.08);
+  color: rgba(187, 247, 208, 0.95);
+  text-align: center;
+}
+
+.task-plan-locked-title {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.task-plan-locked-note {
+  margin: 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Task Planning panel - a real sibling of Brief/Tasks/Layers, reached
+   directly from the VenueGuard menu (not nested inside Tasks). Has its
+   own task selector since it isn't opened from a specific task row.
+   Docks to the same left edge, shifted right by however many of
+   Brief/Tasks are open. Reuses .tasks-panel-header/eyebrow/title/close/
+   empty/viewing-as for the header and task selector - same visual
+   language as the Tasks panel. */
+.task-planning-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 29;
+  width: min(360px, 88vw);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  background: rgba(8, 11, 15, 0.92);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+  color: #fff;
+  transform: translateX(-100%);
+  transition: transform 0.28s ease, left 0.28s ease;
+  pointer-events: auto;
+}
+
+.task-planning-panel-open {
+  transform: translateX(0);
+}
+
+/* Route Planning panel - same base panel styling and task-list-with-
+   expandable-slots pattern as Risk Assessments/Venues. */
+.route-planning-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 29;
+  width: min(360px, 88vw);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  background: rgba(8, 11, 15, 0.92);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+  color: #fff;
+  transform: translateX(-100%);
+  transition: transform 0.28s ease;
+  pointer-events: auto;
+}
+
+.route-planning-panel-open {
+  transform: translateX(0);
+}
+
+/* Download Task panel - one accepted task per row, each with a link to
+   its PDF (task name/date/time/operator plus Task Planning, Risk
+   Assessments and Route Planning - see routes/task-pdf.ts on the
+   backend). Same base panel styling as Route Planning/Layers. */
+.download-task-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 29;
+  width: min(360px, 88vw);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  background: rgba(8, 11, 15, 0.92);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+  color: #fff;
+  transform: translateX(-100%);
+  transition: transform 0.28s ease;
+  pointer-events: auto;
+}
+
+.download-task-panel-open {
+  transform: translateX(0);
+}
+
+.download-task-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.download-task-row-text {
+  min-width: 0;
+}
+
+.download-task-row-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.download-task-row-actions .venue-assessment-add-btn {
+  flex: 1;
+  justify-content: center;
+}
+
+.download-task-row-disabled-note {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* One route slot's Start/End fields + Calculate result, inside an
+   expanded task row (see TaskRouteSlotCard in dashboard.tsx) - reuses
+   the venue-assessment-field/-meta classes above rather than
+   duplicating their styling. */
+.route-slot-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-left: 10px;
+  border-left: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.route-slot-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Alternative to searching - fills a route slot's Start/End straight
+   from a real Venue record's saved address/coordinates. */
+.route-slot-venue-select {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  font-family: inherit;
+  width: 100%;
+}
+
+/* Nearest hospitals/police stations along a calculated route (see
+   route-slot-nearby-* usage in TaskRouteSlotCard, populated by
+   lib/nearby-services.ts on the backend). Reuses the same visual
+   language as venue-assessment-meta above. */
+.route-slot-nearby {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.route-slot-nearby-group {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.route-slot-nearby-label {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.route-slot-nearby-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  padding: 2px 0;
+}
+
+.route-slot-nearby-distance {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Operational Layers panel - a legend/control panel for the canvas
+   itself, docking to the same left edge as Brief/Tasks (all three
+   opened via the VenueGuard brand menu). Shifts right by one panel-
+   width for each of Brief/Tasks that's also open (computed inline in
+   JSX, since the offset now depends on two other panels, not one), so
+   they sit side by side instead of overlapping - same idea as the
+   Country panel shifting when Alerts is open. */
+.layers-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 29;
+  width: min(360px, 88vw);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  background: rgba(8, 11, 15, 0.92);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+  color: #fff;
+  transform: translateX(-100%);
+  transition: transform 0.28s ease, left 0.28s ease;
+  pointer-events: auto;
+}
+
+.layers-panel-open {
+  transform: translateX(0);
+}
+
+.layers-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.layers-panel-eyebrow {
+  font-size: 12px;
+  color: rgba(148, 163, 184, 0.9);
+  margin: 0 0 4px;
+}
+
+.layers-panel-title {
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.layers-panel-close {
+  flex-shrink: 0;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+
+.layers-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.layer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.layer-row-text {
+  min-width: 0;
+}
+
+.layer-row-label {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 2px;
+}
+
+.layer-row-description {
   font-size: 12px;
   line-height: 1.5;
+  color: rgba(255, 255, 255, 0.55);
+  margin: 0;
 }
 
-.leaflet-tooltip.venueguard-marker-tooltip::before {
-  display: none;
+.layer-row-fixed-tag {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.layer-toggle {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 20px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.layer-toggle-on {
+  background: rgba(125, 211, 252, 0.5);
+  border-color: rgba(125, 211, 252, 0.7);
+}
+
+.layer-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+
+.layer-toggle-on .layer-toggle-thumb {
+  transform: translateX(16px);
+}
+
+/* Alerts panel - individual timestamped events, distinct from the
+   standing Operational Brief. Mirrors the Brief panel's non-modal
+   treatment (no dimming overlay) but slides from the right edge so the
+   two panels never compete for the same screen space. */
+.alerts-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 29;
+  width: min(360px, 88vw);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  background: rgba(8, 11, 15, 0.92);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+  color: #fff;
+  transform: translateX(100%);
+  transition: transform 0.28s ease;
+  pointer-events: auto;
+}
+
+.alerts-panel-open {
+  transform: translateX(0);
+}
+
+.alerts-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.alerts-panel-eyebrow {
+  font-size: 12px;
+  color: rgba(252, 165, 165, 0.9);
+  margin: 0 0 4px;
+}
+
+.alerts-panel-title {
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.alerts-panel-close {
+  flex-shrink: 0;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+
+.alerts-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.alert-item {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-left-width: 3px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  transition: opacity 0.15s ease;
+}
+
+.alert-item-reviewed {
+  opacity: 0.55;
+}
+
+.alert-item-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.alert-item-critical {
+  border-left-color: rgba(248, 113, 113, 0.9);
+}
+
+.alert-item-warning {
+  border-left-color: rgba(255, 196, 87, 0.9);
+}
+
+.alert-item-info {
+  border-left-color: rgba(125, 211, 252, 0.9);
+}
+
+.alert-item-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.alert-item-critical .alert-item-icon {
+  color: rgba(248, 113, 113, 0.95);
+}
+
+.alert-item-warning .alert-item-icon {
+  color: rgba(255, 196, 87, 0.95);
+}
+
+.alert-item-info .alert-item-icon {
+  color: rgba(125, 211, 252, 0.95);
+}
+
+.alert-item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.alert-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 3px;
+}
+
+.alert-item-reviewed-badge {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(134, 239, 172, 0.14);
+  color: rgba(134, 239, 172, 0.9);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.alert-item-description {
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0 0 6px;
+}
+
+.alert-item-meta {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  margin: 0 0 8px;
+}
+
+.alert-item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.alert-item-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.alert-item-action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.alert-item-action-btn-dismiss:hover {
+  background: rgba(248, 113, 113, 0.14);
+  border-color: rgba(248, 113, 113, 0.3);
+  color: rgba(252, 165, 165, 0.95);
+}
+
+/* Profile panel - opened from the operator menu (TopBanner, top-right,
+   separate from the VenueGuard brand menu) rather than the brand-menu
+   group, but shares activePanel with it so it gets the same mutual-
+   exclusivity/click-outside-to-close behaviour for free. Docks to the
+   right edge like Alerts (its trigger lives in the same corner), not
+   left like the six brand-menu panels - the two close each other when
+   opened instead of stacking (see the openProfile/alerts-trigger
+   handlers in dashboard.tsx). */
+.profile-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 29;
+  width: min(360px, 88vw);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  background: rgba(8, 11, 15, 0.92);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+  color: #fff;
+  transform: translateX(100%);
+  transition: transform 0.28s ease;
+  pointer-events: auto;
+}
+
+.profile-panel-open {
+  transform: translateX(0);
+}
+
+.profile-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.profile-panel-eyebrow {
+  font-size: 12px;
+  color: rgba(125, 211, 252, 0.9);
+  margin: 0 0 4px;
+}
+
+.profile-panel-title {
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.profile-panel-close {
+  flex-shrink: 0;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+
+/* Profile > Overview - identity card + summary stats, built from data
+   already fetched by Timesheet/Expenses rather than a separate
+   aggregate endpoint (see overviewStats in dashboard.tsx). */
+.profile-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.profile-overview-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.profile-overview-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: rgba(125, 211, 252, 0.18);
+  color: rgba(125, 211, 252, 0.95);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.profile-overview-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.profile-overview-role {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Profile > Timesheet - hand-rolled month calendar (see
+   TimesheetCalendar in dashboard.tsx for why this isn't the shadcn
+   Calendar component). */
+.timesheet-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.timesheet-calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.timesheet-calendar-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+}
+
+.timesheet-calendar-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.timesheet-calendar-month {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.timesheet-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.timesheet-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.timesheet-calendar-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  aspect-ratio: 1;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.timesheet-calendar-cell:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.timesheet-calendar-cell-empty {
+  background: transparent;
+  cursor: default;
+}
+
+.timesheet-calendar-cell-today {
+  border-color: rgba(125, 211, 252, 0.4);
+}
+
+.timesheet-calendar-cell-logged {
+  background: rgba(134, 239, 172, 0.1);
+}
+
+.timesheet-calendar-cell-selected {
+  background: rgba(125, 211, 252, 0.2);
+  border-color: rgba(125, 211, 252, 0.6);
+}
+
+.timesheet-calendar-cell-day {
+  font-weight: 500;
+}
+
+.timesheet-calendar-cell-hours {
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(134, 239, 172, 0.9);
+}
+
+.timesheet-entry-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.timesheet-entry-form-date {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.timesheet-entry-form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.timesheet-entry-form-actions .venue-assessment-save-btn {
+  margin-bottom: 0;
+}
+
+.timesheet-entry-form-delete {
+  padding: 10px 16px;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 10px;
+  background: rgba(248, 113, 113, 0.1);
+  color: rgba(252, 165, 165, 0.95);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.timesheet-entry-form-delete:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.18);
+}
+
+.timesheet-entry-form-delete:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.timesheet-day-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.timesheet-day-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.timesheet-day-entry:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.timesheet-day-entry-active {
+  border-color: rgba(96, 165, 250, 0.5);
+  background: rgba(96, 165, 250, 0.1);
+}
+
+.timesheet-day-entry-task {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timesheet-day-entry-hours {
+  color: rgba(255, 255, 255, 0.55);
+  flex-shrink: 0;
+}
+
+.timesheet-day-entry-status {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: rgba(251, 191, 36, 0.95);
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+}
+
+.timesheet-day-entry-status-approved {
+  color: rgba(74, 222, 128, 0.95);
+  background: rgba(74, 222, 128, 0.12);
+  border-color: rgba(74, 222, 128, 0.25);
+}
+
+.timesheet-day-entry-add {
+  justify-content: center;
+  color: rgba(96, 165, 250, 0.9);
+  font-weight: 600;
+}
+
+/* Profile > Expenses - one expense entry inside an expanded task row
+   (see ExpenseEntryCard in dashboard.tsx). Reuses the venue-assessment-
+   field/-save-btn and timesheet-entry-form-delete classes above rather
+   than duplicating their styling. */
+.expense-entry-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-left: 10px;
+  border-left: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.expense-entry-amount-row {
+  display: flex;
+  gap: 10px;
+}
+
+.expense-entry-amount-field {
+  flex: 2;
+}
+
+.expense-entry-currency-field {
+  flex: 1;
+}
+
+.expense-entry-file-input {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.expense-entry-receipt-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(125, 211, 252, 0.9);
+  text-decoration: none;
+}
+
+.expense-entry-receipt-link:hover {
+  text-decoration: underline;
+}
+
+.expense-entry-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.expense-entry-actions .venue-assessment-save-btn {
+  margin-bottom: 0;
+}
+
+/* Country Intelligence panel - tied to Active Country selection rather
+   than a manual trigger (mirrors the country focus visuals' own
+   entered/exited timing via focusEntered), so it appears and dismisses
+   in lockstep with the selected country. Docks to the right edge like
+   the Alerts panel (not centred over the map) so the selected country's
+   shape stays visible. Shifts left by one panel-width when the Alerts
+   panel is also open, so the two sit side by side instead of stacking. */
+.country-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 28;
+  width: min(360px, 88vw);
+  padding: 72px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  background: rgba(8, 11, 15, 0.92);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+  color: #fff;
+  transform: translateX(100%);
+  transition: transform 0.28s ease, right 0.28s ease;
+  pointer-events: auto;
+}
+
+.country-panel-open {
+  transform: translateX(0);
+}
+
+.country-panel-shifted {
+  right: min(360px, 88vw);
+}
+
+.country-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.country-panel-eyebrow {
+  font-size: 12px;
+  color: rgba(125, 211, 252, 0.9);
+  margin: 0 0 4px;
+}
+
+.country-panel-title {
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.country-panel-iso {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 4px 0 0;
+  letter-spacing: 0.04em;
+}
+
+/* In-panel city search - same treatment as the top banner's search bar,
+   scoped to the selected country's own cities only. */
+.country-panel-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.country-panel-search:focus-within {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(125, 211, 252, 0.4);
+}
+
+.country-panel-search-icon {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.country-panel-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+}
+
+.country-panel-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.country-panel-search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: rgba(11, 15, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.country-panel-search-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.country-panel-search-result:hover,
+.country-panel-search-result:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.country-panel-search-result-icon {
+  flex-shrink: 0;
+  color: rgba(125, 211, 252, 0.85);
+}
+
+.country-panel-search-result-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.country-panel-search-result-meta {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.country-panel-search-empty {
+  padding: 10px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+}
+
+.country-panel-risk-badge {
+  align-self: flex-start;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.country-panel-risk-unrated {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.country-panel-risk-loading {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.country-panel-risk-low {
+  background: rgba(74, 222, 128, 0.16);
+  color: rgba(134, 239, 172, 0.95);
+}
+
+.country-panel-risk-elevated {
+  background: rgba(255, 196, 87, 0.16);
+  color: rgba(255, 196, 87, 0.95);
+}
+
+.country-panel-risk-critical {
+  background: rgba(248, 113, 113, 0.16);
+  color: rgba(248, 113, 113, 0.95);
+}
+
+.country-panel-risk-do_not_travel {
+  background: rgba(248, 113, 113, 0.28);
+  color: #fff;
+}
+
+.country-panel-risk-drivers {
+  margin: -6px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.country-panel-close {
+  flex-shrink: 0;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+
+.country-panel-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.country-panel-stat {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.country-panel-stat-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0 0 2px;
+}
+
+.country-panel-stat-value {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.country-panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.country-panel-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.country-panel-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.country-panel-section-empty {
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0;
+}
+
+.country-panel-advisories {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.country-panel-advisory {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+a.country-panel-advisory:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(125, 211, 252, 0.35);
+}
+
+.country-panel-advisory-source {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(125, 211, 252, 0.85);
+}
+
+.country-panel-advisory-text {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.country-panel-advisory-date {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.country-panel-health-badge {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.country-panel-health-low {
+  background: rgba(74, 222, 128, 0.16);
+  color: rgba(134, 239, 172, 0.95);
+}
+
+.country-panel-health-moderate {
+  background: rgba(255, 196, 87, 0.16);
+  color: rgba(255, 196, 87, 0.95);
+}
+
+.country-panel-health-high {
+  background: rgba(248, 113, 113, 0.16);
+  color: rgba(248, 113, 113, 0.95);
+}
+
+.country-panel-health-critical {
+  background: rgba(248, 113, 113, 0.28);
+  color: #fff;
+}
+
+/* LocationSearch (components/location-search.tsx) - the address/place
+   search box used on the Risk Assessment Location field and the Venue
+   form. Self-contained, fixed light-card colors for the suggestions
+   dropdown so it reads correctly whether it's floating over a light
+   admin page or the dark Operational Canvas - the input itself takes
+   its look entirely from the caller's className. */
+.location-search {
+  position: relative;
+  /* Fills the available width both as a flex item (e.g. next to the
+     top banner's search icon) and in normal block flow (e.g. under a
+     form label) - without this, a flex row parent lets it shrink to
+     the placeholder text's intrinsic width instead of stretching. */
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+.location-search-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+}
+
+.location-search-input {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.location-search-locate-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  border-radius: 8px;
+  background: rgba(128, 128, 128, 0.12);
+  color: inherit;
+  cursor: pointer;
+}
+
+.location-search-locate-btn:hover:not(:disabled) {
+  background: rgba(128, 128, 128, 0.22);
+}
+
+.location-search-locate-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.location-search-error {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: rgb(220, 90, 90);
+}
+
+.location-search-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+}
+
+.location-search-empty {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.5);
+}
+
+.location-search-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: rgba(15, 23, 42, 0.85);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.location-search-result:hover {
+  background: rgba(15, 23, 42, 0.05);
+}
+
+.location-search-result-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: rgba(15, 23, 42, 0.4);
 }

@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
 import { db, incidentsTable, venuesTable } from "@workspace/db";
 import { z } from "zod";
+import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -40,8 +41,10 @@ async function formatIncident(row: typeof incidentsTable.$inferSelect, venueName
   };
 }
 
-router.get("/incidents", async (_req, res): Promise<void> => {
-  const incidents = await db.select().from(incidentsTable).orderBy(desc(incidentsTable.incidentDate));
+router.get("/incidents", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const incidents = await db.select().from(incidentsTable).where(eq(incidentsTable.companyId, companyId)).orderBy(desc(incidentsTable.incidentDate));
   const venues = await db.select({ id: venuesTable.id, name: venuesTable.name }).from(venuesTable);
   const venueMap: Record<number, string> = {};
   for (const v of venues) venueMap[v.id] = v.name;
@@ -55,9 +58,10 @@ router.post("/incidents", async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const { incidentDate, ...rest } = parsed.data;
+  const companyId = await resolveCompanyId(req.user!.companyId);
   const [incident] = await db
     .insert(incidentsTable)
-    .values({ ...rest, incidentDate: new Date(incidentDate) })
+    .values({ ...rest, companyId, incidentDate: new Date(incidentDate) })
     .returning();
 
   let venueName: string | null = null;

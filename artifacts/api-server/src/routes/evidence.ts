@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
-import { db, evidenceTable, usersTable } from "@workspace/db";
+import { db, evidenceTable, usersTable, assessmentsTable } from "@workspace/db";
 import { z } from "zod";
+import { requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -33,6 +34,42 @@ async function formatEvidence(row: typeof evidenceTable.$inferSelect, uploadedBy
   };
 }
 
+// Global feed across every assessment - powers the Management
+// Dashboard's "Documents / PDF Repository" item, which has no
+// destination of its own (the route below only covers one assessment
+// at a time).
+router.get("/evidence", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const rows = await db.select().from(evidenceTable).where(eq(evidenceTable.companyId, companyId)).orderBy(desc(evidenceTable.createdAt)).limit(50);
+
+  const assessmentIds = [...new Set(rows.map((r) => r.assessmentId))];
+  const assessments = assessmentIds.length
+    ? await db.select({ id: assessmentsTable.id, title: assessmentsTable.title }).from(assessmentsTable)
+    : [];
+  const assessmentMap: Record<number, string> = {};
+  for (const a of assessments) assessmentMap[a.id] = a.title;
+
+  const users = await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable);
+  const userMap: Record<number, string> = {};
+  for (const u of users) userMap[u.id] = u.name;
+
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      assessmentId: r.assessmentId,
+      assessmentTitle: assessmentMap[r.assessmentId] ?? null,
+      evidenceType: r.evidenceType,
+      label: r.label,
+      filename: r.filename ?? null,
+      url: r.url ?? null,
+      verified: r.verified,
+      uploadedByName: r.uploadedBy ? (userMap[r.uploadedBy] ?? null) : null,
+      createdAt: r.createdAt.toISOString(),
+    })),
+  );
+});
+
 router.get("/assessments/:id/evidence", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -58,9 +95,12 @@ router.post("/assessments/:id/evidence", async (req, res): Promise<void> => {
   const parsed = EvidenceInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const [assessment] = await db.select({ companyId: assessmentsTable.companyId }).from(assessmentsTable).where(eq(assessmentsTable.id, id));
+  if (!assessment) { res.status(404).json({ error: "Assessment not found" }); return; }
+
   const [row] = await db
     .insert(evidenceTable)
-    .values({ ...parsed.data, assessmentId: id })
+    .values({ ...parsed.data, companyId: assessment.companyId, assessmentId: id })
     .returning();
 
   let uploadedByName: string | null = null;

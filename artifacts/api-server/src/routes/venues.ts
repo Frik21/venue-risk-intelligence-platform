@@ -2,10 +2,12 @@ import { Router, type IRouter } from "express";
 import { eq, desc, count } from "drizzle-orm";
 import { db, venuesTable, assessmentsTable, incidentsTable } from "@workspace/db";
 import { z } from "zod";
+import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
 const VenueInputSchema = z.object({
+  companyId: z.number().int().optional(),
   name: z.string().min(1),
   venueType: z.string().optional(),
   address: z.string().min(1),
@@ -22,6 +24,7 @@ const VenueInputSchema = z.object({
 function formatVenue(row: typeof venuesTable.$inferSelect, assessmentCount = 0) {
   return {
     id: row.id,
+    companyId: row.companyId,
     name: row.name,
     venueType: row.venueType,
     address: row.address,
@@ -39,8 +42,10 @@ function formatVenue(row: typeof venuesTable.$inferSelect, assessmentCount = 0) 
   };
 }
 
-router.get("/venues", async (_req, res): Promise<void> => {
-  const venues = await db.select().from(venuesTable).orderBy(desc(venuesTable.updatedAt));
+router.get("/venues", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const venues = await db.select().from(venuesTable).where(eq(venuesTable.companyId, companyId)).orderBy(desc(venuesTable.updatedAt));
   const assessmentCounts = await db
     .select({ venueId: assessmentsTable.venueId, cnt: count() })
     .from(assessmentsTable)
@@ -59,7 +64,7 @@ router.get("/venues/:id", async (req, res): Promise<void> => {
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const [venue] = await db.select().from(venuesTable).where(eq(venuesTable.id, id));
-  if (!venue) { res.status(404).json({ error: "Venue not found" }); return; }
+  if (!venue || venue.companyId !== req.user!.companyId) { res.status(404).json({ error: "Venue not found" }); return; }
 
   const assessments = await db
     .select()
@@ -117,7 +122,8 @@ router.post("/venues", async (req, res): Promise<void> => {
   const parsed = VenueInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const [venue] = await db.insert(venuesTable).values(parsed.data).returning();
+  const companyId = await resolveCompanyId(req.user!.companyId);
+  const [venue] = await db.insert(venuesTable).values({ ...parsed.data, companyId }).returning();
   res.status(201).json(formatVenue(venue, 0));
 });
 

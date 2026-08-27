@@ -1,23 +1,26 @@
 import { Router, type IRouter } from "express";
 import { desc, count, eq } from "drizzle-orm";
 import { db, venuesTable, assessmentsTable, incidentsTable, alertsTable, riskMatrixTable } from "@workspace/db";
+import { requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
-router.get("/dashboard/summary", async (_req, res): Promise<void> => {
-  const [venueCount] = await db.select({ cnt: count() }).from(venuesTable);
-  const [assessmentCount] = await db.select({ cnt: count() }).from(assessmentsTable);
-  const [incidentCount] = await db.select({ cnt: count() }).from(incidentsTable);
+router.get("/dashboard/summary", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const [venueCount] = await db.select({ cnt: count() }).from(venuesTable).where(eq(venuesTable.companyId, companyId));
+  const [assessmentCount] = await db.select({ cnt: count() }).from(assessmentsTable).where(eq(assessmentsTable.companyId, companyId));
+  const [incidentCount] = await db.select({ cnt: count() }).from(incidentsTable).where(eq(incidentsTable.companyId, companyId));
 
-  const allAlerts = await db.select().from(alertsTable).orderBy(desc(alertsTable.createdAt));
+  const allAlerts = await db.select().from(alertsTable).where(eq(alertsTable.companyId, companyId)).orderBy(desc(alertsTable.createdAt));
   const pendingAlerts = allAlerts.filter((a) => a.status === "pending").length;
 
-  const allAssessments = await db.select().from(assessmentsTable).orderBy(desc(assessmentsTable.updatedAt));
-  const matrices = await db.select({ assessmentId: riskMatrixTable.assessmentId, overallRating: riskMatrixTable.overallRating }).from(riskMatrixTable);
+  const allAssessments = await db.select().from(assessmentsTable).where(eq(assessmentsTable.companyId, companyId)).orderBy(desc(assessmentsTable.updatedAt));
+  const matrices = await db.select({ assessmentId: riskMatrixTable.assessmentId, overallRating: riskMatrixTable.overallRating }).from(riskMatrixTable).where(eq(riskMatrixTable.companyId, companyId));
   const matrixMap: Record<number, string | null> = {};
   for (const m of matrices) matrixMap[m.assessmentId] = m.overallRating ?? null;
 
-  const venues = await db.select({ id: venuesTable.id, name: venuesTable.name, city: venuesTable.city }).from(venuesTable);
+  const venues = await db.select({ id: venuesTable.id, name: venuesTable.name, city: venuesTable.city }).from(venuesTable).where(eq(venuesTable.companyId, companyId));
   const venueMap: Record<number, { name: string; city: string }> = {};
   for (const v of venues) venueMap[v.id] = { name: v.name, city: v.city };
 

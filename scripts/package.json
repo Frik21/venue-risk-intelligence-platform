@@ -5,7 +5,15 @@
   "type": "module",
   "scripts": {
     "hello": "tsx ./src/hello.ts",
+    "refresh-travel-advisories": "tsx ./src/refresh-travel-advisories.ts",
+    "backfill-company-id": "tsx --env-file-if-exists=../lib/db/.env ./src/backfill-company-id.ts",
+    "set-owner-password": "tsx --env-file-if-exists=../lib/db/.env ./src/set-owner-password.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@workspace/db": "workspace:*",
+    "bcryptjs": "^3.0.2",
+    "drizzle-orm": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",

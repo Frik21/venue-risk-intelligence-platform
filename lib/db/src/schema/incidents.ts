@@ -2,9 +2,11 @@ import { pgTable, text, serial, integer, real, timestamp, boolean } from "drizzl
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { venuesTable } from "./venues";
+import { companiesTable } from "./companies";
 
 export const incidentsTable = pgTable("incidents", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   venueId: integer("venue_id").references(() => venuesTable.id, { onDelete: "set null" }),
   incidentType: text("incident_type").notNull(),
   severity: text("severity").notNull().default("medium"),

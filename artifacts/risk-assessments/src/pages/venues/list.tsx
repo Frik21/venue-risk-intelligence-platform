@@ -5,14 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link, useLocation } from "wouter";
-import { Building2, Plus, MapPin, Search, Globe, ClipboardList } from "lucide-react";
+import { Building2, Plus, MapPin, Search, Globe, ClipboardList, Filter } from "lucide-react";
 import { useState } from "react";
 import { VENUE_TYPES } from "@/lib/display-utils";
 
 export default function VenuesList() {
   const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
   const qc = useQueryClient();
 
   const { data: venues = [], isLoading } = useQuery<Venue[]>({
@@ -22,9 +24,10 @@ export default function VenuesList() {
 
   const filtered = venues.filter(
     (v) =>
-      v.name.toLowerCase().includes(search.toLowerCase()) ||
-      v.city.toLowerCase().includes(search.toLowerCase()) ||
-      v.country.toLowerCase().includes(search.toLowerCase())
+      (typeFilter === "all" || v.venueType === typeFilter) &&
+      (v.name.toLowerCase().includes(search.toLowerCase()) ||
+        v.city.toLowerCase().includes(search.toLowerCase()) ||
+        v.country.toLowerCase().includes(search.toLowerCase()))
   );
 
   const venueTypeLabel = (type: string) =>
@@ -42,14 +45,26 @@ export default function VenuesList() {
         </Button>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-        <Input
-          className="pl-9"
-          placeholder="Search venues..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="flex gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Input
+            className="pl-9"
+            placeholder="Search venues..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className="w-48">
+            <Filter className="w-4 h-4 mr-2 text-slate-400" />
+            <SelectValue placeholder="All types" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            {VENUE_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       {isLoading ? (
@@ -62,9 +77,9 @@ export default function VenuesList() {
             <Building2 className="w-10 h-10 mx-auto mb-3 text-slate-300" />
             <h3 className="font-medium text-slate-600 mb-1">No venues found</h3>
             <p className="text-sm text-slate-400 mb-4">
-              {search ? "Try a different search term" : "Add your first venue to start assessing it"}
+              {search || typeFilter !== "all" ? "Try changing filters" : "Add your first venue to start assessing it"}
             </p>
-            {!search && (
+            {!search && typeFilter === "all" && (
               <Button onClick={() => navigate("/venues/new")}>
                 <Plus className="w-4 h-4 mr-1.5" /> Add Venue
               </Button>

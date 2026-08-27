@@ -11,6 +11,7 @@ import {
   auditLogTable,
 } from "@workspace/db";
 import { z } from "zod";
+import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -55,9 +56,11 @@ async function buildAssessmentSummary(
   };
 }
 
-router.get("/assessments/summary", async (_req, res): Promise<void> => {
-  const assessments = await db.select().from(assessmentsTable).orderBy(desc(assessmentsTable.updatedAt));
-  const risks = await db.select().from(risksTable);
+router.get("/assessments/summary", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const assessments = await db.select().from(assessmentsTable).where(eq(assessmentsTable.companyId, companyId)).orderBy(desc(assessmentsTable.updatedAt));
+  const risks = await db.select().from(risksTable).where(eq(risksTable.companyId, companyId));
   const venues = await db.select({ id: venuesTable.id, name: venuesTable.name, city: venuesTable.city }).from(venuesTable);
   const venueMap: Record<number, { name: string; city: string }> = {};
   for (const v of venues) venueMap[v.id] = { name: v.name, city: v.city };
@@ -84,8 +87,10 @@ router.get("/assessments/summary", async (_req, res): Promise<void> => {
   });
 });
 
-router.get("/assessments", async (_req, res): Promise<void> => {
-  const assessments = await db.select().from(assessmentsTable).orderBy(desc(assessmentsTable.updatedAt));
+router.get("/assessments", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const assessments = await db.select().from(assessmentsTable).where(eq(assessmentsTable.companyId, companyId)).orderBy(desc(assessmentsTable.updatedAt));
   const venues = await db.select({ id: venuesTable.id, name: venuesTable.name, city: venuesTable.city }).from(venuesTable);
   const matrices = await db.select({ assessmentId: riskMatrixTable.assessmentId, overallRating: riskMatrixTable.overallRating }).from(riskMatrixTable);
 
@@ -104,9 +109,10 @@ router.post("/assessments", async (req, res): Promise<void> => {
   const parsed = AssessmentInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const companyId = await resolveCompanyId(req.user!.companyId);
   const [assessment] = await db
     .insert(assessmentsTable)
-    .values({ ...parsed.data, status: parsed.data.status ?? "draft" })
+    .values({ ...parsed.data, companyId, status: parsed.data.status ?? "draft" })
     .returning();
 
   const venues = await db.select({ id: venuesTable.id, name: venuesTable.name, city: venuesTable.city }).from(venuesTable);
@@ -115,6 +121,7 @@ router.post("/assessments", async (req, res): Promise<void> => {
 
   if (parsed.data.createdBy) {
     await db.insert(auditLogTable).values({
+      companyId: assessment.companyId,
       assessmentId: assessment.id,
       userId: parsed.data.createdBy,
       action: "created",
@@ -214,6 +221,7 @@ router.patch("/assessments/:id", async (req, res): Promise<void> => {
 
   if (updatedBy && updates.status && updates.status !== before.status) {
     await db.insert(auditLogTable).values({
+      companyId: before.companyId,
       assessmentId: id,
       userId: updatedBy,
       action: "status_changed",
@@ -309,6 +317,7 @@ router.post("/assessments/:id/approve", async (req, res): Promise<void> => {
   const snapshot = { assessment, risks, matrix: matrix ?? null };
 
   await db.insert(assessmentVersionsTable).values({
+    companyId: assessment.companyId,
     assessmentId: id,
     version: assessment.version,
     snapshot,
@@ -329,6 +338,7 @@ router.post("/assessments/:id/approve", async (req, res): Promise<void> => {
     .returning();
 
   await db.insert(auditLogTable).values({
+    companyId: assessment.companyId,
     assessmentId: id,
     userId: parsed.data.userId,
     action: "approved",
@@ -443,6 +453,44 @@ router.get("/assessments/:id/audit-log", async (req, res): Promise<void> => {
       reason: l.reason ?? null,
       createdAt: l.createdAt.toISOString(),
     }))
+  );
+});
+
+// Global feed across every assessment - powers the Management
+// Dashboard's "Audit History" item. Honestly scoped: audit_log is
+// only ever written to from this file (create/status-change/approve),
+// so this is assessment lifecycle activity, not a platform-wide
+// audit trail - tasks, users, venues etc. have no audit logging today.
+router.get("/audit-log", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+  const logs = await db.select().from(auditLogTable).where(eq(auditLogTable.companyId, companyId)).orderBy(desc(auditLogTable.createdAt)).limit(50);
+
+  const assessmentIds = [...new Set(logs.map((l) => l.assessmentId).filter((id): id is number => id !== null))];
+  const assessments = assessmentIds.length
+    ? await db.select({ id: assessmentsTable.id, title: assessmentsTable.title }).from(assessmentsTable)
+    : [];
+  const assessmentMap: Record<number, string> = {};
+  for (const a of assessments) assessmentMap[a.id] = a.title;
+
+  const users = await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable);
+  const userMap: Record<number, string> = {};
+  for (const u of users) userMap[u.id] = u.name;
+
+  res.json(
+    logs.map((l) => ({
+      id: l.id,
+      assessmentId: l.assessmentId ?? null,
+      assessmentTitle: l.assessmentId ? (assessmentMap[l.assessmentId] ?? null) : null,
+      userId: l.userId ?? null,
+      userName: l.userId ? (userMap[l.userId] ?? null) : null,
+      action: l.action,
+      fieldChanged: l.fieldChanged ?? null,
+      oldValue: l.oldValue ?? null,
+      newValue: l.newValue ?? null,
+      reason: l.reason ?? null,
+      createdAt: l.createdAt.toISOString(),
+    })),
   );
 });
 

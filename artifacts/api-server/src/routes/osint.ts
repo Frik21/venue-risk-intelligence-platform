@@ -2,8 +2,20 @@ import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
 import { db, osintEventsTable, venuesTable, alertsTable } from "@workspace/db";
 import { z } from "zod";
+import { fetchWeatherFinding, weatherEventType, weatherAlertPriority } from "../lib/weather";
+import { gdeltAlertPriority } from "../lib/gdelt";
+import { getRunningVenues, runGdeltCheckForVenue } from "../lib/gdelt-monitor";
 
 const router: IRouter = Router();
+
+// A live weather check runs on every /venues/:id/osint fetch (below) -
+// conditions genuinely change, unlike the static templates. To avoid
+// inserting a fresh row on every page load while a storm is ongoing, a
+// pending weather-type row created within this window gets its summary
+// updated in place instead of duplicated. Once it's older than this (or
+// an analyst has already reviewed it), the next live finding starts a
+// new row.
+const WEATHER_REFRESH_WINDOW_MS = 3 * 60 * 60 * 1000;
 
 function formatOsint(row: typeof osintEventsTable.$inferSelect) {
   return {
@@ -32,6 +44,15 @@ const OSINT_TEMPLATES = [
   { eventType: "road_closure", summary: "Temporary road closure affecting primary access route", sourceName: "Traffic Authority", confidenceLevel: "high" },
 ];
 
+// Venues GDELT is actively watching right now - any venue with a task
+// in the Running bucket (see getRunningVenues in lib/gdelt-monitor.ts).
+// Drops off this list on its own the moment that task is completed,
+// cancelled, or reassigned away from Running - nothing to clean up.
+router.get("/osint/monitored-venues", async (_req, res): Promise<void> => {
+  const venues = await getRunningVenues();
+  res.json(venues);
+});
+
 router.get("/venues/:id/osint", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -47,6 +68,7 @@ router.get("/venues/:id/osint", async (req, res): Promise<void> => {
 
   if (existing.length === 0) {
     const toInsert = OSINT_TEMPLATES.map((t) => ({
+      companyId: venue.companyId,
       venueId: id,
       eventType: t.eventType,
       summary: t.summary,
@@ -55,12 +77,64 @@ router.get("/venues/:id/osint", async (req, res): Promise<void> => {
       lng: venue.lng ? venue.lng + (Math.random() - 0.5) * 0.01 : null,
       status: "pending" as const,
     }));
-    const inserted = await db.insert(osintEventsTable).values(toInsert).returning();
-    res.json(inserted.map(formatOsint));
-    return;
+    await db.insert(osintEventsTable).values(toInsert);
   }
 
-  res.json(existing.map(formatOsint));
+  // Live weather check - the one real (non-template) OSINT source so
+  // far. Failures here must never break the rest of the OSINT feed, so
+  // they're caught and logged rather than propagated.
+  if (venue.lat != null && venue.lng != null) {
+    try {
+      const finding = await fetchWeatherFinding(venue.lat, venue.lng);
+      if (finding) {
+        const eventType = weatherEventType(finding.severity);
+        const recentPendingWeather = existing.find(
+          (row) =>
+            row.eventType.startsWith("weather") &&
+            row.status === "pending" &&
+            Date.now() - row.createdAt.getTime() < WEATHER_REFRESH_WINDOW_MS,
+        );
+        if (recentPendingWeather) {
+          await db
+            .update(osintEventsTable)
+            .set({ eventType, summary: finding.summary, sourceUrl: finding.sourceUrl })
+            .where(eq(osintEventsTable.id, recentPendingWeather.id));
+        } else {
+          await db.insert(osintEventsTable).values({
+            companyId: venue.companyId,
+            venueId: id,
+            eventType,
+            summary: finding.summary,
+            sourceName: finding.sourceName,
+            sourceUrl: finding.sourceUrl,
+            lat: venue.lat,
+            lng: venue.lng,
+            status: "pending",
+          });
+        }
+      }
+    } catch (err) {
+      console.error(`Weather OSINT check failed for venue ${id}:`, err);
+    }
+  }
+
+  // Live GDELT news check - deduped against existing rows by sourceUrl
+  // so the same article isn't inserted again on every page load. Same
+  // check the background monitor (lib/gdelt-monitor.ts) runs on its own
+  // schedule for every venue with a Running task - viewing a venue's
+  // OSINT feed directly just triggers an on-demand check too.
+  try {
+    await runGdeltCheckForVenue(id);
+  } catch (err) {
+    console.error(`GDELT OSINT check failed for venue ${id}:`, err);
+  }
+
+  const finalRows = await db
+    .select()
+    .from(osintEventsTable)
+    .where(eq(osintEventsTable.venueId, id))
+    .orderBy(desc(osintEventsTable.createdAt));
+  res.json(finalRows.map(formatOsint));
 });
 
 router.patch("/osint/:id/review", async (req, res): Promise<void> => {
@@ -82,10 +156,19 @@ router.patch("/osint/:id/review", async (req, res): Promise<void> => {
 
   if (!row) { res.status(404).json({ error: "OSINT event not found" }); return; }
 
-  if (parsed.data.status === "accepted" && (row.eventType === "crime" || row.eventType === "protest" || row.eventType === "riot")) {
+  const promotableTypes = ["crime", "protest", "riot", "weather", "weather_high", "weather_critical", "news", "news_high", "news_critical"];
+  if (parsed.data.status === "accepted" && promotableTypes.includes(row.eventType)) {
+    const priority = row.eventType.startsWith("weather")
+      ? weatherAlertPriority(row.eventType)
+      : row.eventType.startsWith("news")
+        ? gdeltAlertPriority(row.eventType)
+        : row.eventType === "riot"
+          ? "critical"
+          : "medium";
     await db.insert(alertsTable).values({
+      companyId: row.companyId,
       venueId: row.venueId,
-      priority: row.eventType === "riot" ? "critical" : "medium",
+      priority,
       title: `OSINT Alert: ${row.eventType.replace(/_/g, " ")}`,
       summary: row.summary,
       status: "pending",
