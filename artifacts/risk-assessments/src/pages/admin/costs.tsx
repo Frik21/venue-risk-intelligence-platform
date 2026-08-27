@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { api, type GlobalExpense, type PersonnelCostLine, type CompanySettings, type Task, type QuotationStatus, type ExpenseCategory, type Venue, type User, type Client, type Quote } from "@/lib/api";
+import { api, type GlobalExpense, type PersonnelCostLine, type CompanySettings, type Task, type QuotationStatus, type ExpenseCategory, type Venue, type User, type Client, type Quote, type Invoice } from "@/lib/api";
 import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -507,9 +507,11 @@ export default function CostsPage() {
   const { data: users = [] } = useQuery<User[]>({ queryKey: ["users"], queryFn: api.users.list });
   const { data: clients = [] } = useQuery<Client[]>({ queryKey: ["clients"], queryFn: api.clients.list });
   const { data: allQuotes = [], isLoading: quotesLoading } = useQuery<Quote[]>({ queryKey: ["quotes"], queryFn: api.quotes.list });
+  const { data: allInvoices = [] } = useQuery<Invoice[]>({ queryKey: ["invoices"], queryFn: api.invoices.list });
   const [selectedOfficeId] = useSelectedOfficeId();
   const tasks = filterByOffice(allTasks, selectedOfficeId);
   const quotes = filterByOffice(allQuotes, selectedOfficeId);
+  const invoices = filterByOffice(allInvoices, selectedOfficeId);
   const { data: expenses = [], isLoading: expensesLoading } = useQuery<GlobalExpense[]>({
     queryKey: ["expenses-all"],
     queryFn: api.expenses.listAll,
@@ -622,10 +624,51 @@ export default function CostsPage() {
       entry.expense += l.expense;
       return acc;
     }, {}),
-  )
-    .map(([, v]) => ({ ...v, total: v.personnel + v.expense }))
-    .filter((v) => v.total > 0)
-    .sort((a, b) => b.total - a.total)
+  ).map(([key, v]) => ({ taskId: key === "none" ? null : Number(key), ...v, total: v.personnel + v.expense }));
+
+  // Revenue per task, for the Job Profitability table below - per
+  // direct product direction (Following Roadmap Tier 1, item 2: "quoted/
+  // invoiced revenue next to actual cost, per task"). Prefers an
+  // invoice's total (the real, actual amount billed, which can exceed
+  // the quote once added costs are line-itemed in - see the Invoices
+  // note in CLAUDE.md) over the quote's totalQuoteValue, since an
+  // invoice is the more truthful "what this job actually earned" once
+  // one exists. Same currency-naive assumption as totalCostByTask above
+  // - revenue and cost are only directly comparable when everything for
+  // that task shares one currency, which this doesn't verify.
+  const revenueByTask = new Map<number, { revenue: number; currency: string; source: "invoice" | "quote" }>();
+  for (const q of quotes) {
+    if (q.taskId == null || q.status !== "approved") continue;
+    revenueByTask.set(q.taskId, { revenue: q.totalQuoteValue, currency: q.currency, source: "quote" });
+  }
+  for (const inv of invoices) {
+    if (inv.taskId == null) continue;
+    const existing = revenueByTask.get(inv.taskId);
+    revenueByTask.set(inv.taskId, {
+      revenue: (existing?.source === "invoice" ? existing.revenue : 0) + inv.totalAmount,
+      currency: inv.currency,
+      source: "invoice",
+    });
+  }
+
+  // Job Profitability - revenue next to cost, with margin where both are
+  // known. Sorted worst-margin-first (not highest-cost-first, unlike the
+  // Total Cost by Task table below) so a job quietly losing money surfaces
+  // immediately instead of waiting to be noticed in hindsight.
+  const jobProfitability = totalCostByTask
+    .filter((t) => t.taskId != null)
+    .map((t) => {
+      const rev = t.taskId != null ? revenueByTask.get(t.taskId) : undefined;
+      const margin = rev != null ? rev.revenue - t.total : null;
+      return { ...t, revenue: rev?.revenue ?? null, revenueCurrency: rev?.currency ?? null, margin };
+    })
+    .filter((t) => t.total > 0 || t.revenue != null)
+    .sort((a, b) => {
+      if (a.margin == null && b.margin == null) return b.total - a.total;
+      if (a.margin == null) return 1;
+      if (b.margin == null) return -1;
+      return a.margin - b.margin;
+    })
     .slice(0, 8);
 
   return (
@@ -931,27 +974,42 @@ export default function CostsPage() {
         </CardContent>
       </Card>
 
-      {totalCostByTask.length > 0 && (
+      {jobProfitability.length > 0 && (
         <Card>
           <CardContent className="p-5">
-            <h2 className="font-semibold text-slate-900 mb-1">Total Cost by Task</h2>
-            <p className="text-xs text-slate-400 mb-3">Personnel cost plus expenses, combined per task.</p>
+            <h2 className="font-semibold text-slate-900 mb-1">Job Profitability</h2>
+            <p className="text-xs text-slate-400 mb-3">
+              Revenue (invoiced, or the approved quote if not yet invoiced) next to personnel + expense cost, per task - worst margin first.
+              Assumes revenue and cost share one currency; verify before acting on a mixed-currency job.
+            </p>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-xs font-medium uppercase tracking-wide text-slate-500">
                   <th className="text-left py-1.5">Task</th>
+                  <th className="text-right py-1.5">Revenue</th>
                   <th className="text-right py-1.5">Personnel</th>
                   <th className="text-right py-1.5">Expenses</th>
-                  <th className="text-right py-1.5">Total</th>
+                  <th className="text-right py-1.5">Cost</th>
+                  <th className="text-right py-1.5">Margin</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {totalCostByTask.map((t, i) => (
+                {jobProfitability.map((t, i) => (
                   <tr key={i}>
                     <td className="py-2 text-slate-700 truncate max-w-0">{t.title}</td>
+                    <td className="py-2 text-right font-mono tabular-nums text-slate-500">
+                      {t.revenue != null ? t.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—"}
+                      {t.revenueCurrency && <span className="text-slate-400 ml-1">{t.revenueCurrency}</span>}
+                    </td>
                     <td className="py-2 text-right font-mono tabular-nums text-slate-500">{t.personnel.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
                     <td className="py-2 text-right font-mono tabular-nums text-slate-500">{t.expense.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
-                    <td className="py-2 text-right font-mono tabular-nums font-semibold text-slate-900">{t.total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                    <td className="py-2 text-right font-mono tabular-nums text-slate-700">{t.total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                    <td className={cn(
+                      "py-2 text-right font-mono tabular-nums font-semibold",
+                      t.margin == null ? "text-slate-400" : t.margin < 0 ? "text-red-600" : "text-green-700",
+                    )}>
+                      {t.margin != null ? t.margin.toLocaleString(undefined, { maximumFractionDigits: 0, signDisplay: "always" }) : "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>
