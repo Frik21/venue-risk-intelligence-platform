@@ -28,7 +28,7 @@ export function ReportIssueDialog({ source, onClose }: { source: TicketSource; o
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md my-8 p-6 space-y-4">
+      <div className="bg-white text-slate-900 rounded-xl shadow-2xl w-full max-w-md my-8 p-6 space-y-4">
         <div>
           <h2 className="text-lg font-bold">Report an Issue</h2>
           <p className="text-xs text-slate-500 mt-0.5">Describe what happened - this goes straight to the VenueGuard team.</p>
