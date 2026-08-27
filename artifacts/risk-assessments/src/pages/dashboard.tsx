@@ -44,10 +44,13 @@ import type {
   ExpenseCategory,
   Announcement,
   NearbyEmergencyInfo,
+  FieldIncidentReportSeverity,
 } from "@/lib/api";
+import { enqueueOfflineSubmission, useOfflineQueue, useOfflineQueueSynced, retryOfflineItem, discardOfflineItem } from "@/lib/offline-queue";
 import { LocationSearch, resolveCurrentLocation } from "@/components/location-search";
 import type { LocationSearchResult } from "@/components/location-search";
 import { ReportIssueDialog } from "@/components/report-issue-dialog";
+import { ReportIncidentDialog } from "@/components/report-incident-dialog";
 import { projectToOperationalGeometry } from "@/lib/map-projection";
 import { timeAgo } from "@/lib/display-utils";
 
@@ -1019,7 +1022,7 @@ function TimesheetCalendar({
                   <span className="timesheet-day-entry-task">{entry.taskTitle ?? "Unknown task"}</span>
                   <span className="timesheet-day-entry-hours">{entry.dayHours}d + {entry.nightHours}n</span>
                   <span className={`timesheet-day-entry-status ${entry.approved ? "timesheet-day-entry-status-approved" : ""}`}>
-                    {entry.approved ? "Added to costing" : "Pending review"}
+                    {entry.pendingSync ? "Queued - will sync" : entry.approved ? "Added to costing" : "Pending review"}
                   </span>
                 </button>
               ))}
@@ -1289,6 +1292,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
   // back to the original static "Frik"/"F" until then.
   const [profileDisplay, setProfileDisplay] = useState<{ name: string; avatarInitials: string | null } | null>(null);
   const [showReportIssue, setShowReportIssue] = useState(false);
+  const [showReportIncident, setShowReportIncident] = useState(false);
   // The real panic button - always visible in the header regardless of
   // which panel is open or whether any task is in_progress, per direct
   // product direction ("let's put an actual panic button on operators
@@ -1510,6 +1514,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
           />
         </div>
       </div>
+      <SyncStatusIndicator />
       <button
         type="button"
         className="top-banner-panic-trigger"
@@ -1579,6 +1584,17 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
               type="button"
               className="top-banner-operator-menu-item"
               onClick={() => {
+                setShowReportIncident(true);
+                setOperatorMenuOpen(false);
+              }}
+            >
+              <AlertTriangle className="w-4 h-4" />
+              Report Incident
+            </button>
+            <button
+              type="button"
+              className="top-banner-operator-menu-item"
+              onClick={() => {
                 setShowReportIssue(true);
                 setOperatorMenuOpen(false);
               }}
@@ -1615,7 +1631,70 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
         )}
       </div>
       {showReportIssue && <ReportIssueDialog source="operators_note" onClose={() => setShowReportIssue(false)} />}
+      {showReportIncident && <ReportIncidentDialog onClose={() => setShowReportIncident(false)} />}
     </header>
+  );
+}
+
+// Following Roadmap, Tier 2 item 6 - visible proof that a Timesheet
+// entry or Incident report typed in a dead zone wasn't lost, not just
+// an invisible background retry. Hidden entirely once the queue is
+// empty (same "nothing to show, render nothing" convention as
+// SafetyAlertsPanel on Command Desk) - a CPO with a good connection
+// should never see this. Amber while items are pending/syncing, red the
+// moment any has genuinely failed (a real server rejection, not a
+// connectivity retry) so it reads as "needs you" rather than "just wait".
+function SyncStatusIndicator() {
+  const items = useOfflineQueue();
+  const [open, setOpen] = useState(false);
+
+  if (items.length === 0) return null;
+  const failedCount = items.filter((i) => i.status === "failed").length;
+
+  const KIND_LABELS: Record<string, string> = { timesheet: "Timesheet entry", incident: "Incident report" };
+
+  return (
+    <div
+      className="top-banner-sync-status"
+      onClick={(event) => event.stopPropagation()}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node)) setOpen(false);
+      }}
+    >
+      <button
+        type="button"
+        className={`top-banner-sync-status-trigger ${failedCount > 0 ? "top-banner-sync-status-trigger-failed" : ""}`}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <Loader2 className={`w-4 h-4 ${failedCount === 0 ? "animate-spin" : ""}`} />
+        {failedCount > 0 ? `${failedCount} failed to sync` : `${items.length} syncing…`}
+      </button>
+      {open && (
+        <div className="top-banner-sync-status-panel">
+          {items.map((item) => (
+            <div key={item.id} className="top-banner-sync-status-row">
+              <div className="top-banner-sync-status-row-info">
+                <span className="top-banner-sync-status-row-kind">{KIND_LABELS[item.kind] ?? item.kind}</span>
+                <span className="top-banner-sync-status-row-time">{timeAgo(item.createdAt)}</span>
+                {item.status === "failed" && item.lastError && (
+                  <span className="top-banner-sync-status-row-error">{item.lastError}</span>
+                )}
+              </div>
+              {item.status === "failed" ? (
+                <div className="top-banner-sync-status-row-actions">
+                  <button type="button" onClick={() => retryOfflineItem(item.id)}>Retry</button>
+                  <button type="button" onClick={() => discardOfflineItem(item.id)}>Discard</button>
+                </div>
+              ) : (
+                <span className="top-banner-sync-status-row-pending">
+                  {item.status === "syncing" ? "Syncing…" : "Waiting for signal"}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -2274,7 +2353,6 @@ function OperationalCanvas({
   const [timesheetDayHoursInput, setTimesheetDayHoursInput] = useState("");
   const [timesheetNightHoursInput, setTimesheetNightHoursInput] = useState("");
   const [timesheetNotesInput, setTimesheetNotesInput] = useState("");
-  const [savingTimesheetEntry, setSavingTimesheetEntry] = useState(false);
   const [deletingTimesheetEntry, setDeletingTimesheetEntry] = useState(false);
 
   useEffect(() => {
@@ -2313,29 +2391,57 @@ function OperationalCanvas({
     setTimesheetNotesInput(entry.notes);
   }
 
+  // Offline-first (Following Roadmap, Tier 2 item 6) - a save is written
+  // straight into local state and the offline queue (lib/offline-queue.ts)
+  // rather than waiting on the network round-trip, so a CPO logging hours
+  // in a dead zone sees it land immediately and trusts it's not lost. The
+  // optimistic row is tagged pendingSync until the queue actually lands it
+  // server-side, at which point useOfflineQueueSynced below refetches the
+  // real list and the temporary row is replaced by the authoritative one.
   function saveTimesheetEntry() {
     if (!selectedTimesheetDate || profileUserId == null || !timesheetTaskIdInput) return;
     const dayHours = Number(timesheetDayHoursInput) || 0;
     const nightHours = Number(timesheetNightHoursInput) || 0;
     if (dayHours < 0 || nightHours < 0 || dayHours + nightHours > 24) return;
-    setSavingTimesheetEntry(true);
-    api.timesheet
-      .upsert(profileUserId, {
-        taskId: Number(timesheetTaskIdInput),
-        date: selectedTimesheetDate,
-        dayHours,
-        nightHours,
-        notes: timesheetNotesInput,
-      })
-      .then((entry) => {
-        setTimesheetEntries((prev) =>
-          [...prev.filter((e) => !(e.date === entry.date && e.taskId === entry.taskId)), entry].sort((a, b) => a.date.localeCompare(b.date)),
-        );
-        resetTimesheetForm();
-      })
-      .catch((err) => console.error("Failed to save timesheet entry:", err))
-      .finally(() => setSavingTimesheetEntry(false));
+    const taskId = Number(timesheetTaskIdInput);
+    const data = { taskId, date: selectedTimesheetDate, dayHours, nightHours, notes: timesheetNotesInput };
+
+    const optimisticEntry: TimesheetEntry = {
+      id: editingTimesheetEntryId ?? -Date.now(),
+      userId: profileUserId,
+      userName: profileUser?.name ?? null,
+      taskId,
+      taskTitle: profileUserTasks.find((t) => t.id === taskId)?.title ?? null,
+      date: selectedTimesheetDate,
+      hoursWorked: dayHours + nightHours,
+      dayHours,
+      nightHours,
+      notes: timesheetNotesInput,
+      approved: false,
+      approvedBy: null,
+      approvedAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      pendingSync: true,
+    };
+    setTimesheetEntries((prev) =>
+      [...prev.filter((e) => !(e.date === optimisticEntry.date && e.taskId === optimisticEntry.taskId)), optimisticEntry].sort((a, b) =>
+        a.date.localeCompare(b.date),
+      ),
+    );
+    enqueueOfflineSubmission("timesheet", { userId: profileUserId, data });
+    resetTimesheetForm();
   }
+
+  // Reconcile once a queued Timesheet submission actually lands - a
+  // full refetch is simplest and correct (the server is the source of
+  // truth for ids/approval state), and clears every pendingSync row for
+  // this profile in one pass rather than trying to patch just the one
+  // that synced.
+  useOfflineQueueSynced("timesheet", () => {
+    if (profileUserId == null) return;
+    api.timesheet.list(profileUserId).then(setTimesheetEntries).catch((err) => console.error("Failed to refetch timesheet after sync:", err));
+  });
 
   function deleteTimesheetEntry(id: number) {
     setDeletingTimesheetEntry(true);
@@ -4967,7 +5073,7 @@ function OperationalCanvas({
                 onStartEdit={startEditTimesheetEntry}
                 onSave={saveTimesheetEntry}
                 onDelete={deleteTimesheetEntry}
-                saving={savingTimesheetEntry}
+                saving={false}
                 deleting={deletingTimesheetEntry}
                 noOperator={profileUserId == null}
               />

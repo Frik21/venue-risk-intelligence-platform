@@ -32,7 +32,7 @@ import {
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { api, type Checkin, type Office } from "@/lib/api";
+import { api, type Checkin, type FieldIncidentReport, type Office } from "@/lib/api";
 import { useSelectedOfficeId } from "@/lib/office-scope";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
@@ -106,9 +106,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     enabled: !!user,
     refetchInterval: 30000,
   });
-  const unacknowledgedAlertCount = checkins.filter(
-    (c) => (c.type === "panic" || c.type === "missed") && c.acknowledgedAt == null,
-  ).length;
+  // Same queryKey as the Field Incident Reports panel (pages/alerts/
+  // list.tsx), for the same invalidate-on-review reasoning as checkins.
+  const { data: fieldIncidentReports = [] } = useQuery<FieldIncidentReport[]>({
+    queryKey: ["field-incident-reports"],
+    queryFn: api.fieldIncidentReports.list,
+    enabled: !!user,
+    refetchInterval: 30000,
+  });
+  const unacknowledgedAlertCount =
+    checkins.filter((c) => (c.type === "panic" || c.type === "missed") && c.acknowledgedAt == null).length +
+    fieldIncidentReports.filter((r) => r.reviewedAt == null).length;
   const [showShell, setShowShell] = useState(() => {
   return sessionStorage.getItem("venueguard-show-shell") === "true";
 });

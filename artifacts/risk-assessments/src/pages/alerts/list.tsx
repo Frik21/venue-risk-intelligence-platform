@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Alert, type AlertStatus, type Checkin, type Task, type User } from "@/lib/api";
+import { api, type Alert, type AlertStatus, type Checkin, type FieldIncidentReport, type Task, type User } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -83,6 +83,94 @@ function SafetyAlertsPanel() {
               disabled={mutation.isPending}
             >
               <CheckCheck className="w-3 h-3 mr-1" /> Acknowledge
+            </Button>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+const FIELD_INCIDENT_SEVERITY_STYLES: Record<string, string> = {
+  high: "text-red-700 bg-red-50 border-red-200",
+  medium: "text-amber-700 bg-amber-50 border-amber-200",
+  low: "text-slate-600 bg-slate-50 border-slate-200",
+};
+
+// A CPO's own field-filed incident report - Following Roadmap, Tier 2
+// item 6 - submitted through Operators Note's offline queue
+// (lib/offline-queue.ts) so a report typed in a dead zone still lands
+// here once the CPO's connection comes back. Same "only show what needs
+// a response" shape as SafetyAlertsPanel above - reviewed reports drop
+// off this list once actioned.
+function FieldIncidentReportsPanel() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: reports = [], isLoading } = useQuery<FieldIncidentReport[]>({
+    queryKey: ["field-incident-reports"],
+    queryFn: api.fieldIncidentReports.list,
+  });
+
+  const mutation = useMutation({
+    mutationFn: (id: number) => api.fieldIncidentReports.markReviewed(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["field-incident-reports"] });
+      toast({ title: "Marked reviewed" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const unreviewed = reports
+    .filter((r) => r.reviewedAt == null)
+    .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
+
+  if (isLoading) return <Skeleton className="h-24" />;
+  if (unreviewed.length === 0) return null;
+
+  return (
+    <Card className="border-amber-200">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <ClipboardList className="w-4 h-4 text-amber-500" /> Field Incident Reports
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-amber-700 bg-amber-50 border-amber-200">
+            {unreviewed.length} unreviewed
+          </span>
+        </CardTitle>
+        <p className="text-slate-500 text-xs mt-0.5">First-hand reports filed by CPOs from Operators Note.</p>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {unreviewed.map((r) => (
+          <div key={r.id} className="flex items-start gap-3 py-2 border-b border-slate-100 last:border-0">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                <span
+                  className={cn(
+                    "text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase",
+                    FIELD_INCIDENT_SEVERITY_STYLES[r.severity] ?? FIELD_INCIDENT_SEVERITY_STYLES.medium,
+                  )}
+                >
+                  {r.severity}
+                </span>
+                <span className="text-xs text-slate-400">{timeAgo(r.occurredAt)}</span>
+              </div>
+              <div className="font-semibold text-slate-900 text-sm">{r.cpoName ?? "Unknown operator"}</div>
+              <p className="text-xs text-slate-600 mt-0.5">{r.summary}</p>
+              {r.taskTitle && <p className="text-xs text-slate-500 mt-0.5">{r.taskTitle}</p>}
+              {r.locationLabel && (
+                <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                  <MapPin className="w-3 h-3 shrink-0" /> {r.locationLabel}
+                </p>
+              )}
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs h-7 shrink-0 border-amber-200 text-amber-700 hover:bg-amber-50"
+              onClick={() => mutation.mutate(r.id)}
+              disabled={mutation.isPending}
+            >
+              <CheckCheck className="w-3 h-3 mr-1" /> Mark Reviewed
             </Button>
           </div>
         ))}
@@ -235,6 +323,7 @@ export default function AlertsList() {
       </div>
 
       <SafetyAlertsPanel />
+      <FieldIncidentReportsPanel />
       <TaskFlagsPanel />
 
       {isLoading ? (

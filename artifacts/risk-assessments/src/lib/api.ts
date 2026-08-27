@@ -207,6 +207,30 @@ export interface Checkin {
   acknowledgedAt: string | null;
 }
 
+// A CPO's own field-filed incident report - Following Roadmap, Tier 2
+// item 6. Distinct from the OSINT-sourced Incident type below (see
+// lib/db/src/schema/field-incident-reports.ts) - this is a first-hand
+// report from whoever's on the ground, submitted through Operators
+// Note's offline queue (lib/offline-queue.ts) so a report typed in a
+// dead zone syncs once the connection comes back rather than being lost.
+export type FieldIncidentReportSeverity = "low" | "medium" | "high";
+export interface FieldIncidentReport {
+  id: number;
+  taskId: number | null;
+  taskTitle: string | null;
+  cpoId: number;
+  cpoName: string | null;
+  severity: FieldIncidentReportSeverity;
+  summary: string;
+  latitude: number | null;
+  longitude: number | null;
+  locationLabel: string | null;
+  occurredAt: string;
+  reviewedBy: number | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+}
+
 export type CompanyStatus = "trial" | "active" | "suspended" | "cancelled";
 export type ManagementRole = "manager" | "operations" | "finance" | "human_resources";
 // "team" (the default, Management + CPO) or "solo_operator" (a single
@@ -683,6 +707,11 @@ export interface TimesheetEntry {
   approvedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  // Frontend-only - never sent by the server. Set on the optimistic
+  // local row a queued-but-not-yet-synced save renders while offline
+  // (see lib/offline-queue.ts); cleared once the real row comes back
+  // from a refetch after the queued submission actually lands.
+  pendingSync?: boolean;
 }
 
 export interface CompanySettings {
@@ -1064,6 +1093,14 @@ export const api = {
     create: (data: { taskId?: number; type: "ok" | "panic"; latitude?: number; longitude?: number; locationLabel?: string }) =>
       apiFetch<Checkin>("/checkins", { method: "POST", body: JSON.stringify(data) }),
     acknowledge: (id: number) => apiFetch<Checkin>(`/checkins/${id}`, { method: "PATCH", body: JSON.stringify({}) }),
+  },
+  fieldIncidentReports: {
+    // Company-wide, newest first - Command Desk's Field Incident Reports
+    // panel filters this to unreviewed rows, same pattern as checkins.
+    list: () => apiFetch<FieldIncidentReport[]>("/field-incident-reports"),
+    create: (data: { taskId?: number; severity: FieldIncidentReportSeverity; summary: string; latitude?: number; longitude?: number; locationLabel?: string }) =>
+      apiFetch<FieldIncidentReport>("/field-incident-reports", { method: "POST", body: JSON.stringify(data) }),
+    markReviewed: (id: number) => apiFetch<FieldIncidentReport>(`/field-incident-reports/${id}`, { method: "PATCH", body: JSON.stringify({}) }),
   },
   auth: {
     login: (email: string, password: string) =>
