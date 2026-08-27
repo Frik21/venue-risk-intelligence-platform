@@ -8,8 +8,13 @@ import { getExchangeRate, currencyForCountry, SUPPORTED_CURRENCY_CODES } from ".
 const router: IRouter = Router();
 // Owner-only - the one surface a companyId: null session is allowed to
 // use, and only for this aggregate-only data (see buildCompanyRows's
-// own comment for the invariant this protects).
-router.use(requireRole("admin"));
+// own comment for the invariant this protects). requireRole("admin") is
+// applied per-route below (not a router-wide router.use()) because this
+// router is mounted with no path prefix in routes/index.ts - a blanket
+// gate here would intercept every request that falls through to this
+// router in the chain, not just /companies/*, 403ing non-admins on any
+// route registered later (checkins, emergency-info, field-incident-
+// reports, etc.) that isn't matched by an earlier router first.
 
 const STATUSES = ["trial", "active", "suspended", "cancelled"] as const;
 
@@ -230,11 +235,11 @@ async function buildCompanyRows() {
   });
 }
 
-router.get("/companies", async (_req, res): Promise<void> => {
+router.get("/companies", requireRole("admin"), async (_req, res): Promise<void> => {
   res.json(await buildCompanyRows());
 });
 
-router.get("/companies/summary", async (_req, res): Promise<void> => {
+router.get("/companies/summary", requireRole("admin"), async (_req, res): Promise<void> => {
   const companies = await db
     .select({
       status: companiesTable.status,
@@ -277,7 +282,7 @@ function formatPricingConfig(row: typeof pricingConfigTable.$inferSelect) {
   };
 }
 
-router.get("/companies/pricing", async (_req, res): Promise<void> => {
+router.get("/companies/pricing", requireRole("admin"), async (_req, res): Promise<void> => {
   res.json(formatPricingConfig(await getOrCreatePricingConfig()));
 });
 
@@ -292,7 +297,7 @@ function formatPricingHistory(row: typeof pricingHistoryTable.$inferSelect) {
   };
 }
 
-router.get("/companies/pricing/history", async (_req, res): Promise<void> => {
+router.get("/companies/pricing/history", requireRole("admin"), async (_req, res): Promise<void> => {
   const rows = await db.select().from(pricingHistoryTable).orderBy(desc(pricingHistoryTable.changedAt));
   res.json(rows.map(formatPricingHistory));
 });
@@ -306,7 +311,7 @@ export const PRICING_CURRENCY_CODES = SUPPORTED_CURRENCY_CODES;
 // frontend converts both directions around this rate; the backend
 // itself never receives or stores anything but USD, so nothing here
 // changes what /companies/pricing/change actually persists.
-router.get("/companies/pricing/fx", async (req, res): Promise<void> => {
+router.get("/companies/pricing/fx", requireRole("admin"), async (req, res): Promise<void> => {
   const code = String(req.query.currency ?? "USD").toUpperCase();
   if (!(SUPPORTED_CURRENCY_CODES as readonly string[]).includes(code)) {
     res.status(400).json({ error: "Unsupported currency" });
@@ -323,7 +328,7 @@ router.get("/companies/pricing/fx", async (req, res): Promise<void> => {
 // is the missing link turning that country into a currency the working-
 // currency selector can actually use, via the same map the subscriber-
 // facing engine resolves through - not a second implementation.
-router.get("/companies/pricing/currency-for-country", async (req, res): Promise<void> => {
+router.get("/companies/pricing/currency-for-country", requireRole("admin"), async (req, res): Promise<void> => {
   const country = String(req.query.country ?? "");
   const code = country ? currencyForCountry(country) : null;
   const supported = code != null && (SUPPORTED_CURRENCY_CODES as readonly string[]).includes(code);
@@ -350,7 +355,7 @@ const PricingChangeSchema = z
     message: "Provide exactly one of newValue or percentageChange",
   });
 
-router.post("/companies/pricing/change", async (req, res): Promise<void> => {
+router.post("/companies/pricing/change", requireRole("admin"), async (req, res): Promise<void> => {
   const parsed = PricingChangeSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
@@ -380,7 +385,7 @@ router.post("/companies/pricing/change", async (req, res): Promise<void> => {
   res.json({ config: formatPricingConfig(updatedConfig), entry: formatPricingHistory(entry) });
 });
 
-router.get("/companies/:id", async (req, res): Promise<void> => {
+router.get("/companies/:id", requireRole("admin"), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
@@ -419,7 +424,7 @@ function formatCompanyRecord(company: typeof companiesTable.$inferSelect) {
   };
 }
 
-router.post("/companies", async (req, res): Promise<void> => {
+router.post("/companies", requireRole("admin"), async (req, res): Promise<void> => {
   const parsed = CompanyInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
@@ -445,7 +450,7 @@ router.post("/companies", async (req, res): Promise<void> => {
 
 const CompanyUpdateSchema = CompanyInputSchema.partial();
 
-router.patch("/companies/:id", async (req, res): Promise<void> => {
+router.patch("/companies/:id", requireRole("admin"), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
