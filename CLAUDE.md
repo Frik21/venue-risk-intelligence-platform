@@ -150,3 +150,47 @@ Everything flagged as still-needed during this session's "what would it take to 
 - Registered business entity, Terms of Service, Privacy Policy
 - Actual decided pricing for the base plan and additional seats - now Owner-editable (`/owner`'s "Subscription" button, see the pricing-config note above) rather than hardcoded, but the numbers themselves are still placeholders until real prices are decided
 - Hosting + a domain, connected together - mechanically simple once the above is far enough along (see this session's own walkthrough for the how-to)
+
+# Following Roadmap - Industry Feature Backlog
+
+Comes after the Outstanding list above, not instead of it - the items above are launch blockers, this is what comes next once VenueGuard is live. Built from a deliberate exercise: imagining the product through the eyes of a former international CPO who now owns a CPO company, first as a field operator (Operators Note) then as a subscriber running the business (Command Desk), asking specifically what would make either of them feel "where has this been all my life" - not just "useful," but solving a real, remembered moment of fear, loss, or embarrassment they'd already lived through. Confirmed by direct product direction as the following roadmap. Same rule as every other section here: this documents direction, it isn't a spec to build from unprompted - confirm scope before starting any item.
+
+**Tier 1 - build these first, biggest "finally" reaction:**
+1. Live check-in / panic-alert signal - Operators Note triggers it (scheduled check-in + a panic/man-down trigger), Command Desk receives and monitors it. The strongest "this could save my life" feature on the CPO side - everything else in the platform is admin, this is duty-of-care.
+2. Job profitability per task - quoted/invoiced revenue next to actual cost (personnel + expenses, both already tracked separately), in one view. The gap between "the business looks busy" and "the business is making money."
+3. Aging receivables - flag overdue invoices before they become a payroll problem, since CPO payroll is often due before client payment clears.
+4. Certification/license expiry tracking per operator per jurisdiction (Command Desk/HR, alongside Operator Database) with a self-service cert wallet on Operators Note so a CPO sees and renews their own expiring certs rather than waiting on HR to chase them.
+5. One-tap emergency info (nearest hospital/embassy/police) pulled from Field Intelligence, surfaced during an active task on Operators Note.
+
+**Tier 2 - strong value, real pain, less visceral:**
+6. Offline-first sync for field timesheet/incident entries on Operators Note - queue and sync later instead of losing data in a dead zone.
+7. Structured after-action report tied to a task (Operators Note fills it in, Command Desk reviews/stores it) - industry-standard, currently only free-text fields exist.
+8. Real client/principal protection profile - medical info, known threats, routine, family - built in Command Desk's Clients CRM, surfaced to the assigned CPO during their task. Today's "requirements" field is billing-shaped, not protection-shaped.
+9. Operator utilization over time (not just the current snapshot stat tile) - are CPOs sitting idle or is work being turned down.
+10. One compliance/risk rollup - expiring certs, pending onboarding docs, unapproved timesheets, unreviewed incidents - instead of five separate pages.
+11. Client revenue concentration view - how exposed the business is to one account.
+12. Quote win rate as an actual trend (approved / sent over time), not just Sent vs. Pending counts.
+13. Shift handover notes between CPOs on multi-day details - different from the existing one-way Manager -> CPO Communications.
+14. Equipment/asset tracking - issued/returned per task, serial numbers, maintenance (Command Desk tracks, Operators Note gets an issued/returned checklist per task).
+15. Team-lead/hierarchy designation on multi-operator task rosters - who's team lead, driver, advance, close protection (Command Desk assigns, Operators Note displays).
+
+**Tier 3 - real, but bigger builds / further out:**
+16. Travel/visa logistics module - visa requirements by nationality+destination, local embassy/fixer contacts (built Command Desk-side like Field Intelligence, surfaced to the traveling CPO's own Operational Brief).
+17. Contract/retainer management with renewal dates - standing details and recurring revenue, distinct from one-off Tasks/Quotes.
+18. Pipeline/forecasting from open quotes - projected future revenue for staffing and cash planning.
+19. Post-task client satisfaction/feedback loop, closing the quality circle.
+20. Vendor/subcontractor performance tracking over time (Vendors CRM exists; this adds a track record, not just a contact card).
+21. Insurance/liability policy tracking - coverage and expiry per operator or per contract.
+22. Re-vetting/background-check renewal cadence - vetting isn't one-and-done.
+23. Passport/visa expiry tracking for internationally-deployed CPOs.
+24. Weapons/firearms permit tracking where applicable, same treatment as certs.
+25. Client portal - the client sees their own task status/invoices instead of chasing email.
+26. E-signature on quotes, not just a status flip - more defensible if a dispute comes up.
+27. Scope-creep alerts - flag when actual task cost is diverging from the quote while the job is still running, not after.
+28. Rate benchmarking - is a given day/night rate competitive for the region and risk level.
+29. Real notifications - SMS/push/email for panic alerts, overdue invoices, expiring certs - things that can't wait for someone to open the app.
+30. Granular per-role permissions - today Finance/Operations/HR all have the same looseness on Command Desk; this locks that down as the company grows.
+31. Subscriber's own data export - reduces lock-in fear, builds trust in the platform.
+32. Multi-language UI, for companies running local staff who aren't English-first.
+33. GPS breadcrumb trail during active tasks (Operators Note), pairs with item 1.
+34. CPO self-service availability/time-off requests on Operators Note.
