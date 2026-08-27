@@ -306,6 +306,22 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
 // The isInternal check here is the actual enforcement of that boundary
 // (not just the Master Console UI only showing a Preview button on that
 // one row) - a request for any other company's id is rejected outright.
+// Registered before the /auth/preview/:companyId route below - Express
+// matches routes in registration order, and ":companyId" matches
+// literally any path segment including the string "exit", so having
+// that dynamic route first would swallow every exit request as an
+// invalid company id (confirmed live: this silently broke the Owner's
+// "Exit Preview" button - the request always 400'd before ever reaching
+// this handler). Static/literal routes must come before a param route
+// that could otherwise shadow them.
+router.post("/auth/preview/exit", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+  const sessionId = req.signedCookies?.[SESSION_COOKIE];
+  await exitPreview(sessionId);
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id));
+  res.json({ user: await formatSessionUser(user!, { companyId: user!.companyId, isPreviewing: false }) });
+});
+
 router.post("/auth/preview/:companyId", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
   const companyId = Number(req.params.companyId);
   if (isNaN(companyId)) { res.status(400).json({ error: "Invalid company id" }); return; }
@@ -321,14 +337,6 @@ router.post("/auth/preview/:companyId", requireAuth, requireRole("admin"), async
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id));
   res.json({ user: await formatSessionUser(user!, { companyId, isPreviewing: true }) });
-});
-
-router.post("/auth/preview/exit", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
-  const sessionId = req.signedCookies?.[SESSION_COOKIE];
-  await exitPreview(sessionId);
-
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id));
-  res.json({ user: await formatSessionUser(user!, { companyId: user!.companyId, isPreviewing: false }) });
 });
 
 const ChangePasswordSchema = z.object({
