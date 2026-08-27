@@ -1289,6 +1289,39 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
   // back to the original static "Frik"/"F" until then.
   const [profileDisplay, setProfileDisplay] = useState<{ name: string; avatarInitials: string | null } | null>(null);
   const [showReportIssue, setShowReportIssue] = useState(false);
+  // The real panic button - always visible in the header regardless of
+  // which panel is open or whether any task is in_progress, per direct
+  // product direction ("let's put an actual panic button on operators
+  // note"). Deliberately separate, simpler state than OperationalCanvas's
+  // own per-task checkinState (TopBanner and OperationalCanvas are
+  // siblings, not parent/child - see the window-event pattern used
+  // elsewhere in this file for why a shared state object isn't a
+  // natural fit here). No taskId is sent - see the nullable taskId
+  // comment on schema/checkins.ts.
+  const [panicSending, setPanicSending] = useState(false);
+  const [panicSent, setPanicSent] = useState(false);
+
+  async function sendGlobalPanic() {
+    if (!window.confirm("Send a panic alert to your Command Desk now?")) return;
+    setPanicSending(true);
+    let location: { latitude?: number; longitude?: number; locationLabel?: string } = {};
+    try {
+      const resolved = await resolveCurrentLocation();
+      location = { latitude: resolved.lat ?? undefined, longitude: resolved.lng ?? undefined, locationLabel: resolved.label };
+    } catch (err) {
+      console.error("Could not resolve location for panic alert:", err);
+    }
+    try {
+      await api.checkins.create({ type: "panic", ...location });
+      setPanicSent(true);
+      setTimeout(() => setPanicSent(false), 5000);
+    } catch (err) {
+      console.error("Failed to send panic alert:", err);
+      window.alert("Couldn't send the panic alert - try again.");
+    } finally {
+      setPanicSending(false);
+    }
+  }
 
   useEffect(() => {
     const reopenMenu = () => setBrandMenuOpen(true);
@@ -1477,6 +1510,24 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
           />
         </div>
       </div>
+      <button
+        type="button"
+        className="top-banner-panic-trigger"
+        disabled={panicSending}
+        onClick={(event) => {
+          event.stopPropagation();
+          sendGlobalPanic();
+        }}
+      >
+        {panicSending ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : panicSent ? (
+          <Check className="w-4 h-4" />
+        ) : (
+          <ShieldAlert className="w-4 h-4" />
+        )}
+        {panicSent ? "Sent" : "Panic"}
+      </button>
       <button
         type="button"
         className="top-banner-alerts-trigger"

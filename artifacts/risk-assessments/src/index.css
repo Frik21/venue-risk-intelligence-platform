@@ -338,6 +338,36 @@
    TOGGLE_ALERTS_PANEL_EVENT/ALERTS_COUNT_EVENT in dashboard.tsx for
    how it stays in sync with alertsPanelOpen/combinedAlerts, both of
    which still live in OperationalCanvas). */
+/* The real panic button - always visible in the header, works with no
+   active task required (see sendGlobalPanic in dashboard.tsx). Styled
+   as the loudest control in the whole top banner on purpose. */
+.top-banner-panic-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-right: 12px;
+  padding: 8px 14px;
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  border-radius: 8px;
+  background: rgba(248, 113, 113, 0.16);
+  color: rgba(254, 202, 202, 0.95);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.top-banner-panic-trigger:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.3);
+  border-color: rgba(248, 113, 113, 0.75);
+}
+
+.top-banner-panic-trigger:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
 .top-banner-alerts-trigger {
   display: flex;
   align-items: center;

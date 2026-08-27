@@ -190,7 +190,10 @@ export interface Task {
 export type CheckinType = "ok" | "panic" | "missed";
 export interface Checkin {
   id: number;
-  taskId: number;
+  // Null for the always-visible TopBanner panic button, which works
+  // with no active task required - only the per-task Tasks panel
+  // Check In/Panic buttons set this.
+  taskId: number | null;
   taskTitle: string | null;
   cpoId: number;
   cpoName: string | null;
@@ -1058,7 +1061,7 @@ export const api = {
     // filters this to unacknowledged panic/missed rows; Operators Note
     // filters it to the session's own cpoId to show "last checked in".
     list: () => apiFetch<Checkin[]>("/checkins"),
-    create: (data: { taskId: number; type: "ok" | "panic"; latitude?: number; longitude?: number; locationLabel?: string }) =>
+    create: (data: { taskId?: number; type: "ok" | "panic"; latitude?: number; longitude?: number; locationLabel?: string }) =>
       apiFetch<Checkin>("/checkins", { method: "POST", body: JSON.stringify(data) }),
     acknowledge: (id: number) => apiFetch<Checkin>(`/checkins/${id}`, { method: "PATCH", body: JSON.stringify({}) }),
   },

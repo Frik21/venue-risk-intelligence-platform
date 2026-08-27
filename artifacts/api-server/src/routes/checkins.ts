@@ -9,8 +9,8 @@ const router: IRouter = Router();
 function formatCheckin(row: typeof checkinsTable.$inferSelect, taskTitle?: string | null, cpoName?: string | null, acknowledgedByName?: string | null) {
   return {
     id: row.id,
-    taskId: row.taskId,
-    taskTitle: taskTitle ?? null,
+    taskId: row.taskId ?? null,
+    taskTitle: row.taskId != null ? (taskTitle ?? null) : null,
     cpoId: row.cpoId,
     cpoName: cpoName ?? null,
     type: row.type as "ok" | "panic" | "missed",
@@ -42,11 +42,16 @@ router.get("/checkins", async (req, res): Promise<void> => {
   const userMap: Record<number, string> = {};
   for (const u of users) userMap[u.id] = u.name;
 
-  res.json(rows.map((r) => formatCheckin(r, taskMap[r.taskId], userMap[r.cpoId], r.acknowledgedBy != null ? userMap[r.acknowledgedBy] : null)));
+  res.json(rows.map((r) => formatCheckin(r, r.taskId != null ? taskMap[r.taskId] : null, userMap[r.cpoId], r.acknowledgedBy != null ? userMap[r.acknowledgedBy] : null)));
 });
 
 const CreateCheckinSchema = z.object({
-  taskId: z.number().int(),
+  // Optional - per direct product direction, the always-visible panic
+  // button in TopBanner works with no active task required (an
+  // emergency isn't only possible during a formally in_progress task).
+  // The per-task Check In/Panic buttons in the Tasks panel still pass
+  // one.
+  taskId: z.number().int().optional(),
   type: z.enum(["ok", "panic"]),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
@@ -56,10 +61,10 @@ const CreateCheckinSchema = z.object({
 // The CPO's own trigger - a routine "ok" check-in or an emergency
 // "panic" alert. cpoId always comes from the session, never the
 // request body, matching this app's usual no-client-trust posture for
-// anything security-relevant. Requires the CPO to actually be on the
-// task's roster (task_assignments) - a real integrity check, not just
-// a client-side courtesy, since this is the one signal a Manager's
-// duty-of-care response depends on.
+// anything security-relevant. When a taskId is given, requires the CPO
+// to actually be on that task's roster (task_assignments) - a real
+// integrity check, not just a client-side courtesy, since this is one
+// of the signals a Manager's duty-of-care response depends on.
 router.post("/checkins", async (req, res): Promise<void> => {
   const companyId = requireCompanyId(req, res);
   if (companyId == null) return;
@@ -68,20 +73,22 @@ router.post("/checkins", async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const cpoId = req.user!.id;
-  const [task] = await db.select({ id: tasksTable.id }).from(tasksTable).where(and(eq(tasksTable.id, parsed.data.taskId), eq(tasksTable.companyId, companyId)));
-  if (!task) { res.status(404).json({ error: "Task not found" }); return; }
+  if (parsed.data.taskId != null) {
+    const [task] = await db.select({ id: tasksTable.id }).from(tasksTable).where(and(eq(tasksTable.id, parsed.data.taskId), eq(tasksTable.companyId, companyId)));
+    if (!task) { res.status(404).json({ error: "Task not found" }); return; }
 
-  const [onRoster] = await db
-    .select({ id: taskAssignmentsTable.id })
-    .from(taskAssignmentsTable)
-    .where(and(eq(taskAssignmentsTable.taskId, parsed.data.taskId), eq(taskAssignmentsTable.operatorId, cpoId)));
-  if (!onRoster) { res.status(403).json({ error: "You are not assigned to this task" }); return; }
+    const [onRoster] = await db
+      .select({ id: taskAssignmentsTable.id })
+      .from(taskAssignmentsTable)
+      .where(and(eq(taskAssignmentsTable.taskId, parsed.data.taskId), eq(taskAssignmentsTable.operatorId, cpoId)));
+    if (!onRoster) { res.status(403).json({ error: "You are not assigned to this task" }); return; }
+  }
 
   const [row] = await db
     .insert(checkinsTable)
     .values({
       companyId,
-      taskId: parsed.data.taskId,
+      taskId: parsed.data.taskId ?? null,
       cpoId,
       type: parsed.data.type,
       latitude: parsed.data.latitude ?? null,
@@ -90,7 +97,7 @@ router.post("/checkins", async (req, res): Promise<void> => {
     })
     .returning();
 
-  const [taskRow] = await db.select({ title: tasksTable.title }).from(tasksTable).where(eq(tasksTable.id, row.taskId));
+  const [taskRow] = row.taskId != null ? await db.select({ title: tasksTable.title }).from(tasksTable).where(eq(tasksTable.id, row.taskId)) : [undefined];
   const [cpo] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, cpoId));
   res.status(201).json(formatCheckin(row, taskRow?.title ?? null, cpo?.name ?? null));
 });
@@ -109,7 +116,7 @@ router.patch("/checkins/:id", async (req, res): Promise<void> => {
     .returning();
   if (!row) { res.status(404).json({ error: "Check-in not found" }); return; }
 
-  const [taskRow] = await db.select({ title: tasksTable.title }).from(tasksTable).where(eq(tasksTable.id, row.taskId));
+  const [taskRow] = row.taskId != null ? await db.select({ title: tasksTable.title }).from(tasksTable).where(eq(tasksTable.id, row.taskId)) : [undefined];
   const [cpo] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, row.cpoId));
   const [ackUser] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id));
   res.json(formatCheckin(row, taskRow?.title ?? null, cpo?.name ?? null, ackUser?.name ?? null));

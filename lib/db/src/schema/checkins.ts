@@ -20,10 +20,17 @@ import { usersTable } from "./users";
 // (components/location-search.tsx) - reused rather than a second
 // geolocation implementation, same engine already used for the CPO's
 // "Current Area" and the currency engine's country detection.
+//
+// taskId is nullable - per direct product direction, the real panic
+// button (the always-visible one in TopBanner, not the per-task one in
+// the Tasks panel) works with no active task required, since an
+// emergency isn't only possible during a formally in_progress task.
+// onDelete: set null (not cascade) so a safety record outlives the task
+// it happened to be tied to, same reasoning as alertsTable.incidentId.
 export const checkinsTable = pgTable("checkins", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
-  taskId: integer("task_id").notNull().references(() => tasksTable.id, { onDelete: "cascade" }),
+  taskId: integer("task_id").references(() => tasksTable.id, { onDelete: "set null" }),
   cpoId: integer("cpo_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   type: text("type").notNull(),
   latitude: real("latitude"),
