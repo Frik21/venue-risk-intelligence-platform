@@ -30,8 +30,9 @@ import {
   Workflow,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { api, type Office } from "@/lib/api";
+import { api, type Checkin, type Office } from "@/lib/api";
 import { useSelectedOfficeId } from "@/lib/office-scope";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
@@ -93,6 +94,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     api.offices.list().then(setOffices).catch((err) => console.error("Failed to load offices:", err));
   }, []);
+
+  // Same queryKey as the Safety Alerts panel (pages/alerts/list.tsx), so
+  // acknowledging one there invalidates this count too. Polled here since
+  // this sidebar stays mounted across every Command Desk page - a panic
+  // triggered while a Manager is elsewhere in the app shouldn't require a
+  // manual reload to surface as a badge on the Alerts nav item.
+  const { data: checkins = [] } = useQuery<Checkin[]>({
+    queryKey: ["checkins"],
+    queryFn: api.checkins.list,
+    enabled: !!user,
+    refetchInterval: 30000,
+  });
+  const unacknowledgedAlertCount = checkins.filter(
+    (c) => (c.type === "panic" || c.type === "missed") && c.acknowledgedAt == null,
+  ).length;
   const [showShell, setShowShell] = useState(() => {
   return sessionStorage.getItem("venueguard-show-shell") === "true";
 });
@@ -172,6 +188,7 @@ const hideShell = (location === "/cpo" || location === "/owner" || location === 
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.href);
+                const alertBadge = item.href === "/alerts" ? unacknowledgedAlertCount : 0;
                 return (
                   <Link
                     key={item.href}
@@ -185,7 +202,12 @@ const hideShell = (location === "/cpo" || location === "/owner" || location === 
                     )}
                   >
                     <Icon className="w-4 h-4 mr-2.5 shrink-0" />
-                    {item.label}
+                    <span className="flex-1">{item.label}</span>
+                    {alertBadge > 0 && (
+                      <span className="ml-2 shrink-0 min-w-[1.25rem] h-5 px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center">
+                        {alertBadge > 99 ? "99+" : alertBadge}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
