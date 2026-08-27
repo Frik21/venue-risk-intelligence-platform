@@ -37,10 +37,10 @@ function SectionCard({
   );
 }
 
-function StatTile({ label, value }: { label: string; value: string }) {
+function StatTile({ label, value, tone }: { label: string; value: string; tone?: "negative" }) {
   return (
-    <div className="border border-slate-100 rounded-lg p-3">
-      <div className="text-lg font-mono tabular-nums font-bold text-slate-900">{value}</div>
+    <div className={cn("border rounded-lg p-3", tone === "negative" ? "border-red-200 bg-red-50/50" : "border-slate-100")}>
+      <div className={cn("text-lg font-mono tabular-nums font-bold", tone === "negative" ? "text-red-700" : "text-slate-900")}>{value}</div>
       <div className="text-xs text-slate-500 mt-0.5">{label}</div>
     </div>
   );
@@ -80,6 +80,12 @@ export default function FinanceDashboard() {
   const outstandingInvoices = scopedInvoices.filter((i) => i.status === "sent");
   const outstandingValue = outstandingInvoices.reduce((sum, i) => sum + i.totalAmount, 0);
   const paidValue = scopedInvoices.filter((i) => i.status === "paid").reduce((sum, i) => sum + i.totalAmount, 0);
+  // Aging receivables (Following Roadmap Tier 1, item 3) - sent but
+  // unpaid, past its own due date. Flagged here so it's visible without
+  // navigating into /admin/invoices - the whole point is catching a
+  // late payment before it becomes a payroll problem, not after.
+  const overdueInvoices = outstandingInvoices.filter((i) => i.dueDate != null && new Date(i.dueDate).getTime() < Date.now());
+  const overdueValue = overdueInvoices.reduce((sum, i) => sum + i.totalAmount, 0);
 
   const pendingPayrollTotal = pendingPayroll.reduce((sum, p) => sum + p.totalAmount, 0);
   const recentRuns = [...payRuns].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
@@ -114,6 +120,8 @@ export default function FinanceDashboard() {
               <StatTile label="Outstanding" value={String(outstandingInvoices.length)} />
               <StatTile label="Outstanding value" value={`$${outstandingValue.toLocaleString()}`} />
               <StatTile label="Paid to date" value={`$${paidValue.toLocaleString()}`} />
+              <StatTile label="Overdue" value={String(overdueInvoices.length)} tone={overdueInvoices.length > 0 ? "negative" : undefined} />
+              <StatTile label="Overdue value" value={`$${overdueValue.toLocaleString()}`} tone={overdueInvoices.length > 0 ? "negative" : undefined} />
             </div>
           </SectionCard>
 

@@ -8,7 +8,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
-import { Receipt, Plus, MoreVertical, Pencil, Trash2, FileText } from "lucide-react";
+import { Receipt, Plus, MoreVertical, Pencil, Trash2, FileText, AlertTriangle } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,17 @@ const STATUS_CONFIG: Record<InvoiceStatus, { label: string; color: string }> = {
 
 function formatMoney(amount: number, currency: string) {
   return `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+}
+
+// Aging Receivables (Following Roadmap Tier 1, item 3) - a sent invoice
+// past its own due date, before it becomes a payroll problem. Null for
+// anything not overdue (draft/paid, no due date, or due date not yet
+// passed) rather than a negative number, so callers can branch on it
+// cleanly.
+function daysOverdue(invoice: Invoice): number | null {
+  if (invoice.status !== "sent" || !invoice.dueDate) return null;
+  const days = Math.floor((Date.now() - new Date(invoice.dueDate).getTime()) / (24 * 60 * 60 * 1000));
+  return days > 0 ? days : null;
 }
 
 // One currency-bucketed amount per line, stacked when totals span more
@@ -86,6 +97,14 @@ export default function InvoicesPage() {
   for (const inv of invoices) {
     totalsByStatus[inv.status][inv.currency] = (totalsByStatus[inv.status][inv.currency] ?? 0) + inv.totalAmount;
   }
+
+  // Most overdue first - the whole point is surfacing the one closest
+  // to becoming a real cash-flow problem, not just listing every late
+  // invoice in creation order.
+  const overdueInvoices = invoices
+    .map((inv) => ({ invoice: inv, days: daysOverdue(inv) }))
+    .filter((x): x is { invoice: Invoice; days: number } => x.days != null)
+    .sort((a, b) => b.days - a.days);
 
   function findApprovedQuote(taskId: number): Quote | null {
     return quotes.find((q) => q.taskId === taskId && q.status === "approved") ?? null;
@@ -159,6 +178,40 @@ export default function InvoicesPage() {
         </CardContent>
       </Card>
 
+      {overdueInvoices.length > 0 && (
+        <Card className="border-red-200">
+          <CardContent className="p-5">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2 mb-3">
+              <AlertTriangle className="w-4 h-4 text-red-500" /> Aging Receivables
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-red-700 bg-red-50 border-red-200">
+                {overdueInvoices.length} overdue
+              </span>
+            </h2>
+            <div className="space-y-2">
+              {overdueInvoices.map(({ invoice, days }) => (
+                <button
+                  key={invoice.id}
+                  onClick={() => setEditingInvoice(invoice)}
+                  className="w-full flex items-center justify-between gap-3 text-sm border border-red-100 rounded-md px-3 py-2 hover:bg-red-50/50 text-left"
+                >
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-mono text-slate-400 border border-slate-200 px-1.5 py-0.5 rounded mr-2">{invoice.invoiceNumber}</span>
+                    <span className="text-slate-900">{invoice.title || "Untitled invoice"}</span>
+                    {invoice.clientName && <span className="text-slate-400"> · {invoice.clientName}</span>}
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="font-mono tabular-nums text-slate-700">{formatMoney(invoice.totalAmount, invoice.currency)}</span>
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-red-700 bg-red-50 border-red-200 whitespace-nowrap">
+                      {days} day{days > 1 ? "s" : ""} overdue
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {invoicesLoading ? (
         <Skeleton className="h-64" />
       ) : invoices.length === 0 ? (
@@ -187,6 +240,7 @@ export default function InvoicesPage() {
               <tbody className="divide-y divide-slate-100">
                 {invoices.map((invoice) => {
                   const sc = STATUS_CONFIG[invoice.status];
+                  const overdueDays = daysOverdue(invoice);
                   return (
                     <tr key={invoice.id} className="hover:bg-slate-50/60">
                       <td className="px-4 py-2.5">
@@ -199,7 +253,12 @@ export default function InvoicesPage() {
                       <td className="px-4 py-2.5">
                         <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase", sc.color)}>{sc.label}</span>
                       </td>
-                      <td className="px-4 py-2.5 text-slate-500">{invoice.dueDate ? formatDate(invoice.dueDate) : "—"}</td>
+                      <td className="px-4 py-2.5 text-slate-500">
+                        {invoice.dueDate ? formatDate(invoice.dueDate) : "—"}
+                        {overdueDays != null && (
+                          <div className="text-[10px] text-red-600 font-medium mt-0.5">{overdueDays} day{overdueDays > 1 ? "s" : ""} overdue</div>
+                        )}
+                      </td>
                       <td className="px-4 py-2.5 text-right font-mono tabular-nums text-slate-900">{formatMoney(invoice.totalAmount, invoice.currency)}</td>
                       <td className="px-2 py-2.5 text-right">
                         <DropdownMenu>
