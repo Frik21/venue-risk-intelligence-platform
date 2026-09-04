@@ -16,12 +16,13 @@ import {
   Users as UsersIcon,
   CheckCircle2,
   Activity,
+  UserX,
   type LucideIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { formatDate } from "@/lib/display-utils";
 import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
-import { dailyBuckets, countByDay, countOpenByDay, mergeSeries, toSingleSeries } from "@/lib/trend-buckets";
+import { dailyBuckets, countByDay, countOpenByDay, distinctByDay, mergeSeries, toSingleSeries } from "@/lib/trend-buckets";
 
 const PRIORITY_COLORS: Record<string, string> = {
   low: "text-slate-600 bg-slate-100 border-slate-200",
@@ -111,6 +112,7 @@ export default function AdminDashboard() {
   const { data: allInvoices = [] } = useQuery<Invoice[]>({ queryKey: ["invoices"], queryFn: api.invoices.list });
   const { data: allClients = [] } = useQuery<Client[]>({ queryKey: ["clients"], queryFn: api.clients.list });
   const { data: onboardingRecords = [] } = useQuery<OnboardingOverviewRecord[]>({ queryKey: ["onboarding"], queryFn: api.onboarding.listAll });
+  const { data: allTimesheetEntries = [] } = useQuery({ queryKey: ["timesheet-all"], queryFn: api.timesheet.listAll });
 
   // Every entity below carries officeId - scoping the whole dashboard
   // (existing sections included) to the sidebar switcher, same as
@@ -175,6 +177,59 @@ export default function AdminDashboard() {
     [buckets, onboardingRecords],
   );
 
+  // Operator Utilization - Following Roadmap Tier 2, item 9 ("are CPOs
+  // sitting idle or is work being turned down"). Scoped to the idle-
+  // time half only (real data, timesheet_entries.date) - "work being
+  // turned down" would need Accept/Decline to actually be persisted
+  // server-side, which it isn't today (Operators Note's respondToTask
+  // is local UI state only), so that half is flagged as a separate
+  // follow-up rather than faked here. Office-scoped by filtering to
+  // this office's own CPO ids, since the trimmed /timesheet response
+  // carries no officeId of its own to filter by directly.
+  const cpoIds = useMemo(() => new Set(cpos.map((c) => c.id)), [cpos]);
+  const officeTimesheetEntries = useMemo(() => allTimesheetEntries.filter((e) => cpoIds.has(e.userId)), [allTimesheetEntries, cpoIds]);
+  // Date-only strings ("YYYY-MM-DD") parsed at local noon rather than
+  // handed straight to distinctByDay's own `new Date(iso)` - midnight
+  // UTC (what a bare "YYYY-MM-DD" parses to) can land on the previous
+  // calendar day for any timezone behind UTC, silently shifting every
+  // entry back a day. Noon is never at risk of crossing a day
+  // boundary either direction once read back in local time.
+  const operatorUtilizationData = useMemo(
+    () =>
+      toSingleSeries(
+        buckets,
+        distinctByDay(officeTimesheetEntries, buckets, (e) => `${e.date}T12:00:00`, (e) => e.userId).map((deployed) =>
+          cpos.length > 0 ? Math.round((deployed / cpos.length) * 100) : 0,
+        ),
+        "deployed",
+      ),
+    [buckets, officeTimesheetEntries, cpos.length],
+  );
+
+  // Per-operator: how many distinct days in the period they actually
+  // logged hours, out of the period's total days - worst (most idle)
+  // first, same sort-worst-first convention as Job Profitability/
+  // Aging Receivables elsewhere in this app.
+  const operatorUtilizationRows = useMemo(() => {
+    const daysByUser: Record<number, Set<string>> = {};
+    const hoursByUser: Record<number, number> = {};
+    for (const e of officeTimesheetEntries) {
+      if (e.date < sinceDate) continue;
+      (daysByUser[e.userId] ??= new Set()).add(e.date);
+      hoursByUser[e.userId] = (hoursByUser[e.userId] ?? 0) + e.hoursWorked;
+    }
+    return cpos
+      .filter((c) => c.active)
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        daysDeployed: daysByUser[c.id]?.size ?? 0,
+        hours: hoursByUser[c.id] ?? 0,
+      }))
+      .sort((a, b) => a.daysDeployed - b.daysDeployed);
+  }, [cpos, officeTimesheetEntries, sinceDate]);
+  const daysInPeriod = buckets.length;
+
   return (
     <div className="space-y-6">
       {showNewTask && <NewTaskDialog venues={venues} users={users} onClose={() => setShowNewTask(false)} />}
@@ -226,6 +281,7 @@ export default function AdminDashboard() {
           <TrendChart title="Invoices Pending" data={invoicesPendingData} lines={[{ key: "pending", label: "Pending", color: "#eda100" }]} />
           <TrendChart title="New Clients Onboarded" data={newClientsData} lines={[{ key: "onboarded", label: "New Clients", color: "#1baf7a" }]} />
           <TrendChart title="Operators Onboarded" data={operatorsOnboardedData} lines={[{ key: "onboarded", label: "Operators Onboarded", color: "#4a3aa7" }]} />
+          <TrendChart title="Operator Utilization" data={operatorUtilizationData} lines={[{ key: "deployed", label: "% CPOs Deployed", color: "#0891b2" }]} />
         </div>
       </div>
 
@@ -295,6 +351,27 @@ export default function AdminDashboard() {
                 })}
               </div>
             )}
+          </div>
+        )}
+      </SectionCard>
+
+      {/* Operator Utilization - Following Roadmap Tier 2, item 9 */}
+      <SectionCard title="Operator Utilization" icon={UserX}>
+        {!tasksLoaded ? (
+          <Skeleton className="h-32" />
+        ) : operatorUtilizationRows.length === 0 ? (
+          <p className="text-sm text-slate-400">No active CPOs yet.</p>
+        ) : (
+          <div className="space-y-1">
+            <p className="text-xs text-slate-400 mb-2">Days deployed since {formatDate(sinceDate)} - most idle first.</p>
+            {operatorUtilizationRows.map((r) => (
+              <div key={r.id} className="flex items-center justify-between text-sm py-1">
+                <span className="text-slate-700">{r.name}</span>
+                <span className="text-xs text-slate-500 tabular-nums">
+                  {r.daysDeployed}/{daysInPeriod} days · {r.hours.toFixed(1)}h
+                </span>
+              </div>
+            ))}
           </div>
         )}
       </SectionCard>

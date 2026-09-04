@@ -79,6 +79,28 @@ export function countOpenByDay<T>(
   });
 }
 
+// Distinct-entity count per day - e.g. how many different CPOs logged
+// at least one timesheet entry on each bucket day (Operator
+// Utilization, Following Roadmap Tier 2 item 9). Different from
+// countByDay, which counts every matching item; this counts unique
+// `getKey` values instead, since a CPO logging 3 entries on one day
+// should count as "deployed" once, not three times.
+export function distinctByDay<T>(
+  items: T[],
+  buckets: DateBucket[],
+  getDate: (item: T) => string | null,
+  getKey: (item: T) => number | string,
+): number[] {
+  const seen: Record<string, Set<number | string>> = Object.fromEntries(buckets.map((b) => [b.key, new Set()]));
+  for (const item of items) {
+    const iso = getDate(item);
+    if (!iso) continue;
+    const key = toDateKey(new Date(iso));
+    if (key in seen) seen[key].add(getKey(item));
+  }
+  return buckets.map((b) => seen[b.key].size);
+}
+
 // Merges two same-buckets series into one dataset for a 2-line chart,
 // e.g. Quotes Sent + Quotes Pending.
 export function mergeSeries(

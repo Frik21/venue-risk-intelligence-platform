@@ -1430,6 +1430,11 @@ export const api = {
     calculate: (id: number) => apiFetch<TaskRoute>(`/task-routes/${id}/calculate`, { method: "POST" }),
   },
   timesheet: {
+    // Company-wide, every entry regardless of approval status - powers
+    // the Operator Utilization trend/table (Following Roadmap Tier 2,
+    // item 9). A trimmed shape (userId/date/hoursWorked only) since
+    // that's all a utilization rollup needs.
+    listAll: () => apiFetch<{ userId: number; date: string; hoursWorked: number }[]>("/timesheet"),
     list: (userId: number) => apiFetch<TimesheetEntry[]>(`/users/${userId}/timesheet`),
     listForTask: (taskId: number) => apiFetch<TimesheetEntry[]>(`/tasks/${taskId}/timesheet-entries`),
     upsert: (userId: number, data: { taskId: number; date: string; dayHours: number; nightHours: number; notes?: string }) =>
