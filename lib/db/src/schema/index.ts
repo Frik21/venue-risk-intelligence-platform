@@ -1,6 +1,7 @@
 export * from "./companies";
 export * from "./users";
 export * from "./sessions";
+export * from "./password-reset-tokens";
 export * from "./venues";
 export * from "./clients";
 export * from "./client-activities";

@@ -28,3 +28,17 @@ export const registerLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many signup attempts from this network. Please try again later." },
 });
+
+// POST /auth/forgot-password always returns the same generic response
+// regardless of whether the email exists (see that route's own
+// comment), so this is the only real brake on someone hammering it to
+// spam an inbox with reset emails or brute-force-probe which addresses
+// are real accounts via timing/side channels. Same budget as register
+// - both are "someone doing something unusual from one IP" surfaces.
+export const forgotPasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many password reset attempts from this network. Please try again later." },
+});

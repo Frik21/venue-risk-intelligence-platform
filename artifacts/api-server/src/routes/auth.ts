@@ -1,7 +1,8 @@
+import crypto from "crypto";
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { and, eq, gt } from "drizzle-orm";
-import { db, usersTable, companiesTable, sessionsTable, officesTable } from "@workspace/db";
+import { db, usersTable, companiesTable, sessionsTable, officesTable, passwordResetTokensTable } from "@workspace/db";
 import {
   SESSION_COOKIE,
   createSession,
@@ -15,7 +16,8 @@ import {
 } from "../lib/auth";
 import { getOrCreatePricingConfig, trialEndsAtFor } from "./companies";
 import { createCardValidationSetupIntent, getStripePublishableKey, isStripeConfigured, verifySetupIntentSucceeded } from "../lib/stripe";
-import { loginLimiter, registerLimiter } from "../lib/rate-limit";
+import { isEmailConfigured, sendPasswordResetEmail } from "../lib/email";
+import { loginLimiter, registerLimiter, forgotPasswordLimiter } from "../lib/rate-limit";
 
 // Deliberately NOT behind requireAuth (except /me and /change-password,
 // gated per-route below) - registered in routes/index.ts before the
@@ -88,6 +90,78 @@ router.post("/auth/login", loginLimiter, async (req, res): Promise<void> => {
   const sessionId = await createSession(user.id);
   res.cookie(SESSION_COOKIE, sessionId, cookieOptions);
   res.json({ user: await formatSessionUser(user) });
+});
+
+const ForgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+// Closes the "real forgot password email flow" Outstanding item - same
+// build-now-connect-later pattern as Stripe/error tracking (lib/
+// email.ts): real and complete, but no SMTP credentials are set
+// anywhere in this environment yet. Deliberately returns the exact
+// same response whether or not the email belongs to a real, active
+// account - same anti-enumeration convention as /auth/login's generic
+// "Invalid email or password". forgotPasswordLimiter (not loginLimiter/
+// registerLimiter) is the real brake here, since the response itself
+// gives an attacker nothing to distinguish a hit from a miss.
+router.post("/auth/forgot-password", forgotPasswordLimiter, async (req, res): Promise<void> => {
+  const parsed = ForgotPasswordSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.email, parsed.data.email.toLowerCase()));
+  if (user && user.active) {
+    const token = crypto.randomBytes(32).toString("base64url");
+    await db.insert(passwordResetTokensTable).values({
+      id: token,
+      userId: user.id,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
+
+    if (isEmailConfigured()) {
+      const resetUrl = `${req.protocol}://${req.get("host")}/reset-password?token=${token}`;
+      // Fire-and-forget-ish (awaited, but errors are logged rather than
+      // surfaced) - the HTTP response must stay identical regardless of
+      // whether the send actually succeeds, or its status would leak
+      // exactly the "does this email exist" signal this route is
+      // designed to hide.
+      await sendPasswordResetEmail(user.email, resetUrl).catch((err) => req.log.error({ err }, "Failed to send password reset email"));
+    } else {
+      // No SMTP connected yet - same standing workaround as every other
+      // admin-created account today (an Owner/Manager manually
+      // generating a one-time password), logged here so a developer or
+      // Owner watching logs in this environment can still complete the
+      // flow by hand until real email is wired up.
+      req.log.info({ userId: user.id, token }, "Password reset requested but email isn't connected yet - logging the token instead of sending it");
+    }
+  }
+
+  res.status(202).json({ message: "If an account exists for that email, a password reset link has been sent." });
+});
+
+const ResetPasswordSchema = z.object({
+  token: z.string().min(1),
+  newPassword: z.string().min(8),
+});
+
+router.post("/auth/reset-password", forgotPasswordLimiter, async (req, res): Promise<void> => {
+  const parsed = ResetPasswordSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [row] = await db
+    .select()
+    .from(passwordResetTokensTable)
+    .where(and(eq(passwordResetTokensTable.id, parsed.data.token), gt(passwordResetTokensTable.expiresAt, new Date())));
+  if (!row || row.usedAt) { res.status(400).json({ error: "This reset link is invalid or has expired" }); return; }
+
+  const passwordHash = await hashPassword(parsed.data.newPassword);
+  await db.update(usersTable).set({ passwordHash, mustChangePassword: false }).where(eq(usersTable.id, row.userId));
+  // Stamped after the password update succeeds, not before - a crash
+  // between the two would leave the token still usable (safe: the user
+  // just retries), rather than burned with no password actually changed.
+  await db.update(passwordResetTokensTable).set({ usedAt: new Date() }).where(eq(passwordResetTokensTable.id, row.id));
+
+  res.status(204).end();
 });
 
 // Unauthenticated - the /register page needs to show the base

@@ -53,7 +53,16 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <Label className="text-slate-300">Password</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-slate-300">Password</Label>
+              <button
+                type="button"
+                onClick={() => navigate("/forgot-password")}
+                className="text-xs text-blue-400 hover:text-blue-300"
+              >
+                Forgot password?
+              </button>
+            </div>
             <Input
               type="password"
               autoComplete="current-password"

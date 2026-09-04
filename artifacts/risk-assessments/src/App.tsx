@@ -8,6 +8,8 @@ import Layout from "@/components/layout";
 import Dashboard from "@/pages/dashboard";
 import LoginPage from "@/pages/login";
 import RegisterPage from "@/pages/register";
+import ForgotPasswordPage from "@/pages/forgot-password";
+import ResetPasswordPage from "@/pages/reset-password";
 import ChangePasswordPage from "@/pages/change-password";
 import { AuthProvider } from "@/lib/auth";
 import RequireAuth from "@/components/require-auth";
@@ -71,6 +73,8 @@ function Router() {
       <Switch>
         <Route path="/login" component={LoginPage} />
         <Route path="/register" component={RegisterPage} />
+        <Route path="/forgot-password" component={ForgotPasswordPage} />
+        <Route path="/reset-password" component={ResetPasswordPage} />
         <Route path="/change-password" component={ChangePasswordPage} />
         <Route path="/owner" component={OwnerDashboard} />
         <Route path="/owner/subscriptions" component={SubscriptionsPage} />

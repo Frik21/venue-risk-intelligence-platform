@@ -1142,6 +1142,14 @@ export const api = {
       apiFetch<{ user: SessionUser; loggedIn: boolean }>("/auth/register", { method: "POST", body: JSON.stringify(data) }),
     logout: () => apiFetch<void>("/auth/logout", { method: "POST" }),
     me: () => apiFetch<{ user: SessionUser }>("/auth/me"),
+    // Unauthenticated - always resolves with the same generic message
+    // regardless of whether the email belongs to a real account (see
+    // routes/auth.ts's own comment), so the frontend has nothing to
+    // branch on either way beyond "the request went through".
+    forgotPassword: (email: string) =>
+      apiFetch<{ message: string }>("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) }),
+    resetPassword: (token: string, newPassword: string) =>
+      apiFetch<void>("/auth/reset-password", { method: "POST", body: JSON.stringify({ token, newPassword }) }),
     changePassword: (currentPassword: string, newPassword: string) =>
       apiFetch<{ user: SessionUser }>("/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),
     // Owner-only - browse the Management/CPO pages scoped to the
