@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, asc, desc, inArray } from "drizzle-orm";
-import { db, clientsTable, clientActivitiesTable, usersTable } from "@workspace/db";
+import { db, clientsTable, clientActivitiesTable, principalsTable, usersTable } from "@workspace/db";
 import { z } from "zod";
 import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 
@@ -36,6 +36,21 @@ function formatActivity(row: typeof clientActivitiesTable.$inferSelect, createdB
     createdBy: row.createdBy,
     createdByName,
     createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function formatPrincipal(row: typeof principalsTable.$inferSelect) {
+  return {
+    id: row.id,
+    clientId: row.clientId,
+    name: row.name,
+    relationship: row.relationship,
+    medicalInfo: row.medicalInfo,
+    knownThreats: row.knownThreats,
+    routineNotes: row.routineNotes,
+    familyNotes: row.familyNotes,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 
@@ -170,6 +185,74 @@ router.delete("/clients/:id/activities/:activityId", async (req, res): Promise<v
     .where(eq(clientActivitiesTable.id, activityId))
     .returning();
   if (!deleted || deleted.clientId !== clientId) { res.status(404).json({ error: "Activity not found" }); return; }
+  res.sendStatus(204);
+});
+
+// Principals - Following Roadmap Tier 2, item 8. A roster of the
+// individually-protected people under this client (not one profile
+// per client - see principalsTable's own comment for why), managed
+// from the Client detail page. Same nested-resource shape as
+// activities above.
+router.get("/clients/:id/principals", async (req, res): Promise<void> => {
+  const clientId = Number(req.params.id);
+  if (isNaN(clientId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const rows = await db
+    .select()
+    .from(principalsTable)
+    .where(eq(principalsTable.clientId, clientId))
+    .orderBy(asc(principalsTable.name));
+  res.json(rows.map(formatPrincipal));
+});
+
+const PrincipalInputSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  relationship: z.string().max(200).optional(),
+  medicalInfo: z.string().max(4000).nullable().optional(),
+  knownThreats: z.string().max(4000).nullable().optional(),
+  routineNotes: z.string().max(4000).nullable().optional(),
+  familyNotes: z.string().max(4000).nullable().optional(),
+});
+
+router.post("/clients/:id/principals", async (req, res): Promise<void> => {
+  const clientId = Number(req.params.id);
+  if (isNaN(clientId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [client] = await db.select({ id: clientsTable.id, companyId: clientsTable.companyId }).from(clientsTable).where(eq(clientsTable.id, clientId));
+  if (!client) { res.status(404).json({ error: "Client not found" }); return; }
+
+  const parsed = PrincipalInputSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [principal] = await db
+    .insert(principalsTable)
+    .values({ companyId: client.companyId, clientId, ...parsed.data })
+    .returning();
+  res.status(201).json(formatPrincipal(principal));
+});
+
+const PrincipalUpdateSchema = PrincipalInputSchema.partial();
+
+router.patch("/clients/:id/principals/:principalId", async (req, res): Promise<void> => {
+  const clientId = Number(req.params.id);
+  const principalId = Number(req.params.principalId);
+  if (isNaN(clientId) || isNaN(principalId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const parsed = PrincipalUpdateSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [principal] = await db.update(principalsTable).set(parsed.data).where(eq(principalsTable.id, principalId)).returning();
+  if (!principal || principal.clientId !== clientId) { res.status(404).json({ error: "Principal not found" }); return; }
+  res.json(formatPrincipal(principal));
+});
+
+router.delete("/clients/:id/principals/:principalId", async (req, res): Promise<void> => {
+  const clientId = Number(req.params.id);
+  const principalId = Number(req.params.principalId);
+  if (isNaN(clientId) || isNaN(principalId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [deleted] = await db.delete(principalsTable).where(eq(principalsTable.id, principalId)).returning();
+  if (!deleted || deleted.clientId !== clientId) { res.status(404).json({ error: "Principal not found" }); return; }
   res.sendStatus(204);
 });
 

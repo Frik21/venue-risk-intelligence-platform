@@ -4,6 +4,7 @@ export * from "./sessions";
 export * from "./password-reset-tokens";
 export * from "./venues";
 export * from "./clients";
+export * from "./principals";
 export * from "./client-activities";
 export * from "./quotes";
 export * from "./assessments";

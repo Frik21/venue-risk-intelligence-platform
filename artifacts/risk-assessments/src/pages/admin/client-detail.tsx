@@ -1,12 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
-import { api, type Client, type ClientActivity, type Task, type Quote, type User } from "@/lib/api";
+import { api, type Client, type ClientActivity, type Principal, type Task, type Quote, type User } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
-import { ArrowLeft, Pencil, Trash2, Mail, Phone, MapPin, Briefcase, ListChecks, FileText, MessageSquare } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Mail, Phone, MapPin, Briefcase, ListChecks, FileText, MessageSquare, ShieldCheck, Plus, X } from "lucide-react";
 import { formatDate, formatDateTime } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -116,6 +118,189 @@ function ActivityLog({ clientId, currentUserId }: { clientId: number; currentUse
                 </button>
               </div>
             ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+const PRINCIPAL_FIELDS: { key: keyof Pick<Principal, "medicalInfo" | "knownThreats" | "routineNotes" | "familyNotes">; label: string; placeholder: string }[] = [
+  { key: "medicalInfo", label: "Medical Info", placeholder: "Conditions, allergies, medications, blood type" },
+  { key: "knownThreats", label: "Known Threats", placeholder: "Prior incidents, specific concerns, restraining orders" },
+  { key: "routineNotes", label: "Routine", placeholder: "Regular schedule, habits, places frequently visited" },
+  { key: "familyNotes", label: "Family", placeholder: "Spouse, children, dependents, emergency contacts" },
+];
+
+type PrincipalFormState = { name: string; relationship: string; medicalInfo: string; knownThreats: string; routineNotes: string; familyNotes: string };
+const EMPTY_PRINCIPAL_FORM: PrincipalFormState = { name: "", relationship: "", medicalInfo: "", knownThreats: "", routineNotes: "", familyNotes: "" };
+
+function principalToForm(p: Principal): PrincipalFormState {
+  return {
+    name: p.name,
+    relationship: p.relationship,
+    medicalInfo: p.medicalInfo ?? "",
+    knownThreats: p.knownThreats ?? "",
+    routineNotes: p.routineNotes ?? "",
+    familyNotes: p.familyNotes ?? "",
+  };
+}
+
+function PrincipalForm({ form, onChange }: { form: PrincipalFormState; onChange: (form: PrincipalFormState) => void }) {
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label>Name *</Label>
+          <Input value={form.name} onChange={(e) => onChange({ ...form, name: e.target.value })} placeholder="Full name" />
+        </div>
+        <div>
+          <Label>Relationship</Label>
+          <Input value={form.relationship} onChange={(e) => onChange({ ...form, relationship: e.target.value })} placeholder="Principal, Spouse, Executive..." />
+        </div>
+      </div>
+      {PRINCIPAL_FIELDS.map(({ key, label, placeholder }) => (
+        <div key={key}>
+          <Label>{label}</Label>
+          <Textarea rows={2} value={form[key]} onChange={(e) => onChange({ ...form, [key]: e.target.value })} placeholder={placeholder} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Protection profiles for the individually-protected people under this
+// client - Following Roadmap, Tier 2 item 8. A roster (not one profile
+// per client, see principalsTable's own schema comment), each with
+// their own medical/threats/routine/family sections. Surfaced
+// automatically to the assigned CPO on their own task (api.tasks.
+// principals) - this is the Command Desk side that maintains it.
+function PrincipalsPanel({ clientId }: { clientId: number }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [adding, setAdding] = useState(false);
+  const [addForm, setAddForm] = useState<PrincipalFormState>(EMPTY_PRINCIPAL_FORM);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<PrincipalFormState>(EMPTY_PRINCIPAL_FORM);
+
+  const { data: principals = [], isLoading } = useQuery<Principal[]>({
+    queryKey: ["principals", clientId],
+    queryFn: () => api.principals.list(clientId),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () => api.principals.create(clientId, addForm),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["principals", clientId] });
+      setAdding(false);
+      setAddForm(EMPTY_PRINCIPAL_FORM);
+      toast({ title: "Principal added" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (id: number) => api.principals.update(clientId, id, editForm),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["principals", clientId] });
+      setEditingId(null);
+      toast({ title: "Principal updated" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.principals.delete(clientId, id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["principals", clientId] });
+      toast({ title: "Principal removed" });
+    },
+  });
+
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-slate-400" /> Protection Profiles
+          </h2>
+          {!adding && (
+            <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
+              <Plus className="w-3.5 h-3.5 mr-1" /> Add Principal
+            </Button>
+          )}
+        </div>
+        <p className="text-xs text-slate-400 mb-3">
+          Shown automatically to any CPO assigned to a task for this client.
+        </p>
+
+        {adding && (
+          <div className="border border-slate-200 rounded-lg p-4 mb-4 space-y-3">
+            <PrincipalForm form={addForm} onChange={setAddForm} />
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !addForm.name.trim()}>
+                Save
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => { setAdding(false); setAddForm(EMPTY_PRINCIPAL_FORM); }}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {isLoading ? (
+          <Skeleton className="h-20" />
+        ) : principals.length === 0 && !adding ? (
+          <p className="text-sm text-slate-400">No principals recorded yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {principals.map((p) =>
+              editingId === p.id ? (
+                <div key={p.id} className="border border-slate-200 rounded-lg p-4 space-y-3">
+                  <PrincipalForm form={editForm} onChange={setEditForm} />
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => updateMutation.mutate(p.id)} disabled={updateMutation.isPending || !editForm.name.trim()}>
+                      Save
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div key={p.id} className="border border-slate-200 rounded-lg p-4 space-y-2 group">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <span className="font-medium text-slate-900">{p.name}</span>
+                      {p.relationship && <span className="text-xs text-slate-400 ml-2">{p.relationship}</span>}
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                      <button
+                        type="button"
+                        onClick={() => { setEditingId(p.id); setEditForm(principalToForm(p)); }}
+                        className="text-slate-400 hover:text-blue-600 p-1"
+                        aria-label="Edit principal"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteMutation.mutate(p.id)}
+                        className="text-slate-400 hover:text-red-600 p-1"
+                        aria-label="Remove principal"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  {PRINCIPAL_FIELDS.map(({ key, label }) =>
+                    p[key] ? (
+                      <p key={key} className="text-sm text-slate-600"><span className="font-medium text-slate-500">{label}: </span>{p[key]}</p>
+                    ) : null,
+                  )}
+                </div>
+              ),
+            )}
           </div>
         )}
       </CardContent>
@@ -278,6 +463,8 @@ export default function ClientDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          <PrincipalsPanel clientId={client.id} />
 
           <ActivityLog clientId={client.id} currentUserId={currentUserId} />
         </div>
