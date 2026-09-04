@@ -1796,6 +1796,66 @@
   flex-shrink: 0;
 }
 
+/* Shift Handover Notes (Tasks panel) - Following Roadmap Tier 2, item
+   13. Peer-to-peer continuity notes on a task, distinct from the
+   After-Action Report button above it. */
+.task-row-handover {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.handover-notes-btn {
+  color: rgba(253, 224, 71, 0.9);
+}
+
+.handover-notes-btn:hover:not(:disabled) {
+  background: rgba(250, 204, 21, 0.14);
+  border-color: rgba(250, 204, 21, 0.4);
+}
+
+.handover-add-btn {
+  color: rgba(253, 224, 71, 0.9);
+}
+
+.handover-add-btn:hover:not(:disabled) {
+  background: rgba(250, 204, 21, 0.14);
+  border-color: rgba(250, 204, 21, 0.4);
+}
+
+.handover-notes-list {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.handover-note-row {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.handover-note-author {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(253, 224, 71, 0.85);
+}
+
+.handover-note-text {
+  margin-top: 3px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: pre-wrap;
+}
+
+.handover-note-empty {
+  margin-top: 8px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
 /* Task Planning (Planner, Step 1) - the pre-op readiness checklist. */
 .task-plan-checklist {
   display: flex;

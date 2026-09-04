@@ -20,11 +20,25 @@ import { usersTable } from "./users";
 // (e.g. an interim note during a multi-day deployment, then a final
 // one) - append-only list, same convention as field_incident_reports,
 // rather than a single upsert-per-task record.
+//
+// reportType distinguishes a full structured AAR ("aar", the default)
+// from a lightweight Shift Handover Note ("handover") - Following
+// Roadmap, Tier 2 item 13. Extends this table rather than a new one,
+// since a handover note is really the same thing this table already
+// anticipated ("an interim note during a multi-day deployment") - a
+// CPO-authored, append-only, per-task note, just using only `summary`
+// (the handover text itself) and leaving the structured
+// incidents/route/client/recommendations fields unused. Visible to
+// any CPO on the task's roster (peer continuity) and to Command Desk
+// (the same review panel every other CPO-authored report already
+// surfaces in) - no separate visibility model needed since GET was
+// already company-wide-within-a-task, not roster-restricted.
 export const afterActionReportsTable = pgTable("after_action_reports", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
   taskId: integer("task_id").notNull().references(() => tasksTable.id, { onDelete: "cascade" }),
   cpoId: integer("cpo_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  reportType: text("report_type").notNull().default("aar"), // "aar" | "handover"
   summary: text("summary").notNull(),
   incidentsEncountered: text("incidents_encountered"),
   routeDeviations: text("route_deviations"),

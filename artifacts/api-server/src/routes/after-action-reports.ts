@@ -18,6 +18,7 @@ function formatReport(
     taskTitle,
     cpoId: row.cpoId,
     cpoName,
+    reportType: row.reportType,
     summary: row.summary,
     incidentsEncountered: row.incidentsEncountered,
     routeDeviations: row.routeDeviations,
@@ -57,6 +58,7 @@ router.get("/after-action-reports", async (req, res): Promise<void> => {
 
 const CreateReportSchema = z.object({
   taskId: z.number().int(),
+  reportType: z.enum(["aar", "handover"]).optional().default("aar"),
   summary: z.string().min(1),
   incidentsEncountered: z.string().optional(),
   routeDeviations: z.string().optional(),
@@ -92,6 +94,7 @@ router.post("/after-action-reports", async (req, res): Promise<void> => {
       companyId,
       taskId: parsed.data.taskId,
       cpoId,
+      reportType: parsed.data.reportType,
       summary: parsed.data.summary,
       incidentsEncountered: parsed.data.incidentsEncountered ?? null,
       routeDeviations: parsed.data.routeDeviations ?? null,
