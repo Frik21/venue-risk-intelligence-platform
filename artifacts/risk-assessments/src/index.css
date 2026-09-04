@@ -1593,6 +1593,55 @@
   color: rgba(255, 255, 255, 0.85);
 }
 
+/* Travel Logistics (Tasks panel) - Following Roadmap Tier 3, item 16.
+   Amber, not red - guidance to plan around, not an active safety
+   warning like Protection Profile above. */
+.travel-logistics-panel {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.24);
+}
+
+.travel-logistics-heading {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(252, 211, 77, 0.9);
+  margin: 0 0 6px;
+}
+
+.travel-logistics-entry + .travel-logistics-entry {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.travel-logistics-entry-type {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: rgba(252, 211, 77, 0.75);
+}
+
+.travel-logistics-entry-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin-top: 1px;
+}
+
+.travel-logistics-entry-details {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 2px;
+  white-space: pre-wrap;
+}
+
 .task-row-status {
   display: flex;
   gap: 6px;

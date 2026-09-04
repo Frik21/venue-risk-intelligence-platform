@@ -29,6 +29,7 @@ import {
   IdCard,
   Workflow,
   ShieldCheck,
+  Plane,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -77,6 +78,7 @@ const navGroups = [
       { href: "/admin/payroll", label: "Payroll", icon: Wallet },
       { href: "/osint", label: "OSINT", icon: Radio },
       { href: "/admin/vendors", label: "Vendors", icon: Store },
+      { href: "/admin/travel-logistics", label: "Travel Logistics", icon: Plane },
       { href: "/admin/task-archive", label: "Task Archived", icon: Archive },
       { href: "/admin/offices", label: "Offices", icon: Building2 },
       { href: "/admin/users", label: "Users", icon: Users },

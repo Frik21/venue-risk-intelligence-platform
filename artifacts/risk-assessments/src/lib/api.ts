@@ -284,6 +284,23 @@ export interface TaskEquipment {
   createdAt: string;
 }
 
+// Travel/visa logistics reference data - Following Roadmap Tier 3,
+// item 16. Manager-maintained, not live-fetched (see the schema's own
+// comment for why) - one flexible entryType rather than three tables.
+export type TravelLogisticsEntryType = "visa_requirement" | "embassy_contact" | "fixer_contact";
+
+export interface TravelLogisticsEntry {
+  id: number;
+  destinationCountry: string;
+  entryType: TravelLogisticsEntryType;
+  title: string;
+  details: string;
+  createdBy: number;
+  createdByName: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type CompanyStatus = "trial" | "active" | "suspended" | "cancelled";
 export type ManagementRole = "manager" | "operations" | "finance" | "human_resources";
 // "team" (the default, Management + CPO) or "solo_operator" (a single
@@ -1196,6 +1213,19 @@ export const api = {
     returnItem: (id: number, data: { needsMaintenance?: boolean; notes?: string }) =>
       apiFetch<TaskEquipment>(`/task-equipment/${id}/return`, { method: "PATCH", body: JSON.stringify(data) }),
     remove: (id: number) => apiFetch<void>(`/task-equipment/${id}`, { method: "DELETE" }),
+  },
+  travelLogistics: {
+    // Unfiltered - Command Desk's own reference-data page manages
+    // everything at once. Pass destinationCountry to filter to one
+    // country (normalized match server-side) - what Operators Note
+    // uses to look up entries for a task's venue country.
+    list: (destinationCountry?: string) =>
+      apiFetch<TravelLogisticsEntry[]>(`/travel-logistics${destinationCountry ? `?destinationCountry=${encodeURIComponent(destinationCountry)}` : ""}`),
+    create: (data: { destinationCountry: string; entryType: TravelLogisticsEntryType; title: string; details: string }) =>
+      apiFetch<TravelLogisticsEntry>("/travel-logistics", { method: "POST", body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<{ destinationCountry: string; entryType: TravelLogisticsEntryType; title: string; details: string }>) =>
+      apiFetch<TravelLogisticsEntry>(`/travel-logistics/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    remove: (id: number) => apiFetch<void>(`/travel-logistics/${id}`, { method: "DELETE" }),
   },
   auth: {
     login: (email: string, password: string) =>

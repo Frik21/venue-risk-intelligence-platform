@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, ChangeEvent } from "react";
-import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet, LifeBuoy, FileText, Package, Users } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet, LifeBuoy, FileText, Package, Users, Plane } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -48,6 +48,8 @@ import type {
   Principal,
   AfterActionReport,
   TaskEquipment,
+  TravelLogisticsEntry,
+  TravelLogisticsEntryType,
 } from "@/lib/api";
 import { enqueueOfflineSubmission, useOfflineQueue, useOfflineQueueSynced, retryOfflineItem, discardOfflineItem } from "@/lib/offline-queue";
 import { LocationSearch, resolveCurrentLocation } from "@/components/location-search";
@@ -148,6 +150,13 @@ const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   not_completed: "Not Completed",
   in_progress: "In Progress",
   completed: "Completed",
+};
+
+// Travel Logistics entry types - Following Roadmap Tier 3, item 16.
+const TRAVEL_LOGISTICS_TYPE_LABELS: Record<TravelLogisticsEntryType, string> = {
+  visa_requirement: "Visa Requirement",
+  embassy_contact: "Embassy Contact",
+  fixer_contact: "Local Fixer Contact",
 };
 
 // Profile's sub-navigation titles (excludes "root", which uses its own
@@ -3093,6 +3102,28 @@ function OperationalCanvas({
     api.venues.list().then(setVenues).catch((err) => console.error("Failed to load venues:", err));
   }, []);
 
+  // Travel/visa logistics reference data (visa requirements, embassy
+  // contacts, local fixer contacts) - Following Roadmap Tier 3, item
+  // 16. Surfaced automatically per task, same no-separate-reveal-step
+  // pattern as Protection Profile above, whenever the task's venue
+  // country has any Manager-entered reference data - self-limiting,
+  // since a Manager only enters this for actual international
+  // deployments, so a purely domestic task simply shows nothing.
+  const [taskTravelLogistics, setTaskTravelLogistics] = useState<Record<number, TravelLogisticsEntry[]>>({});
+
+  useEffect(() => {
+    for (const task of cpoTasks) {
+      if (task.id === MOCK_TASK_ID || taskTravelLogistics[task.id] != null) continue;
+      const venue = task.venueId != null ? venues.find((v) => v.id === task.venueId) : undefined;
+      if (!venue?.country) continue;
+      api.travelLogistics
+        .list(venue.country)
+        .then((entries) => setTaskTravelLogistics((prev) => ({ ...prev, [task.id]: entries })))
+        .catch((err) => console.error(`Failed to load travel logistics for task ${task.id}:`, err));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cpoTasks, venues]);
+
   const [expandedRouteTaskIds, setExpandedRouteTaskIds] = useState<Set<number>>(new Set());
   const [taskRoutesMap, setTaskRoutesMap] = useState<Record<number, TaskRoute[]>>({});
   const [taskRoutesLoading, setTaskRoutesLoading] = useState<Record<number, boolean>>({});
@@ -4340,6 +4371,25 @@ function OperationalCanvas({
                           {p.knownThreats && <p className="protection-profile-field"><span>Threats: </span>{p.knownThreats}</p>}
                           {p.routineNotes && <p className="protection-profile-field"><span>Routine: </span>{p.routineNotes}</p>}
                           {p.familyNotes && <p className="protection-profile-field"><span>Family: </span>{p.familyNotes}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {(taskTravelLogistics[task.id] ?? []).length > 0 && (
+                    <div className="travel-logistics-panel">
+                      <p className="travel-logistics-heading">
+                        <Plane className="w-3 h-3" /> Travel Logistics
+                        {(() => {
+                          const venue = task.venueId != null ? venues.find((v) => v.id === task.venueId) : undefined;
+                          return venue?.country ? ` - ${venue.country}` : "";
+                        })()}
+                      </p>
+                      {taskTravelLogistics[task.id]!.map((entry) => (
+                        <div key={entry.id} className="travel-logistics-entry">
+                          <p className="travel-logistics-entry-type">{TRAVEL_LOGISTICS_TYPE_LABELS[entry.entryType]}</p>
+                          <p className="travel-logistics-entry-title">{entry.title}</p>
+                          <p className="travel-logistics-entry-details">{entry.details}</p>
                         </div>
                       ))}
                     </div>

@@ -173,6 +173,7 @@ const CPO_SURFACE_PATH_PREFIXES = [
   "/field-incident-reports",
   "/after-action-reports",
   "/task-equipment",
+  "/travel-logistics",
 ];
 
 export function blockSoloOperatorFromManagement(req: Request, res: Response, next: NextFunction): void {
