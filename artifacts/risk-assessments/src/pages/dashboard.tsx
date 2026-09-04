@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, ChangeEvent } from "react";
-import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet, LifeBuoy } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet, LifeBuoy, FileText } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -51,6 +51,7 @@ import { LocationSearch, resolveCurrentLocation } from "@/components/location-se
 import type { LocationSearchResult } from "@/components/location-search";
 import { ReportIssueDialog } from "@/components/report-issue-dialog";
 import { ReportIncidentDialog } from "@/components/report-incident-dialog";
+import { AfterActionReportDialog } from "@/components/after-action-report-dialog";
 import { projectToOperationalGeometry } from "@/lib/map-projection";
 import { timeAgo } from "@/lib/display-utils";
 
@@ -2549,6 +2550,12 @@ function OperationalCanvas({
   // Tier 1 item 1).
   const [checkinState, setCheckinState] = useState<Record<number, { submitting: boolean; lastResult?: "ok" | "panic" | "error" }>>({});
 
+  // Which task's After-Action Report dialog is open - Following
+  // Roadmap, Tier 2 item 7. Submittable any time during or after the
+  // task (not gated to just "completed"), per direct product
+  // direction - a CPO can file an interim note mid-deployment.
+  const [aarDialogTaskId, setAarDialogTaskId] = useState<number | null>(null);
+
   async function sendCheckin(taskId: number, type: "ok" | "panic") {
     if (taskId === MOCK_TASK_ID) {
       setCheckinState((prev) => ({ ...prev, [taskId]: { submitting: false, lastResult: type } }));
@@ -4305,12 +4312,31 @@ function OperationalCanvas({
                       )}
                     </>
                   )}
+
+                  {(task.status === "in_progress" || task.status === "completed") && (
+                    <button
+                      type="button"
+                      className="checkin-btn after-action-report-btn"
+                      onClick={() => setAarDialogTaskId(task.id)}
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      After-Action Report
+                    </button>
+                  )}
                 </div>
               );
             })}
           </div>
         )}
       </div>
+
+      {aarDialogTaskId != null && (
+        <AfterActionReportDialog
+          taskId={aarDialogTaskId}
+          taskTitle={displayedTasks.find((t) => t.id === aarDialogTaskId)?.title ?? ""}
+          onClose={() => setAarDialogTaskId(null)}
+        />
+      )}
 
       <div
         className={`task-planning-panel ${taskPlanningPanelOpen ? "task-planning-panel-open" : ""}`}

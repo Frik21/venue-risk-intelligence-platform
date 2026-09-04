@@ -1701,6 +1701,17 @@
   border-color: rgba(96, 165, 250, 0.4);
 }
 
+.after-action-report-btn {
+  width: 100%;
+  margin-top: 8px;
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.after-action-report-btn:hover:not(:disabled) {
+  background: rgba(148, 163, 184, 0.16);
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
 .nearby-help-results {
   margin-top: 8px;
   display: flex;
