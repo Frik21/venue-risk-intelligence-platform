@@ -15,6 +15,7 @@ import {
 } from "../lib/auth";
 import { getOrCreatePricingConfig, trialEndsAtFor } from "./companies";
 import { createCardValidationSetupIntent, getStripePublishableKey, isStripeConfigured, verifySetupIntentSucceeded } from "../lib/stripe";
+import { loginLimiter, registerLimiter } from "../lib/rate-limit";
 
 // Deliberately NOT behind requireAuth (except /me and /change-password,
 // gated per-route below) - registered in routes/index.ts before the
@@ -71,7 +72,7 @@ const LoginSchema = z.object({
   password: z.string().min(1),
 });
 
-router.post("/auth/login", async (req, res): Promise<void> => {
+router.post("/auth/login", loginLimiter, async (req, res): Promise<void> => {
   const parsed = LoginSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
@@ -200,7 +201,7 @@ const RegisterSchema = z
 // /owner (require-auth.tsx exempts them from the usual "already
 // logged in, skip this page" redirect) without it silently logging
 // them out of their own account.
-router.post("/auth/register", async (req, res): Promise<void> => {
+router.post("/auth/register", registerLimiter, async (req, res): Promise<void> => {
   const parsed = RegisterSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
