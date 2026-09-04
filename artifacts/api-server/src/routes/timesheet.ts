@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
 import { db, timesheetEntriesTable, tasksTable, usersTable } from "@workspace/db";
 import { z } from "zod";
+import { requireCompanyId } from "../lib/resolve-company";
 
 const router: IRouter = Router();
 
@@ -24,6 +25,21 @@ function formatEntry(row: typeof timesheetEntriesTable.$inferSelect, taskTitle?:
     updatedAt: row.updatedAt.toISOString(),
   };
 }
+
+// Every logged entry, company-wide, regardless of approval status -
+// Following Roadmap Tier 2, item 9 ("operator utilization over time").
+// Deliberately unfiltered by `approved` (unlike GET /personnel-costs,
+// which only counts approved hours toward costing) - a CPO who logged
+// hours but hasn't had them approved yet still worked that day, so
+// excluding unapproved entries would make an actually-deployed
+// operator look idle.
+router.get("/timesheet", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+
+  const rows = await db.select().from(timesheetEntriesTable).where(eq(timesheetEntriesTable.companyId, companyId));
+  res.json(rows.map((r) => ({ userId: r.userId, date: r.date, hoursWorked: r.hoursWorked })));
+});
 
 // Every logged day for this operator - Profile > Timesheet fetches
 // once and works with the full list client-side (small, personal
