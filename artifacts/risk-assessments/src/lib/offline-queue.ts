@@ -11,7 +11,7 @@ import { api } from "./api";
 // once the browser's back online, on a periodic sweep, or the next time
 // something is enqueued. Same localStorage + CustomEvent pattern as
 // lib/office-scope.ts, so components can subscribe without prop-drilling.
-export type OfflineQueueKind = "timesheet" | "incident";
+export type OfflineQueueKind = "timesheet" | "incident" | "after_action_report";
 export type OfflineQueueStatus = "pending" | "syncing" | "failed";
 
 export interface OfflineQueueItem {
@@ -53,6 +53,7 @@ const SUBMITTERS: Record<OfflineQueueKind, (payload: unknown) => Promise<unknown
     return api.timesheet.upsert(userId, data);
   },
   incident: (payload) => api.fieldIncidentReports.create(payload as Parameters<typeof api.fieldIncidentReports.create>[0]),
+  after_action_report: (payload) => api.afterActionReports.create(payload as Parameters<typeof api.afterActionReports.create>[0]),
 };
 
 export function enqueueOfflineSubmission(kind: OfflineQueueKind, payload: unknown): void {

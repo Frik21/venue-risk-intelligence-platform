@@ -171,6 +171,7 @@ const CPO_SURFACE_PATH_PREFIXES = [
   "/checkins",
   "/emergency-info",
   "/field-incident-reports",
+  "/after-action-reports",
 ];
 
 export function blockSoloOperatorFromManagement(req: Request, res: Response, next: NextFunction): void {

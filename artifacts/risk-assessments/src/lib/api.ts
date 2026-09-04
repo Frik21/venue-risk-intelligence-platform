@@ -231,6 +231,27 @@ export interface FieldIncidentReport {
   reviewedAt: string | null;
 }
 
+// A structured after-action report - Following Roadmap, Tier 2 item 7.
+// Fixed sections (standard close-protection AAR shape) rather than one
+// free-text field, filed by the CPO who worked the task, reviewed on
+// Command Desk's Task detail panel (pages/tasks/list.tsx).
+export interface AfterActionReport {
+  id: number;
+  taskId: number;
+  taskTitle: string | null;
+  cpoId: number;
+  cpoName: string | null;
+  summary: string;
+  incidentsEncountered: string | null;
+  routeDeviations: string | null;
+  clientFeedback: string | null;
+  recommendations: string | null;
+  submittedAt: string;
+  reviewedBy: number | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+}
+
 export type CompanyStatus = "trial" | "active" | "suspended" | "cancelled";
 export type ManagementRole = "manager" | "operations" | "finance" | "human_resources";
 // "team" (the default, Management + CPO) or "solo_operator" (a single
@@ -1101,6 +1122,14 @@ export const api = {
     create: (data: { taskId?: number; severity: FieldIncidentReportSeverity; summary: string; latitude?: number; longitude?: number; locationLabel?: string }) =>
       apiFetch<FieldIncidentReport>("/field-incident-reports", { method: "POST", body: JSON.stringify(data) }),
     markReviewed: (id: number) => apiFetch<FieldIncidentReport>(`/field-incident-reports/${id}`, { method: "PATCH", body: JSON.stringify({}) }),
+  },
+  afterActionReports: {
+    // Task-scoped, not company-wide - backs the Task detail panel,
+    // which is always asking "what's been filed against this job."
+    listForTask: (taskId: number) => apiFetch<AfterActionReport[]>(`/after-action-reports?taskId=${taskId}`),
+    create: (data: { taskId: number; summary: string; incidentsEncountered?: string; routeDeviations?: string; clientFeedback?: string; recommendations?: string }) =>
+      apiFetch<AfterActionReport>("/after-action-reports", { method: "POST", body: JSON.stringify(data) }),
+    markReviewed: (id: number) => apiFetch<AfterActionReport>(`/after-action-reports/${id}`, { method: "PATCH", body: JSON.stringify({}) }),
   },
   auth: {
     login: (email: string, password: string) =>

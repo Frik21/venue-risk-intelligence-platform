@@ -41,6 +41,7 @@ import supportTicketsRouter from "./support-tickets";
 import checkinsRouter from "./checkins";
 import emergencyInfoRouter from "./emergency-info";
 import fieldIncidentReportsRouter from "./field-incident-reports";
+import afterActionReportsRouter from "./after-action-reports";
 
 const router: IRouter = Router();
 
@@ -92,5 +93,6 @@ router.use(supportTicketsRouter);
 router.use(checkinsRouter);
 router.use(emergencyInfoRouter);
 router.use(fieldIncidentReportsRouter);
+router.use(afterActionReportsRouter);
 
 export default router;

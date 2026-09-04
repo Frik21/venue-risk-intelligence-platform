@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Task, type TaskStatus, type TaskPriority, type Venue, type User, type Client, type TimesheetEntry } from "@/lib/api";
+import { api, type Task, type TaskStatus, type TaskPriority, type Venue, type User, type Client, type TimesheetEntry, type AfterActionReport } from "@/lib/api";
 import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
-import { ListChecks, Plus, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, Search, Shield, Receipt } from "lucide-react";
+import { ListChecks, Plus, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, Search, Shield, Receipt, FileText } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -246,10 +246,76 @@ function TaskHoursPanel({ taskId, currentManagerId }: { taskId: number; currentM
   );
 }
 
+// Structured after-action reports filed against this task - Following
+// Roadmap, Tier 2 item 7. Fetched only while expanded, same pattern as
+// TaskHoursPanel above. A CPO can file more than one (see the schema's
+// own comment), so this renders as a list, newest first, each with its
+// own Review action independent of the others.
+const AAR_SECTIONS: { key: keyof AfterActionReport; label: string }[] = [
+  { key: "incidentsEncountered", label: "Incidents Encountered" },
+  { key: "routeDeviations", label: "Route / Schedule Deviations" },
+  { key: "clientFeedback", label: "Client Feedback" },
+  { key: "recommendations", label: "Recommendations" },
+];
+
+function AfterActionReportsPanel({ taskId }: { taskId: number }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: reports = [], isLoading } = useQuery<AfterActionReport[]>({
+    queryKey: ["task-after-action-reports", taskId],
+    queryFn: () => api.afterActionReports.listForTask(taskId),
+  });
+
+  const reviewMutation = useMutation({
+    mutationFn: (id: number) => api.afterActionReports.markReviewed(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["task-after-action-reports", taskId] });
+      toast({ title: "Marked reviewed" });
+    },
+  });
+
+  if (isLoading) return <Skeleton className="h-16 mt-2" />;
+  if (reports.length === 0) return <p className="text-xs text-slate-400 mt-2">No after-action report filed against this task yet.</p>;
+
+  return (
+    <div className="mt-2 space-y-3 border-t border-slate-100 pt-2">
+      {reports.map((report) => (
+        <div key={report.id} className="text-xs bg-slate-50 border border-slate-200 rounded-md p-2.5 space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium text-slate-700">{report.cpoName ?? "Unknown"} · {formatDate(report.submittedAt)}</span>
+            {report.reviewedAt ? (
+              <span className="flex items-center gap-1 text-green-600 shrink-0"><Check className="w-3 h-3" /> Reviewed{report.reviewedByName ? ` by ${report.reviewedByName}` : ""}</span>
+            ) : (
+              <Button
+                size="sm"
+                className="h-6 px-2 text-[11px] shrink-0"
+                onClick={() => reviewMutation.mutate(report.id)}
+                disabled={reviewMutation.isPending}
+              >
+                Mark Reviewed
+              </Button>
+            )}
+          </div>
+          <p className="text-slate-700"><span className="font-medium">Summary: </span>{report.summary}</p>
+          {AAR_SECTIONS.map(({ key, label }) => {
+            const value = report[key];
+            if (!value) return null;
+            return (
+              <p key={key} className="text-slate-600"><span className="font-medium">{label}: </span>{value as string}</p>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function TasksList() {
   const [showNew, setShowNew] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [expandedHoursTaskId, setExpandedHoursTaskId] = useState<number | null>(null);
+  const [expandedAarTaskId, setExpandedAarTaskId] = useState<number | null>(null);
   // "archived" sits alongside the real TaskBucket values as a 7th,
   // page-local filter tile ("Task Archive") - not a real bucket (an
   // archived task can have been in any status/bucket before it was
@@ -585,6 +651,20 @@ export default function TasksList() {
                           {expandedHoursTaskId === task.id && (
                             <TaskHoursPanel taskId={task.id} currentManagerId={currentManagerId} />
                           )}
+                        </>
+                      )}
+
+                      {(task.status === "in_progress" || task.status === "completed") && (
+                        <>
+                          <button
+                            onClick={() => setExpandedAarTaskId((id) => (id === task.id ? null : task.id))}
+                            className="flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1.5"
+                          >
+                            <FileText className="w-3 h-3" />
+                            After-action reports
+                            {expandedAarTaskId === task.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          </button>
+                          {expandedAarTaskId === task.id && <AfterActionReportsPanel taskId={task.id} />}
                         </>
                       )}
                     </div>
