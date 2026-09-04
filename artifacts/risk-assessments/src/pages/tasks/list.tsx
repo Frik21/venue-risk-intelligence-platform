@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Task, type TaskStatus, type TaskPriority, type Venue, type User, type Client, type TimesheetEntry, type AfterActionReport, type TaskEquipment } from "@/lib/api";
+import { api, type Task, type TaskStatus, type TaskPriority, type Venue, type User, type Client, type TimesheetEntry, type AfterActionReport, type TaskEquipment, type FeedbackRequest } from "@/lib/api";
 import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
-import { ListChecks, Plus, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, Search, Shield, Receipt, FileText, Package, Trash2, Wrench } from "lucide-react";
+import { ListChecks, Plus, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, Search, Shield, Receipt, FileText, Package, Trash2, Wrench, Star } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -510,12 +510,93 @@ function TaskEquipmentPanel({ taskId }: { taskId: number }) {
   );
 }
 
+// Static (read-only) star display for a submitted rating - distinct
+// from pages/feedback.tsx's own clickable StarPicker, which this
+// mirrors visually but never needs interaction here.
+function StarRow({ value }: { value: number | null }) {
+  if (value == null) return <span className="text-slate-300">—</span>;
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Star key={n} className={cn("w-3 h-3", n <= value ? "fill-amber-400 text-amber-400" : "text-slate-300")} />
+      ))}
+    </span>
+  );
+}
+
+// Post-task client satisfaction - Following Roadmap Tier 3, item 19.
+// A Manager generates a one-time public link here (api.feedbackRequests
+// .create) and copies it to send to the client manually - no email
+// infra exists, no client portal exists, same "generate/show once,
+// send it yourself" pattern as this app's other manually-distributed
+// links/passwords. Fetched only while expanded, same pattern as
+// AfterActionReportsPanel/TaskEquipmentPanel above.
+function FeedbackPanel({ taskId }: { taskId: number }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const queryKey = ["task-feedback-requests", taskId];
+
+  const { data: requests = [], isLoading } = useQuery<FeedbackRequest[]>({
+    queryKey,
+    queryFn: () => api.feedbackRequests.listForTask(taskId),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () => api.feedbackRequests.create(taskId),
+    onSuccess: () => qc.invalidateQueries({ queryKey }),
+    onError: () => toast({ title: "Couldn't create feedback link", variant: "destructive" }),
+  });
+
+  const copyLink = (id: string) => {
+    const url = `${window.location.origin}/feedback/${id}`;
+    navigator.clipboard.writeText(url).then(
+      () => toast({ title: "Link copied", description: "Send it to the client to collect their feedback." }),
+      () => toast({ title: "Couldn't copy link", description: url, variant: "destructive" }),
+    );
+  };
+
+  if (isLoading) return <Skeleton className="h-16 mt-2" />;
+
+  return (
+    <div className="mt-2 space-y-2 border-t border-slate-100 pt-2">
+      {requests.length === 0 && <p className="text-xs text-slate-400">No feedback requested for this task yet.</p>}
+      {requests.map((r) => (
+        <div key={r.id} className="text-xs bg-slate-50 border border-slate-200 rounded-md p-2.5 space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-slate-500">Requested by {r.requestedByName ?? "Unknown"} · {formatDate(r.requestedAt)}</span>
+            {r.submittedAt ? (
+              <span className="flex items-center gap-1 text-green-600 shrink-0"><Check className="w-3 h-3" /> Received {formatDate(r.submittedAt)}</span>
+            ) : (
+              <Button size="sm" variant="outline" className="h-6 px-2 text-[11px] shrink-0" onClick={() => copyLink(r.id)}>
+                <Copy className="w-3 h-3 mr-1" /> Copy Link
+              </Button>
+            )}
+          </div>
+          {r.submittedAt && (
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+              <div className="flex items-center justify-between"><span className="text-slate-500">Overall</span><StarRow value={r.overallRating} /></div>
+              <div className="flex items-center justify-between"><span className="text-slate-500">Professionalism</span><StarRow value={r.professionalismRating} /></div>
+              <div className="flex items-center justify-between"><span className="text-slate-500">Punctuality</span><StarRow value={r.punctualityRating} /></div>
+              <div className="flex items-center justify-between"><span className="text-slate-500">Communication</span><StarRow value={r.communicationRating} /></div>
+            </div>
+          )}
+          {r.submittedAt && r.comment && <p className="text-slate-600 pt-1 border-t border-slate-200">"{r.comment}"</p>}
+        </div>
+      ))}
+      <Button size="sm" className="h-7 px-2 text-[11px]" onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
+        <Plus className="w-3 h-3 mr-1" /> Request Feedback
+      </Button>
+    </div>
+  );
+}
+
 export default function TasksList() {
   const [showNew, setShowNew] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [expandedHoursTaskId, setExpandedHoursTaskId] = useState<number | null>(null);
   const [expandedAarTaskId, setExpandedAarTaskId] = useState<number | null>(null);
   const [expandedEquipmentTaskId, setExpandedEquipmentTaskId] = useState<number | null>(null);
+  const [expandedFeedbackTaskId, setExpandedFeedbackTaskId] = useState<number | null>(null);
   // "archived" sits alongside the real TaskBucket values as a 7th,
   // page-local filter tile ("Task Archive") - not a real bucket (an
   // archived task can have been in any status/bucket before it was
@@ -886,6 +967,20 @@ export default function TasksList() {
                         {expandedEquipmentTaskId === task.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                       </button>
                       {expandedEquipmentTaskId === task.id && <TaskEquipmentPanel taskId={task.id} />}
+
+                      {task.status === "completed" && (
+                        <>
+                          <button
+                            onClick={() => setExpandedFeedbackTaskId((id) => (id === task.id ? null : task.id))}
+                            className="flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1.5"
+                          >
+                            <Star className="w-3 h-3" />
+                            Client Feedback
+                            {expandedFeedbackTaskId === task.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          </button>
+                          {expandedFeedbackTaskId === task.id && <FeedbackPanel taskId={task.id} />}
+                        </>
+                      )}
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>

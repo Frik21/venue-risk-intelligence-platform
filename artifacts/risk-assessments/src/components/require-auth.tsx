@@ -18,6 +18,14 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   const { user, status } = useAuth();
   const [location] = useLocation();
 
+  // /feedback/:token (pages/feedback.tsx) - the public client-
+  // satisfaction link, see schema/feedback-requests.ts - is reachable
+  // by someone with no account and no session at all, regardless of
+  // whatever session (if any) happens to be active in this browser.
+  // Checked before every other branch below, the same way none of the
+  // other public pages need to be.
+  if (location.startsWith("/feedback/")) return <>{children}</>;
+
   if (status === "loading") {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">

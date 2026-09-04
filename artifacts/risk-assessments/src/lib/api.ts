@@ -268,6 +268,35 @@ export interface AfterActionReport {
 // Equipment/asset tracking, issued/returned per task - Following
 // Roadmap Tier 2, item 14. Ad-hoc per task, not a shared company-wide
 // catalog - see the schema's own comment for why.
+// Post-task client satisfaction - Following Roadmap Tier 3, item 19.
+// A Manager generates one of these against a task (POST, below) and
+// sends the resulting link (built from `id`, the opaque token -
+// /feedback/:id) to the client manually, since no email infra exists
+// and there's no client portal for the client to log into. See
+// schema/feedback-requests.ts.
+export interface FeedbackRequest {
+  id: string;
+  taskId: number;
+  requestedBy: number;
+  requestedByName: string | null;
+  requestedAt: string;
+  overallRating: number | null;
+  professionalismRating: number | null;
+  punctualityRating: number | null;
+  communicationRating: number | null;
+  comment: string;
+  submittedAt: string | null;
+}
+
+// What the public, unauthenticated /feedback/:token page gets back -
+// deliberately just enough to render the form, never anything else
+// about the task/company.
+export interface PublicFeedbackInfo {
+  taskTitle: string;
+  companyName: string;
+  submitted: boolean;
+}
+
 export interface TaskEquipment {
   id: number;
   taskId: number;
@@ -1237,6 +1266,18 @@ export const api = {
     returnItem: (id: number, data: { needsMaintenance?: boolean; notes?: string }) =>
       apiFetch<TaskEquipment>(`/task-equipment/${id}/return`, { method: "PATCH", body: JSON.stringify(data) }),
     remove: (id: number) => apiFetch<void>(`/task-equipment/${id}`, { method: "DELETE" }),
+  },
+  feedbackRequests: {
+    listForTask: (taskId: number) => apiFetch<FeedbackRequest[]>(`/tasks/${taskId}/feedback-requests`),
+    create: (taskId: number) => apiFetch<FeedbackRequest>(`/tasks/${taskId}/feedback-requests`, { method: "POST", body: JSON.stringify({}) }),
+  },
+  // The public, unauthenticated side of the same feature - called from
+  // pages/feedback.tsx (the client-facing link itself), never from
+  // inside Command Desk.
+  publicFeedback: {
+    get: (token: string) => apiFetch<PublicFeedbackInfo>(`/feedback/${token}`),
+    submit: (token: string, data: { overallRating: number; professionalismRating: number; punctualityRating: number; communicationRating: number; comment?: string }) =>
+      apiFetch<void>(`/feedback/${token}`, { method: "POST", body: JSON.stringify(data) }),
   },
   travelLogistics: {
     // Unfiltered - Command Desk's own reference-data page manages
