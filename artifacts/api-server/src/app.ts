@@ -1,5 +1,6 @@
 import express, { type Express, type ErrorRequestHandler } from "express";
 import cors from "cors";
+import helmet from "helmet";
 import pinoHttp from "pino-http";
 import cookieParser from "cookie-parser";
 import router from "./routes";
@@ -12,6 +13,28 @@ if (!process.env.SESSION_SECRET) {
 
 const app: Express = express();
 
+// Trust exactly one hop of X-Forwarded-For - the standard setup once
+// this sits behind a single reverse proxy/load balancer (the normal
+// topology for most hosts). Without this, req.ip (which the rate
+// limiters below key on) resolves to the proxy's own address for
+// every request, collapsing every real client into one shared bucket.
+// No-op locally/in this sandbox, where there's no proxy in front and
+// no X-Forwarded-For header to trust in the first place.
+app.set("trust proxy", 1);
+
+app.use(
+  // contentSecurityPolicy and crossOriginEmbedderPolicy are off for
+  // now - this app leans on a long list of third-party origins (Google
+  // Fonts, Stripe Elements, weather/traffic/currency/map providers,
+  // Google Maps links) that a real CSP/COEP needs to be tuned against
+  // deliberately rather than guessed at. Everything else helmet sets by
+  // default (X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-
+  // Policy, etc.) is safe with no app-specific tuning.
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  }),
+);
 app.use(
   pinoHttp({
     logger,
