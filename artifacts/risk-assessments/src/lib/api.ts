@@ -235,12 +235,20 @@ export interface FieldIncidentReport {
 // Fixed sections (standard close-protection AAR shape) rather than one
 // free-text field, filed by the CPO who worked the task, reviewed on
 // Command Desk's Task detail panel (pages/tasks/list.tsx).
+// reportType "handover" is a lightweight Shift Handover Note - Following
+// Roadmap Tier 2, item 13 - reusing this same table/endpoint rather than
+// a separate one, since it's really just a leaner variant of the same
+// CPO-authored, append-only, per-task report (see the schema's own
+// comment for why).
+export type AfterActionReportType = "aar" | "handover";
+
 export interface AfterActionReport {
   id: number;
   taskId: number;
   taskTitle: string | null;
   cpoId: number;
   cpoName: string | null;
+  reportType: AfterActionReportType;
   summary: string;
   incidentsEncountered: string | null;
   routeDeviations: string | null;
@@ -1150,7 +1158,7 @@ export const api = {
     // Task-scoped, not company-wide - backs the Task detail panel,
     // which is always asking "what's been filed against this job."
     listForTask: (taskId: number) => apiFetch<AfterActionReport[]>(`/after-action-reports?taskId=${taskId}`),
-    create: (data: { taskId: number; summary: string; incidentsEncountered?: string; routeDeviations?: string; clientFeedback?: string; recommendations?: string }) =>
+    create: (data: { taskId: number; reportType?: AfterActionReportType; summary: string; incidentsEncountered?: string; routeDeviations?: string; clientFeedback?: string; recommendations?: string }) =>
       apiFetch<AfterActionReport>("/after-action-reports", { method: "POST", body: JSON.stringify(data) }),
     markReviewed: (id: number) => apiFetch<AfterActionReport>(`/after-action-reports/${id}`, { method: "PATCH", body: JSON.stringify({}) }),
   },

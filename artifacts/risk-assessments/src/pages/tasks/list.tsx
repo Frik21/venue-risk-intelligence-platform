@@ -247,10 +247,14 @@ function TaskHoursPanel({ taskId, currentManagerId }: { taskId: number; currentM
 }
 
 // Structured after-action reports filed against this task - Following
-// Roadmap, Tier 2 item 7. Fetched only while expanded, same pattern as
-// TaskHoursPanel above. A CPO can file more than one (see the schema's
-// own comment), so this renders as a list, newest first, each with its
-// own Review action independent of the others.
+// Roadmap, Tier 2 item 7 - plus lightweight Shift Handover Notes
+// (reportType: "handover", Tier 2 item 13) filed against the same
+// table, badged and rendered without the structured AAR sections since
+// a handover note is just its own freeform `summary`. Fetched only
+// while expanded, same pattern as TaskHoursPanel above. A CPO can file
+// more than one of either kind (see the schema's own comment), so this
+// renders as a list, newest first, each with its own Review action
+// independent of the others.
 const AAR_SECTIONS: { key: keyof AfterActionReport; label: string }[] = [
   { key: "incidentsEncountered", label: "Incidents Encountered" },
   { key: "routeDeviations", label: "Route / Schedule Deviations" },
@@ -276,14 +280,19 @@ function AfterActionReportsPanel({ taskId }: { taskId: number }) {
   });
 
   if (isLoading) return <Skeleton className="h-16 mt-2" />;
-  if (reports.length === 0) return <p className="text-xs text-slate-400 mt-2">No after-action report filed against this task yet.</p>;
+  if (reports.length === 0) return <p className="text-xs text-slate-400 mt-2">No after-action report or handover note filed against this task yet.</p>;
 
   return (
     <div className="mt-2 space-y-3 border-t border-slate-100 pt-2">
       {reports.map((report) => (
         <div key={report.id} className="text-xs bg-slate-50 border border-slate-200 rounded-md p-2.5 space-y-1.5">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-medium text-slate-700">{report.cpoName ?? "Unknown"} · {formatDate(report.submittedAt)}</span>
+            <span className="font-medium text-slate-700 flex items-center gap-1.5">
+              {report.reportType === "handover" && (
+                <span className="text-[10px] font-bold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">Handover</span>
+              )}
+              {report.cpoName ?? "Unknown"} · {formatDate(report.submittedAt)}
+            </span>
             {report.reviewedAt ? (
               <span className="flex items-center gap-1 text-green-600 shrink-0"><Check className="w-3 h-3" /> Reviewed{report.reviewedByName ? ` by ${report.reviewedByName}` : ""}</span>
             ) : (
@@ -297,8 +306,8 @@ function AfterActionReportsPanel({ taskId }: { taskId: number }) {
               </Button>
             )}
           </div>
-          <p className="text-slate-700"><span className="font-medium">Summary: </span>{report.summary}</p>
-          {AAR_SECTIONS.map(({ key, label }) => {
+          <p className="text-slate-700"><span className="font-medium">{report.reportType === "handover" ? "Handover Note: " : "Summary: "}</span>{report.summary}</p>
+          {report.reportType !== "handover" && AAR_SECTIONS.map(({ key, label }) => {
             const value = report[key];
             if (!value) return null;
             return (

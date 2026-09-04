@@ -46,6 +46,7 @@ import type {
   NearbyEmergencyInfo,
   FieldIncidentReportSeverity,
   Principal,
+  AfterActionReport,
 } from "@/lib/api";
 import { enqueueOfflineSubmission, useOfflineQueue, useOfflineQueueSynced, retryOfflineItem, discardOfflineItem } from "@/lib/offline-queue";
 import { LocationSearch, resolveCurrentLocation } from "@/components/location-search";
@@ -53,6 +54,7 @@ import type { LocationSearchResult } from "@/components/location-search";
 import { ReportIssueDialog } from "@/components/report-issue-dialog";
 import { ReportIncidentDialog } from "@/components/report-incident-dialog";
 import { AfterActionReportDialog } from "@/components/after-action-report-dialog";
+import { HandoverNoteDialog } from "@/components/handover-note-dialog";
 import { projectToOperationalGeometry } from "@/lib/map-projection";
 import { timeAgo } from "@/lib/display-utils";
 
@@ -2624,6 +2626,28 @@ function OperationalCanvas({
     return meters >= 1000 ? `${(meters / 1000).toFixed(1)}km` : `${Math.round(meters)}m`;
   }
 
+  // Shift Handover Notes - Following Roadmap, Tier 2 item 13. Which
+  // task's "add a note" dialog is open, and per-task fetched notes for
+  // the "view notes" list - same fetch-on-tap pattern as Nearby Help
+  // above rather than fetching for every rendered task on mount, since
+  // the notes only matter once a CPO actually wants to check them.
+  const [handoverDialogTaskId, setHandoverDialogTaskId] = useState<number | null>(null);
+  const [handoverNotesState, setHandoverNotesState] = useState<
+    Record<number, { loading: boolean; notes?: AfterActionReport[]; error?: string }>
+  >({});
+
+  async function fetchHandoverNotes(taskId: number) {
+    setHandoverNotesState((prev) => ({ ...prev, [taskId]: { loading: true } }));
+    try {
+      const all = await api.afterActionReports.listForTask(taskId);
+      const notes = all.filter((r) => r.reportType === "handover");
+      setHandoverNotesState((prev) => ({ ...prev, [taskId]: { loading: false, notes } }));
+    } catch (err) {
+      console.error(`Failed to fetch handover notes for task ${taskId}:`, err);
+      setHandoverNotesState((prev) => ({ ...prev, [taskId]: { loading: false, error: "Couldn't load handover notes - try again." } }));
+    }
+  }
+
   // Closes whichever panel is open and reopens the Operators note dropdown,
   // so switching panels is one motion instead of close-then-reclick-
   // Operators note. Same cross-sibling-component pattern as the
@@ -4357,6 +4381,47 @@ function OperationalCanvas({
                       After-Action Report
                     </button>
                   )}
+
+                  {(task.status === "in_progress" || task.status === "completed") && (
+                    <>
+                      <div className="task-row-handover">
+                        <button
+                          type="button"
+                          className="checkin-btn handover-notes-btn"
+                          disabled={handoverNotesState[task.id]?.loading}
+                          onClick={() => fetchHandoverNotes(task.id)}
+                        >
+                          {handoverNotesState[task.id]?.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ClipboardList className="w-3.5 h-3.5" />}
+                          Handover Notes{handoverNotesState[task.id]?.notes ? ` (${handoverNotesState[task.id]!.notes!.length})` : ""}
+                        </button>
+                        <button
+                          type="button"
+                          className="checkin-btn handover-add-btn"
+                          onClick={() => setHandoverDialogTaskId(task.id)}
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Add Note
+                        </button>
+                      </div>
+                      {handoverNotesState[task.id]?.error && (
+                        <p className="checkin-status checkin-status-error">{handoverNotesState[task.id]?.error}</p>
+                      )}
+                      {handoverNotesState[task.id]?.notes && (
+                        <div className="handover-notes-list">
+                          {handoverNotesState[task.id]!.notes!.length === 0 ? (
+                            <p className="handover-note-empty">No handover notes on this task yet.</p>
+                          ) : (
+                            handoverNotesState[task.id]!.notes!.map((note) => (
+                              <div key={note.id} className="handover-note-row">
+                                <span className="handover-note-author">{note.cpoName ?? "Unknown"} · {timeAgo(note.submittedAt)}</span>
+                                <p className="handover-note-text">{note.summary}</p>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -4369,6 +4434,14 @@ function OperationalCanvas({
           taskId={aarDialogTaskId}
           taskTitle={displayedTasks.find((t) => t.id === aarDialogTaskId)?.title ?? ""}
           onClose={() => setAarDialogTaskId(null)}
+        />
+      )}
+
+      {handoverDialogTaskId != null && (
+        <HandoverNoteDialog
+          taskId={handoverDialogTaskId}
+          taskTitle={displayedTasks.find((t) => t.id === handoverDialogTaskId)?.title ?? ""}
+          onClose={() => setHandoverDialogTaskId(null)}
         />
       )}
 
