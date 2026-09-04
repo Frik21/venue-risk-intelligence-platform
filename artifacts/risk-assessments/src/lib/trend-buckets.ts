@@ -117,3 +117,45 @@ export function mergeSeries(
 export function toSingleSeries(buckets: DateBucket[], series: number[], key: string): Record<string, string | number>[] {
   return buckets.map((b, i) => ({ label: b.label, [key]: series[i] }));
 }
+
+// Cumulative win rate: % of items decided by each bucket day (across
+// every decision up to and including that day, not just decisions
+// made on that exact day) that count as a "win" - e.g. Quote Win Rate
+// (approved / (approved + rejected)), Following Roadmap Tier 2 item
+// 12. Cumulative rather than a per-day rate because most days have 0
+// or 1 decision - a day-by-day ratio would swing between 0%/100%/gap
+// and show nothing resembling a trend; accumulating instead gives a
+// smooth line that reflects how the overall rate is actually moving.
+// Returns null (not 0) for a day before any decision has happened yet
+// so the chart shows a gap rather than a misleading 0%.
+export function cumulativeWinRateByDay<T>(
+  items: T[],
+  buckets: DateBucket[],
+  getDecidedDate: (item: T) => string | null,
+  isWin: (item: T) => boolean,
+): (number | null)[] {
+  const decided = items
+    .map((item) => ({ date: getDecidedDate(item), win: isWin(item) }))
+    .filter((x): x is { date: string; win: boolean } => x.date != null)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  let cursor = 0;
+  let won = 0;
+  let total = 0;
+  return buckets.map((b) => {
+    const dayEnd = new Date(`${b.key}T23:59:59.999`);
+    while (cursor < decided.length && new Date(decided[cursor].date) <= dayEnd) {
+      total++;
+      if (decided[cursor].win) won++;
+      cursor++;
+    }
+    return total === 0 ? null : Math.round((won / total) * 100);
+  });
+}
+
+// Null-tolerant single-series shape - for cumulativeWinRateByDay's
+// gap-before-first-decision values, which toSingleSeries's plain
+// number[] signature doesn't accept.
+export function toSingleSeriesNullable(buckets: DateBucket[], series: (number | null)[], key: string): Record<string, string | number | null>[] {
+  return buckets.map((b, i) => ({ label: b.label, [key]: series[i] }));
+}

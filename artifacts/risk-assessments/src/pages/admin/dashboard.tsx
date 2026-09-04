@@ -22,7 +22,7 @@ import {
 import { useMemo, useState } from "react";
 import { formatDate } from "@/lib/display-utils";
 import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
-import { dailyBuckets, countByDay, countOpenByDay, distinctByDay, mergeSeries, toSingleSeries } from "@/lib/trend-buckets";
+import { dailyBuckets, countByDay, countOpenByDay, distinctByDay, mergeSeries, toSingleSeries, cumulativeWinRateByDay, toSingleSeriesNullable } from "@/lib/trend-buckets";
 
 const PRIORITY_COLORS: Record<string, string> = {
   low: "text-slate-600 bg-slate-100 border-slate-200",
@@ -164,6 +164,16 @@ export default function AdminDashboard() {
     const pending = countOpenByDay(quotes, buckets, (q) => q.sentAt, (q) => q.decidedAt);
     return mergeSeries(buckets, sent, "sent", pending, "pending");
   }, [buckets, quotes]);
+  // Quote Win Rate - Following Roadmap Tier 2, item 12 ("approved /
+  // sent over time", not just the Sent-vs-Pending counts above).
+  // Cumulative % of decided quotes (approved vs rejected, by
+  // decidedAt) that were won - see cumulativeWinRateByDay's own
+  // comment for why cumulative rather than a per-day ratio.
+  const quoteWinRateData = useMemo(() => {
+    const decided = quotes.filter((q) => q.status === "approved" || q.status === "rejected");
+    const rate = cumulativeWinRateByDay(decided, buckets, (q) => q.decidedAt, (q) => q.status === "approved");
+    return toSingleSeriesNullable(buckets, rate, "winRate");
+  }, [buckets, quotes]);
   const invoicesPendingData = useMemo(
     () => toSingleSeries(buckets, countOpenByDay(invoices, buckets, (i) => i.sentAt, (i) => i.paidAt), "pending"),
     [buckets, invoices],
@@ -277,6 +287,12 @@ export default function AdminDashboard() {
               { key: "sent", label: "Sent", color: "#2a78d6" },
               { key: "pending", label: "Pending", color: "#eb6834" },
             ]}
+          />
+          <TrendChart
+            title="Quote Win Rate"
+            data={quoteWinRateData}
+            lines={[{ key: "winRate", label: "Win Rate", color: "#9333ea" }]}
+            unit="%"
           />
           <TrendChart title="Invoices Pending" data={invoicesPendingData} lines={[{ key: "pending", label: "Pending", color: "#eda100" }]} />
           <TrendChart title="New Clients Onboarded" data={newClientsData} lines={[{ key: "onboarded", label: "New Clients", color: "#1baf7a" }]} />
