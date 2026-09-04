@@ -1,0 +1,39 @@
+name: CI
+
+# Closes the Outstanding item "CI running pnpm run build/typecheck
+# automatically on every PR - none configured yet, all verification
+# this session was manual" (CLAUDE.md's Operational safety net
+# section). Every workspace's own typecheck + build, same `pnpm run
+# build` command the repo's own Workflow section already requires
+# before every commit - this just makes sure it actually ran, on every
+# PR, not only when someone remembered to run it locally.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Matches the frontend build's own requirement (see vite.config.ts) -
+    # no real values needed, this job never serves traffic or talks to a
+    # database, it only typechecks and bundles.
+    env:
+      PORT: "5173"
+      BASE_PATH: "/"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run build
