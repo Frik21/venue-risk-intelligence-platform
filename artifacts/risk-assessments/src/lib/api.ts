@@ -562,6 +562,30 @@ export interface VendorActivity {
   createdAt: string;
 }
 
+export type ContractStatus = "active" | "expired" | "cancelled";
+export type ContractBillingFrequency = "monthly" | "quarterly" | "annually";
+
+// A client's standing retainer/contract - Following Roadmap Tier 3,
+// item 17. See contractsTable in schema/contracts.ts for why this is a
+// standalone entity (own lifecycle + renewal date) rather than fields
+// on Client. "expiring soon" is never stored - computed from
+// renewalDate client-side, same convention as cert expiry elsewhere.
+export interface Contract {
+  id: number;
+  clientId: number;
+  clientName: string | null;
+  title: string;
+  status: ContractStatus;
+  recurringAmount: number;
+  billingFrequency: ContractBillingFrequency;
+  currency: string;
+  startDate: string;
+  renewalDate: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type QuoteStatus = "draft" | "sent" | "approved" | "rejected";
 export type QuoteMarkupType = "percent" | "fixed";
 export const QUOTE_COST_CATEGORIES = [
@@ -1410,6 +1434,20 @@ export const api = {
     create: (vendorId: number, data: { note: string; createdBy?: number | null }) =>
       apiFetch<VendorActivity>(`/vendors/${vendorId}/activities`, { method: "POST", body: JSON.stringify(data) }),
     delete: (vendorId: number, id: number) => apiFetch<void>(`/vendors/${vendorId}/activities/${id}`, { method: "DELETE" }),
+  },
+  contracts: {
+    list: () => apiFetch<Contract[]>("/contracts"),
+    create: (data: {
+      clientId: number; title: string; status?: ContractStatus;
+      recurringAmount: number; billingFrequency?: ContractBillingFrequency;
+      currency?: string; startDate: string; renewalDate: string; notes?: string;
+    }) => apiFetch<Contract>("/contracts", { method: "POST", body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<{
+      clientId: number; title: string; status: ContractStatus;
+      recurringAmount: number; billingFrequency: ContractBillingFrequency;
+      currency: string; startDate: string; renewalDate: string; notes: string;
+    }>) => apiFetch<Contract>(`/contracts/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    delete: (id: number) => apiFetch<void>(`/contracts/${id}`, { method: "DELETE" }),
   },
   quotes: {
     list: () => apiFetch<Quote[]>("/quotes"),

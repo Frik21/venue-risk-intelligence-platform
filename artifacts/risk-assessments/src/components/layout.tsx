@@ -30,6 +30,7 @@ import {
   Workflow,
   ShieldCheck,
   Plane,
+  FileSignature,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -68,6 +69,7 @@ const navGroups = [
       { href: "/tasks", label: "Tasks", icon: ListChecks },
       { href: "/admin/communications", label: "Communications", icon: MessageSquare },
       { href: "/admin/clients", label: "Clients", icon: Briefcase },
+      { href: "/admin/contracts", label: "Contracts", icon: FileSignature },
       { href: "/admin/finance", label: "Finance", icon: Landmark },
       { href: "/admin/hr", label: "Human Resources", icon: IdCard },
       { href: "/admin/operations", label: "Operations", icon: Workflow },

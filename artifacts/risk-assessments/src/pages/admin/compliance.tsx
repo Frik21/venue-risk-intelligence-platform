@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { api, type OnboardingOverviewRecord, type OnboardingDocument, type TimesheetEntry, type FieldIncidentReport } from "@/lib/api";
+import { api, type OnboardingOverviewRecord, type OnboardingDocument, type TimesheetEntry, type FieldIncidentReport, type Contract } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ShieldCheck, IdCard, Clock, MessageSquareWarning, type LucideIcon } from "lucide-react";
+import { ShieldCheck, IdCard, Clock, MessageSquareWarning, FileSignature, type LucideIcon } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 
 // Same 30-day heads-up window and expiry math as the Expiring
@@ -53,17 +53,20 @@ function RollupCard({
   );
 }
 
-// One compliance/risk rollup, instead of five separate pages - Following
-// Roadmap Tier 2, item 10. Every row here already exists somewhere else
-// in Command Desk (Operator Database, Tasks, Alerts) - this page adds
-// nothing new to the data model, it's purely a cross-cutting view over
-// four things a Manager would otherwise have to go check separately:
-// expiring certs and pending onboarding (both Operator Database/HR),
-// unapproved timesheets (Tasks/Finance), and unreviewed field incident
-// reports (Alerts). Deliberately not office-scoped - none of its four
-// source lists are office-scoped anywhere else in this app either
-// (operator_onboarding isn't, and timesheet/field-incident-report
-// company-wide endpoints carry no officeId to filter by).
+// One compliance/risk rollup, instead of six separate pages - Following
+// Roadmap Tier 2, item 10 (a 5th card, Contracts Renewing Soon, was
+// added later alongside Tier 3 item 17's Contracts page). Every row
+// here already exists somewhere else in Command Desk (Operator
+// Database, Tasks, Alerts, Contracts) - this page adds nothing new to
+// the data model, it's purely a cross-cutting view over things a
+// Manager would otherwise have to go check separately: expiring certs
+// and pending onboarding (both Operator Database/HR), unapproved
+// timesheets (Tasks/Finance), unreviewed field incident reports
+// (Alerts), and contracts renewing soon (Contracts). Deliberately not
+// office-scoped - none of its source lists are office-scoped anywhere
+// else in this app either (operator_onboarding isn't, and the
+// timesheet/field-incident-report/contracts company-wide endpoints
+// carry no officeId to filter by).
 export default function ComplianceRollup() {
   const { data: onboarding = [], isLoading: onboardingLoading } = useQuery<OnboardingOverviewRecord[]>({
     queryKey: ["onboarding"],
@@ -81,8 +84,12 @@ export default function ComplianceRollup() {
     queryKey: ["field-incident-reports"],
     queryFn: api.fieldIncidentReports.list,
   });
+  const { data: contracts = [], isLoading: contractsLoading } = useQuery<Contract[]>({
+    queryKey: ["contracts"],
+    queryFn: api.contracts.list,
+  });
 
-  const loading = onboardingLoading || documentsLoading || timesheetLoading || incidentsLoading;
+  const loading = onboardingLoading || documentsLoading || timesheetLoading || incidentsLoading || contractsLoading;
 
   const expiringDocs = allDocuments
     .filter((d) => d.expiryDate != null)
@@ -100,13 +107,19 @@ export default function ComplianceRollup() {
     .filter((r) => r.reviewedAt == null)
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
 
+  const renewingContracts = contracts
+    .filter((c) => c.status === "active")
+    .map((c) => ({ ...c, days: daysUntilExpiry(c.renewalDate) }))
+    .filter((c) => c.days <= EXPIRY_WARNING_DAYS)
+    .sort((a, b) => a.days - b.days);
+
   return (
     <div className="p-4 md:p-6 space-y-5">
       <div>
         <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
           <ShieldCheck className="w-5 h-5 text-slate-400" /> Compliance Rollup
         </h1>
-        <p className="text-sm text-slate-500 mt-0.5">Expiring certs, pending onboarding, unapproved timesheets, and unreviewed incidents - one view instead of four separate pages.</p>
+        <p className="text-sm text-slate-500 mt-0.5">Expiring certs, pending onboarding, unapproved timesheets, unreviewed incidents, and contracts renewing soon - one view instead of five separate pages.</p>
       </div>
 
       {loading ? (
@@ -158,6 +171,20 @@ export default function ComplianceRollup() {
                   <span className="text-slate-400"> · {r.summary.slice(0, 60)}{r.summary.length > 60 ? "…" : ""}</span>
                 </div>
                 <span className="text-xs text-slate-500 shrink-0 uppercase">{r.severity}</span>
+              </div>
+            ))}
+          </RollupCard>
+
+          <RollupCard title="Contracts Renewing Soon" icon={FileSignature} count={renewingContracts.length} action={{ href: "/admin/contracts", label: "Contracts →" }}>
+            {renewingContracts.map((c) => (
+              <div key={c.id} className="flex items-center justify-between text-sm border-b border-slate-100 last:border-0 pb-2 last:pb-0">
+                <div className="min-w-0">
+                  <span className="text-slate-700">{c.clientName ?? "Unknown client"}</span>
+                  <span className="text-slate-400"> · {c.title}</span>
+                </div>
+                <span className={c.days < 0 ? "text-red-700 font-medium text-xs shrink-0" : "text-amber-700 font-medium text-xs shrink-0"}>
+                  {c.days < 0 ? `Overdue ${Math.abs(c.days)}d` : `${c.days}d left`}
+                </span>
               </div>
             ))}
           </RollupCard>
