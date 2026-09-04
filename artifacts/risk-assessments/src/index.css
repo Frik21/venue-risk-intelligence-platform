@@ -1856,6 +1856,74 @@
   color: rgba(255, 255, 255, 0.4);
 }
 
+/* Equipment issued/returned checklist (Tasks panel) - Following
+   Roadmap Tier 2, item 14. Reuses .task-row-handover/.handover-notes-list
+   for layout; these are its own item-row styling on top of that. */
+.equipment-btn,
+.equipment-add-btn {
+  color: rgba(147, 197, 253, 0.9);
+}
+
+.equipment-btn:hover:not(:disabled),
+.equipment-add-btn:hover:not(:disabled) {
+  background: rgba(96, 165, 250, 0.14);
+  border-color: rgba(96, 165, 250, 0.4);
+}
+
+.equipment-row {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.equipment-row-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.equipment-row-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.equipment-row-serial {
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.45);
+  font-family: monospace;
+}
+
+.equipment-row-status {
+  margin-top: 2px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.equipment-action-btn {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border: 1px solid rgba(147, 197, 253, 0.4);
+  border-radius: 5px;
+  background: rgba(96, 165, 250, 0.12);
+  color: rgba(147, 197, 253, 0.95);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.equipment-action-btn:hover:not(:disabled) {
+  background: rgba(96, 165, 250, 0.22);
+}
+
+.equipment-action-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* Task Planning (Planner, Step 1) - the pre-op readiness checklist. */
 .task-plan-checklist {
   display: flex;

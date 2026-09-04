@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, ChangeEvent } from "react";
-import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet, LifeBuoy, FileText } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet, LifeBuoy, FileText, Package } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -47,6 +47,7 @@ import type {
   FieldIncidentReportSeverity,
   Principal,
   AfterActionReport,
+  TaskEquipment,
 } from "@/lib/api";
 import { enqueueOfflineSubmission, useOfflineQueue, useOfflineQueueSynced, retryOfflineItem, discardOfflineItem } from "@/lib/offline-queue";
 import { LocationSearch, resolveCurrentLocation } from "@/components/location-search";
@@ -55,6 +56,7 @@ import { ReportIssueDialog } from "@/components/report-issue-dialog";
 import { ReportIncidentDialog } from "@/components/report-incident-dialog";
 import { AfterActionReportDialog } from "@/components/after-action-report-dialog";
 import { HandoverNoteDialog } from "@/components/handover-note-dialog";
+import { AddEquipmentDialog } from "@/components/add-equipment-dialog";
 import { projectToOperationalGeometry } from "@/lib/map-projection";
 import { timeAgo } from "@/lib/display-utils";
 
@@ -2660,6 +2662,52 @@ function OperationalCanvas({
     }
   }
 
+  // Equipment issued/returned checklist - Following Roadmap, Tier 2
+  // item 14. Same fetch-on-tap pattern as Handover Notes above.
+  // Issue/Return act on a specific existing row, so (unlike adding an
+  // item) they're direct API calls rather than offline-queued - a
+  // still-pending offline "add" wouldn't have a real id yet to act on.
+  const [equipmentDialogTaskId, setEquipmentDialogTaskId] = useState<number | null>(null);
+  const [equipmentState, setEquipmentState] = useState<
+    Record<number, { loading: boolean; items?: TaskEquipment[]; error?: string }>
+  >({});
+  const [equipmentActionPending, setEquipmentActionPending] = useState<Record<number, boolean>>({});
+
+  async function fetchEquipment(taskId: number) {
+    setEquipmentState((prev) => ({ ...prev, [taskId]: { loading: true } }));
+    try {
+      const items = await api.taskEquipment.listForTask(taskId);
+      setEquipmentState((prev) => ({ ...prev, [taskId]: { loading: false, items } }));
+    } catch (err) {
+      console.error(`Failed to fetch equipment for task ${taskId}:`, err);
+      setEquipmentState((prev) => ({ ...prev, [taskId]: { loading: false, error: "Couldn't load equipment - try again." } }));
+    }
+  }
+
+  async function issueEquipmentItem(taskId: number, itemId: number) {
+    setEquipmentActionPending((prev) => ({ ...prev, [itemId]: true }));
+    try {
+      await api.taskEquipment.issue(itemId);
+      await fetchEquipment(taskId);
+    } catch (err) {
+      console.error(`Failed to issue equipment item ${itemId}:`, err);
+    } finally {
+      setEquipmentActionPending((prev) => ({ ...prev, [itemId]: false }));
+    }
+  }
+
+  async function returnEquipmentItem(taskId: number, itemId: number, needsMaintenance: boolean) {
+    setEquipmentActionPending((prev) => ({ ...prev, [itemId]: true }));
+    try {
+      await api.taskEquipment.returnItem(itemId, { needsMaintenance });
+      await fetchEquipment(taskId);
+    } catch (err) {
+      console.error(`Failed to return equipment item ${itemId}:`, err);
+    } finally {
+      setEquipmentActionPending((prev) => ({ ...prev, [itemId]: false }));
+    }
+  }
+
   // Closes whichever panel is open and reopens the Operators note dropdown,
   // so switching panels is one motion instead of close-then-reclick-
   // Operators note. Same cross-sibling-component pattern as the
@@ -4432,6 +4480,74 @@ function OperationalCanvas({
                           )}
                         </div>
                       )}
+
+                      <div className="task-row-handover">
+                        <button
+                          type="button"
+                          className="checkin-btn equipment-btn"
+                          disabled={equipmentState[task.id]?.loading}
+                          onClick={() => fetchEquipment(task.id)}
+                        >
+                          {equipmentState[task.id]?.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Package className="w-3.5 h-3.5" />}
+                          Equipment{equipmentState[task.id]?.items ? ` (${equipmentState[task.id]!.items!.length})` : ""}
+                        </button>
+                        <button
+                          type="button"
+                          className="checkin-btn equipment-add-btn"
+                          onClick={() => setEquipmentDialogTaskId(task.id)}
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Add Item
+                        </button>
+                      </div>
+                      {equipmentState[task.id]?.error && (
+                        <p className="checkin-status checkin-status-error">{equipmentState[task.id]?.error}</p>
+                      )}
+                      {equipmentState[task.id]?.items && (
+                        <div className="handover-notes-list">
+                          {equipmentState[task.id]!.items!.length === 0 ? (
+                            <p className="handover-note-empty">No equipment logged on this task yet.</p>
+                          ) : (
+                            equipmentState[task.id]!.items!.map((item) => (
+                              <div key={item.id} className="equipment-row">
+                                <div className="equipment-row-info">
+                                  <span className="equipment-row-name">
+                                    {item.itemName}
+                                    {item.serialNumber && <span className="equipment-row-serial"> #{item.serialNumber}</span>}
+                                  </span>
+                                  <p className="equipment-row-status">
+                                    {item.returnedAt
+                                      ? `Returned ${timeAgo(item.returnedAt)}${item.needsMaintenance ? " · Flagged for maintenance" : ""}`
+                                      : item.issuedAt
+                                        ? `Issued to ${item.issuedToName ?? "Unknown"} · ${timeAgo(item.issuedAt)}`
+                                        : `Not yet issued · added by ${item.addedByName ?? "Unknown"}`}
+                                  </p>
+                                </div>
+                                {!item.issuedAt && (
+                                  <button
+                                    type="button"
+                                    className="equipment-action-btn"
+                                    disabled={equipmentActionPending[item.id]}
+                                    onClick={() => issueEquipmentItem(task.id, item.id)}
+                                  >
+                                    Issue
+                                  </button>
+                                )}
+                                {item.issuedAt && !item.returnedAt && (
+                                  <button
+                                    type="button"
+                                    className="equipment-action-btn"
+                                    disabled={equipmentActionPending[item.id]}
+                                    onClick={() => returnEquipmentItem(task.id, item.id, false)}
+                                  >
+                                    Return
+                                  </button>
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
@@ -4454,6 +4570,14 @@ function OperationalCanvas({
           taskId={handoverDialogTaskId}
           taskTitle={displayedTasks.find((t) => t.id === handoverDialogTaskId)?.title ?? ""}
           onClose={() => setHandoverDialogTaskId(null)}
+        />
+      )}
+
+      {equipmentDialogTaskId != null && (
+        <AddEquipmentDialog
+          taskId={equipmentDialogTaskId}
+          taskTitle={displayedTasks.find((t) => t.id === equipmentDialogTaskId)?.title ?? ""}
+          onClose={() => setEquipmentDialogTaskId(null)}
         />
       )}
 

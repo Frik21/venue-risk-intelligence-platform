@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Task, type TaskStatus, type TaskPriority, type Venue, type User, type Client, type TimesheetEntry, type AfterActionReport } from "@/lib/api";
+import { api, type Task, type TaskStatus, type TaskPriority, type Venue, type User, type Client, type TimesheetEntry, type AfterActionReport, type TaskEquipment } from "@/lib/api";
 import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
-import { ListChecks, Plus, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, Search, Shield, Receipt, FileText } from "lucide-react";
+import { ListChecks, Plus, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, Search, Shield, Receipt, FileText, Package, Trash2, Wrench } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -320,11 +320,115 @@ function AfterActionReportsPanel({ taskId }: { taskId: number }) {
   );
 }
 
+// Equipment/asset tracking, issued/returned per task - Following
+// Roadmap, Tier 2 item 14. Ad-hoc per task (see the schema's own
+// comment) - a simple append-only list a Manager or CPO can add to,
+// with Issue/Return actions per item. Fetched only while expanded,
+// same pattern as AfterActionReportsPanel/TaskHoursPanel above.
+function TaskEquipmentPanel({ taskId }: { taskId: number }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [newItemName, setNewItemName] = useState("");
+  const [newSerial, setNewSerial] = useState("");
+
+  const queryKey = ["task-equipment", taskId];
+  const { data: items = [], isLoading } = useQuery<TaskEquipment[]>({
+    queryKey,
+    queryFn: () => api.taskEquipment.listForTask(taskId),
+  });
+
+  const addMutation = useMutation({
+    mutationFn: () => api.taskEquipment.create({ taskId, itemName: newItemName.trim(), serialNumber: newSerial.trim() || undefined }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey });
+      setNewItemName("");
+      setNewSerial("");
+    },
+    onError: () => toast({ title: "Couldn't add item", variant: "destructive" }),
+  });
+
+  const issueMutation = useMutation({
+    mutationFn: (id: number) => api.taskEquipment.issue(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey }),
+  });
+
+  const returnMutation = useMutation({
+    mutationFn: ({ id, needsMaintenance }: { id: number; needsMaintenance: boolean }) => api.taskEquipment.returnItem(id, { needsMaintenance }),
+    onSuccess: () => qc.invalidateQueries({ queryKey }),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (id: number) => api.taskEquipment.remove(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey }),
+  });
+
+  if (isLoading) return <Skeleton className="h-16 mt-2" />;
+
+  return (
+    <div className="mt-2 space-y-2 border-t border-slate-100 pt-2">
+      {items.length === 0 && <p className="text-xs text-slate-400">No equipment logged against this task yet.</p>}
+      {items.map((item) => (
+        <div key={item.id} className="text-xs bg-slate-50 border border-slate-200 rounded-md p-2.5 flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-medium text-slate-700">{item.itemName}</span>
+              {item.serialNumber && <span className="text-slate-400 font-mono">#{item.serialNumber}</span>}
+              {item.needsMaintenance && (
+                <span className="flex items-center gap-0.5 text-[10px] font-bold uppercase text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                  <Wrench className="w-2.5 h-2.5" /> Needs Maintenance
+                </span>
+              )}
+            </div>
+            <p className="text-slate-500 mt-0.5">
+              {item.returnedAt ? (
+                <>Returned {formatDate(item.returnedAt)}</>
+              ) : item.issuedAt ? (
+                <>Issued to {item.issuedToName ?? "Unknown"} · {formatDate(item.issuedAt)}</>
+              ) : (
+                <>Not yet issued · added by {item.addedByName ?? "Unknown"}</>
+              )}
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {!item.issuedAt && (
+              <Button size="sm" className="h-6 px-2 text-[11px]" onClick={() => issueMutation.mutate(item.id)} disabled={issueMutation.isPending}>
+                Issue
+              </Button>
+            )}
+            {item.issuedAt && !item.returnedAt && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-6 px-2 text-[11px]"
+                onClick={() => returnMutation.mutate({ id: item.id, needsMaintenance: false })}
+                disabled={returnMutation.isPending}
+              >
+                Return
+              </Button>
+            )}
+            <Button size="icon" variant="ghost" className="h-6 w-6 text-slate-400 hover:text-red-600" onClick={() => removeMutation.mutate(item.id)}>
+              <Trash2 className="w-3 h-3" />
+            </Button>
+          </div>
+        </div>
+      ))}
+      <div className="flex items-center gap-1.5 pt-1">
+        <Input placeholder="Item name" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} className="h-7 text-xs" />
+        <Input placeholder="Serial # (optional)" value={newSerial} onChange={(e) => setNewSerial(e.target.value)} className="h-7 text-xs w-32" />
+        <Button size="sm" className="h-7 px-2 text-[11px] shrink-0" onClick={() => addMutation.mutate()} disabled={!newItemName.trim() || addMutation.isPending}>
+          <Plus className="w-3 h-3" /> Add
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function TasksList() {
   const [showNew, setShowNew] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [expandedHoursTaskId, setExpandedHoursTaskId] = useState<number | null>(null);
   const [expandedAarTaskId, setExpandedAarTaskId] = useState<number | null>(null);
+  const [expandedEquipmentTaskId, setExpandedEquipmentTaskId] = useState<number | null>(null);
   // "archived" sits alongside the real TaskBucket values as a 7th,
   // page-local filter tile ("Task Archive") - not a real bucket (an
   // archived task can have been in any status/bucket before it was
@@ -676,6 +780,16 @@ export default function TasksList() {
                           {expandedAarTaskId === task.id && <AfterActionReportsPanel taskId={task.id} />}
                         </>
                       )}
+
+                      <button
+                        onClick={() => setExpandedEquipmentTaskId((id) => (id === task.id ? null : task.id))}
+                        className="flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1.5"
+                      >
+                        <Package className="w-3 h-3" />
+                        Equipment
+                        {expandedEquipmentTaskId === task.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                      </button>
+                      {expandedEquipmentTaskId === task.id && <TaskEquipmentPanel taskId={task.id} />}
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
