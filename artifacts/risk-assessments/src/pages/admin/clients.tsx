@@ -12,7 +12,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
-import { Briefcase, Plus, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { Briefcase, Plus, MoreVertical, Pencil, Trash2, PieChart } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +26,60 @@ export const CLIENT_STATUS_CONFIG: Record<ClientStatus, { label: string; color: 
   vip: { label: "VIP", color: "text-purple-700 bg-purple-50 border-purple-200" },
   inactive: { label: "Inactive", color: "text-slate-600 bg-slate-100 border-slate-200" },
 };
+
+// Revenue concentration - Following Roadmap Tier 2, item 11 ("how
+// exposed the business is to one account"). Reuses this page's own
+// existing "approved" revenue rollup per client (same figure already
+// shown in the ledger table's Approved column and Book Total row)
+// rather than fetching Quotes/Invoices separately, so this can never
+// disagree with what the ledger itself already says. Bucketed by
+// currency rather than summed across them, same currency-naive
+// convention documented on the Job Profitability table (costs.tsx) -
+// a client's % share is only meaningful within one currency. Two
+// warning tiers rather than one: notable exposure (25%+) gets an amber
+// flag, genuine over-exposure (50%+, more than every other client
+// combined) gets red - thresholds are a display choice, not a stored
+// setting anywhere.
+const CONCENTRATION_WARN_PCT = 25;
+const CONCENTRATION_HIGH_PCT = 50;
+
+function RevenueConcentrationCard({ rows, currency }: { rows: { name: string; amount: number; pct: number }[]; currency: string }) {
+  if (rows.length === 0) return null;
+  const top = rows[0];
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+            <PieChart className="w-4 h-4 text-slate-400" /> Revenue Concentration ({currency})
+          </h2>
+        </div>
+        {top.pct >= CONCENTRATION_WARN_PCT && (
+          <p className={cn(
+            "text-xs font-medium rounded-md px-2.5 py-1.5 mb-3 border",
+            top.pct >= CONCENTRATION_HIGH_PCT ? "text-red-700 bg-red-50 border-red-200" : "text-amber-700 bg-amber-50 border-amber-200",
+          )}>
+            {top.name} accounts for {top.pct.toFixed(0)}% of {currency} approved revenue{top.pct >= CONCENTRATION_HIGH_PCT ? " - more than every other client combined" : ""}.
+          </p>
+        )}
+        <div className="space-y-2">
+          {rows.slice(0, 8).map((r) => (
+            <div key={r.name} className="flex items-center gap-3 text-sm">
+              <span className="w-32 truncate text-slate-700 shrink-0">{r.name}</span>
+              <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+                <div
+                  className={cn("h-full rounded-full", r.pct >= CONCENTRATION_HIGH_PCT ? "bg-red-500" : r.pct >= CONCENTRATION_WARN_PCT ? "bg-amber-500" : "bg-blue-500")}
+                  style={{ width: `${Math.min(r.pct, 100)}%` }}
+                />
+              </div>
+              <span className="w-12 text-right font-mono tabular-nums text-slate-500 shrink-0">{r.pct.toFixed(0)}%</span>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 // CRM-style profile fields per direct product direction - a
 // structured primary contact person plus status/industry, rather
@@ -244,6 +298,20 @@ export default function ClientsPage() {
     for (const [cur, amt] of Object.entries(approved)) bookTotalApproved[cur] = (bookTotalApproved[cur] ?? 0) + amt;
   }
 
+  const concentrationByCurrency = Object.entries(bookTotalApproved)
+    .filter(([, total]) => total > 0)
+    .map(([currency, total]) => ({
+      currency,
+      rows: clients
+        .map((client) => {
+          const { approved } = rollup(tasksByClient.get(client.id) ?? []);
+          const amount = approved[currency] ?? 0;
+          return { name: client.name, amount, pct: (amount / total) * 100 };
+        })
+        .filter((r) => r.amount > 0)
+        .sort((a, b) => b.amount - a.amount),
+    }));
+
   return (
     <div className="space-y-5">
       {showDialog && <ClientDialog client={null} onClose={() => setShowDialog(false)} />}
@@ -271,6 +339,14 @@ export default function ClientsPage() {
           </CardContent>
         </Card>
       ) : (
+        <>
+          {concentrationByCurrency.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {concentrationByCurrency.map(({ currency, rows }) => (
+                <RevenueConcentrationCard key={currency} currency={currency} rows={rows} />
+              ))}
+            </div>
+          )}
         <Card>
           <CardContent className="p-0 overflow-x-auto">
             <table className="w-full text-sm">
@@ -348,6 +424,7 @@ export default function ClientsPage() {
             </table>
           </CardContent>
         </Card>
+        </>
       )}
     </div>
   );
