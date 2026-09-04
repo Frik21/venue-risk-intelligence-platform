@@ -44,6 +44,7 @@ import fieldIncidentReportsRouter from "./field-incident-reports";
 import afterActionReportsRouter from "./after-action-reports";
 import taskEquipmentRouter from "./task-equipment";
 import travelLogisticsRouter from "./travel-logistics";
+import contractsRouter from "./contracts";
 
 const router: IRouter = Router();
 
@@ -98,5 +99,6 @@ router.use(fieldIncidentReportsRouter);
 router.use(afterActionReportsRouter);
 router.use(taskEquipmentRouter);
 router.use(travelLogisticsRouter);
+router.use(contractsRouter);
 
 export default router;
