@@ -27,18 +27,30 @@ function formatEntry(row: typeof timesheetEntriesTable.$inferSelect, taskTitle?:
 }
 
 // Every logged entry, company-wide, regardless of approval status -
-// Following Roadmap Tier 2, item 9 ("operator utilization over time").
+// Following Roadmap Tier 2, items 9 ("operator utilization over time")
+// and 10 (the Compliance Rollup's Unapproved Timesheets section).
 // Deliberately unfiltered by `approved` (unlike GET /personnel-costs,
 // which only counts approved hours toward costing) - a CPO who logged
 // hours but hasn't had them approved yet still worked that day, so
 // excluding unapproved entries would make an actually-deployed
-// operator look idle.
+// operator look idle. Full formatEntry shape (not a trimmed one) so
+// this one endpoint covers both consumers - utilization only reads
+// userId/date/hoursWorked, the rollup also needs approved/taskTitle/
+// userName to list which specific entries need a Manager's attention.
 router.get("/timesheet", async (req, res): Promise<void> => {
   const companyId = requireCompanyId(req, res);
   if (companyId == null) return;
 
   const rows = await db.select().from(timesheetEntriesTable).where(eq(timesheetEntriesTable.companyId, companyId));
-  res.json(rows.map((r) => ({ userId: r.userId, date: r.date, hoursWorked: r.hoursWorked })));
+  const taskIds = [...new Set(rows.map((r) => r.taskId).filter((id): id is number => id !== null))];
+  const tasks = taskIds.length ? await db.select({ id: tasksTable.id, title: tasksTable.title }).from(tasksTable) : [];
+  const taskMap: Record<number, string> = {};
+  for (const t of tasks) taskMap[t.id] = t.title;
+  const users = await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(eq(usersTable.companyId, companyId));
+  const userMap: Record<number, string> = {};
+  for (const u of users) userMap[u.id] = u.name;
+
+  res.json(rows.map((r) => formatEntry(r, r.taskId !== null ? (taskMap[r.taskId] ?? null) : null, userMap[r.userId] ?? null)));
 });
 
 // Every logged day for this operator - Profile > Timesheet fetches
