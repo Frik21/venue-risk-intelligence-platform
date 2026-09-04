@@ -43,6 +43,7 @@ import emergencyInfoRouter from "./emergency-info";
 import fieldIncidentReportsRouter from "./field-incident-reports";
 import afterActionReportsRouter from "./after-action-reports";
 import taskEquipmentRouter from "./task-equipment";
+import travelLogisticsRouter from "./travel-logistics";
 
 const router: IRouter = Router();
 
@@ -96,5 +97,6 @@ router.use(emergencyInfoRouter);
 router.use(fieldIncidentReportsRouter);
 router.use(afterActionReportsRouter);
 router.use(taskEquipmentRouter);
+router.use(travelLogisticsRouter);
 
 export default router;
