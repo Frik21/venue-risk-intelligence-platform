@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { api, type OnboardingOverviewRecord, type OnboardingDocument, type TimesheetEntry, type FieldIncidentReport, type Contract } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ShieldCheck, IdCard, Clock, MessageSquareWarning, FileSignature, type LucideIcon } from "lucide-react";
+import { ShieldCheck, IdCard, Clock, MessageSquareWarning, FileSignature, UserCog, type LucideIcon } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 
 // Same 30-day heads-up window and expiry math as the Expiring
@@ -13,6 +13,16 @@ import { formatDate } from "@/lib/display-utils";
 const EXPIRY_WARNING_DAYS = 30;
 function daysUntilExpiry(expiryDate: string): number {
   return Math.ceil((new Date(expiryDate + "T00:00:00").getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+}
+
+// Same 12-month re-vetting cadence as /admin/onboarding's own Due for
+// Re-vetting card - duplicated page-local constant, same convention.
+const VETTING_INTERVAL_MONTHS = 12;
+function daysUntilVettingDue(lastVettedAt: string | null): number {
+  if (lastVettedAt == null) return -Infinity;
+  const due = new Date(lastVettedAt);
+  due.setMonth(due.getMonth() + VETTING_INTERVAL_MONTHS);
+  return Math.ceil((due.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
 }
 
 function RollupCard({
@@ -113,13 +123,22 @@ export default function ComplianceRollup() {
     .filter((c) => c.days <= EXPIRY_WARNING_DAYS)
     .sort((a, b) => a.days - b.days);
 
+  // Due for Re-vetting - Following Roadmap Tier 3, item 22. Same
+  // "active operators only" scoping as /admin/onboarding's own card -
+  // a still-pending/denied candidate isn't a re-vetting-cadence gap.
+  const dueForVetting = onboarding
+    .filter((o) => o.status === "onboarded")
+    .map((o) => ({ ...o, days: daysUntilVettingDue(o.lastVettedAt) }))
+    .filter((o) => o.days <= 0)
+    .sort((a, b) => a.days - b.days);
+
   return (
     <div className="p-4 md:p-6 space-y-5">
       <div>
         <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
           <ShieldCheck className="w-5 h-5 text-slate-400" /> Compliance Rollup
         </h1>
-        <p className="text-sm text-slate-500 mt-0.5">Expiring certs, pending onboarding, unapproved timesheets, unreviewed incidents, and contracts renewing soon - one view instead of five separate pages.</p>
+        <p className="text-sm text-slate-500 mt-0.5">Expiring certs, pending onboarding, unapproved timesheets, unreviewed incidents, contracts renewing soon, and operators due for re-vetting - one view instead of six separate pages.</p>
       </div>
 
       {loading ? (
@@ -184,6 +203,17 @@ export default function ComplianceRollup() {
                 </div>
                 <span className={c.days < 0 ? "text-red-700 font-medium text-xs shrink-0" : "text-amber-700 font-medium text-xs shrink-0"}>
                   {c.days < 0 ? `Overdue ${Math.abs(c.days)}d` : `${c.days}d left`}
+                </span>
+              </div>
+            ))}
+          </RollupCard>
+
+          <RollupCard title="Operators Due for Re-vetting" icon={UserCog} count={dueForVetting.length} action={{ href: "/admin/onboarding", label: "Operator Database →" }}>
+            {dueForVetting.map((o) => (
+              <div key={o.id} className="flex items-center justify-between text-sm border-b border-slate-100 last:border-0 pb-2 last:pb-0">
+                <span className="text-slate-700">{o.userName}</span>
+                <span className="text-red-700 font-medium text-xs shrink-0">
+                  {o.lastVettedAt ? `Overdue ${Math.abs(o.days)}d` : "Never vetted"}
                 </span>
               </div>
             ))}
