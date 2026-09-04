@@ -2276,6 +2276,18 @@ function OperationalCanvas({
   const [profileUserId, setProfileUserId] = useState<number | null>(null);
   const [profileUser, setProfileUser] = useState<User | null>(null);
 
+  // Which CPO's tasks to actually load into cpoTasks below - a real
+  // CPO session loads its own tasks directly (sessionUser.id), never
+  // through viewingAsCpoId (which stays a Manager/Owner-only "preview"
+  // concept, per the comment above - a CPO isn't "viewing as" itself).
+  // Bug fix: this used to be `viewingAsCpoId` directly everywhere below,
+  // which is only ever set for a non-CPO session (see the effect right
+  // below) - so a real CPO's own login never loaded cpoTasks at all and
+  // the Tasks panel silently fell back to the hardcoded MOCK_TASK, with
+  // every CPO-authored action (Check In, Panic, After-Action Report,
+  // Handover Notes) unreachable from a genuine CPO account.
+  const effectiveCpoId = sessionUser?.role === "cpo" ? sessionUser.id : viewingAsCpoId;
+
   useEffect(() => {
     api.users
       .list()
@@ -2307,14 +2319,14 @@ function OperationalCanvas({
   }, [profileUser]);
 
   useEffect(() => {
-    if (viewingAsCpoId == null) return;
+    if (effectiveCpoId == null) return;
     setCpoTasksLoading(true);
     api.tasks
-      .list({ assignedTo: viewingAsCpoId })
+      .list({ assignedTo: effectiveCpoId })
       .then(setCpoTasks)
-      .catch((err) => console.error(`Failed to load tasks for CPO ${viewingAsCpoId}:`, err))
+      .catch((err) => console.error(`Failed to load tasks for CPO ${effectiveCpoId}:`, err))
       .finally(() => setCpoTasksLoading(false));
-  }, [viewingAsCpoId]);
+  }, [effectiveCpoId]);
 
   // Profile > Account Details - self-service edit of the same
   // profileUser record Timesheet is scoped to. Local input state
@@ -2484,7 +2496,7 @@ function OperationalCanvas({
     setCpoTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status } : t)));
     api.tasks.updateStatus(taskId, { status }).catch((err) => {
       console.error(`Failed to update task ${taskId}:`, err);
-      if (viewingAsCpoId != null) api.tasks.list({ assignedTo: viewingAsCpoId }).then(setCpoTasks).catch(() => {});
+      if (effectiveCpoId != null) api.tasks.list({ assignedTo: effectiveCpoId }).then(setCpoTasks).catch(() => {});
     });
   }
 
