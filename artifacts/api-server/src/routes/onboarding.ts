@@ -5,6 +5,7 @@ import { z } from "zod";
 import { ONBOARDING_CHECKLIST_ITEMS, DOCUMENT_TYPES } from "../lib/onboarding-checklist";
 import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 import { generateInitialPassword, hashPassword } from "../lib/auth";
+import { checkSeatAvailable } from "./companies";
 
 const router: IRouter = Router();
 const DOCUMENT_TYPE_VALUES = DOCUMENT_TYPES.map((t) => t.value) as [string, ...string[]];
@@ -311,6 +312,19 @@ router.patch("/onboarding/:id/operational-access", async (req, res): Promise<voi
   if (parsed.data.granted && userId == null) {
     const [dupe] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, existing.candidateEmail));
     if (dupe) { res.status(409).json({ error: `A user with email "${existing.candidateEmail}" already exists` }); return; }
+
+    // Seat-limit enforcement - this is the CPO-creation path for a Team
+    // company (a Solo Operator's own CPO is never onboarded through
+    // here - Operator Database is a Management-side page, unreachable
+    // for that plan). Only meaningful the first time a company crosses
+    // its base+additional CPO seat count.
+    const seatCheck = await checkSeatAvailable(existing.companyId, "cpo");
+    if (!seatCheck.ok) {
+      res.status(403).json({
+        error: `CPO seat limit reached (${seatCheck.used}/${seatCheck.limit} used) - buy additional CPO seats on the Users page before granting operational access.`,
+      });
+      return;
+    }
 
     const initials = existing.candidateName.trim().split(/\s+/).map((n) => n[0]).join("").toUpperCase().slice(0, 2);
     // Admin-generated, shown once - same as POST /users, no email
