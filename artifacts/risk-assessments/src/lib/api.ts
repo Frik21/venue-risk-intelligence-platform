@@ -967,6 +967,11 @@ export interface OnboardingRecord {
   // access was actually handed over, separate from the Approved/
   // Pending/Denied decision and from account creation.
   operationalAccessGrantedAt: string | null;
+  // Re-vetting/background-check renewal cadence - Following Roadmap
+  // Tier 3, item 22. See lastVettedAt's own comment in
+  // schema/operator-onboarding.ts - stamped by api.onboarding.markVetted,
+  // not derived from the checklist's one-time background_check item.
+  lastVettedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1669,6 +1674,8 @@ export const api = {
       apiFetch<OnboardingRecord>(`/onboarding/${onboardingId}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
     setOperationalAccess: (onboardingId: number, granted: boolean) =>
       apiFetch<OnboardingRecord>(`/onboarding/${onboardingId}/operational-access`, { method: "PATCH", body: JSON.stringify({ granted }) }),
+    markVetted: (onboardingId: number) =>
+      apiFetch<OnboardingRecord>(`/onboarding/${onboardingId}/mark-vetted`, { method: "PATCH", body: JSON.stringify({}) }),
     listDocuments: (onboardingId: number) => apiFetch<OnboardingDocument[]>(`/onboarding/${onboardingId}/documents`),
     // Every document across every operator, company-wide - powers the
     // Expiring Certifications view (Following Roadmap Tier 1, item 4).

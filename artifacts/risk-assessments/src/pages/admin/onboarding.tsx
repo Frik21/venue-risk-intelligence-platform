@@ -65,6 +65,21 @@ function daysUntilExpiry(expiryDate: string): number {
   return Math.ceil((new Date(expiryDate + "T00:00:00").getTime() - Date.now()) / (24 * 60 * 60 * 1000));
 }
 
+// Re-vetting/background-check renewal cadence - Following Roadmap
+// Tier 3, item 22. A fixed 12-month interval, same "fixed constant,
+// not a company setting" convention as EXPIRY_WARNING_DAYS above -
+// "due" = lastVettedAt + this interval, computed here rather than
+// stored, so it can never drift out of sync with lastVettedAt itself.
+// Never vetted at all (lastVettedAt null) counts as due, not excluded
+// - the most urgent case, not a reason to hide it.
+const VETTING_INTERVAL_MONTHS = 12;
+function daysUntilVettingDue(lastVettedAt: string | null): number {
+  if (lastVettedAt == null) return -Infinity;
+  const due = new Date(lastVettedAt);
+  due.setMonth(due.getMonth() + VETTING_INTERVAL_MONTHS);
+  return Math.ceil((due.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+}
+
 // Always-shown either/or indicator for the two mutually-exclusive
 // "engagement_type" checklist items (see onboarding-checklist.ts) -
 // filled in when checked, outlined/dim when not, so both read as
@@ -399,6 +414,16 @@ function CpoOnboardingDetail({ onboardingId, onRemoved }: { onboardingId: number
     },
   });
 
+  const markVettedMutation = useMutation({
+    mutationFn: () => api.onboarding.markVetted(record!.id),
+    onSuccess: (updated) => {
+      qc.setQueryData(["onboarding", onboardingId], updated);
+      qc.invalidateQueries({ queryKey: ["onboarding-overview"] });
+      toast({ title: "Re-vetting recorded" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   const removeOperatorMutation = useMutation({
     mutationFn: () => api.onboarding.remove(onboardingId),
     onSuccess: () => {
@@ -450,6 +475,27 @@ function CpoOnboardingDetail({ onboardingId, onRemoved }: { onboardingId: number
           )}
         </div>
       )}
+
+      <div>
+        <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Re-vetting</p>
+        {recordLoading ? (
+          <Skeleton className="h-6 w-40" />
+        ) : (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-slate-600">
+              {record?.lastVettedAt ? `Last vetted ${formatDate(record.lastVettedAt)}` : "Never vetted"}
+            </span>
+            {record && daysUntilVettingDue(record.lastVettedAt) <= 0 && (
+              <Badge className="bg-red-50 text-red-700 border-red-200 text-[10px]">
+                {record.lastVettedAt ? "Re-vetting overdue" : "Due for vetting"}
+              </Badge>
+            )}
+            <Button size="sm" className="h-7 px-2 text-xs" onClick={() => markVettedMutation.mutate()} disabled={markVettedMutation.isPending}>
+              Mark Re-vetted
+            </Button>
+          </div>
+        )}
+      </div>
 
       <div>
         <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Checklist</p>
@@ -576,6 +622,17 @@ export default function OnboardingPage() {
     .filter((d) => d.expiryDate != null)
     .map((d) => ({ ...d, days: daysUntilExpiry(d.expiryDate!) }))
     .filter((d) => d.days <= EXPIRY_WARNING_DAYS)
+    .sort((a, b) => a.days - b.days);
+
+  // Due for Re-vetting - Following Roadmap Tier 3, item 22. Scoped to
+  // active (onboarded) operators only - a still-pending or denied
+  // candidate has a different, already-tracked gap (Pending
+  // Onboarding), not a re-vetting cadence problem. Most overdue first,
+  // same convention as expiringDocuments above.
+  const recordsDueForVetting = records
+    .filter((r) => r.status === "onboarded")
+    .map((r) => ({ ...r, days: daysUntilVettingDue(r.lastVettedAt) }))
+    .filter((r) => r.days <= 0)
     .sort((a, b) => a.days - b.days);
 
   // Scroll a manually-expanded card into view (e.g. after "Manage" on
@@ -756,6 +813,29 @@ export default function OnboardingPage() {
                   </div>
                 );
               })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {recordsDueForVetting.length > 0 && (
+        <Card className="border-red-200">
+          <CardContent className="p-5">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2 mb-3">
+              <AlertTriangle className="w-4 h-4 text-red-500" /> Due for Re-vetting
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-red-700 bg-red-50 border-red-200">
+                {recordsDueForVetting.length}
+              </span>
+            </h2>
+            <div className="space-y-2">
+              {recordsDueForVetting.map((r) => (
+                <div key={r.id} className="flex items-center justify-between gap-3 text-sm border border-red-100 rounded-md px-3 py-2">
+                  <span className="text-slate-900">{r.userName}</span>
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-red-700 bg-red-50 border-red-200 shrink-0 whitespace-nowrap">
+                    {r.lastVettedAt ? `Overdue ${Math.abs(r.days)}d` : "Never vetted"}
+                  </span>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>

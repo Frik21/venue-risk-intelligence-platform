@@ -57,6 +57,7 @@ function formatOnboarding(row: typeof operatorOnboardingTable.$inferSelect, user
     checkedCount,
     totalCount,
     operationalAccessGrantedAt: row.operationalAccessGrantedAt?.toISOString() ?? null,
+    lastVettedAt: row.lastVettedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -270,6 +271,32 @@ router.patch("/onboarding/:id/status", async (req, res): Promise<void> => {
   const [updated] = await db
     .update(operatorOnboardingTable)
     .set({ status: parsed.data.status, operationalAccessGrantedAt: denying ? null : existing.operationalAccessGrantedAt })
+    .where(eq(operatorOnboardingTable.id, id))
+    .returning();
+
+  const userName = existing.userId != null
+    ? (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, existing.userId)))[0]?.name ?? null
+    : null;
+
+  res.json(formatOnboarding(updated, userName));
+});
+
+// Re-vetting/background-check renewal cadence - Following Roadmap
+// Tier 3, item 22. Explicit action a Manager takes whenever a
+// background check is actually redone, distinct from the checklist's
+// one-time "background_check" item checked during initial onboarding
+// (see the schema's own comment on lastVettedAt) - can be called
+// repeatedly over an operator's tenure.
+router.patch("/onboarding/:id/mark-vetted", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [existing] = await db.select().from(operatorOnboardingTable).where(eq(operatorOnboardingTable.id, id));
+  if (!existing) { res.status(404).json({ error: "Onboarding record not found" }); return; }
+
+  const [updated] = await db
+    .update(operatorOnboardingTable)
+    .set({ lastVettedAt: new Date() })
     .where(eq(operatorOnboardingTable.id, id))
     .returning();
 
