@@ -5,6 +5,7 @@ import pinoHttp from "pino-http";
 import cookieParser from "cookie-parser";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { captureError } from "./lib/error-tracking";
 import path from "path";
 
 if (!process.env.SESSION_SECRET) {
@@ -84,6 +85,7 @@ app.get("/{*splat}", (_req, res) => {
 const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
   if (res.headersSent) { next(err); return; }
   req.log.error({ err }, "Unhandled error");
+  captureError(err);
   res.status(500).json({ error: "Internal server error" });
 };
 app.use(errorHandler);

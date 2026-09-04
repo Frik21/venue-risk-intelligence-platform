@@ -62,7 +62,15 @@ async function buildAll() {
       "@swc/*",
       "@aws-sdk/*",
       "@azure/*",
-      "@opentelemetry/*",
+      // NOT externalized (unlike the packages around it) - @sentry/node
+      // (lib/error-tracking.ts) pulls this in transitively for its
+      // tracing internals, and it's pure JS with no native/dynamic-path
+      // dependency forcing it out of the bundle the way the others
+      // here do. Externalizing it left `import ... from
+      // "@opentelemetry/api"` etc. in dist/index.mjs with nothing to
+      // resolve it against at runtime (dist/ has no node_modules of its
+      // own) - confirmed broken via a direct `node dist/index.mjs` smoke
+      // test before landing this fix.
       "@google-cloud/*",
       "@google/*",
       "googleapis",
