@@ -36,3 +36,5 @@ export * from "./task-equipment";
 export * from "./travel-logistics";
 export * from "./contracts";
 export * from "./feedback-requests";
+export * from "./task-vendors";
+export * from "./vendor-performance-reviews";

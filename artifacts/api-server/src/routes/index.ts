@@ -46,6 +46,7 @@ import afterActionReportsRouter from "./after-action-reports";
 import taskEquipmentRouter from "./task-equipment";
 import travelLogisticsRouter from "./travel-logistics";
 import contractsRouter from "./contracts";
+import vendorPerformanceRouter from "./vendor-performance";
 
 const router: IRouter = Router();
 
@@ -106,5 +107,6 @@ router.use(afterActionReportsRouter);
 router.use(taskEquipmentRouter);
 router.use(travelLogisticsRouter);
 router.use(contractsRouter);
+router.use(vendorPerformanceRouter);
 
 export default router;

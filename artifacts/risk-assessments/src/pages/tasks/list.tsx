@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Task, type TaskStatus, type TaskPriority, type Venue, type User, type Client, type TimesheetEntry, type AfterActionReport, type TaskEquipment, type FeedbackRequest } from "@/lib/api";
+import { api, type Task, type TaskStatus, type TaskPriority, type Venue, type User, type Client, type Vendor, type TimesheetEntry, type AfterActionReport, type TaskEquipment, type FeedbackRequest, type TaskVendor, type VendorPerformanceReview } from "@/lib/api";
 import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
-import { ListChecks, Plus, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, Search, Shield, Receipt, FileText, Package, Trash2, Wrench, Star } from "lucide-react";
+import { ListChecks, Plus, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, Search, Shield, Receipt, FileText, Package, Trash2, Wrench, Star, Store } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -590,6 +590,146 @@ function FeedbackPanel({ taskId }: { taskId: number }) {
   );
 }
 
+// Inline "add a review" form for one assigned vendor - rating +
+// notes, submitted against the real task_vendors engagement it's
+// nested under.
+function VendorReviewForm({ taskId, vendorId, onDone }: { taskId: number; vendorId: number; onDone: () => void }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [rating, setRating] = useState(0);
+  const [notes, setNotes] = useState("");
+
+  const mutation = useMutation({
+    mutationFn: () => api.vendorPerformanceReviews.create({ taskId, vendorId, rating, notes: notes.trim() || undefined }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["task-vendor-reviews", taskId] });
+      qc.invalidateQueries({ queryKey: ["vendor-performance-reviews"] });
+      toast({ title: "Review added" });
+      onDone();
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="mt-1.5 bg-white border border-slate-200 rounded-md p-2 space-y-1.5">
+      <div className="flex items-center gap-0.5">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} type="button" onClick={() => setRating(n)}>
+            <Star className={cn("w-4 h-4", n <= rating ? "fill-amber-400 text-amber-400" : "text-slate-300")} />
+          </button>
+        ))}
+      </div>
+      <Textarea rows={2} placeholder="Notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} className="text-xs" />
+      <div className="flex items-center gap-1.5">
+        <Button size="sm" className="h-6 px-2 text-[11px]" disabled={rating === 0 || mutation.isPending} onClick={() => mutation.mutate()}>
+          Save Review
+        </Button>
+        <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px]" onClick={onDone}>Cancel</Button>
+      </div>
+    </div>
+  );
+}
+
+// Vendor/subcontractor performance tracking - Following Roadmap Tier
+// 3, item 20. Confirmed via AskUserQuestion: vendors had no real link
+// to Tasks anywhere before this, so the first half of this panel is
+// that real Task<->Vendor assignment (task_vendors), and a Review is
+// always against a specific, real engagement rather than a
+// freestanding rating on the vendor in the abstract. Fetched only
+// while expanded, same pattern as the other per-task panels above.
+function VendorsUsedPanel({ taskId }: { taskId: number }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [pickedVendorId, setPickedVendorId] = useState<string>("");
+  const [reviewingVendorId, setReviewingVendorId] = useState<number | null>(null);
+
+  const { data: allVendors = [] } = useQuery<Vendor[]>({ queryKey: ["vendors"], queryFn: api.vendors.list });
+  const { data: assignments = [], isLoading } = useQuery<TaskVendor[]>({
+    queryKey: ["task-vendors", taskId],
+    queryFn: () => api.taskVendors.listForTask(taskId),
+  });
+  const { data: reviews = [] } = useQuery<VendorPerformanceReview[]>({
+    queryKey: ["task-vendor-reviews", taskId],
+    queryFn: () => api.vendorPerformanceReviews.listForTask(taskId),
+  });
+
+  const assignedVendorIds = new Set(assignments.map((a) => a.vendorId));
+  const availableVendors = allVendors.filter((v) => !assignedVendorIds.has(v.id));
+
+  const assignMutation = useMutation({
+    mutationFn: (vendorId: number) => api.taskVendors.create({ taskId, vendorId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["task-vendors", taskId] });
+      setPickedVendorId("");
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (id: number) => api.taskVendors.remove(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["task-vendors", taskId] }),
+  });
+
+  if (isLoading) return <Skeleton className="h-16 mt-2" />;
+
+  return (
+    <div className="mt-2 space-y-2 border-t border-slate-100 pt-2">
+      {assignments.length === 0 && <p className="text-xs text-slate-400">No vendors used on this task yet.</p>}
+      {assignments.map((a) => {
+        const vendorReviews = reviews.filter((r) => r.vendorId === a.vendorId);
+        return (
+          <div key={a.id} className="text-xs bg-slate-50 border border-slate-200 rounded-md p-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium text-slate-700">{a.vendorName ?? "Unknown vendor"}</span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" onClick={() => setReviewingVendorId(a.vendorId)}>
+                  <Star className="w-3 h-3 mr-1" /> Add Review
+                </Button>
+                <Button size="icon" variant="ghost" className="h-6 w-6 text-slate-400 hover:text-red-600" onClick={() => removeMutation.mutate(a.id)}>
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </div>
+            </div>
+            {vendorReviews.length > 0 && (
+              <div className="mt-1.5 space-y-1">
+                {vendorReviews.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between gap-2 text-slate-500">
+                    <span className="flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <Star key={n} className={cn("w-3 h-3", n <= r.rating ? "fill-amber-400 text-amber-400" : "text-slate-300")} />
+                      ))}
+                    </span>
+                    <span className="truncate">{r.notes || "—"}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {reviewingVendorId === a.vendorId && (
+              <VendorReviewForm taskId={taskId} vendorId={a.vendorId} onDone={() => setReviewingVendorId(null)} />
+            )}
+          </div>
+        );
+      })}
+      <div className="flex items-center gap-1.5 pt-1">
+        <Select value={pickedVendorId} onValueChange={setPickedVendorId}>
+          <SelectTrigger className="h-7 text-xs flex-1"><SelectValue placeholder="Select a vendor to add..." /></SelectTrigger>
+          <SelectContent>
+            {availableVendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Button
+          size="sm"
+          className="h-7 px-2 text-[11px] shrink-0"
+          disabled={!pickedVendorId || assignMutation.isPending}
+          onClick={() => assignMutation.mutate(Number(pickedVendorId))}
+        >
+          <Plus className="w-3 h-3" /> Add
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function TasksList() {
   const [showNew, setShowNew] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -597,6 +737,7 @@ export default function TasksList() {
   const [expandedAarTaskId, setExpandedAarTaskId] = useState<number | null>(null);
   const [expandedEquipmentTaskId, setExpandedEquipmentTaskId] = useState<number | null>(null);
   const [expandedFeedbackTaskId, setExpandedFeedbackTaskId] = useState<number | null>(null);
+  const [expandedVendorsTaskId, setExpandedVendorsTaskId] = useState<number | null>(null);
   // "archived" sits alongside the real TaskBucket values as a 7th,
   // page-local filter tile ("Task Archive") - not a real bucket (an
   // archived task can have been in any status/bucket before it was
@@ -981,6 +1122,16 @@ export default function TasksList() {
                           {expandedFeedbackTaskId === task.id && <FeedbackPanel taskId={task.id} />}
                         </>
                       )}
+
+                      <button
+                        onClick={() => setExpandedVendorsTaskId((id) => (id === task.id ? null : task.id))}
+                        className="flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1.5"
+                      >
+                        <Store className="w-3 h-3" />
+                        Vendors Used
+                        {expandedVendorsTaskId === task.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                      </button>
+                      {expandedVendorsTaskId === task.id && <VendorsUsedPanel taskId={task.id} />}
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
