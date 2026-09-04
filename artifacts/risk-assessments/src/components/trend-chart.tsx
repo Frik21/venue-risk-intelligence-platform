@@ -3,9 +3,10 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLe
 import { Card, CardContent } from "@/components/ui/card";
 
 // Shared line-chart card for the Dashboard's trend charts (Tasks
-// Completed, Quotes Sent/Pending, Invoices Pending, New Clients
-// Onboarded, Operators Onboarded) - one series or two, always daily
-// counts within the selected date range. Thin 2px lines, recessive
+// Completed, Quotes Sent/Pending, Quote Win Rate, Invoices Pending,
+// New Clients Onboarded, Operators Onboarded) - one series or two,
+// always daily counts (or, with `unit` set, a cumulative percentage)
+// within the selected date range. Thin 2px lines, recessive
 // gridlines/axes, a legend only when there's more than one series
 // (a single series is already named by the card title) - per the
 // data-viz method's mark/legend rules.
@@ -13,21 +14,32 @@ export function TrendChart({
   title,
   data,
   lines,
+  unit,
 }: {
   title: string;
-  data: Record<string, string | number>[];
+  data: Record<string, string | number | null>[];
   lines: { key: string; label: string; color: string }[];
+  /** Optional suffix appended to axis ticks and tooltip values, e.g. "%". */
+  unit?: string;
 }) {
   const config: ChartConfig = Object.fromEntries(
     lines.map((l) => [l.key, { label: l.label, color: l.color }]),
   );
-  const total = data.reduce((sum, d) => sum + lines.reduce((s, l) => s + (Number(d[l.key]) || 0), 0), 0);
+  // "No activity" means every point is null-or-zero, matching the
+  // original sum>0 check for the plain-count charts (every value here
+  // is non-negative, so sum>0 iff some value is nonzero) while also
+  // covering the nullable win-rate case (every bucket null = no
+  // decisions yet at all). Known edge case: a win-rate series that's
+  // genuinely 0% throughout (every decided quote lost) reads the same
+  // as "no decisions yet" - an acceptable tradeoff over a 3rd explicit
+  // "activity happened but rate is zero" state.
+  const hasActivity = data.some((d) => lines.some((l) => { const v = d[l.key]; return v != null && Number(v) !== 0; }));
 
   return (
     <Card>
       <CardContent className="p-5">
         <h3 className="font-semibold text-slate-900 text-sm mb-3">{title}</h3>
-        {total === 0 ? (
+        {!hasActivity ? (
           <div className="h-[220px] flex items-center justify-center text-sm text-slate-400">No activity in this range yet.</div>
         ) : (
           <ChartContainer config={config} className="aspect-auto h-[220px] w-full">
@@ -41,8 +53,16 @@ export function TrendChart({
                 minTickGap={24}
                 fontSize={11}
               />
-              <YAxis tickLine={false} axisLine={false} tickMargin={4} fontSize={11} width={28} allowDecimals={false} />
-              <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                tickMargin={4}
+                fontSize={11}
+                width={28}
+                allowDecimals={false}
+                {...(unit ? { domain: [0, 100], tickFormatter: (v: number) => `${v}${unit}` } : {})}
+              />
+              <ChartTooltip content={<ChartTooltipContent indicator="line" formatter={unit ? (value, name) => `${value}${unit} ${name}` : undefined} />} />
               {lines.length > 1 && <ChartLegend content={<ChartLegendContent />} />}
               {lines.map((l) => (
                 <Line
@@ -54,6 +74,8 @@ export function TrendChart({
                   strokeWidth={2}
                   dot={false}
                   activeDot={{ r: 4 }}
+                  connectNulls={false}
+                  isAnimationActive={false}
                 />
               ))}
             </LineChart>
