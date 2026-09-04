@@ -42,3 +42,17 @@ export const forgotPasswordLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many password reset attempts from this network. Please try again later." },
 });
+
+// GET/POST /feedback/:token (the public client-satisfaction link, see
+// schema/feedback-requests.ts) - the token itself is an unguessable
+// 32-byte random value, but this is still the one other fully public,
+// no-session surface in the app, so it gets the same "someone doing
+// something unusual from one IP" brake as the three above rather than
+// being left completely open.
+export const feedbackLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests. Please try again in a few minutes." },
+});

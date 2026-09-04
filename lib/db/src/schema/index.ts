@@ -35,3 +35,4 @@ export * from "./after-action-reports";
 export * from "./task-equipment";
 export * from "./travel-logistics";
 export * from "./contracts";
+export * from "./feedback-requests";
