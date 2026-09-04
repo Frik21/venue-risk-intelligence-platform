@@ -297,6 +297,33 @@ export interface PublicFeedbackInfo {
   submitted: boolean;
 }
 
+// The real Task<->Vendor link - Following Roadmap Tier 3, item 20.
+// See schema/task-vendors.ts.
+export interface TaskVendor {
+  id: number;
+  taskId: number;
+  vendorId: number;
+  vendorName: string | null;
+  addedBy: number;
+  addedByName: string | null;
+  createdAt: string;
+}
+
+// A performance review against one real Task<->Vendor engagement -
+// see schema/vendor-performance-reviews.ts.
+export interface VendorPerformanceReview {
+  id: number;
+  vendorId: number;
+  vendorName: string | null;
+  taskId: number;
+  taskTitle: string | null;
+  rating: number;
+  notes: string;
+  reviewedBy: number;
+  reviewedByName: string | null;
+  reviewedAt: string;
+}
+
 export interface TaskEquipment {
   id: number;
   taskId: number;
@@ -1266,6 +1293,18 @@ export const api = {
     returnItem: (id: number, data: { needsMaintenance?: boolean; notes?: string }) =>
       apiFetch<TaskEquipment>(`/task-equipment/${id}/return`, { method: "PATCH", body: JSON.stringify(data) }),
     remove: (id: number) => apiFetch<void>(`/task-equipment/${id}`, { method: "DELETE" }),
+  },
+  taskVendors: {
+    listForTask: (taskId: number) => apiFetch<TaskVendor[]>(`/task-vendors?taskId=${taskId}`),
+    create: (data: { taskId: number; vendorId: number }) => apiFetch<TaskVendor>("/task-vendors", { method: "POST", body: JSON.stringify(data) }),
+    remove: (id: number) => apiFetch<void>(`/task-vendors/${id}`, { method: "DELETE" }),
+  },
+  vendorPerformanceReviews: {
+    list: () => apiFetch<VendorPerformanceReview[]>("/vendor-performance-reviews"),
+    listForVendor: (vendorId: number) => apiFetch<VendorPerformanceReview[]>(`/vendor-performance-reviews?vendorId=${vendorId}`),
+    listForTask: (taskId: number) => apiFetch<VendorPerformanceReview[]>(`/vendor-performance-reviews?taskId=${taskId}`),
+    create: (data: { taskId: number; vendorId: number; rating: number; notes?: string }) =>
+      apiFetch<VendorPerformanceReview>("/vendor-performance-reviews", { method: "POST", body: JSON.stringify(data) }),
   },
   feedbackRequests: {
     listForTask: (taskId: number) => apiFetch<FeedbackRequest[]>(`/tasks/${taskId}/feedback-requests`),
