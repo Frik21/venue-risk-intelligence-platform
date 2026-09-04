@@ -139,7 +139,7 @@ useEffect(() => {
 // full-bleed auth pages. "/" itself renders the public landing page
 // directly from require-auth.tsx, never reaching this component at
 // all, so it's not listed here either.
-const hideShell = (location === "/cpo" || location === "/owner" || location === "/owner/subscriptions" || location === "/owner/it" || location === "/quick-access" || location === "/login" || location === "/register" || location === "/change-password") && !showShell;
+const hideShell = (location === "/cpo" || location === "/owner" || location === "/owner/subscriptions" || location === "/owner/it" || location === "/quick-access" || location === "/login" || location === "/register" || location === "/forgot-password" || location === "/reset-password" || location === "/change-password") && !showShell;
   // "/admin" needs the same exact-match treatment as "/" - otherwise
   // it'd also read as active on "/admin/users" (a real, distinct nav
   // item), since that path also starts with "/admin".
