@@ -8,6 +8,8 @@
     "refresh-travel-advisories": "tsx ./src/refresh-travel-advisories.ts",
     "backfill-company-id": "tsx --env-file-if-exists=../lib/db/.env ./src/backfill-company-id.ts",
     "set-owner-password": "tsx --env-file-if-exists=../lib/db/.env ./src/set-owner-password.ts",
+    "backup-db": "tsx --env-file-if-exists=../lib/db/.env ./src/backup-database.ts",
+    "restore-db": "tsx --env-file-if-exists=../lib/db/.env ./src/restore-database.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
