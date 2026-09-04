@@ -28,6 +28,7 @@ import {
   Landmark,
   IdCard,
   Workflow,
+  ShieldCheck,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -61,6 +62,7 @@ const navGroups = [
     items: [
       { href: "/alerts", label: "Alerts", icon: Bell },
       { href: "/admin", label: "Dashboard", icon: Gauge },
+      { href: "/admin/compliance", label: "Compliance", icon: ShieldCheck },
       { href: "/admin/calendar", label: "Calendar", icon: CalendarDays },
       { href: "/tasks", label: "Tasks", icon: ListChecks },
       { href: "/admin/communications", label: "Communications", icon: MessageSquare },
