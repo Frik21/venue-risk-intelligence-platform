@@ -260,6 +260,25 @@ export interface AfterActionReport {
   reviewedAt: string | null;
 }
 
+// Equipment/asset tracking, issued/returned per task - Following
+// Roadmap Tier 2, item 14. Ad-hoc per task, not a shared company-wide
+// catalog - see the schema's own comment for why.
+export interface TaskEquipment {
+  id: number;
+  taskId: number;
+  addedBy: number;
+  addedByName: string | null;
+  itemName: string;
+  serialNumber: string | null;
+  issuedAt: string | null;
+  issuedTo: number | null;
+  issuedToName: string | null;
+  returnedAt: string | null;
+  needsMaintenance: boolean;
+  notes: string | null;
+  createdAt: string;
+}
+
 export type CompanyStatus = "trial" | "active" | "suspended" | "cancelled";
 export type ManagementRole = "manager" | "operations" | "finance" | "human_resources";
 // "team" (the default, Management + CPO) or "solo_operator" (a single
@@ -1161,6 +1180,17 @@ export const api = {
     create: (data: { taskId: number; reportType?: AfterActionReportType; summary: string; incidentsEncountered?: string; routeDeviations?: string; clientFeedback?: string; recommendations?: string }) =>
       apiFetch<AfterActionReport>("/after-action-reports", { method: "POST", body: JSON.stringify(data) }),
     markReviewed: (id: number) => apiFetch<AfterActionReport>(`/after-action-reports/${id}`, { method: "PATCH", body: JSON.stringify({}) }),
+  },
+  taskEquipment: {
+    // Task-scoped, not company-wide - same reasoning as
+    // afterActionReports.listForTask above.
+    listForTask: (taskId: number) => apiFetch<TaskEquipment[]>(`/task-equipment?taskId=${taskId}`),
+    create: (data: { taskId: number; itemName: string; serialNumber?: string }) =>
+      apiFetch<TaskEquipment>("/task-equipment", { method: "POST", body: JSON.stringify(data) }),
+    issue: (id: number) => apiFetch<TaskEquipment>(`/task-equipment/${id}/issue`, { method: "PATCH", body: JSON.stringify({}) }),
+    returnItem: (id: number, data: { needsMaintenance?: boolean; notes?: string }) =>
+      apiFetch<TaskEquipment>(`/task-equipment/${id}/return`, { method: "PATCH", body: JSON.stringify(data) }),
+    remove: (id: number) => apiFetch<void>(`/task-equipment/${id}`, { method: "DELETE" }),
   },
   auth: {
     login: (email: string, password: string) =>

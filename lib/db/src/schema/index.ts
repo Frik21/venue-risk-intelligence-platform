@@ -32,3 +32,4 @@ export * from "./support-tickets";
 export * from "./checkins";
 export * from "./field-incident-reports";
 export * from "./after-action-reports";
+export * from "./task-equipment";
