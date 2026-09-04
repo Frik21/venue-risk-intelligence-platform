@@ -18,7 +18,7 @@ function formatTask(
   venueName: string | null,
   assignedByName: string | null,
   planSubmittedAt: string | null,
-  roster: { id: number; name: string }[],
+  roster: { id: number; name: string; role: string | null }[],
   alertReviewedByName: string | null = null,
 ) {
   return {
@@ -32,6 +32,12 @@ function formatTask(
     assignedToName: roster.find((r) => r.id === row.assignedTo)?.name ?? null,
     assignedToIds: roster.map((r) => r.id),
     assignedToNames: roster.map((r) => r.name),
+    // Team-lead/hierarchy designation - Following Roadmap Tier 2, item
+    // 15. Parallel array alongside assignedToIds/Names (same index per
+    // roster member) rather than restructuring those into objects,
+    // since assignedToIds/Names are already consumed all over the
+    // frontend and this keeps every existing consumer unaffected.
+    assignedToRoles: roster.map((r) => r.role),
     assignedBy: row.assignedBy,
     assignedByName: assignedByName ?? null,
     title: row.title,
@@ -81,9 +87,9 @@ async function rosterMap(taskIds: number[]) {
   const nameMap: Record<number, string> = {};
   for (const u of users) nameMap[u.id] = u.name;
 
-  const map: Record<number, { id: number; name: string }[]> = {};
+  const map: Record<number, { id: number; name: string; role: string | null }[]> = {};
   for (const r of rows) {
-    (map[r.taskId] ??= []).push({ id: r.operatorId, name: nameMap[r.operatorId] ?? "" });
+    (map[r.taskId] ??= []).push({ id: r.operatorId, name: nameMap[r.operatorId] ?? "", role: r.role });
   }
   return map;
 }
@@ -162,11 +168,12 @@ const TaskInputSchema = z.object({
   checkInIntervalMinutes: z.number().int().min(1).nullable().optional(),
 });
 
-async function setRoster(taskId: number, companyId: number, assigneeIds: number[]) {
+async function setRoster(taskId: number, companyId: number, assignees: { operatorId: number; role?: string | null }[]) {
   await db.delete(taskAssignmentsTable).where(eq(taskAssignmentsTable.taskId, taskId));
-  const unique = [...new Set(assigneeIds)];
+  const seen = new Set<number>();
+  const unique = assignees.filter((a) => (seen.has(a.operatorId) ? false : (seen.add(a.operatorId), true)));
   if (unique.length) {
-    await db.insert(taskAssignmentsTable).values(unique.map((operatorId) => ({ companyId, taskId, operatorId })));
+    await db.insert(taskAssignmentsTable).values(unique.map((a) => ({ companyId, taskId, operatorId: a.operatorId, role: a.role ?? null })));
   }
 }
 
@@ -225,7 +232,7 @@ router.post("/tasks", async (req, res): Promise<void> => {
     })
     .returning();
 
-  await setRoster(task.id, task.companyId, assigneeIds);
+  await setRoster(task.id, task.companyId, assigneeIds.map((operatorId) => ({ operatorId })));
 
   const ctx = await loadTaskContext(task);
   res.status(201).json(formatTask(task, ctx.venueName, ctx.assignedByName, null, ctx.roster, ctx.alertReviewedByName));
@@ -238,6 +245,12 @@ const TaskUpdateSchema = z.object({
   venueId: z.number().int().nullable().optional(),
   officeId: z.number().int().nullable().optional(),
   assigneeIds: z.array(z.number().int()).optional(),
+  // Team-lead/hierarchy designation per roster member - Following
+  // Roadmap Tier 2, item 15. Keyed by operatorId (as a string, since
+  // JSON object keys always are) - only meaningful alongside
+  // assigneeIds, applied 1:1 by id when rebuilding the roster below.
+  // An id with no entry here (or not sent at all) gets role: null.
+  assigneeRoles: z.record(z.string(), z.string().nullable()).optional(),
   // Legacy single-assignee convenience - equivalent to assigneeIds:
   // [id] (or [] when null). Ignored if assigneeIds is also given.
   assignedTo: z.number().int().nullable().optional(),
@@ -284,8 +297,9 @@ router.patch("/tasks/:id", async (req, res): Promise<void> => {
   const [existing] = await db.select().from(tasksTable).where(eq(tasksTable.id, id));
   if (!existing || existing.companyId !== req.user!.companyId) { res.status(404).json({ error: "Task not found" }); return; }
 
-  const { dueDate, endDate, assigneeIds, assignedTo, clientConfirmed, alertReviewedBucket, alertReviewedBy, ...rest } = parsed.data;
-  const nextRoster = assigneeIds ?? (assignedTo !== undefined ? (assignedTo !== null ? [assignedTo] : []) : undefined);
+  const { dueDate, endDate, assigneeIds, assigneeRoles, assignedTo, clientConfirmed, alertReviewedBucket, alertReviewedBy, ...rest } = parsed.data;
+  const nextRosterIds = assigneeIds ?? (assignedTo !== undefined ? (assignedTo !== null ? [assignedTo] : []) : undefined);
+  const nextRoster = nextRosterIds?.map((operatorId) => ({ operatorId, role: assigneeRoles?.[String(operatorId)] ?? null }));
 
   // Stamped the first time status moves into "completed" - never
   // cleared if the task is later edited back to another status, same
@@ -300,7 +314,7 @@ router.patch("/tasks/:id", async (req, res): Promise<void> => {
       ...completedAtStamp,
       ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
       ...(endDate !== undefined ? { endDate: endDate ? new Date(endDate) : null } : {}),
-      ...(nextRoster !== undefined ? { assignedTo: nextRoster[0] ?? null } : {}),
+      ...(nextRoster !== undefined ? { assignedTo: nextRoster[0]?.operatorId ?? null } : {}),
       ...(clientConfirmed !== undefined ? { clientConfirmedAt: clientConfirmed ? new Date() : null } : {}),
       ...(alertReviewedBucket !== undefined
         ? {
@@ -356,7 +370,7 @@ router.post("/tasks/:id/duplicate", async (req, res): Promise<void> => {
     })
     .returning();
 
-  await setRoster(task.id, task.companyId, sourceRoster.map((r) => r.id));
+  await setRoster(task.id, task.companyId, sourceRoster.map((r) => ({ operatorId: r.id, role: r.role })));
 
   const ctx = await loadTaskContext(task);
   res.status(201).json(formatTask(task, ctx.venueName, ctx.assignedByName, null, ctx.roster));
