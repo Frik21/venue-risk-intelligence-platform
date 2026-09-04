@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, asc, desc, count, max } from "drizzle-orm";
+import { eq, and, asc, desc, count, max } from "drizzle-orm";
 import { db, companiesTable, usersTable, venuesTable, clientsTable, tasksTable, pricingConfigTable, pricingHistoryTable } from "@workspace/db";
 import { z } from "zod";
 import { requireRole } from "../lib/auth";
@@ -60,6 +60,43 @@ export const MANAGEMENT_ROLES = Object.keys(BASE_SEATS_BY_ROLE) as ManagementRol
 // Team company - Solo Operator is hardcoded to exactly one CPO seat
 // (routes/users.ts), unrelated to this.
 export const CPO_BASE_SEATS = 12;
+
+// Seat-limit enforcement - the base+additional counts above have
+// displayed since the seat model shipped, but nothing actually blocked
+// a company from creating a user past its limit until now. Shared by
+// both real user-creation paths (routes/users.ts's POST /users for the
+// four Management roles, routes/onboarding.ts's operational-access
+// grant for CPO) so the "used >= limit -> reject" rule lives in exactly
+// one place. Solo Operator's own "exactly one CPO" hard cap
+// (routes/users.ts) is a separate, unrelated rule - this only ever
+// runs for Management roles and Team-company CPO creation.
+export async function checkSeatAvailable(
+  companyId: number,
+  role: ManagementRole | "cpo",
+): Promise<{ ok: true } | { ok: false; used: number; limit: number }> {
+  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId));
+  if (!company) return { ok: true };
+
+  const [row] = await db
+    .select({ value: count() })
+    .from(usersTable)
+    .where(and(eq(usersTable.companyId, companyId), eq(usersTable.role, role), eq(usersTable.active, true)));
+  const used = row?.value ?? 0;
+
+  const limit =
+    role === "cpo"
+      ? CPO_BASE_SEATS + company.additionalCpoSeats
+      : BASE_SEATS_BY_ROLE[role] +
+        (role === "manager"
+          ? company.additionalManagerSeats
+          : role === "operations"
+            ? company.additionalOperationsSeats
+            : role === "finance"
+              ? company.additionalFinanceSeats
+              : company.additionalHumanResourcesSeats);
+
+  return used >= limit ? { ok: false, used, limit } : { ok: true };
+}
 
 // The seven Owner-editable dollar figures on pricingConfigTable - kept
 // as one list so the change-history endpoint (POST /companies/pricing/

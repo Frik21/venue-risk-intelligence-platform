@@ -12,6 +12,7 @@ import {
   PRICE_FIELD_BY_ROLE,
   CPO_PRICE_FIELD,
   getOrCreatePricingConfig,
+  checkSeatAvailable,
   type ManagementRole,
 } from "./companies";
 
@@ -99,6 +100,22 @@ router.post("/users", async (req, res): Promise<void> => {
         res.status(409).json({ error: "A Solo Operator company can only have one CPO account" });
         return;
       }
+    }
+  }
+
+  // Seat-limit enforcement - only the four Management roles go through
+  // this path in practice (Team-company CPOs are created via the
+  // onboarding grant below, which has its own check; the only "cpo"
+  // role this route ever sees is a brand-new Solo Operator's first and
+  // only account, already hard-capped above). Skipped for the Owner's
+  // own admin/companyId:null accounts, which aren't seat-tracked at all.
+  if (companyId != null && (MANAGEMENT_ROLES as string[]).includes(parsed.data.role)) {
+    const seatCheck = await checkSeatAvailable(companyId, parsed.data.role as ManagementRole);
+    if (!seatCheck.ok) {
+      res.status(403).json({
+        error: `Seat limit reached for this role (${seatCheck.used}/${seatCheck.limit} used) - buy additional seats on the Users page before adding more.`,
+      });
+      return;
     }
   }
 
