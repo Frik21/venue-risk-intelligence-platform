@@ -46,6 +46,8 @@ const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
   { value: "firearm_competency", label: "Firearm Competency Certificate" },
   { value: "medical_certificate", label: "Medical / First Aid Certificate" },
   { value: "drivers_license", label: "Driver's License" },
+  { value: "professional_indemnity_insurance", label: "Professional Indemnity Insurance" },
+  { value: "public_liability_insurance", label: "Public Liability Insurance" },
   { value: "other_certification", label: "Other Certification / License" },
 ];
 

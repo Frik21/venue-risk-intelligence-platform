@@ -45,5 +45,14 @@ export const DOCUMENT_TYPES = [
   { value: "firearm_competency", label: "Firearm Competency Certificate" },
   { value: "medical_certificate", label: "Medical / First Aid Certificate" },
   { value: "drivers_license", label: "Driver's License" },
+  // Insurance/liability policy tracking - Following Roadmap Tier 3,
+  // item 21. Scoped via AskUserQuestion to per-operator only (not a
+  // separate company-level policy entity) - these are just two more
+  // document types, so the expiry-tracking machinery already built for
+  // PSIRA/SIA/etc. (item 4's Expiring Certifications card, the HR
+  // dashboard's cert tiles, and the Compliance Rollup) picks them up
+  // automatically with no new code.
+  { value: "professional_indemnity_insurance", label: "Professional Indemnity Insurance" },
+  { value: "public_liability_insurance", label: "Public Liability Insurance" },
   { value: "other_certification", label: "Other Certification / License" },
 ] as const;
