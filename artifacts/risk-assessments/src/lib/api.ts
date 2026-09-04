@@ -467,6 +467,24 @@ export interface ClientActivity {
   createdAt: string;
 }
 
+// An individually-protected person under a Client - Following Roadmap,
+// Tier 2 item 8. See principalsTable in schema/principals.ts for why
+// this is a roster, not one profile per Client. The task-scoped GET
+// (api.tasks.principals below) returns this same shape but without
+// createdAt/updatedAt - a CPO's Operational Brief has no use for them.
+export interface Principal {
+  id: number;
+  clientId: number;
+  name: string;
+  relationship: string;
+  medicalInfo: string | null;
+  knownThreats: string | null;
+  routineNotes: string | null;
+  familyNotes: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export type VendorStatus = "lead" | "active" | "inactive" | "preferred";
 
 export interface Vendor {
@@ -1105,6 +1123,11 @@ export const api = {
       checkInIntervalMinutes: number | null;
     }>) => apiFetch<Task>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     duplicate: (id: number) => apiFetch<Task>(`/tasks/${id}/duplicate`, { method: "POST" }),
+    // The CPO-facing protection profile for this task's client -
+    // Following Roadmap Tier 2, item 8. Read-only, roster-checked
+    // server-side for a cpo session. Empty array if the task has no
+    // client, or the client has no principals recorded yet.
+    principals: (id: number) => apiFetch<Principal[]>(`/tasks/${id}/principals`),
   },
   checkins: {
     // Company-wide, newest first - Command Desk's Safety Alerts panel
@@ -1286,6 +1309,14 @@ export const api = {
     create: (clientId: number, data: { note: string; createdBy?: number | null }) =>
       apiFetch<ClientActivity>(`/clients/${clientId}/activities`, { method: "POST", body: JSON.stringify(data) }),
     delete: (clientId: number, id: number) => apiFetch<void>(`/clients/${clientId}/activities/${id}`, { method: "DELETE" }),
+  },
+  principals: {
+    list: (clientId: number) => apiFetch<Principal[]>(`/clients/${clientId}/principals`),
+    create: (clientId: number, data: { name: string; relationship?: string; medicalInfo?: string | null; knownThreats?: string | null; routineNotes?: string | null; familyNotes?: string | null }) =>
+      apiFetch<Principal>(`/clients/${clientId}/principals`, { method: "POST", body: JSON.stringify(data) }),
+    update: (clientId: number, id: number, data: Partial<{ name: string; relationship: string; medicalInfo: string | null; knownThreats: string | null; routineNotes: string | null; familyNotes: string | null }>) =>
+      apiFetch<Principal>(`/clients/${clientId}/principals/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    delete: (clientId: number, id: number) => apiFetch<void>(`/clients/${clientId}/principals/${id}`, { method: "DELETE" }),
   },
   vendors: {
     list: () => apiFetch<Vendor[]>("/vendors"),

@@ -45,6 +45,7 @@ import type {
   Announcement,
   NearbyEmergencyInfo,
   FieldIncidentReportSeverity,
+  Principal,
 } from "@/lib/api";
 import { enqueueOfflineSubmission, useOfflineQueue, useOfflineQueueSynced, retryOfflineItem, discardOfflineItem } from "@/lib/offline-queue";
 import { LocationSearch, resolveCurrentLocation } from "@/components/location-search";
@@ -2229,6 +2230,24 @@ function OperationalCanvas({
   const [viewingAsCpoId, setViewingAsCpoId] = useState<number | null>(null);
   const [cpoTasks, setCpoTasks] = useState<Task[]>([]);
   const [cpoTasksLoading, setCpoTasksLoading] = useState(false);
+  // Protection profiles for each task's client - Following Roadmap,
+  // Tier 2 item 8. Surfaced automatically once a CPO's tasks load, no
+  // separate reveal step (per direct product direction) - fetched
+  // per task since the backend endpoint is roster-checked and scoped
+  // through the task rather than exposing a general client lookup to
+  // Operators Note. Empty for a task with no client or no principals.
+  const [taskPrincipals, setTaskPrincipals] = useState<Record<number, Principal[]>>({});
+
+  useEffect(() => {
+    for (const task of cpoTasks) {
+      if (task.id === MOCK_TASK_ID || taskPrincipals[task.id] != null) continue;
+      api.tasks
+        .principals(task.id)
+        .then((principals) => setTaskPrincipals((prev) => ({ ...prev, [task.id]: principals })))
+        .catch((err) => console.error(`Failed to load protection profile for task ${task.id}:`, err));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cpoTasks]);
   const visibleAnnouncements = useMemo(() => {
     const myTaskIds = new Set(cpoTasks.map((t) => t.id));
     return announcements.filter((a) => a.taskId == null || myTaskIds.has(a.taskId));
@@ -4213,6 +4232,21 @@ function OperationalCanvas({
                   </div>
                   {task.venueName && <p className="task-row-venue">{task.venueName}</p>}
                   {task.assignedByName && <p className="task-row-assigned-by">Assigned by {task.assignedByName}</p>}
+
+                  {(taskPrincipals[task.id] ?? []).length > 0 && (
+                    <div className="protection-profile">
+                      <p className="protection-profile-heading"><ShieldAlert className="w-3 h-3" /> Protection Profile</p>
+                      {taskPrincipals[task.id]!.map((p) => (
+                        <div key={p.id} className="protection-profile-principal">
+                          <p className="protection-profile-name">{p.name}{p.relationship ? ` · ${p.relationship}` : ""}</p>
+                          {p.medicalInfo && <p className="protection-profile-field"><span>Medical: </span>{p.medicalInfo}</p>}
+                          {p.knownThreats && <p className="protection-profile-field"><span>Threats: </span>{p.knownThreats}</p>}
+                          {p.routineNotes && <p className="protection-profile-field"><span>Routine: </span>{p.routineNotes}</p>}
+                          {p.familyNotes && <p className="protection-profile-field"><span>Family: </span>{p.familyNotes}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {response === "pending" ? (
                     <div className="task-row-response">

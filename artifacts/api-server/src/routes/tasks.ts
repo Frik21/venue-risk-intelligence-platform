@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, desc, inArray } from "drizzle-orm";
-import { db, tasksTable, venuesTable, usersTable, plansTable, taskAssignmentsTable } from "@workspace/db";
+import { db, tasksTable, venuesTable, usersTable, plansTable, taskAssignmentsTable, principalsTable } from "@workspace/db";
 import { z } from "zod";
 import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 
@@ -360,6 +360,49 @@ router.post("/tasks/:id/duplicate", async (req, res): Promise<void> => {
 
   const ctx = await loadTaskContext(task);
   res.status(201).json(formatTask(task, ctx.venueName, ctx.assignedByName, null, ctx.roster));
+});
+
+// The protection profile a CPO sees for their task - Following Roadmap
+// Tier 2, item 8. Surfaces automatically once assigned, no separate
+// reveal step (per direct product direction). Read-only and scoped
+// through the task rather than exposing the Management-only Clients
+// CRM routes to a CPO session - a CPO on the roster can see the
+// principals tied to their own task's client, nothing more. A
+// Management-side caller (any role but cpo) skips the roster check,
+// same trust level they already have everywhere else in this app.
+router.get("/tasks/:id/principals", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+
+  const taskId = Number(req.params.id);
+  if (isNaN(taskId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [task] = await db.select().from(tasksTable).where(and(eq(tasksTable.id, taskId), eq(tasksTable.companyId, companyId)));
+  if (!task) { res.status(404).json({ error: "Task not found" }); return; }
+
+  if (req.user!.role === "cpo") {
+    const [onRoster] = await db
+      .select({ id: taskAssignmentsTable.id })
+      .from(taskAssignmentsTable)
+      .where(and(eq(taskAssignmentsTable.taskId, taskId), eq(taskAssignmentsTable.operatorId, req.user!.id)));
+    if (!onRoster) { res.status(403).json({ error: "You are not assigned to this task" }); return; }
+  }
+
+  if (task.clientId == null) { res.json([]); return; }
+
+  const rows = await db.select().from(principalsTable).where(eq(principalsTable.clientId, task.clientId));
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      clientId: r.clientId,
+      name: r.name,
+      relationship: r.relationship,
+      medicalInfo: r.medicalInfo,
+      knownThreats: r.knownThreats,
+      routineNotes: r.routineNotes,
+      familyNotes: r.familyNotes,
+    })),
+  );
 });
 
 export default router;
