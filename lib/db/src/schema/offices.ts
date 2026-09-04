@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, type AnyPgColumn, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -22,7 +22,7 @@ export const officesTable = pgTable("offices", {
   notes: text("notes").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (table) => [index("idx_offices_company_id").on(table.companyId)]);
 
 export const insertOfficeSchema = createInsertSchema(officesTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertOffice = z.infer<typeof insertOfficeSchema>;

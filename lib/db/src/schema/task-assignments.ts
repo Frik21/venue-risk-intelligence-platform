@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, timestamp, unique } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, timestamp, unique, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { tasksTable } from "./tasks";
@@ -19,9 +19,10 @@ export const taskAssignmentsTable = pgTable(
     operatorId: integer("operator_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => ({
-    taskOperatorUnique: unique().on(table.taskId, table.operatorId),
-  }),
+  (table) => [
+    unique("task_assignments_task_id_operator_id_unique").on(table.taskId, table.operatorId),
+    index("idx_task_assignments_company_id").on(table.companyId),
+  ],
 );
 
 export const insertTaskAssignmentSchema = createInsertSchema(taskAssignmentsTable).omit({ id: true, createdAt: true });

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, jsonb, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { venuesTable } from "./venues";
@@ -21,7 +21,7 @@ export const assessmentsTable = pgTable("assessments", {
   analystNotes: text("analyst_notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (table) => [index("idx_assessments_company_id").on(table.companyId)]);
 
 export const insertAssessmentSchema = createInsertSchema(assessmentsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertAssessment = z.infer<typeof insertAssessmentSchema>;
@@ -36,7 +36,7 @@ export const assessmentVersionsTable = pgTable("assessment_versions", {
   changeSummary: text("change_summary"),
   createdBy: integer("created_by").references(() => usersTable.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [index("idx_assessment_versions_company_id").on(table.companyId)]);
 
 export const riskMatrixTable = pgTable("risk_matrix", {
   id: serial("id").primaryKey(),
@@ -54,7 +54,7 @@ export const riskMatrixTable = pgTable("risk_matrix", {
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (table) => [index("idx_risk_matrix_company_id").on(table.companyId)]);
 
 export const auditLogTable = pgTable("audit_log", {
   id: serial("id").primaryKey(),
@@ -67,7 +67,7 @@ export const auditLogTable = pgTable("audit_log", {
   newValue: text("new_value"),
   reason: text("reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [index("idx_audit_log_company_id").on(table.companyId)]);
 
 export const risksTable = pgTable("risks", {
   id: serial("id").primaryKey(),
@@ -83,7 +83,7 @@ export const risksTable = pgTable("risks", {
   status: text("status").notNull().default("open"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (table) => [index("idx_risks_company_id").on(table.companyId)]);
 
 export const insertRiskSchema = createInsertSchema(risksTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertRisk = z.infer<typeof insertRiskSchema>;

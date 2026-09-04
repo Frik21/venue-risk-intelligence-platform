@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, real, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, real, timestamp, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { companiesTable } from "./companies";
@@ -42,7 +42,7 @@ export const checkinsTable = pgTable("checkins", {
   // needs attention.
   acknowledgedBy: integer("acknowledged_by").references(() => usersTable.id),
   acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
-});
+}, (table) => [index("idx_checkins_company_id").on(table.companyId)]);
 
 export const insertCheckinSchema = createInsertSchema(checkinsTable).omit({ id: true, triggeredAt: true });
 export type InsertCheckin = z.infer<typeof insertCheckinSchema>;

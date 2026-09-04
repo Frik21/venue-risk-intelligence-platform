@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, real, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, real, boolean, timestamp, jsonb, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { venuesTable } from "./venues";
@@ -19,7 +19,7 @@ export const alertsTable = pgTable("alerts", {
   reviewedBy: integer("reviewed_by").references(() => usersTable.id),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [index("idx_alerts_company_id").on(table.companyId)]);
 
 export const insertAlertSchema = createInsertSchema(alertsTable).omit({ id: true, createdAt: true });
 export type InsertAlert = z.infer<typeof insertAlertSchema>;
@@ -38,7 +38,7 @@ export const osintEventsTable = pgTable("osint_events", {
   status: text("status").notNull().default("pending"),
   analystNote: text("analyst_note"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [index("idx_osint_events_company_id").on(table.companyId)]);
 
 export const insertOsintEventSchema = createInsertSchema(osintEventsTable).omit({ id: true, createdAt: true });
 export type InsertOsintEvent = z.infer<typeof insertOsintEventSchema>;
@@ -59,7 +59,7 @@ export const venueSearchPhrasesTable = pgTable("venue_search_phrases", {
   venueId: integer("venue_id").references(() => venuesTable.id, { onDelete: "cascade" }),
   phrase: text("phrase").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [index("idx_venue_search_phrases_company_id").on(table.companyId)]);
 
 export const insertVenueSearchPhraseSchema = createInsertSchema(venueSearchPhrasesTable).omit({ id: true, createdAt: true });
 export type InsertVenueSearchPhrase = z.infer<typeof insertVenueSearchPhraseSchema>;
@@ -97,7 +97,7 @@ export const routesTable = pgTable("routes", {
   createdBy: integer("created_by").references(() => usersTable.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (table) => [index("idx_routes_company_id").on(table.companyId)]);
 
 export const insertRouteSchema = createInsertSchema(routesTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertRoute = z.infer<typeof insertRouteSchema>;
@@ -119,7 +119,7 @@ export const routeFindingsTable = pgTable("route_findings", {
   verified: boolean("verified").notNull().default(false),
   analystNotes: text("analyst_notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [index("idx_route_findings_company_id").on(table.companyId)]);
 
 export const insertRouteFindingSchema = createInsertSchema(routeFindingsTable).omit({ id: true, createdAt: true });
 export type InsertRouteFinding = z.infer<typeof insertRouteFindingSchema>;

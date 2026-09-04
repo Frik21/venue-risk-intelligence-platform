@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, real, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, real, text, timestamp, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -29,7 +29,7 @@ export const payRunsTable = pgTable("pay_runs", {
   createdBy: integer("created_by").references(() => usersTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (table) => [index("idx_pay_runs_company_id").on(table.companyId)]);
 
 export const insertPayRunSchema = createInsertSchema(payRunsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertPayRun = z.infer<typeof insertPayRunSchema>;

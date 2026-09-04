@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, jsonb, text, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, jsonb, text, boolean, timestamp, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -36,7 +36,7 @@ export const operatorOnboardingTable = pgTable("operator_onboarding", {
   operationalAccessGrantedAt: timestamp("operational_access_granted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (table) => [index("idx_operator_onboarding_company_id").on(table.companyId)]);
 
 export const insertOperatorOnboardingSchema = createInsertSchema(operatorOnboardingTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertOperatorOnboarding = z.infer<typeof insertOperatorOnboardingSchema>;
@@ -62,7 +62,7 @@ export const operatorDocumentsTable = pgTable("operator_documents", {
   verified: boolean("verified").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (table) => [index("idx_operator_documents_company_id").on(table.companyId)]);
 
 export const insertOperatorDocumentSchema = createInsertSchema(operatorDocumentsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertOperatorDocument = z.infer<typeof insertOperatorDocumentSchema>;

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, boolean, real, integer, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, boolean, real, integer, type AnyPgColumn, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { officesTable } from "./offices";
@@ -35,7 +35,7 @@ export const usersTable = pgTable("users", {
   // cleared on the user's own successful POST /auth/change-password.
   mustChangePassword: boolean("must_change_password").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [index("idx_users_company_id").on(table.companyId)]);
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
