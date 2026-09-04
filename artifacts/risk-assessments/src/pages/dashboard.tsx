@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, ChangeEvent } from "react";
-import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet, LifeBuoy, FileText, Package } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet, LifeBuoy, FileText, Package, Users } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -2525,6 +2525,7 @@ function OperationalCanvas({
     assignedToName: null,
     assignedToIds: [-1],
     assignedToNames: [],
+    assignedToRoles: [],
     assignedBy: -1,
     assignedByName: "Demo Manager",
     title: "Demo Task - Complete assessment for venue X",
@@ -4316,6 +4317,18 @@ function OperationalCanvas({
                   </div>
                   {task.venueName && <p className="task-row-venue">{task.venueName}</p>}
                   {task.assignedByName && <p className="task-row-assigned-by">Assigned by {task.assignedByName}</p>}
+
+                  {task.assignedToIds.length > 1 && (
+                    <div className="task-row-team">
+                      <p className="task-row-team-heading"><Users className="w-3 h-3" /> Team</p>
+                      {task.assignedToIds.map((id, i) => (
+                        <p key={id} className="task-row-team-member">
+                          {task.assignedToNames[i]}{id === sessionUser?.id ? " (You)" : ""}
+                          {task.assignedToRoles[i] ? ` · ${task.assignedToRoles[i]}` : ""}
+                        </p>
+                      ))}
+                    </div>
+                  )}
 
                   {(taskPrincipals[task.id] ?? []).length > 0 && (
                     <div className="protection-profile">

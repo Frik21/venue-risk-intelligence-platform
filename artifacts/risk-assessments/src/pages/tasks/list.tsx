@@ -33,10 +33,87 @@ const PRIORITY_CONFIG: Record<TaskPriority, { label: string; color: string }> = 
   urgent: { label: "Urgent", color: "text-red-700 bg-red-50 border-red-200" },
 };
 
-function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]; onClose: () => void }) {
+// Team-lead/hierarchy designation on a multi-operator roster -
+// Following Roadmap, Tier 2 item 15. Fixed list matching the roadmap's
+// own wording, plus "Other" (confirmed via AskUserQuestion) for
+// company-specific terminology this list doesn't cover.
+const ROSTER_ROLE_OPTIONS = ["Team Lead", "Driver", "Advance", "Close Protection"] as const;
+
+// A checklist of active CPOs with an optional role per selected one -
+// the actual multi-operator roster editor this roadmap item depends
+// on (none existed in Command Desk before this). Kept as its own
+// component since it manages the per-CPO "Other" text-input reveal
+// locally, separate from EditTaskDialog's own flat form state.
+function RosterEditor({
+  cpos,
+  assigneeIds,
+  assigneeRoles,
+  onChange,
+}: {
+  cpos: User[];
+  assigneeIds: number[];
+  assigneeRoles: Record<number, string | null>;
+  onChange: (assigneeIds: number[], assigneeRoles: Record<number, string | null>) => void;
+}) {
+  function toggle(cpoId: number) {
+    if (assigneeIds.includes(cpoId)) {
+      onChange(assigneeIds.filter((id) => id !== cpoId), assigneeRoles);
+    } else {
+      onChange([...assigneeIds, cpoId], assigneeRoles);
+    }
+  }
+
+  function setRole(cpoId: number, role: string | null) {
+    onChange(assigneeIds, { ...assigneeRoles, [cpoId]: role });
+  }
+
+  return (
+    <div className="space-y-1.5 max-h-56 overflow-y-auto border border-slate-200 rounded-md p-2">
+      {cpos.length === 0 && <p className="text-xs text-slate-400 p-1">No active CPOs to assign.</p>}
+      {cpos.map((cpo) => {
+        const checked = assigneeIds.includes(cpo.id);
+        const role = assigneeRoles[cpo.id] ?? null;
+        const isKnownRole = role == null || (ROSTER_ROLE_OPTIONS as readonly string[]).includes(role);
+        return (
+          <div key={cpo.id} className="flex items-center gap-2">
+            <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer flex-1 min-w-0">
+              <Checkbox checked={checked} onCheckedChange={() => toggle(cpo.id)} />
+              <span className="truncate">{cpo.name}</span>
+            </label>
+            {checked && (
+              <>
+                <Select value={isKnownRole ? (role ?? "none") : "other"} onValueChange={(v) => setRole(cpo.id, v === "none" ? null : v === "other" ? "" : v)}>
+                  <SelectTrigger className="h-7 w-36 text-xs shrink-0"><SelectValue placeholder="No role" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No role</SelectItem>
+                    {ROSTER_ROLE_OPTIONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                    <SelectItem value="other">Other...</SelectItem>
+                  </SelectContent>
+                </Select>
+                {!isKnownRole && (
+                  <Input
+                    className="h-7 w-28 text-xs shrink-0"
+                    placeholder="Role"
+                    value={role ?? ""}
+                    onChange={(e) => setRole(cpo.id, e.target.value)}
+                  />
+                )}
+              </>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function EditTaskDialog({ task, venues, cpos, onClose }: { task: Task; venues: Venue[]; cpos: User[]; onClose: () => void }) {
+  const initialRoles: Record<number, string | null> = {};
+  task.assignedToIds.forEach((id, i) => { initialRoles[id] = task.assignedToRoles[i] ?? null; });
   const [form, setForm] = useState({
     venueId: task.venueId != null ? String(task.venueId) : "",
     assigneeIds: task.assignedToIds,
+    assigneeRoles: initialRoles,
     title: task.title,
     dueDate: task.dueDate ? task.dueDate.slice(0, 16) : "",
     endDate: task.endDate ? task.endDate.slice(0, 16) : "",
@@ -60,6 +137,7 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
       api.tasks.update(task.id, {
         venueId: form.venueId ? Number(form.venueId) : null,
         assigneeIds: form.assigneeIds,
+        assigneeRoles: form.assigneeRoles,
         title: form.title,
         dueDate: form.dueDate || null,
         endDate: form.endDate || null,
@@ -95,6 +173,15 @@ function EditTaskDialog({ task, venues, onClose }: { task: Task; venues: Venue[]
         <div>
           <Label>Location</Label>
           <LocationCombobox venues={venues} value={form.venueId} onChange={(v) => set("venueId", v)} />
+        </div>
+        <div>
+          <Label>Roster</Label>
+          <RosterEditor
+            cpos={cpos}
+            assigneeIds={form.assigneeIds}
+            assigneeRoles={form.assigneeRoles}
+            onChange={(assigneeIds, assigneeRoles) => setForm((f) => ({ ...f, assigneeIds, assigneeRoles }))}
+          />
         </div>
         <div>
           <Label>Client</Label>
@@ -534,7 +621,14 @@ export default function TasksList() {
   return (
     <div className="space-y-5">
       {showNew && <NewTaskDialog venues={venues} users={users} onClose={() => setShowNew(false)} />}
-      {editingTask && <EditTaskDialog task={editingTask} venues={venues} onClose={() => setEditingTask(null)} />}
+      {editingTask && (
+        <EditTaskDialog
+          task={editingTask}
+          venues={venues}
+          cpos={users.filter((u) => u.role === "cpo" && u.active)}
+          onClose={() => setEditingTask(null)}
+        />
+      )}
 
       <div className="flex items-center justify-between gap-4">
         <div>
@@ -714,7 +808,9 @@ export default function TasksList() {
                         <div className="flex items-center gap-1 text-xs">
                           <Users className="w-3 h-3 text-slate-400" />
                           <span className={understaffed ? "text-orange-600 font-medium" : "text-slate-500"}>
-                            {task.assignedToNames.length > 0 ? task.assignedToNames.join(", ") : "Unassigned"}
+                            {task.assignedToNames.length > 0
+                              ? task.assignedToNames.map((name, i) => (task.assignedToRoles[i] ? `${name} (${task.assignedToRoles[i]})` : name)).join(", ")
+                              : "Unassigned"}
                             {` (${task.assignedToIds.length}/${task.operatorsRequired})`}
                           </span>
                         </div>

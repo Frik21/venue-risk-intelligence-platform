@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, timestamp, unique, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, unique, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { tasksTable } from "./tasks";
@@ -17,6 +17,16 @@ export const taskAssignmentsTable = pgTable(
     companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
     taskId: integer("task_id").notNull().references(() => tasksTable.id, { onDelete: "cascade" }),
     operatorId: integer("operator_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+    // Team-lead/hierarchy designation on a multi-operator roster -
+    // Following Roadmap Tier 2, item 15 ("who's team lead, driver,
+    // advance, close protection"). Freeform text, not an enum - the
+    // fixed four roles are a Command Desk UI convenience (a dropdown
+    // with those four options plus "Other"), not a schema-level
+    // constraint, since a role this open-ended (a company might use
+    // its own terminology) doesn't need DB-level validation the way a
+    // status field does. Nullable - most rosters won't bother
+    // assigning roles at all.
+    role: text("role"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

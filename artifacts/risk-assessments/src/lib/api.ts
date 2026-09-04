@@ -128,6 +128,11 @@ export interface Task {
   assignedToName: string | null;
   assignedToIds: number[];
   assignedToNames: string[];
+  // Team-lead/hierarchy designation per roster member - Following
+  // Roadmap Tier 2, item 15 ("who's team lead, driver, advance, close
+  // protection"). Same index per member as assignedToIds/Names; null
+  // for a member with no role assigned (most rosters).
+  assignedToRoles: (string | null)[];
   assignedBy: number;
   assignedByName: string | null;
   title: string;
@@ -1138,7 +1143,7 @@ export const api = {
     updateStatus: (id: number, data: { status: TaskStatus; completionNote?: string }) =>
       apiFetch<Task>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     update: (id: number, data: Partial<{
-      venueId: number | null; officeId: number | null; assigneeIds: number[]; assignedTo: number | null; assignedBy: number; title: string;
+      venueId: number | null; officeId: number | null; assigneeIds: number[]; assigneeRoles: Record<number, string | null>; assignedTo: number | null; assignedBy: number; title: string;
       dueDate: string | null; endDate: string | null; status: TaskStatus; priority: TaskPriority; archived: boolean;
       invoiced: boolean;
       clientConfirmed: boolean; quotationStatus: QuotationStatus;
