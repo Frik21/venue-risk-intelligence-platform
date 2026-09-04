@@ -983,6 +983,8 @@ export type DocumentType =
   | "firearm_competency"
   | "medical_certificate"
   | "drivers_license"
+  | "professional_indemnity_insurance"
+  | "public_liability_insurance"
   | "other_certification";
 
 // fileDataUrl is a base64 data: URL (this app has no cloud file
