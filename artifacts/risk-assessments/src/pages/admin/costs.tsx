@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DollarSign, Wallet, CheckCircle2, Clock, XCircle, Users as UsersIcon, Settings, Pencil, Car, FileText, Plus, X, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { DollarSign, Wallet, CheckCircle2, Clock, XCircle, Users as UsersIcon, Settings, Pencil, Car, FileText, Plus, X, ChevronDown, ChevronUp, Trash2, TrendingUp } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -554,6 +554,52 @@ export default function CostsPage() {
     allQuoted[t.estimatedCostCurrency] = (allQuoted[t.estimatedCostCurrency] ?? 0) + t.estimatedCost;
   }
 
+  // Pipeline Forecast - Following Roadmap Tier 3, item 18. Open (draft/
+  // sent, not yet decided) real Quotes, bucketed by their own
+  // operational startDate - the month the work (and the revenue it
+  // represents) would actually begin, which is what matters for
+  // staffing/cash planning, not validUntil (a decision deadline) or
+  // createdAt. A quote with no startDate set falls into its own
+  // "Unscheduled" bucket rather than being silently dropped. Weighted
+  // by the company's overall historical win rate (approved / decided,
+  // decided = approved + rejected) - same shape as the Dashboard's own
+  // "Quote Win Rate" trend (item 12), collapsed to one current-state
+  // number rather than a day-by-day series, since a single scalar is
+  // all a per-month forecast needs.
+  const openPipelineQuotes = quotes.filter((q) => q.status === "draft" || q.status === "sent");
+  const decidedQuotes = quotes.filter((q) => q.status === "approved" || q.status === "rejected");
+  const winRate = decidedQuotes.length > 0
+    ? decidedQuotes.filter((q) => q.status === "approved").length / decidedQuotes.length
+    : null;
+
+  const UNSCHEDULED_BUCKET = "unscheduled";
+  function pipelineMonthKey(q: Quote): string {
+    if (!q.startDate) return UNSCHEDULED_BUCKET;
+    const d = new Date(q.startDate);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  }
+  function pipelineMonthLabel(key: string): string {
+    if (key === UNSCHEDULED_BUCKET) return "Unscheduled";
+    const [y, m] = key.split("-").map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "short", year: "numeric" });
+  }
+  const pipelineByMonth = new Map<string, Record<string, number>>();
+  for (const q of openPipelineQuotes) {
+    const key = pipelineMonthKey(q);
+    const byCurrency = pipelineByMonth.get(key) ?? {};
+    byCurrency[q.currency] = (byCurrency[q.currency] ?? 0) + q.totalQuoteValue;
+    pipelineByMonth.set(key, byCurrency);
+  }
+  const pipelineMonthOrder = [...pipelineByMonth.keys()].filter((k) => k !== UNSCHEDULED_BUCKET).sort();
+  if (pipelineByMonth.has(UNSCHEDULED_BUCKET)) pipelineMonthOrder.push(UNSCHEDULED_BUCKET);
+  const pipelineTotalRaw: Record<string, number> = {};
+  for (const byCurrency of pipelineByMonth.values()) {
+    for (const [cur, amt] of Object.entries(byCurrency)) pipelineTotalRaw[cur] = (pipelineTotalRaw[cur] ?? 0) + amt;
+  }
+  const pipelineTotalWeighted: Record<string, number> = winRate != null
+    ? Object.fromEntries(Object.entries(pipelineTotalRaw).map(([cur, amt]) => [cur, amt * winRate]))
+    : {};
+
   const totalsByCurrency = expenses.reduce<Record<string, number>>((acc, e) => {
     acc[e.currency] = (acc[e.currency] ?? 0) + e.amount;
     return acc;
@@ -775,6 +821,62 @@ export default function CostsPage() {
                 ))}
               </tbody>
             </table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-slate-400" /> Pipeline Forecast
+            </h2>
+            {winRate != null && (
+              <span className="text-xs text-slate-400">Company win rate: {(winRate * 100).toFixed(0)}%</span>
+            )}
+          </div>
+          <p className="text-xs text-slate-400 mb-4">
+            Open (draft/sent) quotes, by the month their work would start - for staffing and cash planning. Raw pipeline value next to a win-rate-weighted estimate.
+          </p>
+          {quotesLoading ? (
+            <Skeleton className="h-32" />
+          ) : openPipelineQuotes.length === 0 ? (
+            <p className="text-sm text-slate-400">No open quotes right now.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-xs font-medium uppercase tracking-wide text-slate-500">
+                  <th className="text-left py-1.5">Month</th>
+                  <th className="text-right py-1.5">Raw Pipeline</th>
+                  <th className="text-right py-1.5">Weighted Estimate</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {pipelineMonthOrder.map((key) => (
+                  <tr key={key}>
+                    <td className="py-2 text-slate-700">{pipelineMonthLabel(key)}</td>
+                    <td className="py-2 text-right"><CurrencyStack byCurrency={pipelineByMonth.get(key)!} /></td>
+                    <td className="py-2 text-right">
+                      {winRate != null ? (
+                        <CurrencyStack byCurrency={Object.fromEntries(Object.entries(pipelineByMonth.get(key)!).map(([cur, amt]) => [cur, amt * winRate]))} className="text-slate-500" />
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="border-t-2 border-slate-200 font-semibold">
+                  <td className="py-2 text-slate-900">Total</td>
+                  <td className="py-2 text-right"><CurrencyStack byCurrency={pipelineTotalRaw} /></td>
+                  <td className="py-2 text-right">
+                    {winRate != null ? <CurrencyStack byCurrency={pipelineTotalWeighted} className="text-slate-500" /> : <span className="text-slate-300">—</span>}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          )}
+          {winRate == null && !quotesLoading && openPipelineQuotes.length > 0 && (
+            <p className="text-xs text-slate-400 mt-3">Not enough decided quotes yet to estimate a win rate - once at least one is approved or rejected, a weighted estimate will show here too.</p>
           )}
         </CardContent>
       </Card>
