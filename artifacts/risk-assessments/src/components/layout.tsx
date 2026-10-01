@@ -32,6 +32,7 @@ import {
   Plane,
   FileSignature,
   Download,
+  HelpCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -86,6 +87,7 @@ const navGroups = [
       { href: "/admin/offices", label: "Offices", icon: Building2 },
       { href: "/admin/users", label: "Users", icon: Users },
       { href: "/admin/data-export", label: "Data Export", icon: Download },
+      { href: "/admin/help-center", label: "Help Center", icon: HelpCircle },
     ],
   },
 ];

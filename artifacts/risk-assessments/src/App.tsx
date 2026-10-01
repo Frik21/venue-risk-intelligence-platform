@@ -43,6 +43,7 @@ import TaskArchive from "@/pages/admin/task-archive";
 import VendorsPage from "@/pages/admin/vendors";
 import TravelLogisticsPage from "@/pages/admin/travel-logistics";
 import DataExportPage from "@/pages/admin/data-export";
+import HelpCenterPage from "@/pages/admin/help-center";
 import ContractsPage from "@/pages/admin/contracts";
 import VendorDetailPage from "@/pages/admin/vendor-detail";
 import PayrollPage from "@/pages/admin/payroll";
@@ -127,6 +128,7 @@ function Router() {
         <Route path="/admin/vendors/:id" component={VendorDetailPage} />
         <Route path="/admin/travel-logistics" component={TravelLogisticsPage} />
         <Route path="/admin/data-export" component={DataExportPage} />
+        <Route path="/admin/help-center" component={HelpCenterPage} />
         <Route path="/admin/contracts" component={ContractsPage} />
         <Route path="/admin/payroll" component={PayrollPage} />
         <Route path="/admin/task-archive" component={TaskArchive} />
