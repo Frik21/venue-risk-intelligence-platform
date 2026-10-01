@@ -193,6 +193,23 @@ export interface Task {
 // lib/checkin-monitor.ts). Surfaced on Command Desk's Safety Alerts
 // panel (pages/alerts/list.tsx).
 export type CheckinType = "ok" | "panic" | "missed";
+
+// CPO self-service availability/time-off requests - Following Roadmap
+// Tier 3, item 34.
+export interface AvailabilityRequest {
+  id: number;
+  cpoId: number;
+  cpoName: string | null;
+  startDate: string;
+  endDate: string;
+  reason: string;
+  status: "pending" | "approved" | "denied";
+  reviewedBy: number | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  requestedAt: string;
+}
+
 export interface Checkin {
   id: number;
   // Null for the always-visible TopBanner panic button, which works
@@ -1273,6 +1290,15 @@ export const api = {
     create: (data: { taskId?: number; type: "ok" | "panic"; latitude?: number; longitude?: number; locationLabel?: string }) =>
       apiFetch<Checkin>("/checkins", { method: "POST", body: JSON.stringify(data) }),
     acknowledge: (id: number) => apiFetch<Checkin>(`/checkins/${id}`, { method: "PATCH", body: JSON.stringify({}) }),
+  },
+  availabilityRequests: {
+    // Company-wide for Management, auto-scoped to "my own" server-side
+    // for a CPO session - see routes/availability-requests.ts's own GET.
+    list: () => apiFetch<AvailabilityRequest[]>("/availability-requests"),
+    create: (data: { startDate: string; endDate: string; reason?: string }) =>
+      apiFetch<AvailabilityRequest>("/availability-requests", { method: "POST", body: JSON.stringify(data) }),
+    review: (id: number, status: "approved" | "denied") =>
+      apiFetch<AvailabilityRequest>(`/availability-requests/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
   },
   fieldIncidentReports: {
     // Company-wide, newest first - Command Desk's Field Incident Reports

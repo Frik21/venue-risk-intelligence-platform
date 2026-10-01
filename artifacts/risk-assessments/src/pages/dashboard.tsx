@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, ChangeEvent } from "react";
-import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet, LifeBuoy, FileText, Package, Users, Plane } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet, LifeBuoy, FileText, Package, Users, Plane, CalendarOff } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -50,6 +50,7 @@ import type {
   TaskEquipment,
   TravelLogisticsEntry,
   TravelLogisticsEntryType,
+  AvailabilityRequest,
 } from "@/lib/api";
 import { enqueueOfflineSubmission, useOfflineQueue, useOfflineQueueSynced, retryOfflineItem, discardOfflineItem } from "@/lib/offline-queue";
 import { LocationSearch, resolveCurrentLocation } from "@/components/location-search";
@@ -161,11 +162,12 @@ const TRAVEL_LOGISTICS_TYPE_LABELS: Record<TravelLogisticsEntryType, string> = {
 
 // Profile's sub-navigation titles (excludes "root", which uses its own
 // "Your account." header instead of a nav item name).
-const PROFILE_VIEW_TITLES: Record<"overview" | "account" | "expenses" | "timesheet", string> = {
+const PROFILE_VIEW_TITLES: Record<"overview" | "account" | "expenses" | "timesheet" | "availability", string> = {
   overview: "Overview",
   account: "Account Details",
   expenses: "Expenses",
   timesheet: "Timesheet",
+  availability: "Availability",
 };
 
 const USER_ROLE_LABELS: Record<UserRole, string> = {
@@ -2151,6 +2153,106 @@ function buildFocusClipPath(svgPath: string, scale: number): string {
 // it does not, and cannot, persist to disk by itself.
 type CountryAdjustment = { status: "review-required"; notes: string };
 
+const AVAILABILITY_STATUS_LABELS: Record<AvailabilityRequest["status"], string> = {
+  pending: "Pending",
+  approved: "Approved",
+  denied: "Denied",
+};
+
+// CPO self-service availability/time-off requests - Following Roadmap
+// Tier 3, item 34, Profile > Availability. This file has no react-query/
+// toast usage anywhere in it (a different pattern than the rest of the
+// app - see submitPlan/saveAccountDetails), so this matches that same
+// plain-promise-plus-useState convention rather than introducing one.
+function AvailabilityPanel({ cpoId }: { cpoId: number | null }) {
+  const [requests, setRequests] = useState<AvailabilityRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadRequests = () => {
+    setLoading(true);
+    api.availabilityRequests
+      .list()
+      .then(setRequests)
+      .catch((err) => console.error("Failed to load availability requests:", err))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    if (cpoId != null) loadRequests();
+  }, [cpoId]);
+
+  function submit() {
+    if (!startDate || !endDate) { setError("Start and end dates are required."); return; }
+    if (endDate < startDate) { setError("End date can't be before start date."); return; }
+    setSubmitting(true);
+    setError(null);
+    api.availabilityRequests
+      .create({ startDate, endDate, reason: reason.trim() || undefined })
+      .then(() => {
+        setStartDate("");
+        setEndDate("");
+        setReason("");
+        loadRequests();
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Couldn't submit request."))
+      .finally(() => setSubmitting(false));
+  }
+
+  return (
+    <div className="tasks-panel-list">
+      <div className="venue-assessment-form">
+        <label className="venue-assessment-field">
+          <span>Start Date</span>
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="venue-assessment-field-input" />
+        </label>
+        <label className="venue-assessment-field">
+          <span>End Date</span>
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="venue-assessment-field-input" />
+        </label>
+        <label className="venue-assessment-field">
+          <span>Reason (optional)</span>
+          <input
+            type="text"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Annual leave, medical, personal..."
+            className="venue-assessment-field-input"
+          />
+        </label>
+        {error && <p className="venue-assessment-action-error">{error}</p>}
+        <button type="button" className="venue-assessment-add-btn" onClick={submit} disabled={submitting}>
+          <Plus className="w-3.5 h-3.5" />
+          {submitting ? "Submitting…" : "Request Time Off"}
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="tasks-panel-empty">Loading…</p>
+      ) : requests.length === 0 ? (
+        <p className="tasks-panel-empty">No requests yet.</p>
+      ) : (
+        requests.map((r) => (
+          <div key={r.id} className="risk-assessments-venue-detail">
+            <p className="risk-assessments-venue-detail-label">
+              <CalendarOff className="w-3.5 h-3.5" /> {r.startDate} &ndash; {r.endDate}
+            </p>
+            {r.reason && <p className="task-row-title">{r.reason}</p>}
+            <p className="tasks-panel-empty" style={{ margin: 0 }}>
+              {AVAILABILITY_STATUS_LABELS[r.status]}
+              {r.status !== "pending" && r.reviewedByName ? ` by ${r.reviewedByName}` : ""}
+            </p>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
 function OperationalCanvas({
   briefArea,
   briefCondition,
@@ -2212,7 +2314,7 @@ function OperationalCanvas({
   // Expenses), same "view switch inside one panel" pattern as Risk
   // Assessments below rather than separate sliding panels. Resets to
   // "root" whenever the panel is (re)opened (see openProfile).
-  const [profileView, setProfileView] = useState<"root" | "overview" | "account" | "expenses" | "timesheet">("root");
+  const [profileView, setProfileView] = useState<"root" | "overview" | "account" | "expenses" | "timesheet" | "availability">("root");
 
   // Risk Assessments has its own sub-navigation ("Venues," step 1 of a
   // bigger project, per direct product direction) - a view switch inside
@@ -5253,6 +5355,11 @@ function OperationalCanvas({
               Timesheet
               <ChevronRight className="w-4 h-4 risk-assessments-nav-item-chevron" />
             </button>
+            <button type="button" className="risk-assessments-nav-item" onClick={() => setProfileView("availability")}>
+              <CalendarOff className="w-4 h-4" />
+              Availability
+              <ChevronRight className="w-4 h-4 risk-assessments-nav-item-chevron" />
+            </button>
           </div>
         ) : (
           <>
@@ -5477,6 +5584,8 @@ function OperationalCanvas({
                   })}
                 </div>
               )
+            ) : profileView === "availability" ? (
+              <AvailabilityPanel cpoId={profileUserId} />
             ) : (
               <p className="tasks-panel-empty">Coming soon.</p>
             )}
