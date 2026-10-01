@@ -40,3 +40,14 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string): Prom
     html: `<p>Someone requested a password reset for this VenueGuard account.</p><p><a href="${resetUrl}">Reset your password</a></p><p>This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>`,
   });
 }
+
+// Generic send, for Real Notifications (Following Roadmap Tier 3,
+// item 29) - panic alerts/overdue invoices/expiring certs all reuse
+// this rather than each growing their own template function, unlike
+// the one password-reset email above (which keeps its own dedicated
+// function since its copy/expiry framing is specific to that one flow).
+export async function sendEmail(to: string, subject: string, text: string): Promise<void> {
+  const t = getTransporter();
+  if (!t) throw new Error("Email is not connected yet");
+  await t.sendMail({ from: process.env.SMTP_FROM ?? process.env.SMTP_USER, to, subject, text });
+}

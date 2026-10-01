@@ -26,6 +26,12 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   // other public pages need to be.
   if (location.startsWith("/feedback/")) return <>{children}</>;
 
+  // /portal/:token (pages/client-portal.tsx) - the public Client
+  // Portal link (Following Roadmap Tier 3, item 25), same "no
+  // account/session at all, regardless of whatever's active in this
+  // browser" treatment as /feedback/:token above.
+  if (location.startsWith("/portal/")) return <>{children}</>;
+
   if (status === "loading") {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">

@@ -55,6 +55,15 @@ export const invoicesTable = pgTable("invoices", {
   // sentAt/decidedAt on quotesTable for the same reasoning.
   sentAt: timestamp("sent_at", { withTimezone: true }),
   paidAt: timestamp("paid_at", { withTimezone: true }),
+  // Real notifications - Following Roadmap Tier 3, item 29. Stamped once
+  // by lib/overdue-invoice-monitor.ts the first time this invoice is
+  // found overdue, so the background scan notifies exactly once per
+  // invoice rather than re-sending on every scan cycle. Deliberately
+  // never cleared - a known, accepted simplification: pushing a
+  // dueDate out and then letting it lapse again won't re-notify. Not
+  // worth the extra complexity for how rarely that specific sequence
+  // would happen in practice.
+  overdueNotifiedAt: timestamp("overdue_notified_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [index("idx_invoices_company_id").on(table.companyId)]);

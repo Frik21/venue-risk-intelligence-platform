@@ -3,8 +3,18 @@ import { eq, and, desc, inArray } from "drizzle-orm";
 import { db, tasksTable, venuesTable, usersTable, plansTable, taskAssignmentsTable, principalsTable } from "@workspace/db";
 import { z } from "zod";
 import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
+import { restrictWritesToRoles } from "../lib/auth";
 
 const router: IRouter = Router();
+
+// Granular per-role permissions - Following Roadmap Tier 3, item 30.
+// Tasks is Operations' own domain (see pages/admin/operations.tsx) -
+// but unlike Quotations/Invoices/Payroll/Operator Database, this
+// router IS reachable by a real CPO session (Operators Note's own
+// status updates, PATCH /tasks/:id via api.tasks.updateStatus) - "cpo"
+// is explicitly included alongside "operations" so that keeps working;
+// only Finance/HR are actually locked out of writing here.
+router.use(restrictWritesToRoles("operations", "cpo"));
 
 const TASK_PRIORITIES = ["low", "medium", "high", "urgent"] as const;
 const QUOTATION_STATUSES = ["approved", "awaiting_approval", "denied"] as const;
