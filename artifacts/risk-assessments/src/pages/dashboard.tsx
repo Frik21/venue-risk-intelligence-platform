@@ -2353,6 +2353,44 @@ function OperationalCanvas({
       .finally(() => setCpoTasksLoading(false));
   }, [effectiveCpoId]);
 
+  // GPS breadcrumb trail - Following Roadmap Tier 3, item 33 ("pairs
+  // with item 1" - checkins' own check-in/panic signal). A passive
+  // timer, not a button - fires a location ping every 5 minutes (same
+  // cadence lib/checkin-monitor.ts's own scan interval uses) for every
+  // in_progress task on this CPO's own roster, for as long as this
+  // page stays open. Honest limitation, not silently glossed over:
+  // this is a web app with no background service-worker tracking, so
+  // the trail only grows while Operators Note is actually open in a
+  // browser tab - closing the tab/app pauses it, same real constraint
+  // the offline-sync work already documented for this codebase. Only
+  // armed for a real CPO's own session (effectiveCpoId === sessionUser.id)
+  // - a Manager/Owner previewing as a CPO should never emit pings that
+  // would misrepresent where the operator actually is.
+  useEffect(() => {
+    if (effectiveCpoId == null || sessionUser?.id !== effectiveCpoId) return;
+    const PING_INTERVAL_MS = 5 * 60 * 1000;
+
+    async function pingInProgressTasks() {
+      const inProgress = cpoTasks.filter((t) => t.status === "in_progress");
+      if (inProgress.length === 0) return;
+      let resolved: { lat: number | null; lng: number | null };
+      try {
+        resolved = await resolveCurrentLocation();
+      } catch {
+        return; // best-effort - a denied/unavailable geolocation permission just skips this cycle
+      }
+      if (resolved.lat == null || resolved.lng == null) return;
+      for (const task of inProgress) {
+        api.taskLocationPings.create({ taskId: task.id, latitude: resolved.lat, longitude: resolved.lng }).catch((err) => {
+          console.error(`Breadcrumb ping failed for task ${task.id}:`, err);
+        });
+      }
+    }
+
+    const interval = setInterval(pingInProgressTasks, PING_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [effectiveCpoId, sessionUser?.id, cpoTasks]);
+
   // Profile > Account Details - self-service edit of the same
   // profileUser record Timesheet is scoped to. Local input state
   // mirrors profileUser (re-synced whenever it changes, e.g. once the

@@ -210,6 +210,16 @@ export interface Task {
 // lib/checkin-monitor.ts). Surfaced on Command Desk's Safety Alerts
 // panel (pages/alerts/list.tsx).
 export type CheckinType = "ok" | "panic" | "missed";
+// GPS breadcrumb trail - Following Roadmap Tier 3, item 33.
+export interface TaskLocationPing {
+  id: number;
+  taskId: number;
+  cpoId: number;
+  latitude: number;
+  longitude: number;
+  capturedAt: string;
+}
+
 export interface Checkin {
   id: number;
   // Null for the always-visible TopBanner panic button, which works
@@ -1349,6 +1359,11 @@ export const api = {
     create: (data: { taskId?: number; type: "ok" | "panic"; latitude?: number; longitude?: number; locationLabel?: string }) =>
       apiFetch<Checkin>("/checkins", { method: "POST", body: JSON.stringify(data) }),
     acknowledge: (id: number) => apiFetch<Checkin>(`/checkins/${id}`, { method: "PATCH", body: JSON.stringify({}) }),
+  },
+  taskLocationPings: {
+    listForTask: (taskId: number) => apiFetch<TaskLocationPing[]>(`/task-location-pings?taskId=${taskId}`),
+    create: (data: { taskId: number; latitude: number; longitude: number }) =>
+      apiFetch<TaskLocationPing>("/task-location-pings", { method: "POST", body: JSON.stringify(data) }),
   },
   fieldIncidentReports: {
     // Company-wide, newest first - Command Desk's Field Incident Reports

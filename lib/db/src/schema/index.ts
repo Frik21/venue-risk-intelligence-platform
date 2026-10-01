@@ -38,3 +38,4 @@ export * from "./contracts";
 export * from "./feedback-requests";
 export * from "./task-vendors";
 export * from "./vendor-performance-reviews";
+export * from "./task-location-pings";
