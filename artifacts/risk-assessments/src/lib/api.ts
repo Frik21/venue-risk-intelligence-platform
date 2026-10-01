@@ -80,6 +80,23 @@ export interface SessionUser {
   planType: PlanType | null;
 }
 
+// Rate benchmarking - Following Roadmap Tier 3, item 28. An internal
+// benchmark (no external market-rate data source exists) - see
+// routes/rate-benchmarking.ts's own comment for the full reasoning.
+export interface RateBenchmark {
+  userId: number;
+  name: string;
+  dayRate: number | null;
+  nightRate: number | null;
+  region: string | null;
+  riskLevel: 1 | 2 | 3 | 4 | null;
+  riskLevelLabel: string | null;
+  comparisonBasis: "region" | "company";
+  avgDayRate: number | null;
+  avgNightRate: number | null;
+  regionSampleSize: number;
+}
+
 export interface Venue {
   id: number; name: string; venueType: string; address: string; city: string; country: string;
   lat: number | null; lng: number | null; googleMapsUrl: string | null; district: string | null;
@@ -557,8 +574,42 @@ export interface Client {
   dayRate: number | null;
   nightRate: number | null;
   officeId: number | null;
+  portalToken: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// Client Portal - Following Roadmap Tier 3, item 25. What the public
+// GET /portal/:token endpoint returns - no session/auth, so this is
+// deliberately a narrower shape than the Command Desk's own Task/
+// Invoice types (no cost build-up, no internal assignee identity).
+export interface ClientPortalTask {
+  id: number;
+  title: string;
+  status: TaskStatus;
+  dueDate: string | null;
+  endDate: string | null;
+}
+
+export interface ClientPortalInvoice {
+  id: number;
+  invoiceNumber: string;
+  status: InvoiceStatus;
+  dueDate: string | null;
+  currency: string;
+  sentAt: string | null;
+  paidAt: string | null;
+  subtotal: number;
+  taxAmount: number;
+  totalAmount: number;
+}
+
+export interface ClientPortalData {
+  clientName: string;
+  companyName: string;
+  tasks: ClientPortalTask[];
+  quotes: ClientPortalQuote[];
+  invoices: ClientPortalInvoice[];
 }
 
 // A dated activity/communication log entry against a Client - see
@@ -686,10 +737,32 @@ export interface Quote {
   assignedByName: string | null;
   sentAt: string | null;
   decidedAt: string | null;
+  signedByName: string | null;
+  signedAt: string | null;
   createdAt: string;
   updatedAt: string;
   internalCost: number;
   markupAmount: number;
+  clientPrice: number;
+  taxAmount: number;
+  totalQuoteValue: number;
+}
+
+// Client Portal's own narrower quote shape - Following Roadmap Tier 3,
+// item 26. Never carries internalCost/markupAmount/costLineItems (the
+// internal cost build-up stays this company's business, not the
+// client's to see) - see routes/client-portal.ts's formatPortalQuote.
+export interface ClientPortalQuote {
+  id: number;
+  quoteNumber: string;
+  title: string;
+  status: QuoteStatus;
+  validUntil: string | null;
+  currency: string;
+  sentAt: string | null;
+  decidedAt: string | null;
+  signedByName: string | null;
+  signedAt: string | null;
   clientPrice: number;
   taxAmount: number;
   totalQuoteValue: number;
@@ -983,9 +1056,11 @@ export interface OnboardingOverviewRecord extends OnboardingRecord {
 export type DocumentType =
   | "id_document"
   | "passport"
+  | "visa"
   | "psira_registration"
   | "sia_license"
   | "firearm_competency"
+  | "firearm_permit"
   | "medical_certificate"
   | "drivers_license"
   | "professional_indemnity_insurance"
@@ -1189,6 +1264,7 @@ export const api = {
       apiFetch<User>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     updateRates: (id: number, data: { dayRate: number | null; nightRate: number | null }) =>
       apiFetch<User>(`/users/${id}/rates`, { method: "PATCH", body: JSON.stringify(data) }),
+    rateBenchmarks: () => apiFetch<RateBenchmark[]>("/rate-benchmarking"),
     // Command Desk's own self-service seat view - distinct from the
     // Master Console's aggregate-only /companies surface (Owner-only).
     // Any Management-side role can call these for its own company,
@@ -1487,6 +1563,19 @@ export const api = {
       dayRate: number | null; nightRate: number | null; officeId: number | null;
     }>) => apiFetch<Client>(`/clients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     delete: (id: number) => apiFetch<void>(`/clients/${id}`, { method: "DELETE" }),
+    generatePortalLink: (id: number) => apiFetch<Client>(`/clients/${id}/portal-link`, { method: "POST" }),
+    revokePortalLink: (id: number) => apiFetch<Client>(`/clients/${id}/portal-link`, { method: "DELETE" }),
+  },
+  // The public, unauthenticated side of the same feature - called from
+  // pages/client-portal.tsx (the client-facing link itself), never
+  // from inside Command Desk. Same shape as publicFeedback below.
+  publicClientPortal: {
+    get: (token: string) => apiFetch<ClientPortalData>(`/portal/${token}`),
+    invoicePdfUrl: (token: string, invoiceId: number) => `${BASE}/portal/${token}/invoices/${invoiceId}/pdf`,
+    signQuote: (token: string, quoteId: number, signedByName: string) =>
+      apiFetch<ClientPortalQuote>(`/portal/${token}/quotes/${quoteId}/sign`, { method: "POST", body: JSON.stringify({ signedByName }) }),
+    declineQuote: (token: string, quoteId: number) =>
+      apiFetch<ClientPortalQuote>(`/portal/${token}/quotes/${quoteId}/decline`, { method: "POST" }),
   },
   clientActivities: {
     list: (clientId: number) => apiFetch<ClientActivity[]>(`/clients/${clientId}/activities`),
