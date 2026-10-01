@@ -557,8 +557,41 @@ export interface Client {
   dayRate: number | null;
   nightRate: number | null;
   officeId: number | null;
+  portalToken: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// Client Portal - Following Roadmap Tier 3, item 25. What the public
+// GET /portal/:token endpoint returns - no session/auth, so this is
+// deliberately a narrower shape than the Command Desk's own Task/
+// Invoice types (no cost build-up, no internal assignee identity).
+export interface ClientPortalTask {
+  id: number;
+  title: string;
+  status: TaskStatus;
+  dueDate: string | null;
+  endDate: string | null;
+}
+
+export interface ClientPortalInvoice {
+  id: number;
+  invoiceNumber: string;
+  status: InvoiceStatus;
+  dueDate: string | null;
+  currency: string;
+  sentAt: string | null;
+  paidAt: string | null;
+  subtotal: number;
+  taxAmount: number;
+  totalAmount: number;
+}
+
+export interface ClientPortalData {
+  clientName: string;
+  companyName: string;
+  tasks: ClientPortalTask[];
+  invoices: ClientPortalInvoice[];
 }
 
 // A dated activity/communication log entry against a Client - see
@@ -1487,6 +1520,15 @@ export const api = {
       dayRate: number | null; nightRate: number | null; officeId: number | null;
     }>) => apiFetch<Client>(`/clients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     delete: (id: number) => apiFetch<void>(`/clients/${id}`, { method: "DELETE" }),
+    generatePortalLink: (id: number) => apiFetch<Client>(`/clients/${id}/portal-link`, { method: "POST" }),
+    revokePortalLink: (id: number) => apiFetch<Client>(`/clients/${id}/portal-link`, { method: "DELETE" }),
+  },
+  // The public, unauthenticated side of the same feature - called from
+  // pages/client-portal.tsx (the client-facing link itself), never
+  // from inside Command Desk. Same shape as publicFeedback below.
+  publicClientPortal: {
+    get: (token: string) => apiFetch<ClientPortalData>(`/portal/${token}`),
+    invoicePdfUrl: (token: string, invoiceId: number) => `${BASE}/portal/${token}/invoices/${invoiceId}/pdf`,
   },
   clientActivities: {
     list: (clientId: number) => apiFetch<ClientActivity[]>(`/clients/${clientId}/activities`),

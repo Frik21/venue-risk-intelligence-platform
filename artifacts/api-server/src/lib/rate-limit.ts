@@ -56,3 +56,17 @@ export const feedbackLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many requests. Please try again in a few minutes." },
 });
+
+// GET /portal/:token (+ its invoice PDF sub-route) - Client Portal,
+// Following Roadmap Tier 3, item 25. Same reasoning/shape as
+// feedbackLimiter above, kept as its own instance so a flood against
+// one public surface doesn't eat into the other's budget. A higher
+// limit than feedbackLimiter's single-submit flow since a client
+// genuinely revisiting their own portal page re-fetches on every load.
+export const clientPortalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests. Please try again in a few minutes." },
+});

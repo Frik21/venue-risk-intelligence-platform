@@ -10,7 +10,7 @@ const router: IRouter = Router();
 
 const INVOICE_STATUSES = ["draft", "sent", "paid"] as const;
 
-function invoiceNumber(id: number) {
+export function invoiceNumber(id: number) {
   return `INV-${String(id).padStart(4, "0")}`;
 }
 
@@ -24,7 +24,7 @@ function computeTotals(row: typeof invoicesTable.$inferSelect) {
   return { subtotal, taxAmount, totalAmount };
 }
 
-function formatInvoice(
+export function formatInvoice(
   row: typeof invoicesTable.$inferSelect,
   assignedByName: string | null,
 ) {
@@ -55,7 +55,7 @@ function formatInvoice(
   };
 }
 
-async function loadAssignedByName(row: typeof invoicesTable.$inferSelect) {
+export async function loadAssignedByName(row: typeof invoicesTable.$inferSelect) {
   const [user] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, row.assignedBy));
   return user?.name ?? null;
 }

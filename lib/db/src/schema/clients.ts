@@ -36,6 +36,13 @@ export const clientsTable = pgTable("clients", {
   // Which office owns this client relationship - see officeId comment
   // in schema/users.ts for the broader multi-office direction.
   officeId: integer("office_id").references(() => officesTable.id, { onDelete: "set null" }),
+  // Client Portal - Following Roadmap Tier 3, item 25. Opaque, unguessable,
+  // persistent (not single-use like feedback_requests.id, since this is a
+  // standing link a client revisits rather than a one-time submission) -
+  // null until a Manager generates one. Generating again rotates it
+  // (invalidating the old link), same "regenerate to revoke a leaked
+  // link" mechanism this needed since there's no separate revoke state.
+  portalToken: text("portal_token").unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [index("idx_clients_company_id").on(table.companyId)]);
