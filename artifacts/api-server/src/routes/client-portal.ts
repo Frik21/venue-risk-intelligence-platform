@@ -1,11 +1,44 @@
 import { Router, type IRouter } from "express";
 import { eq, and, desc } from "drizzle-orm";
-import { db, clientsTable, companiesTable, tasksTable, invoicesTable } from "@workspace/db";
+import { db, clientsTable, companiesTable, tasksTable, invoicesTable, quotesTable } from "@workspace/db";
+import { z } from "zod";
 import { buildInvoicePdf } from "../lib/invoice-pdf";
-import { clientPortalLimiter } from "../lib/rate-limit";
+import { clientPortalLimiter, clientPortalActionLimiter } from "../lib/rate-limit";
 import { formatInvoice, loadAssignedByName, invoiceNumber } from "./invoices";
+import { computeCommercials, applyApprovalSideEffects } from "./quotes";
 
 const router: IRouter = Router();
+
+function quoteNumber(id: number) {
+  return `Q-${String(id).padStart(4, "0")}`;
+}
+
+// Client-facing quote shape - deliberately narrower than quotes.ts's
+// own formatQuote: a client sees what they'd pay (clientPrice/
+// taxAmount/totalQuoteValue), never the internal cost build-up that
+// produced it (internalCost, markupAmount/Type, costLineItems) - that
+// margin is this company's own business, not the client's to see.
+function formatPortalQuote(row: typeof quotesTable.$inferSelect) {
+  const { internalCost: _internalCost, markupAmount: _markupAmount, ...commercials } = computeCommercials(row);
+  return {
+    id: row.id,
+    quoteNumber: quoteNumber(row.id),
+    title: row.title,
+    status: row.status,
+    validUntil: row.validUntil?.toISOString() ?? null,
+    currency: row.currency,
+    sentAt: row.sentAt?.toISOString() ?? null,
+    decidedAt: row.decidedAt?.toISOString() ?? null,
+    signedByName: row.signedByName,
+    signedAt: row.signedAt?.toISOString() ?? null,
+    ...commercials,
+  };
+}
+
+async function loadClientByToken(token: string) {
+  const [client] = await db.select().from(clientsTable).where(eq(clientsTable.portalToken, token));
+  return client;
+}
 
 // Client Portal - Following Roadmap Tier 3, item 25 ("the client sees
 // their own task status/invoices instead of chasing email"). No
@@ -29,7 +62,7 @@ const router: IRouter = Router();
 // (now exported) rather than reimplementing the totals/number math a
 // second time with a drift risk.
 router.get("/portal/:token", clientPortalLimiter, async (req, res): Promise<void> => {
-  const [client] = await db.select().from(clientsTable).where(eq(clientsTable.portalToken, String(req.params.token)));
+  const client = await loadClientByToken(String(req.params.token));
   if (!client) { res.status(404).json({ error: "This portal link is invalid or has been revoked." }); return; }
 
   const [company] = await db.select({ name: companiesTable.name }).from(companiesTable).where(eq(companiesTable.id, client.companyId));
@@ -39,6 +72,16 @@ router.get("/portal/:token", clientPortalLimiter, async (req, res): Promise<void
     .from(tasksTable)
     .where(and(eq(tasksTable.companyId, client.companyId), eq(tasksTable.clientId, client.id), eq(tasksTable.archived, false)))
     .orderBy(desc(tasksTable.dueDate));
+
+  // Following Roadmap Tier 3, item 26 - a client reviews (and, while
+  // status is "sent", signs or declines) their own quotes here. "draft"
+  // quotes are excluded, same reasoning as draft invoices above - not
+  // final/sent yet.
+  const quoteRows = await db
+    .select()
+    .from(quotesTable)
+    .where(and(eq(quotesTable.companyId, client.companyId), eq(quotesTable.clientId, client.id)))
+    .orderBy(desc(quotesTable.createdAt));
 
   const invoiceRows = await db
     .select()
@@ -66,12 +109,77 @@ router.get("/portal/:token", clientPortalLimiter, async (req, res): Promise<void
       dueDate: t.dueDate?.toISOString() ?? null,
       endDate: t.endDate?.toISOString() ?? null,
     })),
+    quotes: quoteRows.filter((q) => q.status !== "draft").map(formatPortalQuote),
     invoices,
   });
 });
 
+const SignQuoteSchema = z.object({ signedByName: z.string().trim().min(1).max(200) });
+
+// E-signature - Following Roadmap Tier 3, item 26 ("not just a status
+// flip - more defensible if a dispute comes up"). Only signable while
+// "sent" (not already decided, not a draft the client was never shown)
+// - 409s otherwise rather than silently re-recording a signature over
+// an existing decision. Shares the exact same task-sync/auto-invoice
+// side effects as the authenticated Manager-side PATCH /quotes/:id
+// approval (routes/quotes.ts's applyApprovalSideEffects, extracted
+// specifically so this flow never drifts from that one).
+router.post("/portal/:token/quotes/:quoteId/sign", clientPortalActionLimiter, async (req, res): Promise<void> => {
+  const client = await loadClientByToken(String(req.params.token));
+  if (!client) { res.status(404).json({ error: "This portal link is invalid or has been revoked." }); return; }
+
+  const quoteId = Number(req.params.quoteId);
+  if (isNaN(quoteId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const parsed = SignQuoteSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [existing] = await db
+    .select()
+    .from(quotesTable)
+    .where(and(eq(quotesTable.id, quoteId), eq(quotesTable.companyId, client.companyId), eq(quotesTable.clientId, client.id)));
+  if (!existing) { res.status(404).json({ error: "Quote not found" }); return; }
+  if (existing.status !== "sent") { res.status(409).json({ error: "This quote has already been decided or isn't ready to sign yet." }); return; }
+
+  const now = new Date();
+  const [quote] = await db
+    .update(quotesTable)
+    .set({ status: "approved", decidedAt: existing.decidedAt ?? now, signedByName: parsed.data.signedByName, signedAt: now })
+    .where(eq(quotesTable.id, quoteId))
+    .returning();
+
+  await applyApprovalSideEffects(quote, true);
+
+  res.json(formatPortalQuote(quote));
+});
+
+// Declining needs no signature to prove - there's nothing to dispute
+// about turning work down, unlike agreeing to pay for it.
+router.post("/portal/:token/quotes/:quoteId/decline", clientPortalActionLimiter, async (req, res): Promise<void> => {
+  const client = await loadClientByToken(String(req.params.token));
+  if (!client) { res.status(404).json({ error: "This portal link is invalid or has been revoked." }); return; }
+
+  const quoteId = Number(req.params.quoteId);
+  if (isNaN(quoteId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [existing] = await db
+    .select()
+    .from(quotesTable)
+    .where(and(eq(quotesTable.id, quoteId), eq(quotesTable.companyId, client.companyId), eq(quotesTable.clientId, client.id)));
+  if (!existing) { res.status(404).json({ error: "Quote not found" }); return; }
+  if (existing.status !== "sent") { res.status(409).json({ error: "This quote has already been decided or isn't ready to decline yet." }); return; }
+
+  const [quote] = await db
+    .update(quotesTable)
+    .set({ status: "rejected", decidedAt: existing.decidedAt ?? new Date() })
+    .where(eq(quotesTable.id, quoteId))
+    .returning();
+
+  res.json(formatPortalQuote(quote));
+});
+
 router.get("/portal/:token/invoices/:invoiceId/pdf", clientPortalLimiter, async (req, res): Promise<void> => {
-  const [client] = await db.select().from(clientsTable).where(eq(clientsTable.portalToken, String(req.params.token)));
+  const client = await loadClientByToken(String(req.params.token));
   if (!client) { res.status(404).json({ error: "This portal link is invalid or has been revoked." }); return; }
 
   const invoiceId = Number(req.params.invoiceId);

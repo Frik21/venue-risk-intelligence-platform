@@ -805,6 +805,9 @@ export default function CostsPage() {
                       <span className={cn("text-xs font-medium border rounded-full px-2 py-0.5", QUOTE_STATUS_CONFIG[q.status].color)}>
                         {QUOTE_STATUS_CONFIG[q.status].label}
                       </span>
+                      {q.signedByName && (
+                        <div className="text-[10px] text-slate-400 mt-1">Signed by {q.signedByName}</div>
+                      )}
                     </td>
                     <td className="py-2 text-right font-mono tabular-nums text-slate-900">{formatMoney(q.totalQuoteValue, q.currency)}</td>
                     <td className="py-2 text-right">

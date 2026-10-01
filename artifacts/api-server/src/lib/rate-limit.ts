@@ -70,3 +70,16 @@ export const clientPortalLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many requests. Please try again in a few minutes." },
 });
+
+// The state-changing sign/decline actions on a quote via the Client
+// Portal (item 26's e-signature flow) - a tighter budget than the
+// read-only clientPortalLimiter above, matching feedbackLimiter's own
+// "single-submission flow" rate since this is likewise not something a
+// client does many times per visit.
+export const clientPortalActionLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests. Please try again in a few minutes." },
+});

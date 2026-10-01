@@ -591,6 +591,7 @@ export interface ClientPortalData {
   clientName: string;
   companyName: string;
   tasks: ClientPortalTask[];
+  quotes: ClientPortalQuote[];
   invoices: ClientPortalInvoice[];
 }
 
@@ -719,10 +720,32 @@ export interface Quote {
   assignedByName: string | null;
   sentAt: string | null;
   decidedAt: string | null;
+  signedByName: string | null;
+  signedAt: string | null;
   createdAt: string;
   updatedAt: string;
   internalCost: number;
   markupAmount: number;
+  clientPrice: number;
+  taxAmount: number;
+  totalQuoteValue: number;
+}
+
+// Client Portal's own narrower quote shape - Following Roadmap Tier 3,
+// item 26. Never carries internalCost/markupAmount/costLineItems (the
+// internal cost build-up stays this company's business, not the
+// client's to see) - see routes/client-portal.ts's formatPortalQuote.
+export interface ClientPortalQuote {
+  id: number;
+  quoteNumber: string;
+  title: string;
+  status: QuoteStatus;
+  validUntil: string | null;
+  currency: string;
+  sentAt: string | null;
+  decidedAt: string | null;
+  signedByName: string | null;
+  signedAt: string | null;
   clientPrice: number;
   taxAmount: number;
   totalQuoteValue: number;
@@ -1529,6 +1552,10 @@ export const api = {
   publicClientPortal: {
     get: (token: string) => apiFetch<ClientPortalData>(`/portal/${token}`),
     invoicePdfUrl: (token: string, invoiceId: number) => `${BASE}/portal/${token}/invoices/${invoiceId}/pdf`,
+    signQuote: (token: string, quoteId: number, signedByName: string) =>
+      apiFetch<ClientPortalQuote>(`/portal/${token}/quotes/${quoteId}/sign`, { method: "POST", body: JSON.stringify({ signedByName }) }),
+    declineQuote: (token: string, quoteId: number) =>
+      apiFetch<ClientPortalQuote>(`/portal/${token}/quotes/${quoteId}/decline`, { method: "POST" }),
   },
   clientActivities: {
     list: (clientId: number) => apiFetch<ClientActivity[]>(`/clients/${clientId}/activities`),
