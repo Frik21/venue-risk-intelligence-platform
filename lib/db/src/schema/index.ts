@@ -41,3 +41,4 @@ export * from "./vendor-performance-reviews";
 export * from "./task-location-pings";
 export * from "./availability-requests";
 export * from "./sample-data";
+export * from "./status-incidents";

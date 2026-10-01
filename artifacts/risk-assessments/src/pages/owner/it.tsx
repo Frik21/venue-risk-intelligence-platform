@@ -1,14 +1,132 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link } from "wouter";
-import { api, type SystemStatus, type SupportTicket, type TicketStatus, type TicketPriority } from "@/lib/api";
+import { api, type SystemStatus, type SupportTicket, type TicketStatus, type TicketPriority, type StatusIncident } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ShieldAlert, ArrowLeft, Database, Clock, Server, Globe } from "lucide-react";
+import { ShieldAlert, ArrowLeft, Database, Clock, Server, Globe, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateTime } from "@/lib/display-utils";
 import { cn } from "@/lib/utils";
+
+const INCIDENT_STATUS_LABELS: Record<StatusIncident["status"], string> = {
+  investigating: "Investigating",
+  identified: "Identified",
+  monitoring: "Monitoring",
+  resolved: "Resolved",
+};
+const INCIDENT_STATUS_COLORS: Record<StatusIncident["status"], string> = {
+  investigating: "text-red-700 bg-red-50 border-red-200",
+  identified: "text-amber-700 bg-amber-50 border-amber-200",
+  monitoring: "text-blue-700 bg-blue-50 border-blue-200",
+  resolved: "text-emerald-700 bg-emerald-50 border-emerald-200",
+};
+
+// Owner-side posting for the public status page (pages/status.tsx) -
+// Platform Maturity Roadmap, Tier 5, item 11. A flat post log, not a
+// single incident with a nested timeline - "post an update" is the one
+// action, same complexity budget as this page's own existing
+// support-ticket handling.
+function StatusIncidentSection() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [title, setTitle] = useState("");
+  const [message, setMessage] = useState("");
+  const [status, setStatus] = useState<StatusIncident["status"]>("investigating");
+
+  const { data, isLoading } = useQuery({ queryKey: ["status-incidents"], queryFn: api.status.get });
+
+  const postMutation = useMutation({
+    mutationFn: () => api.status.create({ title, message, status }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["status-incidents"] });
+      setTitle("");
+      setMessage("");
+      setStatus("investigating");
+      toast({ title: "Posted to the public status page" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: StatusIncident["status"] }) => api.status.update(id, { status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["status-incidents"] }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.status.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["status-incidents"] }),
+  });
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Public Status Page</h2>
+        <a href="/status" target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">View public page →</a>
+      </div>
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <Input placeholder={'Title (e.g. "Investigating slow page loads")'} value={title} onChange={(e) => setTitle(e.target.value)} />
+          <Textarea placeholder="What's happening, and what subscribers should expect" value={message} onChange={(e) => setMessage(e.target.value)} rows={2} />
+          <div className="flex items-center gap-2">
+            <Select value={status} onValueChange={(v) => setStatus(v as StatusIncident["status"])}>
+              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {(Object.keys(INCIDENT_STATUS_LABELS) as StatusIncident["status"][]).map((s) => (
+                  <SelectItem key={s} value={s}>{INCIDENT_STATUS_LABELS[s]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" onClick={() => postMutation.mutate()} disabled={postMutation.isPending || !title.trim() || !message.trim()}>
+              Post update
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {isLoading ? (
+        <div className="space-y-2 mt-3">{Array(2).fill(0).map((_, i) => <Skeleton key={i} className="h-14" />)}</div>
+      ) : (data?.incidents.length ?? 0) > 0 && (
+        <div className="space-y-2 mt-3">
+          {data!.incidents.map((incident) => (
+            <Card key={incident.id}>
+              <CardContent className="p-3 flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm text-slate-900">{incident.title}</span>
+                    <Badge variant="outline" className={cn("text-[10px]", INCIDENT_STATUS_COLORS[incident.status])}>
+                      {INCIDENT_STATUS_LABELS[incident.status]}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">{incident.message}</p>
+                  <p className="text-[10px] text-slate-400 mt-1">{formatDateTime(incident.createdAt)}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Select value={incident.status} onValueChange={(v) => updateStatusMutation.mutate({ id: incident.id, status: v as StatusIncident["status"] })}>
+                    <SelectTrigger className="w-32 h-7 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {(Object.keys(INCIDENT_STATUS_LABELS) as StatusIncident["status"][]).map((s) => (
+                        <SelectItem key={s} value={s}>{INCIDENT_STATUS_LABELS[s]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <button type="button" onClick={() => deleteMutation.mutate(incident.id)} className="text-slate-400 hover:text-red-600 p-1" aria-label="Delete">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const STATUS_LABELS: Record<TicketStatus, string> = {
   open: "Open",
@@ -122,6 +240,8 @@ export default function ItPage() {
             <p className="text-xs text-red-600 mt-2">{status.dbError}</p>
           )}
         </div>
+
+        <StatusIncidentSection />
 
         <div>
           <div className="flex items-center justify-between mb-2">

@@ -502,6 +502,17 @@ export interface SystemStatus {
   serverTime: string;
 }
 
+// Public status page - Platform Maturity Roadmap, Tier 5, item 11. A
+// flat, append-only post log - the most recent post's own `status` is
+// what the public page's "known issues" banner reflects.
+export interface StatusIncident {
+  id: number;
+  title: string;
+  message: string;
+  status: "investigating" | "identified" | "monitoring" | "resolved";
+  createdAt: string;
+}
+
 export interface CompanySummary {
   totalCompanies: number;
   byStatus: Record<CompanyStatus, number>;
@@ -1582,6 +1593,18 @@ export const api = {
   // actually checkable today.
   system: {
     status: () => apiFetch<SystemStatus>("/system/status"),
+  },
+  // Public status page - Platform Maturity Roadmap, Tier 5, item 11.
+  // `get` is entirely unauthenticated (no session needed to check
+  // whether the platform is up); create/update/delete are Owner-only,
+  // used from /owner/it's own "Public Status Page" section.
+  status: {
+    get: () => apiFetch<{ operational: boolean; checkedAt: string; incidents: StatusIncident[] }>("/status"),
+    create: (data: { title: string; message: string; status?: StatusIncident["status"] }) =>
+      apiFetch<StatusIncident>("/status/incidents", { method: "POST", body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<{ title: string; message: string; status: StatusIncident["status"] }>) =>
+      apiFetch<StatusIncident>(`/status/incidents/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    delete: (id: number) => apiFetch<void>(`/status/incidents/${id}`, { method: "DELETE" }),
   },
   // create is open to any company-scoped user (Command Desk or
   // Operators Note, "Report an Issue"); list/update are Owner-only (the
