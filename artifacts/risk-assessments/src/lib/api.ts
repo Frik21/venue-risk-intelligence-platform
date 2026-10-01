@@ -987,6 +987,7 @@ export type DocumentType =
   | "psira_registration"
   | "sia_license"
   | "firearm_competency"
+  | "firearm_permit"
   | "medical_certificate"
   | "drivers_license"
   | "professional_indemnity_insurance"

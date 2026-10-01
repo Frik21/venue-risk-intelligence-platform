@@ -45,6 +45,7 @@ const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
   { value: "psira_registration", label: "PSIRA Registration" },
   { value: "sia_license", label: "SIA License" },
   { value: "firearm_competency", label: "Firearm Competency Certificate" },
+  { value: "firearm_permit", label: "Firearm Permit / License" },
   { value: "medical_certificate", label: "Medical / First Aid Certificate" },
   { value: "drivers_license", label: "Driver's License" },
   { value: "professional_indemnity_insurance", label: "Professional Indemnity Insurance" },
