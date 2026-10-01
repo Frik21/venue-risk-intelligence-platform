@@ -4,8 +4,14 @@ import { db, timesheetEntriesTable, usersTable, companySettingsTable, payRunsTab
 import { z } from "zod";
 import { computePersonnelCosts } from "../lib/personnel-cost";
 import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
+import { restrictWritesToRoles } from "../lib/auth";
 
 const router: IRouter = Router();
+
+// Granular per-role permissions - Following Roadmap Tier 3, item 30.
+// Same reasoning as quotes.ts/invoices.ts - Finance's own domain, no
+// CPO session ever reaches this router.
+router.use(restrictWritesToRoles("finance"));
 
 const PAY_RUN_STATUSES = ["pending", "paid"] as const;
 
