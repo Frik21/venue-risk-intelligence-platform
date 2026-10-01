@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DollarSign, Wallet, CheckCircle2, Clock, XCircle, Users as UsersIcon, Settings, Pencil, Car, FileText, Plus, X, ChevronDown, ChevronUp, Trash2, TrendingUp } from "lucide-react";
+import { DollarSign, Wallet, CheckCircle2, Clock, XCircle, Users as UsersIcon, Settings, Pencil, Car, FileText, Plus, X, ChevronDown, ChevronUp, Trash2, TrendingUp, AlertTriangle } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -717,6 +717,32 @@ export default function CostsPage() {
     })
     .slice(0, 8);
 
+  // Scope-creep alerts - Following Roadmap Tier 3, item 27 ("flag when
+  // actual task cost is diverging from the quote while the job is
+  // still running, not after"). Deliberately compares against the
+  // quote's own internalCost (the planned/budgeted internal cost
+  // before markup and tax), not totalQuoteValue (the client-facing
+  // sale price) - this is a "are we overspending against our own
+  // budget" signal, not a revenue one. Only in_progress tasks (a
+  // completed job overrunning its budget is a Job Profitability
+  // problem, already covered above; this is specifically about
+  // catching it while there's still time to act) with an approved
+  // quote that actually has a positive budget to measure against.
+  const SCOPE_CREEP_WARNING_RATIO = 0.8;
+  const costByTaskId = new Map(totalCostByTask.filter((t) => t.taskId != null).map((t) => [t.taskId as number, t.total]));
+  const scopeCreepAlerts = tasks
+    .filter((t) => t.status === "in_progress")
+    .map((t) => {
+      const approvedQuote = quotes.find((q) => q.taskId === t.id && q.status === "approved");
+      if (!approvedQuote || approvedQuote.internalCost <= 0) return null;
+      const actualCost = costByTaskId.get(t.id) ?? 0;
+      const ratio = actualCost / approvedQuote.internalCost;
+      if (ratio < SCOPE_CREEP_WARNING_RATIO) return null;
+      return { taskId: t.id, title: t.title, actualCost, budget: approvedQuote.internalCost, ratio };
+    })
+    .filter((x): x is NonNullable<typeof x> => x != null)
+    .sort((a, b) => b.ratio - a.ratio);
+
   return (
     <div className="space-y-5">
       {showQuoteDialog && <QuoteDialog quote={null} venues={venues} users={users} clients={clients} onClose={() => setShowQuoteDialog(false)} />}
@@ -1078,6 +1104,37 @@ export default function CostsPage() {
           )}
         </CardContent>
       </Card>
+
+      {scopeCreepAlerts.length > 0 && (
+        <Card className="border-red-200">
+          <CardContent className="p-5">
+            <h2 className="font-semibold text-slate-900 mb-1 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-500" /> Scope-Creep Alerts
+            </h2>
+            <p className="text-xs text-slate-400 mb-3">
+              In-progress jobs where actual personnel + expense cost is approaching or over the quoted internal budget - while there's still time to act.
+            </p>
+            <div className="space-y-2">
+              {scopeCreepAlerts.map((a) => (
+                <div key={a.taskId} className="flex items-center justify-between text-sm border-b border-slate-100 last:border-0 pb-2 last:pb-0">
+                  <span className="text-slate-700 truncate">{a.title}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-slate-400 font-mono tabular-nums">
+                      {a.actualCost.toLocaleString(undefined, { maximumFractionDigits: 0 })} / {a.budget.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </span>
+                    <span className={cn(
+                      "text-xs font-medium border rounded-full px-2 py-0.5",
+                      a.ratio >= 1 ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200",
+                    )}>
+                      {Math.round(a.ratio * 100)}%
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {jobProfitability.length > 0 && (
         <Card>
