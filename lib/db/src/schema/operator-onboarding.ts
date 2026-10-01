@@ -72,6 +72,13 @@ export const operatorDocumentsTable = pgTable("operator_documents", {
   fileDataUrl: text("file_data_url"),
   expiryDate: text("expiry_date"),
   verified: boolean("verified").notNull().default(false),
+  // Real notifications - Following Roadmap Tier 3, item 29. Same
+  // stamped-once, never-cleared shape as invoices.overdueNotifiedAt -
+  // lib/cert-expiry-monitor.ts sets this the first time a document
+  // enters the existing EXPIRY_WARNING_DAYS window, so a re-uploaded/
+  // renewed document (a fresh row) naturally gets its own notification
+  // cycle even though this one never resets.
+  expiryNotifiedAt: timestamp("expiry_notified_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [index("idx_operator_documents_company_id").on(table.companyId)]);

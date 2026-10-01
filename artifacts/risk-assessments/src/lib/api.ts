@@ -62,7 +62,7 @@ export type RouteCreationMethod = "endpoint_marker" | "street_builder" | "freeha
 
 export interface User {
   id: number; companyId: number | null; name: string; email: string; role: UserRole; avatarInitials: string | null; active: boolean;
-  dayRate: number | null; nightRate: number | null; officeId: number | null; mustChangePassword: boolean; createdAt: string;
+  dayRate: number | null; nightRate: number | null; officeId: number | null; phone: string | null; mustChangePassword: boolean; createdAt: string;
 }
 
 // The logged-in session's own view of itself - a trimmed subset of
@@ -1185,7 +1185,7 @@ export const api = {
     // initialPassword is only ever present on this one response - shown
     // once in the Add User dialog, never stored/refetchable.
     create: (data: Partial<User>) => apiFetch<User & { initialPassword: string }>("/users", { method: "POST", body: JSON.stringify(data) }),
-    update: (id: number, data: Partial<Pick<User, "name" | "email" | "avatarInitials" | "officeId">>) =>
+    update: (id: number, data: Partial<Pick<User, "name" | "email" | "avatarInitials" | "officeId" | "phone">>) =>
       apiFetch<User>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     updateRates: (id: number, data: { dayRate: number | null; nightRate: number | null }) =>
       apiFetch<User>(`/users/${id}/rates`, { method: "PATCH", body: JSON.stringify(data) }),
