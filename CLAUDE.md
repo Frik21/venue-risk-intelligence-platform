@@ -247,3 +247,31 @@ Comes after the Outstanding list above, not instead of it - the items above are 
 33. ~~GPS breadcrumb trail during active tasks (Operators Note), pairs with item 1.~~ - **Built**, see the Notes & Follow-ups entry above.
 34. ~~CPO self-service availability/time-off requests on Operators Note.~~ - **Built, closing out the Following Roadmap backlog**, see the Notes & Follow-ups entry above.
 35. **Reminder, not a scoped item yet**: look at [OSIRIS AI](https://osirisai.live/) for inspiration on Operators Note - per direct product direction, a live global situational-awareness map (roughly Palantir/FlightRadar/MarineTraffic combined into one view - maritime and air/naval traffic, live CCTV feeds, live news, earthquakes, global incident markers, a day/night terminator, submarine cable routes). **Explicitly not an API/SDK integration** - no OSIRIS keys or accounts get wired into this app; the ask is to browse it and pull UX/feature *ideas* into Operators Note's own real-time situational-awareness surfaces (the Brief, Field Intelligence, Alerts), using data sources already available to this app (the same free OSINT/OSM-backed pattern `nearby-services.ts`/`travel-advisory.ts`/GDELT already use) rather than OSIRIS's own feed. No scope decided yet - revisit and confirm what (if anything) to actually build before starting any of it, same rule as every other item on this list.
+
+# Platform Maturity Roadmap
+
+With all 34 Following Roadmap items built, this is a second punch list - not feature parity with the industry anymore, but what a program handling real physical safety data (panic alerts, medical/threat info on real protected people, live field operations) for paying businesses needs beyond a feature count. **Unlike every other roadmap section in this file, these items are Claude's own assessment, not yet confirmed per direct product direction** - raised directly when asked "what does a program like this need," not instructed. Same rule as everywhere else applies doubly here: nothing on this list gets built without the Product Owner confirming scope first, and anything that would conflict with the Product Constitution's "reduce uncertainty, never increase anxiety" principle or North Star ("clarity before action") stops and flags rather than proceeding.
+
+**Tier 1 - closes the actual promise of the safety features already built:**
+1. Real mobile push notifications for panic alerts/check-ins, not just email+SMS (item 29 explicitly scoped push out as a bigger, separate build - this is that build). Today a panic alert only reaches a Manager who happens to have Command Desk open.
+2. An installable, offline-capable Operators Note (a real PWA, or further) - today's check-in/panic/breadcrumb-trail features all stop working the moment a CPO's browser tab closes or the phone sleeps, which is the opposite of what a safety signal should do. This is arguably the single biggest gap between what the feature promises and what it actually guarantees today.
+
+**Tier 2 - trust & compliance, blocks a real corporate client from feeling safe signing up:**
+3. POPIA (South Africa's data-protection law, the GDPR equivalent) compliance review - how principal medical/threat data, CPO personal documents, and client data are handled, retained, and who can see them.
+4. Audit logging for access to the most sensitive data in the system - Principal Protection Profiles' medical/threat/family info especially, which today any Management-side session can read with no record of who looked at what.
+5. A documented data retention policy and a basic incident response plan - "we have backups" (already built) isn't the same as "here's what happens and who's notified if something goes wrong."
+6. Confirm and document encryption-at-rest for the database (likely already true via whatever host is chosen, but unconfirmed/undocumented - matters for any customer's own security review).
+
+**Tier 3 - engineering safety net, protects the codebase itself going forward:**
+7. A real automated test suite (unit/integration) - every one of the 34 Following Roadmap items was verified by hand (curl + Playwright spot-checks) rather than with tests that stay behind to catch a future regression. With 40+ tables and dozens of features now sharing code (auth, roster/roles, seat limits), there's no safety net against a future change silently breaking something unrelated.
+8. Extend CI (`.github/workflows/ci.yml`) to run that test suite once it exists, not just typecheck+build.
+
+**Tier 4 - first-time customer experience:**
+9. An onboarding checklist / guided first-run experience for a brand-new company - today a fresh signup lands on an empty dashboard with no guidance on where to start, despite how feature-dense Command Desk now is.
+10. A sample/demo data option so a trial company can explore real-looking Tasks/Clients/Quotes before committing their own data.
+
+**Tier 5 - support & transparency for subscribers:**
+11. A public status page (separate from the Owner-only `/owner/it` system-status view) so a subscriber can check "is it down for everyone or just me" during an incident without needing to file a ticket.
+12. A subscriber-facing help center/FAQ beyond the existing "Report an Issue" ticket intake - today the only self-service channel is filing a ticket and waiting.
+
+**Constitution Compliance Check**: reviewed against `docs/Product-Constitution.md` - no conflict. The North Star ("Clarity before action") and Primary Design Principle ("Reduce uncertainty. Never increase anxiety.") if anything argue *for* Tier 1 and Tier 2 above (a safety signal a CPO can't trust, or protected-person data nobody's accountable for, both increase anxiety and uncertainty rather than reducing it) - nothing here proposes replacing professional judgement or operational planning, only strengthening the platform underneath it.
