@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, ChangeEvent } from "react";
-import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet, LifeBuoy, FileText, Package, Users, Plane } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet, LifeBuoy, FileText, Package, Users, Plane, Globe } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -23,6 +23,7 @@ import {
 } from "@/lib/map-aesthetics";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useLanguage, LANGUAGE_LABELS } from "@/lib/i18n";
 import type {
   CountryIntelligence,
   CountryRiskLevel,
@@ -1298,6 +1299,7 @@ function ExpenseEntryCard({
 
 function TopBanner({ onSignOut }: { onSignOut: () => void }) {
   const { user } = useAuth();
+  const { language, setLanguage, t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState("");
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
   const [operatorMenuOpen, setOperatorMenuOpen] = useState(false);
@@ -1482,7 +1484,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
               }}
             >
               <ShieldAlert className="w-4 h-4" />
-              Risk Assessments
+              {t("riskAssessments")}
             </button>
             <button
               type="button"
@@ -1493,7 +1495,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
               }}
             >
               <Route className="w-4 h-4" />
-              Route Planning
+              {t("routePlanning")}
             </button>
             <button
               type="button"
@@ -1504,7 +1506,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
               }}
             >
               <Download className="w-4 h-4" />
-              Download Task
+              {t("downloadTask")}
             </button>
             <button
               type="button"
@@ -1515,7 +1517,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
               }}
             >
               <Layers className="w-4 h-4" />
-              Layers
+              {t("layers")}
             </button>
           </div>
         )}
@@ -1527,7 +1529,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
             value={searchQuery}
             onChange={setSearchQuery}
             onSelect={handleSearchSelect}
-            placeholder="Search for a place or address…"
+            placeholder={t("searchPlaceholder")}
             className="top-banner-search-input"
           />
         </div>
@@ -1549,7 +1551,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
         ) : (
           <ShieldAlert className="w-4 h-4" />
         )}
-        {panicSent ? "Sent" : "Panic"}
+        {panicSent ? t("panicSent") : t("panic")}
       </button>
       <button
         type="button"
@@ -1560,7 +1562,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
         }}
       >
         <Bell className="w-4 h-4" />
-        Alerts
+        {t("alerts")}
         {alertsCount > 0 && <span className="top-banner-alerts-trigger-badge">{alertsCount}</span>}
       </button>
       <div
@@ -1596,7 +1598,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
               }}
             >
               <UserIcon className="w-4 h-4" />
-              Profile
+              {t("profile")}
             </button>
             <button
               type="button"
@@ -1607,7 +1609,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
               }}
             >
               <AlertTriangle className="w-4 h-4" />
-              Report Incident
+              {t("reportIncident")}
             </button>
             <button
               type="button"
@@ -1618,7 +1620,19 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
               }}
             >
               <LifeBuoy className="w-4 h-4" />
-              Report an Issue
+              {t("reportIssue")}
+            </button>
+            {/* Multi-language UI - Following Roadmap Tier 3, item 32.
+                A plain toggle between the two currently-translated
+                languages rather than a dropdown - only two options
+                exist today, see lib/i18n.tsx for how to add a third. */}
+            <button
+              type="button"
+              className="top-banner-operator-menu-item"
+              onClick={() => setLanguage(language === "en" ? "af" : "en")}
+            >
+              <Globe className="w-4 h-4" />
+              {t("language")}: {LANGUAGE_LABELS[language]}
             </button>
             {/* Owner-only, only shown while actively previewing a Test
                 Company (see require-auth.tsx) - lets the Owner jump back

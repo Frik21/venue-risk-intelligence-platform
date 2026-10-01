@@ -13,6 +13,7 @@ import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import ChangePasswordPage from "@/pages/change-password";
 import { AuthProvider } from "@/lib/auth";
+import { LanguageProvider } from "@/lib/i18n";
 import RequireAuth from "@/components/require-auth";
 
 import AssessmentsList from "@/pages/assessments/list";
@@ -151,7 +152,9 @@ function App() {
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <AuthProvider>
-            <Router />
+            <LanguageProvider>
+              <Router />
+            </LanguageProvider>
           </AuthProvider>
         </WouterRouter>
         <Toaster />
