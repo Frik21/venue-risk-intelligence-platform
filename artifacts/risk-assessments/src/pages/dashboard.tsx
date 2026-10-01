@@ -1337,16 +1337,16 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
     } catch (err) {
       console.error("Could not resolve location for panic alert:", err);
     }
-    try {
-      await api.checkins.create({ type: "panic", ...location });
-      setPanicSent(true);
-      setTimeout(() => setPanicSent(false), 5000);
-    } catch (err) {
-      console.error("Failed to send panic alert:", err);
-      window.alert("Couldn't send the panic alert - try again.");
-    } finally {
-      setPanicSending(false);
-    }
+    // Queued, not sent directly - Platform Maturity Roadmap, Tier 1,
+    // item 2. A panic alert is exactly the signal that must survive a
+    // dead zone: it's written to localStorage immediately and retried
+    // automatically once connectivity is back (see lib/offline-queue.ts
+    // and TopBanner's own sync-status indicator), rather than failing
+    // outright the moment this fetch can't reach the server.
+    enqueueOfflineSubmission("checkin", { type: "panic", ...location });
+    setPanicSent(true);
+    setTimeout(() => setPanicSent(false), 5000);
+    setPanicSending(false);
   }
 
   useEffect(() => {
@@ -1685,7 +1685,7 @@ function SyncStatusIndicator() {
   if (items.length === 0) return null;
   const failedCount = items.filter((i) => i.status === "failed").length;
 
-  const KIND_LABELS: Record<string, string> = { timesheet: "Timesheet entry", incident: "Incident report" };
+  const KIND_LABELS: Record<string, string> = { timesheet: "Timesheet entry", incident: "Incident report", checkin: "Check-in / Panic signal" };
 
   return (
     <div
@@ -2776,13 +2776,11 @@ function OperationalCanvas({
     } catch (err) {
       console.error("Could not resolve location for check-in:", err);
     }
-    try {
-      await api.checkins.create({ taskId, type, ...location });
-      setCheckinState((prev) => ({ ...prev, [taskId]: { submitting: false, lastResult: type } }));
-    } catch (err) {
-      console.error(`Failed to send ${type} check-in for task ${taskId}:`, err);
-      setCheckinState((prev) => ({ ...prev, [taskId]: { submitting: false, lastResult: "error" } }));
-    }
+    // Queued, not sent directly - same dead-zone protection as the
+    // global panic button above (Platform Maturity Roadmap, Tier 1,
+    // item 2).
+    enqueueOfflineSubmission("checkin", { taskId, type, ...location });
+    setCheckinState((prev) => ({ ...prev, [taskId]: { submitting: false, lastResult: type } }));
   }
 
   // One-tap emergency info (Following Roadmap Tier 1, item 5) - nearest
