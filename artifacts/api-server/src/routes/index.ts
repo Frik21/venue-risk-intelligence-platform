@@ -51,6 +51,7 @@ import vendorPerformanceRouter from "./vendor-performance";
 import rateBenchmarkingRouter from "./rate-benchmarking";
 import dataExportRouter from "./data-export";
 import taskLocationPingsRouter from "./task-location-pings";
+import availabilityRequestsRouter from "./availability-requests";
 
 const router: IRouter = Router();
 
@@ -119,5 +120,6 @@ router.use(vendorPerformanceRouter);
 router.use(rateBenchmarkingRouter);
 router.use(dataExportRouter);
 router.use(taskLocationPingsRouter);
+router.use(availabilityRequestsRouter);
 
 export default router;

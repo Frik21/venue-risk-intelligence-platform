@@ -210,6 +210,7 @@ export interface Task {
 // lib/checkin-monitor.ts). Surfaced on Command Desk's Safety Alerts
 // panel (pages/alerts/list.tsx).
 export type CheckinType = "ok" | "panic" | "missed";
+
 // GPS breadcrumb trail - Following Roadmap Tier 3, item 33.
 export interface TaskLocationPing {
   id: number;
@@ -218,6 +219,22 @@ export interface TaskLocationPing {
   latitude: number;
   longitude: number;
   capturedAt: string;
+}
+
+// CPO self-service availability/time-off requests - Following Roadmap
+// Tier 3, item 34.
+export interface AvailabilityRequest {
+  id: number;
+  cpoId: number;
+  cpoName: string | null;
+  startDate: string;
+  endDate: string;
+  reason: string;
+  status: "pending" | "approved" | "denied";
+  reviewedBy: number | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  requestedAt: string;
 }
 
 export interface Checkin {
@@ -1364,6 +1381,15 @@ export const api = {
     listForTask: (taskId: number) => apiFetch<TaskLocationPing[]>(`/task-location-pings?taskId=${taskId}`),
     create: (data: { taskId: number; latitude: number; longitude: number }) =>
       apiFetch<TaskLocationPing>("/task-location-pings", { method: "POST", body: JSON.stringify(data) }),
+  },
+  availabilityRequests: {
+    // Company-wide for Management, auto-scoped to "my own" server-side
+    // for a CPO session - see routes/availability-requests.ts's own GET.
+    list: () => apiFetch<AvailabilityRequest[]>("/availability-requests"),
+    create: (data: { startDate: string; endDate: string; reason?: string }) =>
+      apiFetch<AvailabilityRequest>("/availability-requests", { method: "POST", body: JSON.stringify(data) }),
+    review: (id: number, status: "approved" | "denied") =>
+      apiFetch<AvailabilityRequest>(`/availability-requests/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
   },
   fieldIncidentReports: {
     // Company-wide, newest first - Command Desk's Field Incident Reports

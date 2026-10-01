@@ -201,6 +201,7 @@ const CPO_SURFACE_PATH_PREFIXES = [
   "/task-equipment",
   "/travel-logistics",
   "/task-location-pings",
+  "/availability-requests",
 ];
 
 export function blockSoloOperatorFromManagement(req: Request, res: Response, next: NextFunction): void {

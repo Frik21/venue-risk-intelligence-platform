@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type OnboardingOverviewRecord, type OnboardingRecord, type OnboardingDocument, type DocumentType, type OnboardingStatus, type User, type RateBenchmark } from "@/lib/api";
+import { api, type OnboardingOverviewRecord, type OnboardingRecord, type OnboardingDocument, type DocumentType, type OnboardingStatus, type User, type RateBenchmark, type AvailabilityRequest } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -640,6 +640,27 @@ export default function OnboardingPage() {
     queryKey: ["onboarding-documents-all"],
     queryFn: api.onboarding.listAllDocuments,
   });
+
+  // CPO self-service availability/time-off requests - Following
+  // Roadmap Tier 3, item 34. api.availabilityRequests.list() is
+  // already company-wide for a Management session (see that route's
+  // own GET), so no further filtering is needed here.
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { data: availabilityRequests = [] } = useQuery<AvailabilityRequest[]>({
+    queryKey: ["availability-requests"],
+    queryFn: api.availabilityRequests.list,
+  });
+  const pendingAvailabilityRequests = availabilityRequests.filter((r) => r.status === "pending");
+  const reviewAvailabilityMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: "approved" | "denied" }) => api.availabilityRequests.review(id, status),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["availability-requests"] });
+      toast({ title: "Request reviewed" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   // Most urgent first - already-expired certs (negative days) sort
   // ahead of ones still inside the warning window.
   const expiringDocuments = allDocuments
@@ -858,6 +879,49 @@ export default function OnboardingPage() {
                   <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-red-700 bg-red-50 border-red-200 shrink-0 whitespace-nowrap">
                     {r.lastVettedAt ? `Overdue ${Math.abs(r.days)}d` : "Never vetted"}
                   </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {pendingAvailabilityRequests.length > 0 && (
+        <Card className="border-red-200">
+          <CardContent className="p-5">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2 mb-3">
+              <AlertTriangle className="w-4 h-4 text-red-500" /> Pending Time-Off Requests
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-red-700 bg-red-50 border-red-200">
+                {pendingAvailabilityRequests.length}
+              </span>
+            </h2>
+            <div className="space-y-2">
+              {pendingAvailabilityRequests.map((r) => (
+                <div key={r.id} className="flex items-center justify-between gap-3 text-sm border border-red-100 rounded-md px-3 py-2">
+                  <div className="min-w-0">
+                    <span className="text-slate-900">{r.cpoName ?? "Unknown"}</span>
+                    <span className="text-slate-400"> · {r.startDate} – {r.endDate}</span>
+                    {r.reason && <span className="text-slate-400"> · {r.reason}</span>}
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Button
+                      size="sm"
+                      className="h-6 px-2 text-[11px]"
+                      onClick={() => reviewAvailabilityMutation.mutate({ id: r.id, status: "approved" })}
+                      disabled={reviewAvailabilityMutation.isPending}
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 px-2 text-[11px] text-red-600 hover:text-red-700"
+                      onClick={() => reviewAvailabilityMutation.mutate({ id: r.id, status: "denied" })}
+                      disabled={reviewAvailabilityMutation.isPending}
+                    >
+                      Deny
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
