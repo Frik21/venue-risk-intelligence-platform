@@ -39,6 +39,7 @@ function formatUser(row: typeof usersTable.$inferSelect) {
     dayRate: row.dayRate ?? null,
     nightRate: row.nightRate ?? null,
     officeId: row.officeId,
+    phone: row.phone ?? null,
     mustChangePassword: row.mustChangePassword,
     createdAt: row.createdAt.toISOString(),
   };
@@ -264,6 +265,10 @@ const UserUpdateSchema = z.object({
   // Unlike role/active below, home office isn't a permission field -
   // no separate admin-only endpoint needed for it.
   officeId: z.number().int().nullable().optional(),
+  // Real notifications - Following Roadmap Tier 3, item 29 - the SMS
+  // recipient number. Self-service like name/email above, not a
+  // permission field.
+  phone: z.string().max(40).nullable().optional(),
 });
 
 // Self-service profile edit (Profile > Account Details) - deliberately

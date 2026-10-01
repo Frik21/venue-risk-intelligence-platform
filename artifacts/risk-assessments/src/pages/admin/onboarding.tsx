@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type OnboardingOverviewRecord, type OnboardingRecord, type OnboardingDocument, type DocumentType, type OnboardingStatus, type User } from "@/lib/api";
+import { api, type OnboardingOverviewRecord, type OnboardingRecord, type OnboardingDocument, type DocumentType, type OnboardingStatus, type User, type RateBenchmark } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,9 +41,11 @@ const STATUS_CONFIG: Record<OnboardingStatus, { label: string; color: string }> 
 const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
   { value: "id_document", label: "ID Document" },
   { value: "passport", label: "Passport" },
+  { value: "visa", label: "Visa" },
   { value: "psira_registration", label: "PSIRA Registration" },
   { value: "sia_license", label: "SIA License" },
   { value: "firearm_competency", label: "Firearm Competency Certificate" },
+  { value: "firearm_permit", label: "Firearm Permit / License" },
   { value: "medical_certificate", label: "Medical / First Aid Certificate" },
   { value: "drivers_license", label: "Driver's License" },
   { value: "professional_indemnity_insurance", label: "Professional Indemnity Insurance" },
@@ -304,6 +306,25 @@ function AddOperatorDialog({ onClose, onCreated }: { onClose: () => void; onCrea
 // CPOs at all - see "Product Vision & Business Model" in CLAUDE.md)
 // since a CPO's rate is exactly the kind of Management-side-only
 // setting that shouldn't exist inside Operators note itself.
+// Rate benchmarking - Following Roadmap Tier 3, item 28 ("is a given
+// day/night rate competitive for the region and risk level"). Fetched
+// once (shared ["rate-benchmarks"] cache, same pattern as ["users"])
+// and looked up per-operator here rather than per-row, since this
+// editor already renders inside each operator's own detail panel.
+function RateBenchmarkHint({ userId }: { userId: number }) {
+  const { data: benchmarks = [] } = useQuery<RateBenchmark[]>({ queryKey: ["rate-benchmarks"], queryFn: api.users.rateBenchmarks });
+  const b = benchmarks.find((r) => r.userId === userId);
+  if (!b || (b.avgDayRate == null && b.avgNightRate == null)) return null;
+
+  const basisLabel = b.comparisonBasis === "region" && b.region ? `other CPOs in ${b.region}` : "the company average";
+  return (
+    <p className="text-[11px] text-slate-400 mt-1">
+      Benchmark ({basisLabel}): Day {b.avgDayRate != null ? Math.round(b.avgDayRate) : "—"} / Night {b.avgNightRate != null ? Math.round(b.avgNightRate) : "—"}
+      {b.riskLevelLabel && b.region ? ` · ${b.region} is currently "${b.riskLevelLabel}"` : ""}
+    </p>
+  );
+}
+
 function OperatorRateEditor({ user }: { user: User }) {
   const [editing, setEditing] = useState(false);
   const [dayRate, setDayRate] = useState(user.dayRate != null ? String(user.dayRate) : "");
@@ -327,15 +348,18 @@ function OperatorRateEditor({ user }: { user: User }) {
 
   if (!editing) {
     return (
-      <button
-        onClick={() => setEditing(true)}
-        className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700"
-      >
-        <Pencil className="w-3 h-3" />
-        {user.dayRate != null || user.nightRate != null
-          ? `Day ${user.dayRate ?? "—"} / Night ${user.nightRate ?? "—"}`
-          : "Set rates"}
-      </button>
+      <div>
+        <button
+          onClick={() => setEditing(true)}
+          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700"
+        >
+          <Pencil className="w-3 h-3" />
+          {user.dayRate != null || user.nightRate != null
+            ? `Day ${user.dayRate ?? "—"} / Night ${user.nightRate ?? "—"}`
+            : "Set rates"}
+        </button>
+        <RateBenchmarkHint userId={user.id} />
+      </div>
     );
   }
 

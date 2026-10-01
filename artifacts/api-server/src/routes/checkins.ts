@@ -3,6 +3,7 @@ import { eq, desc, and } from "drizzle-orm";
 import { db, checkinsTable, tasksTable, taskAssignmentsTable, usersTable } from "@workspace/db";
 import { z } from "zod";
 import { requireCompanyId } from "../lib/resolve-company";
+import { notifyManagement } from "../lib/notifications";
 
 const router: IRouter = Router();
 
@@ -99,6 +100,21 @@ router.post("/checkins", async (req, res): Promise<void> => {
 
   const [taskRow] = row.taskId != null ? await db.select({ title: tasksTable.title }).from(tasksTable).where(eq(tasksTable.id, row.taskId)) : [undefined];
   const [cpo] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, cpoId));
+
+  // Real notifications - Following Roadmap Tier 3, item 29. Fired
+  // (not awaited - the CPO's own panic submission shouldn't wait on
+  // notification delivery) only for a real panic, never a routine "ok"
+  // check-in - an "ok" already surfaces fine by its own absence of an
+  // alert, same reasoning the Safety Alerts panel already uses to only
+  // show unacknowledged panic/missed rows.
+  if (parsed.data.type === "panic") {
+    notifyManagement(
+      companyId,
+      "VenueGuard: PANIC ALERT",
+      `${cpo?.name ?? "A CPO"} triggered a panic alert${taskRow ? ` on "${taskRow.title}"` : ""}${row.locationLabel ? ` near ${row.locationLabel}` : ""}. Acknowledge it on the Safety Alerts panel.`,
+    ).catch((e) => console.error("notifyManagement failed for panic alert", e));
+  }
+
   res.status(201).json(formatCheckin(row, taskRow?.title ?? null, cpo?.name ?? null));
 });
 

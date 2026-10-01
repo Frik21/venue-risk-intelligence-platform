@@ -26,6 +26,13 @@ export const usersTable = pgTable("users", {
   // self-service PATCH /users/:id for Account Details).
   dayRate: real("day_rate"),
   nightRate: real("night_rate"),
+  // Real notifications - Following Roadmap Tier 3, item 29 ("SMS/push/
+  // email for panic alerts, overdue invoices, expiring certs"). Nullable,
+  // self-service-editable (see PATCH /users/:id alongside name/email) -
+  // SMS is simply skipped for a user with no phone set, same "degrade
+  // gracefully rather than block" pattern as everything else in this
+  // notification pipeline (see lib/sms.ts/lib/notifications.ts).
+  phone: text("phone"),
   // Nullable - existing seeded users and CPOs mid-onboarding may not
   // have a password set yet. Login is refused (not "no password
   // required") when this is null - see requireAuth in lib/auth.ts.
