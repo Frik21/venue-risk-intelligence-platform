@@ -4,8 +4,14 @@ import { db, quotesTable, venuesTable, usersTable, tasksTable, invoicesTable } f
 import { z } from "zod";
 import { buildQuotePdf } from "../lib/quote-pdf";
 import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
+import { restrictWritesToRoles } from "../lib/auth";
 
 const router: IRouter = Router();
+
+// Granular per-role permissions - Following Roadmap Tier 3, item 30.
+// Quotations is Finance's own domain (see pages/admin/finance.tsx) - no
+// CPO session ever reaches this router. Reads stay open to every role.
+router.use(restrictWritesToRoles("finance"));
 
 const PRIORITIES = ["low", "medium", "high", "urgent"] as const;
 const QUOTE_STATUSES = ["draft", "sent", "approved", "rejected"] as const;
