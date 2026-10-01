@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
-import { api, type Client, type ClientActivity, type Principal, type Task, type Quote, type User } from "@/lib/api";
+import { api, type Client, type ClientActivity, type Principal, type PrincipalAccessLogEntry, type Task, type Quote, type User } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
-import { ArrowLeft, Pencil, Trash2, Mail, Phone, MapPin, Briefcase, ListChecks, FileText, MessageSquare, ShieldCheck, Plus, X, Link as LinkIcon } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Mail, Phone, MapPin, Briefcase, ListChecks, FileText, MessageSquare, ShieldCheck, Plus, X, Link as LinkIcon, History } from "lucide-react";
 import { formatDate, formatDateTime } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -175,6 +175,54 @@ function PrincipalForm({ form, onChange }: { form: PrincipalFormState; onChange:
 // their own medical/threats/routine/family sections. Surfaced
 // automatically to the assigned CPO on their own task (api.tasks.
 // principals) - this is the Command Desk side that maintains it.
+// Platform Maturity Roadmap, Tier 2, item 4 - who's looked at this
+// principal's record, and when. Fetch-on-tap, same lazy pattern as
+// Nearby Help/Handover Notes elsewhere in this app, rather than
+// fetching every principal's history on page load.
+const ACCESS_LOG_ACTION_LABELS: Record<PrincipalAccessLogEntry["action"], string> = {
+  viewed: "Viewed",
+  created: "Created",
+  updated: "Updated",
+  deleted: "Deleted",
+};
+
+function PrincipalAccessLog({ clientId, principalId }: { clientId: number; principalId: number }) {
+  const [open, setOpen] = useState(false);
+  const { data: entries = [], isLoading } = useQuery<PrincipalAccessLogEntry[]>({
+    queryKey: ["principal-access-log", clientId, principalId],
+    queryFn: () => api.principals.accessLog(clientId, principalId),
+    enabled: open,
+  });
+
+  return (
+    <div className="pt-1">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1"
+      >
+        <History className="w-3 h-3" /> {open ? "Hide" : "View"} access history{!open && entries.length > 0 ? ` (${entries.length})` : ""}
+      </button>
+      {open && (
+        isLoading ? (
+          <Skeleton className="h-10 mt-1" />
+        ) : entries.length === 0 ? (
+          <p className="text-xs text-slate-400 mt-1">No access recorded yet.</p>
+        ) : (
+          <div className="mt-1 space-y-1 max-h-40 overflow-y-auto">
+            {entries.map((e) => (
+              <p key={e.id} className="text-xs text-slate-500">
+                <span className="font-medium">{ACCESS_LOG_ACTION_LABELS[e.action]}</span> by {e.userName ?? "a deactivated user"}
+                {e.taskTitle ? ` (via task "${e.taskTitle}")` : ""} - {formatDateTime(e.createdAt)}
+              </p>
+            ))}
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
 function PrincipalsPanel({ clientId }: { clientId: number }) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -298,6 +346,7 @@ function PrincipalsPanel({ clientId }: { clientId: number }) {
                       <p key={key} className="text-sm text-slate-600"><span className="font-medium text-slate-500">{label}: </span>{p[key]}</p>
                     ) : null,
                   )}
+                  <PrincipalAccessLog clientId={clientId} principalId={p.id} />
                 </div>
               ),
             )}

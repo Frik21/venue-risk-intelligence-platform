@@ -3,6 +3,8 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { clientsTable } from "./clients";
 import { companiesTable } from "./companies";
+import { usersTable } from "./users";
+import { tasksTable } from "./tasks";
 
 // A named, individually-protected person under a Client - Following
 // Roadmap, Tier 2 item 8 ("real client/principal protection profile...
@@ -40,3 +42,37 @@ export const principalsTable = pgTable("principals", {
 export const insertPrincipalSchema = createInsertSchema(principalsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertPrincipal = z.infer<typeof insertPrincipalSchema>;
 export type Principal = typeof principalsTable.$inferSelect;
+
+// Audit log for Principal Protection Profile access - Platform
+// Maturity Roadmap, Tier 2, item 4 ("audit logging for the most
+// sensitive data in the system... today any Management-side session
+// can read with no record of who looked at what"). Scoped via
+// AskUserQuestion to log every read (not just Management-side), so
+// this is a complete trail, not a partial one - one row per principal
+// per access, since the point is "who looked at THIS person's medical/
+// threat info," not "who hit this endpoint." `accessedViaTaskId` is
+// set only for a CPO's own automatic per-task read (`GET
+// /tasks/:id/principals`) - null for a Management-side view/edit on
+// the Client detail page, where there's no task context at all.
+//
+// `principalId` is nullable with `onDelete: set null` rather than
+// cascade - deleting a principal would otherwise wipe out its own
+// access history (including the "deleted" row itself), defeating the
+// entire point of an audit trail that's supposed to survive the data
+// it describes. `principalName` snapshots the name at access time so
+// the log stays legible even after the principal record is gone.
+export const principalAccessLogTable = pgTable("principal_access_log", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "restrict" }),
+  principalId: integer("principal_id").references(() => principalsTable.id, { onDelete: "set null" }),
+  principalName: text("principal_name").notNull(),
+  userId: integer("user_id").notNull().references(() => usersTable.id),
+  action: text("action").notNull(), // "viewed" | "created" | "updated" | "deleted"
+  accessedViaTaskId: integer("accessed_via_task_id").references(() => tasksTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_principal_access_log_company_id").on(table.companyId),
+  index("idx_principal_access_log_principal_id").on(table.principalId),
+]);
+
+export type PrincipalAccessLogEntry = typeof principalAccessLogTable.$inferSelect;

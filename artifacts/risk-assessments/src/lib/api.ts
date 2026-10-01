@@ -668,6 +668,18 @@ export interface Principal {
   updatedAt?: string;
 }
 
+// Platform Maturity Roadmap, Tier 2, item 4 - one row per access to a
+// Principal Protection Profile. userName/taskTitle are null-safe left
+// joins - a deactivated user or a deleted task still leaves the log
+// entry itself intact.
+export interface PrincipalAccessLogEntry {
+  id: number;
+  action: "viewed" | "created" | "updated" | "deleted";
+  userName: string | null;
+  taskTitle: string | null;
+  createdAt: string;
+}
+
 export type VendorStatus = "lead" | "active" | "inactive" | "preferred";
 
 export interface Vendor {
@@ -1631,6 +1643,10 @@ export const api = {
     update: (clientId: number, id: number, data: Partial<{ name: string; relationship: string; medicalInfo: string | null; knownThreats: string | null; routineNotes: string | null; familyNotes: string | null }>) =>
       apiFetch<Principal>(`/clients/${clientId}/principals/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     delete: (clientId: number, id: number) => apiFetch<void>(`/clients/${clientId}/principals/${id}`, { method: "DELETE" }),
+    // Platform Maturity Roadmap, Tier 2, item 4 - who's viewed/edited
+    // this principal's record, and when.
+    accessLog: (clientId: number, id: number) =>
+      apiFetch<PrincipalAccessLogEntry[]>(`/clients/${clientId}/principals/${id}/access-log`),
   },
   vendors: {
     list: () => apiFetch<Vendor[]>("/vendors"),

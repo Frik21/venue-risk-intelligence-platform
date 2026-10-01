@@ -4,6 +4,7 @@ import { db, tasksTable, venuesTable, usersTable, plansTable, taskAssignmentsTab
 import { z } from "zod";
 import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 import { restrictWritesToRoles } from "../lib/auth";
+import { logPrincipalAccess } from "../lib/principal-audit";
 
 const router: IRouter = Router();
 
@@ -415,6 +416,7 @@ router.get("/tasks/:id/principals", async (req, res): Promise<void> => {
   if (task.clientId == null) { res.json([]); return; }
 
   const rows = await db.select().from(principalsTable).where(eq(principalsTable.clientId, task.clientId));
+  void logPrincipalAccess(companyId, req.user!.id, "viewed", rows.map((r) => ({ id: r.id, name: r.name })), taskId);
   res.json(
     rows.map((r) => ({
       id: r.id,
