@@ -22,7 +22,7 @@
 // GENERATED FILE - do not hand-edit. Regenerate monthly (or as
 // needed) via:
 //   pnpm --filter @workspace/scripts run refresh-travel-advisories
-// Last generated: 2026-08-07
+// Last generated: 2026-10-01
 //
 // LEVEL_ encodes two things: the base 1-4 level, and (values >= 10)
 // whether the country "contains areas with higher security risk" (a
