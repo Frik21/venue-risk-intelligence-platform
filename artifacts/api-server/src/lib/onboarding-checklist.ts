@@ -43,6 +43,13 @@ export const DOCUMENT_TYPES = [
   { value: "psira_registration", label: "PSIRA Registration" },
   { value: "sia_license", label: "SIA License" },
   { value: "firearm_competency", label: "Firearm Competency Certificate" },
+  // Weapons/firearms permit tracking - Following Roadmap Tier 3, item
+  // 24 ("same treatment as certs"). Distinct from firearm_competency
+  // above - a competency certificate proves training, a permit/license
+  // is the separate legal authorization to actually carry/possess,
+  // same real-world distinction PSIRA registration vs. SIA license
+  // already models for two different jurisdictions' licensing bodies.
+  { value: "firearm_permit", label: "Firearm Permit / License" },
   { value: "medical_certificate", label: "Medical / First Aid Certificate" },
   { value: "drivers_license", label: "Driver's License" },
   // Insurance/liability policy tracking - Following Roadmap Tier 3,
