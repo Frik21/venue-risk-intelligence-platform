@@ -40,6 +40,13 @@ export const ONBOARDING_CHECKLIST_ITEMS: OnboardingChecklistItem[] = [
 export const DOCUMENT_TYPES = [
   { value: "id_document", label: "ID Document" },
   { value: "passport", label: "Passport" },
+  // Passport/visa expiry tracking for internationally-deployed CPOs -
+  // Following Roadmap Tier 3, item 23. "Passport" already existed
+  // (item 4) and was already picked up by the expiry-tracking
+  // machinery below; this is the one missing piece - same
+  // zero-new-code pattern as item 21's insurance types, since expiry
+  // tracking here is keyed on documentType value, not a fixed list.
+  { value: "visa", label: "Visa" },
   { value: "psira_registration", label: "PSIRA Registration" },
   { value: "sia_license", label: "SIA License" },
   { value: "firearm_competency", label: "Firearm Competency Certificate" },
