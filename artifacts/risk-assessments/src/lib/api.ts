@@ -1927,6 +1927,12 @@ export const api = {
     // Stripe's publishable key) - see lib/push.ts (frontend).
     config: () => apiFetch<{ enabled: boolean; appId: string | null }>("/push/config"),
   },
+  sampleData: {
+    // Platform Maturity Roadmap, Tier 4, item 10.
+    status: () => apiFetch<{ exists: boolean }>("/sample-data"),
+    load: () => apiFetch<{ loaded: boolean }>("/sample-data/load", { method: "POST" }),
+    remove: () => apiFetch<void>("/sample-data", { method: "DELETE" }),
+  },
 };
 
 // Country Intelligence Engine (Operational Canvas) - a Risk Rating from

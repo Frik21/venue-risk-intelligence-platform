@@ -53,6 +53,7 @@ import dataExportRouter from "./data-export";
 import taskLocationPingsRouter from "./task-location-pings";
 import availabilityRequestsRouter from "./availability-requests";
 import pushRouter from "./push";
+import sampleDataRouter from "./sample-data";
 
 const router: IRouter = Router();
 
@@ -123,5 +124,6 @@ router.use(dataExportRouter);
 router.use(taskLocationPingsRouter);
 router.use(availabilityRequestsRouter);
 router.use(pushRouter);
+router.use(sampleDataRouter);
 
 export default router;
