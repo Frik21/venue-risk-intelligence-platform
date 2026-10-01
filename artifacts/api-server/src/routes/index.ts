@@ -47,6 +47,7 @@ import taskEquipmentRouter from "./task-equipment";
 import travelLogisticsRouter from "./travel-logistics";
 import contractsRouter from "./contracts";
 import vendorPerformanceRouter from "./vendor-performance";
+import taskLocationPingsRouter from "./task-location-pings";
 
 const router: IRouter = Router();
 
@@ -108,5 +109,6 @@ router.use(taskEquipmentRouter);
 router.use(travelLogisticsRouter);
 router.use(contractsRouter);
 router.use(vendorPerformanceRouter);
+router.use(taskLocationPingsRouter);
 
 export default router;
