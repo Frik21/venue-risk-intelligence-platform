@@ -502,6 +502,17 @@ export interface SystemStatus {
   serverTime: string;
 }
 
+// Public status page - Platform Maturity Roadmap, Tier 5, item 11. A
+// flat, append-only post log - the most recent post's own `status` is
+// what the public page's "known issues" banner reflects.
+export interface StatusIncident {
+  id: number;
+  title: string;
+  message: string;
+  status: "investigating" | "identified" | "monitoring" | "resolved";
+  createdAt: string;
+}
+
 export interface CompanySummary {
   totalCompanies: number;
   byStatus: Record<CompanyStatus, number>;
@@ -666,6 +677,18 @@ export interface Principal {
   familyNotes: string | null;
   createdAt?: string;
   updatedAt?: string;
+}
+
+// Platform Maturity Roadmap, Tier 2, item 4 - one row per access to a
+// Principal Protection Profile. userName/taskTitle are null-safe left
+// joins - a deactivated user or a deleted task still leaves the log
+// entry itself intact.
+export interface PrincipalAccessLogEntry {
+  id: number;
+  action: "viewed" | "created" | "updated" | "deleted";
+  userName: string | null;
+  taskTitle: string | null;
+  createdAt: string;
 }
 
 export type VendorStatus = "lead" | "active" | "inactive" | "preferred";
@@ -1571,6 +1594,18 @@ export const api = {
   system: {
     status: () => apiFetch<SystemStatus>("/system/status"),
   },
+  // Public status page - Platform Maturity Roadmap, Tier 5, item 11.
+  // `get` is entirely unauthenticated (no session needed to check
+  // whether the platform is up); create/update/delete are Owner-only,
+  // used from /owner/it's own "Public Status Page" section.
+  status: {
+    get: () => apiFetch<{ operational: boolean; checkedAt: string; incidents: StatusIncident[] }>("/status"),
+    create: (data: { title: string; message: string; status?: StatusIncident["status"] }) =>
+      apiFetch<StatusIncident>("/status/incidents", { method: "POST", body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<{ title: string; message: string; status: StatusIncident["status"] }>) =>
+      apiFetch<StatusIncident>(`/status/incidents/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    delete: (id: number) => apiFetch<void>(`/status/incidents/${id}`, { method: "DELETE" }),
+  },
   // create is open to any company-scoped user (Command Desk or
   // Operators Note, "Report an Issue"); list/update are Owner-only (the
   // IT inbox on /owner/it).
@@ -1631,6 +1666,10 @@ export const api = {
     update: (clientId: number, id: number, data: Partial<{ name: string; relationship: string; medicalInfo: string | null; knownThreats: string | null; routineNotes: string | null; familyNotes: string | null }>) =>
       apiFetch<Principal>(`/clients/${clientId}/principals/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     delete: (clientId: number, id: number) => apiFetch<void>(`/clients/${clientId}/principals/${id}`, { method: "DELETE" }),
+    // Platform Maturity Roadmap, Tier 2, item 4 - who's viewed/edited
+    // this principal's record, and when.
+    accessLog: (clientId: number, id: number) =>
+      apiFetch<PrincipalAccessLogEntry[]>(`/clients/${clientId}/principals/${id}/access-log`),
   },
   vendors: {
     list: () => apiFetch<Vendor[]>("/vendors"),
@@ -1903,6 +1942,19 @@ export const api = {
   countries: {
     intelligence: (iso2: string, name: string) =>
       apiFetch<CountryIntelligence>(`/countries/${iso2}/intelligence?name=${encodeURIComponent(name)}`),
+  },
+  push: {
+    // Authenticated - whether a real OneSignal account is connected
+    // yet (lib/push.ts on the backend) and, if so, the App ID to
+    // initialize the browser SDK with (public/safe, same posture as
+    // Stripe's publishable key) - see lib/push.ts (frontend).
+    config: () => apiFetch<{ enabled: boolean; appId: string | null }>("/push/config"),
+  },
+  sampleData: {
+    // Platform Maturity Roadmap, Tier 4, item 10.
+    status: () => apiFetch<{ exists: boolean }>("/sample-data"),
+    load: () => apiFetch<{ loaded: boolean }>("/sample-data/load", { method: "POST" }),
+    remove: () => apiFetch<void>("/sample-data", { method: "DELETE" }),
   },
 };
 

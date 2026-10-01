@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { api, type Task, type User, type Office, type Venue, type Quote, type Invoice, type Client, type OnboardingOverviewRecord } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,6 +23,114 @@ import { useMemo, useState } from "react";
 import { formatDate } from "@/lib/display-utils";
 import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { dailyBuckets, countByDay, countOpenByDay, distinctByDay, mergeSeries, toSingleSeries, cumulativeWinRateByDay, toSingleSeriesNullable } from "@/lib/trend-buckets";
+import { cn } from "@/lib/utils";
+
+const ONBOARDING_DISMISSED_KEY = "venueguard-onboarding-checklist-dismissed";
+
+// "Get started" banner for a brand-new company - Platform Maturity
+// Roadmap, Tier 4, items 9+10. Each step ticks off automatically once
+// that data genuinely exists (no separate "mark done" action to
+// forget), and the whole banner disappears on its own once every step
+// is done - same "vanishes once real data exists" convention this
+// app's own placeholder content (MOCK_TASK, OPERATIONAL_ALERTS) already
+// uses. "Hide this" is the one manual override, for a Manager who just
+// doesn't want to see it regardless of progress.
+function OnboardingChecklistBanner({
+  offices, clients, onboardingRecords, tasks,
+}: { offices: Office[]; clients: Client[]; onboardingRecords: OnboardingOverviewRecord[]; tasks: Task[] }) {
+  const qc = useQueryClient();
+  const [dismissed, setDismissed] = useState(() => {
+    try { return localStorage.getItem(ONBOARDING_DISMISSED_KEY) === "true"; } catch { return false; }
+  });
+  const [working, setWorking] = useState(false);
+  const { data: sampleData } = useQuery({ queryKey: ["sample-data-status"], queryFn: api.sampleData.status });
+
+  const steps = [
+    { key: "office", label: "Add an Office", done: offices.length > 0, href: "/admin/offices" },
+    { key: "client", label: "Add a Client", done: clients.length > 0, href: "/admin/clients" },
+    { key: "operator", label: "Onboard a CPO", done: onboardingRecords.some((r) => r.status === "onboarded"), href: "/admin/onboarding" },
+    { key: "task", label: "Create a Task", done: tasks.length > 0, href: "/tasks" },
+  ];
+  const allDone = steps.every((s) => s.done);
+
+  if (dismissed || allDone) return null;
+
+  function dismiss() {
+    try { localStorage.setItem(ONBOARDING_DISMISSED_KEY, "true"); } catch { /* best-effort only */ }
+    setDismissed(true);
+  }
+
+  async function refetchSeededEntities() {
+    await Promise.all(
+      ["offices", "clients", "tasks", "quotes", "sample-data-status"].map((key) => qc.invalidateQueries({ queryKey: [key] })),
+    );
+  }
+
+  async function handleLoadSample() {
+    setWorking(true);
+    try {
+      await api.sampleData.load();
+      await refetchSeededEntities();
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function handleRemoveSample() {
+    setWorking(true);
+    try {
+      await api.sampleData.remove();
+      await refetchSeededEntities();
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  return (
+    <Card className="border-blue-200 bg-blue-50/40">
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-semibold text-slate-900">Get started with VenueGuard</h2>
+            <p className="text-sm text-slate-500 mt-0.5">A few things to set up before your first real job.</p>
+          </div>
+          <button type="button" onClick={dismiss} className="text-xs text-slate-400 hover:text-slate-600 whitespace-nowrap shrink-0">
+            Hide this
+          </button>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+          {steps.map((s) => (
+            <Link
+              key={s.key}
+              href={s.href}
+              className={cn(
+                "flex items-center gap-2 text-sm rounded-lg border px-3 py-2 transition-colors",
+                s.done ? "border-green-200 bg-green-50 text-green-700" : "border-slate-200 bg-white text-slate-600 hover:border-blue-300",
+              )}
+            >
+              <CheckCircle2 className={cn("w-4 h-4 shrink-0", s.done ? "text-green-500" : "text-slate-300")} />
+              {s.label}
+            </Link>
+          ))}
+        </div>
+        <div className="mt-4">
+          {sampleData?.exists ? (
+            <Button size="sm" variant="outline" onClick={handleRemoveSample} disabled={working}>
+              {working ? "Removing..." : "Remove sample data"}
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" onClick={handleLoadSample} disabled={working}>
+              {working ? "Loading..." : "Load sample data to explore"}
+            </Button>
+          )}
+          {sampleData?.exists && (
+            <span className="text-xs text-slate-400 ml-2">Look for "[Sample]" entries - remove them before going live for real.</span>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 const PRIORITY_COLORS: Record<string, string> = {
   low: "text-slate-600 bg-slate-100 border-slate-200",
@@ -253,6 +361,8 @@ export default function AdminDashboard() {
           <Plus className="w-4 h-4 mr-1.5" /> New Task Request
         </Button>
       </div>
+
+      <OnboardingChecklistBanner offices={offices} clients={allClients} onboardingRecords={onboardingRecords} tasks={allTasks} />
 
       {/* Trends */}
       <div>

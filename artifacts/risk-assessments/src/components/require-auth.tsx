@@ -32,6 +32,12 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   // browser" treatment as /feedback/:token above.
   if (location.startsWith("/portal/")) return <>{children}</>;
 
+  // /status (pages/status.tsx) - the public status page (Platform
+  // Maturity Roadmap, Tier 5, item 11). Same "no account/session at
+  // all" treatment - the whole point is being checkable during a real
+  // outage, which includes one that's taken out auth itself.
+  if (location === "/status") return <>{children}</>;
+
   if (status === "loading") {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
