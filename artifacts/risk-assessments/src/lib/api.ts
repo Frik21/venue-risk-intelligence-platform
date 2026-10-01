@@ -80,6 +80,23 @@ export interface SessionUser {
   planType: PlanType | null;
 }
 
+// Rate benchmarking - Following Roadmap Tier 3, item 28. An internal
+// benchmark (no external market-rate data source exists) - see
+// routes/rate-benchmarking.ts's own comment for the full reasoning.
+export interface RateBenchmark {
+  userId: number;
+  name: string;
+  dayRate: number | null;
+  nightRate: number | null;
+  region: string | null;
+  riskLevel: 1 | 2 | 3 | 4 | null;
+  riskLevelLabel: string | null;
+  comparisonBasis: "region" | "company";
+  avgDayRate: number | null;
+  avgNightRate: number | null;
+  regionSampleSize: number;
+}
+
 export interface Venue {
   id: number; name: string; venueType: string; address: string; city: string; country: string;
   lat: number | null; lng: number | null; googleMapsUrl: string | null; district: string | null;
@@ -1189,6 +1206,7 @@ export const api = {
       apiFetch<User>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     updateRates: (id: number, data: { dayRate: number | null; nightRate: number | null }) =>
       apiFetch<User>(`/users/${id}/rates`, { method: "PATCH", body: JSON.stringify(data) }),
+    rateBenchmarks: () => apiFetch<RateBenchmark[]>("/rate-benchmarking"),
     // Command Desk's own self-service seat view - distinct from the
     // Master Console's aggregate-only /companies surface (Owner-only).
     // Any Management-side role can call these for its own company,
