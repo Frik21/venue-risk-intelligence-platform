@@ -49,6 +49,7 @@ import travelLogisticsRouter from "./travel-logistics";
 import contractsRouter from "./contracts";
 import vendorPerformanceRouter from "./vendor-performance";
 import rateBenchmarkingRouter from "./rate-benchmarking";
+import dataExportRouter from "./data-export";
 
 const router: IRouter = Router();
 
@@ -115,5 +116,6 @@ router.use(travelLogisticsRouter);
 router.use(contractsRouter);
 router.use(vendorPerformanceRouter);
 router.use(rateBenchmarkingRouter);
+router.use(dataExportRouter);
 
 export default router;
