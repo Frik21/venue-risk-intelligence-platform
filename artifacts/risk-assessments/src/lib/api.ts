@@ -983,6 +983,7 @@ export interface OnboardingOverviewRecord extends OnboardingRecord {
 export type DocumentType =
   | "id_document"
   | "passport"
+  | "visa"
   | "psira_registration"
   | "sia_license"
   | "firearm_competency"
