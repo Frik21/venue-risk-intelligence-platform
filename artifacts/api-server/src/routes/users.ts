@@ -3,7 +3,7 @@ import { db, usersTable, companiesTable, officesTable } from "@workspace/db";
 import { z } from "zod";
 import { eq, desc, and, count, asc } from "drizzle-orm";
 import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
-import { generateInitialPassword, hashPassword } from "../lib/auth";
+import { generateInitialPassword, hashPassword, restrictWritesToRoles } from "../lib/auth";
 import { resolveCurrency } from "../lib/currency";
 import {
   BASE_SEATS_BY_ROLE,
@@ -56,7 +56,14 @@ router.get("/users", async (req, res): Promise<void> => {
   res.json(users.map(formatUser));
 });
 
-router.post("/users", async (req, res): Promise<void> => {
+// Granular per-role permissions - Following Roadmap Tier 3, item 30.
+// Creating a user and setting a CPO's pay rate are HR's own domain
+// (see pages/admin/hr.tsx) - deliberately NOT applied to this whole
+// router (GET /users, PATCH /users/:id self-service, GET/PATCH
+// /users/seats all stay open to every Management role and, for GET,
+// to CPOs too - this only gates the two specific HR-management writes
+// below).
+router.post("/users", restrictWritesToRoles("human_resources"), async (req, res): Promise<void> => {
   const parsed = UserInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
@@ -287,7 +294,7 @@ const RatesUpdateSchema = z.object({
 // Manager-set pay rate, deliberately separate from the self-service
 // PATCH above - a CPO editing their own Account Details should never
 // be able to set their own pay rate.
-router.patch("/users/:id/rates", async (req, res): Promise<void> => {
+router.patch("/users/:id/rates", restrictWritesToRoles("human_resources"), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 

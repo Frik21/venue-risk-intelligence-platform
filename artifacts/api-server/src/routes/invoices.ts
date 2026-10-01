@@ -5,8 +5,14 @@ import { z } from "zod";
 import { buildInvoicePdf } from "../lib/invoice-pdf";
 import { COST_CATEGORIES } from "./quotes";
 import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
+import { restrictWritesToRoles } from "../lib/auth";
 
 const router: IRouter = Router();
+
+// Granular per-role permissions - Following Roadmap Tier 3, item 30.
+// Same reasoning as quotes.ts - Finance's own domain, no CPO session
+// ever reaches this router.
+router.use(restrictWritesToRoles("finance"));
 
 const INVOICE_STATUSES = ["draft", "sent", "paid"] as const;
 
