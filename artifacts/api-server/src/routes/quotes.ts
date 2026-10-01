@@ -23,7 +23,7 @@ function quoteNumber(id: number) {
 // derived here on every read rather than stored, so there's exactly
 // one source of truth for the math (see Commercials comment in
 // schema/quotes.ts).
-function computeCommercials(row: typeof quotesTable.$inferSelect) {
+export function computeCommercials(row: typeof quotesTable.$inferSelect) {
   const internalCost = row.costLineItems.reduce((sum, i) => sum + i.amount, 0);
   const markupAmount = row.markupType === "percent" ? internalCost * (row.markupValue / 100) : row.markupValue;
   const clientPrice = internalCost + markupAmount;
@@ -32,7 +32,7 @@ function computeCommercials(row: typeof quotesTable.$inferSelect) {
   return { internalCost, markupAmount, clientPrice, taxAmount, totalQuoteValue };
 }
 
-function formatQuote(
+export function formatQuote(
   row: typeof quotesTable.$inferSelect,
   venueName: string | null,
   assignedByName: string | null,
@@ -69,18 +69,83 @@ function formatQuote(
     assignedByName: assignedByName ?? null,
     sentAt: row.sentAt?.toISOString() ?? null,
     decidedAt: row.decidedAt?.toISOString() ?? null,
+    signedByName: row.signedByName,
+    signedAt: row.signedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     ...computeCommercials(row),
   };
 }
 
-async function loadContext(row: typeof quotesTable.$inferSelect) {
+export async function loadContext(row: typeof quotesTable.$inferSelect) {
   const [venue] = row.venueId != null
     ? await db.select({ name: venuesTable.name }).from(venuesTable).where(eq(venuesTable.id, row.venueId))
     : [undefined];
   const [assignedByUser] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, row.assignedBy));
   return { venueName: venue?.name ?? null, assignedByName: assignedByUser?.name ?? null };
+}
+
+// Side effects of a Quote's status moving into "approved" for the
+// first time - extracted out of the authenticated PATCH handler below
+// so the public Client Portal e-signature flow (Following Roadmap
+// Tier 3, item 26; routes/client-portal.ts) can trigger the exact same
+// task-sync + auto-invoice behavior a Manager-side approval already
+// does, rather than a second, drifting copy of this logic.
+export async function applyApprovalSideEffects(quote: typeof quotesTable.$inferSelect, justApproved: boolean) {
+  // Approving the Quote is what actually moves its linked Task out of
+  // the "Quotation" bucket and into "Pending Allocation" (see
+  // taskBucket() in task-bucket.ts, which reads task.quotationStatus -
+  // a separate field from this Quote's own status, per direct product
+  // direction: quote approval is the trigger, not merely creating/
+  // saving one). Only fires on this explicit transition, not on every
+  // edit of an already-approved quote.
+  if (justApproved && quote.taskId != null) {
+    await db.update(tasksTable).set({ quotationStatus: "approved" }).where(eq(tasksTable.id, quote.taskId));
+  }
+
+  // Auto-create a draft Invoice the moment a Quote is approved, per
+  // direct product direction - the same "prefill from an approved
+  // Quote" the manual Task Pending Invoice flow already does
+  // (invoice-dialog.tsx's initialQuote prop), just triggered
+  // automatically instead of waiting for a Manager to open the
+  // dialog. A Manager can then add further, categorized line items
+  // for costs beyond the quoted amount (operational costs, additional
+  // manpower, vehicles, etc. - COST_CATEGORIES above, shared with
+  // Quotes' own cost build-up). Guarded on the same justApproved
+  // transition, plus a check for an existing invoice against this
+  // quote, so re-saving an already-approved quote (or a quote that
+  // already had one manually created) never creates a duplicate.
+  if (justApproved) {
+    const [existingInvoice] = await db.select({ id: invoicesTable.id }).from(invoicesTable).where(eq(invoicesTable.quoteId, quote.id));
+    if (!existingInvoice) {
+      const { totalQuoteValue } = computeCommercials(quote);
+      const [draftInvoice] = await db
+        .insert(invoicesTable)
+        .values({
+          companyId: quote.companyId,
+          taskId: quote.taskId,
+          quoteId: quote.id,
+          officeId: quote.officeId,
+          clientId: quote.clientId,
+          title: quote.title,
+          status: "draft",
+          clientName: quote.clientName,
+          clientContact: quote.clientContact,
+          billingDetails: quote.billingDetails,
+          lineItems: [{ category: null, description: quote.title || "Services rendered", amount: totalQuoteValue }],
+          taxRatePercent: quote.taxRatePercent,
+          currency: quote.currency,
+          assignedBy: quote.assignedBy,
+        })
+        .returning();
+      // Same "a saved Invoice record existing for a task IS what
+      // billed means" sync as manual invoice creation - see
+      // syncTaskInvoiced in routes/invoices.ts.
+      if (draftInvoice.taskId != null) {
+        await db.update(tasksTable).set({ invoiced: true }).where(eq(tasksTable.id, draftInvoice.taskId));
+      }
+    }
+  }
 }
 
 router.get("/quotes", async (req, res): Promise<void> => {
@@ -216,61 +281,8 @@ router.patch("/quotes/:id", async (req, res): Promise<void> => {
     .where(eq(quotesTable.id, id))
     .returning();
 
-  // Approving the Quote is what actually moves its linked Task out of
-  // the "Quotation" bucket and into "Pending Allocation" (see
-  // taskBucket() in task-bucket.ts, which reads task.quotationStatus -
-  // a separate field from this Quote's own status, per direct product
-  // direction: quote approval is the trigger, not merely creating/
-  // saving one). Only fires on this explicit transition, not on every
-  // edit of an already-approved quote.
   const justApproved = status === "approved" && existing.status !== "approved";
-  if (justApproved && quote.taskId != null) {
-    await db.update(tasksTable).set({ quotationStatus: "approved" }).where(eq(tasksTable.id, quote.taskId));
-  }
-
-  // Auto-create a draft Invoice the moment a Quote is approved, per
-  // direct product direction - the same "prefill from an approved
-  // Quote" the manual Task Pending Invoice flow already does
-  // (invoice-dialog.tsx's initialQuote prop), just triggered
-  // automatically instead of waiting for a Manager to open the
-  // dialog. A Manager can then add further, categorized line items
-  // for costs beyond the quoted amount (operational costs, additional
-  // manpower, vehicles, etc. - COST_CATEGORIES above, shared with
-  // Quotes' own cost build-up). Guarded on the same justApproved
-  // transition, plus a check for an existing invoice against this
-  // quote, so re-saving an already-approved quote (or a quote that
-  // already had one manually created) never creates a duplicate.
-  if (justApproved) {
-    const [existingInvoice] = await db.select({ id: invoicesTable.id }).from(invoicesTable).where(eq(invoicesTable.quoteId, quote.id));
-    if (!existingInvoice) {
-      const { totalQuoteValue } = computeCommercials(quote);
-      const [draftInvoice] = await db
-        .insert(invoicesTable)
-        .values({
-          companyId: quote.companyId,
-          taskId: quote.taskId,
-          quoteId: quote.id,
-          officeId: quote.officeId,
-          clientId: quote.clientId,
-          title: quote.title,
-          status: "draft",
-          clientName: quote.clientName,
-          clientContact: quote.clientContact,
-          billingDetails: quote.billingDetails,
-          lineItems: [{ category: null, description: quote.title || "Services rendered", amount: totalQuoteValue }],
-          taxRatePercent: quote.taxRatePercent,
-          currency: quote.currency,
-          assignedBy: quote.assignedBy,
-        })
-        .returning();
-      // Same "a saved Invoice record existing for a task IS what
-      // billed means" sync as manual invoice creation - see
-      // syncTaskInvoiced in routes/invoices.ts.
-      if (draftInvoice.taskId != null) {
-        await db.update(tasksTable).set({ invoiced: true }).where(eq(tasksTable.id, draftInvoice.taskId));
-      }
-    }
-  }
+  await applyApprovalSideEffects(quote, justApproved);
 
   const ctx = await loadContext(quote);
   res.json(formatQuote(quote, ctx.venueName, ctx.assignedByName));

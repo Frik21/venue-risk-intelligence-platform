@@ -8,6 +8,7 @@ import Layout from "@/components/layout";
 import Dashboard from "@/pages/dashboard";
 import LoginPage from "@/pages/login";
 import FeedbackPage from "@/pages/feedback";
+import ClientPortalPage from "@/pages/client-portal";
 import RegisterPage from "@/pages/register";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
@@ -77,6 +78,7 @@ function Router() {
       <Switch>
         <Route path="/login" component={LoginPage} />
         <Route path="/feedback/:token" component={FeedbackPage} />
+        <Route path="/portal/:token" component={ClientPortalPage} />
         <Route path="/register" component={RegisterPage} />
         <Route path="/forgot-password" component={ForgotPasswordPage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
