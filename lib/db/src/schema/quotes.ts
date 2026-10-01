@@ -84,6 +84,18 @@ export const quotesTable = pgTable("quotes", {
   sentAt: timestamp("sent_at", { withTimezone: true }),
   decidedAt: timestamp("decided_at", { withTimezone: true }),
 
+  // E-signature - Following Roadmap Tier 3, item 26 ("not just a
+  // status flip - more defensible if a dispute comes up"). Only ever
+  // set by the public Client Portal signing flow (routes/client-portal.ts),
+  // never by the authenticated Command Desk PATCH /quotes/:id - a
+  // Manager can still flip status to "approved" by hand (e.g. the
+  // client agreed by phone/email), but that path leaves these two
+  // columns null, so their presence specifically means "the client
+  // typed their name and clicked Sign on the real quote", not just
+  // "someone marked this approved."
+  signedByName: text("signed_by_name"),
+  signedAt: timestamp("signed_at", { withTimezone: true }),
+
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [index("idx_quotes_company_id").on(table.companyId)]);

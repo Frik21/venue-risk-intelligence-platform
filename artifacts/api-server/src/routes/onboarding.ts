@@ -4,10 +4,16 @@ import { db, operatorOnboardingTable, operatorDocumentsTable, usersTable } from 
 import { z } from "zod";
 import { ONBOARDING_CHECKLIST_ITEMS, DOCUMENT_TYPES } from "../lib/onboarding-checklist";
 import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
-import { generateInitialPassword, hashPassword } from "../lib/auth";
+import { generateInitialPassword, hashPassword, restrictWritesToRoles } from "../lib/auth";
 import { checkSeatAvailable } from "./companies";
 
 const router: IRouter = Router();
+
+// Granular per-role permissions - Following Roadmap Tier 3, item 30.
+// Operator Database is HR's own domain (see pages/admin/hr.tsx) - no
+// CPO session ever reaches this router (not in CPO_SURFACE_PATH_PREFIXES),
+// so gating every write here is safe. Reads stay open to every role.
+router.use(restrictWritesToRoles("human_resources"));
 const DOCUMENT_TYPE_VALUES = DOCUMENT_TYPES.map((t) => t.value) as [string, ...string[]];
 const ONBOARDING_STATUSES = ["in_progress", "onboarded", "denied"] as const;
 

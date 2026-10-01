@@ -2362,6 +2362,12 @@ function OperationalCanvas({
   const [accountNameInput, setAccountNameInput] = useState("");
   const [accountEmailInput, setAccountEmailInput] = useState("");
   const [accountInitialsInput, setAccountInitialsInput] = useState("");
+  // Real notifications - Following Roadmap Tier 3, item 29. The one
+  // self-service surface that exists for a CPO's own account - this is
+  // where a CPO sets the number panic/missed-checkin SMS alerts would
+  // reach them on, though those currently only go to Management, not
+  // back to the CPO themselves (see notifyManagement's own scoping).
+  const [accountPhoneInput, setAccountPhoneInput] = useState("");
   const [savingAccountDetails, setSavingAccountDetails] = useState(false);
   const [accountDetailsError, setAccountDetailsError] = useState<string | null>(null);
 
@@ -2370,6 +2376,7 @@ function OperationalCanvas({
     setAccountNameInput(profileUser.name);
     setAccountEmailInput(profileUser.email);
     setAccountInitialsInput(profileUser.avatarInitials ?? "");
+    setAccountPhoneInput(profileUser.phone ?? "");
   }, [profileUser]);
 
   function saveAccountDetails() {
@@ -2385,6 +2392,7 @@ function OperationalCanvas({
         name: accountNameInput.trim(),
         email: accountEmailInput.trim(),
         avatarInitials: accountInitialsInput.trim() || undefined,
+        phone: accountPhoneInput.trim() || null,
       })
       .then((updated) => setProfileUser(updated))
       .catch((err) => {
@@ -5374,6 +5382,16 @@ function OperationalCanvas({
                       value={accountInitialsInput}
                       onChange={(event) => setAccountInitialsInput(event.target.value.toUpperCase())}
                       maxLength={4}
+                      className="venue-assessment-field-input"
+                    />
+                  </label>
+                  <label className="venue-assessment-field">
+                    <span>Phone</span>
+                    <input
+                      type="tel"
+                      value={accountPhoneInput}
+                      onChange={(event) => setAccountPhoneInput(event.target.value)}
+                      placeholder="For SMS alerts"
                       className="venue-assessment-field-input"
                     />
                   </label>

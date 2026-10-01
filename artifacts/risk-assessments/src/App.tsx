@@ -8,6 +8,7 @@ import Layout from "@/components/layout";
 import Dashboard from "@/pages/dashboard";
 import LoginPage from "@/pages/login";
 import FeedbackPage from "@/pages/feedback";
+import ClientPortalPage from "@/pages/client-portal";
 import RegisterPage from "@/pages/register";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
@@ -40,6 +41,7 @@ import AuditLogPage from "@/pages/admin/audit-log";
 import TaskArchive from "@/pages/admin/task-archive";
 import VendorsPage from "@/pages/admin/vendors";
 import TravelLogisticsPage from "@/pages/admin/travel-logistics";
+import DataExportPage from "@/pages/admin/data-export";
 import ContractsPage from "@/pages/admin/contracts";
 import VendorDetailPage from "@/pages/admin/vendor-detail";
 import PayrollPage from "@/pages/admin/payroll";
@@ -78,6 +80,7 @@ function Router() {
       <Switch>
         <Route path="/login" component={LoginPage} />
         <Route path="/feedback/:token" component={FeedbackPage} />
+        <Route path="/portal/:token" component={ClientPortalPage} />
         <Route path="/register" component={RegisterPage} />
         <Route path="/forgot-password" component={ForgotPasswordPage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
@@ -121,6 +124,7 @@ function Router() {
         <Route path="/admin/vendors" component={VendorsPage} />
         <Route path="/admin/vendors/:id" component={VendorDetailPage} />
         <Route path="/admin/travel-logistics" component={TravelLogisticsPage} />
+        <Route path="/admin/data-export" component={DataExportPage} />
         <Route path="/admin/contracts" component={ContractsPage} />
         <Route path="/admin/payroll" component={PayrollPage} />
         <Route path="/admin/task-archive" component={TaskArchive} />
