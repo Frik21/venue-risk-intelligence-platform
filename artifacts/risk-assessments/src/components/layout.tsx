@@ -31,6 +31,7 @@ import {
   ShieldCheck,
   Plane,
   FileSignature,
+  Download,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -84,6 +85,7 @@ const navGroups = [
       { href: "/admin/task-archive", label: "Task Archived", icon: Archive },
       { href: "/admin/offices", label: "Offices", icon: Building2 },
       { href: "/admin/users", label: "Users", icon: Users },
+      { href: "/admin/data-export", label: "Data Export", icon: Download },
     ],
   },
 ];
@@ -145,7 +147,7 @@ useEffect(() => {
 // full-bleed auth pages. "/" itself renders the public landing page
 // directly from require-auth.tsx, never reaching this component at
 // all, so it's not listed here either.
-const hideShell = (location === "/cpo" || location === "/owner" || location === "/owner/subscriptions" || location === "/owner/it" || location === "/quick-access" || location === "/login" || location === "/register" || location === "/forgot-password" || location === "/reset-password" || location === "/change-password" || location.startsWith("/feedback/")) && !showShell;
+const hideShell = (location === "/cpo" || location === "/owner" || location === "/owner/subscriptions" || location === "/owner/it" || location === "/quick-access" || location === "/login" || location === "/register" || location === "/forgot-password" || location === "/reset-password" || location === "/change-password" || location.startsWith("/feedback/") || location.startsWith("/portal/")) && !showShell;
   // "/admin" needs the same exact-match treatment as "/" - otherwise
   // it'd also read as active on "/admin/users" (a real, distinct nav
   // item), since that path also starts with "/admin".

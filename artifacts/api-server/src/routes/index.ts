@@ -3,6 +3,7 @@ import { requireAuth, blockSoloOperatorFromManagement } from "../lib/auth";
 import healthRouter from "./health";
 import authRouter from "./auth";
 import feedbackRouter from "./feedback";
+import clientPortalRouter from "./client-portal";
 import assessmentsRouter from "./assessments";
 import risksRouter from "./risks";
 import venuesRouter from "./venues";
@@ -47,6 +48,9 @@ import taskEquipmentRouter from "./task-equipment";
 import travelLogisticsRouter from "./travel-logistics";
 import contractsRouter from "./contracts";
 import vendorPerformanceRouter from "./vendor-performance";
+import rateBenchmarkingRouter from "./rate-benchmarking";
+import dataExportRouter from "./data-export";
+import taskLocationPingsRouter from "./task-location-pings";
 import availabilityRequestsRouter from "./availability-requests";
 
 const router: IRouter = Router();
@@ -62,6 +66,10 @@ router.use(authRouter);
 // one file, same pattern authRouter itself uses - see that file's own
 // comment.
 router.use(feedbackRouter);
+// clientPortalRouter is entirely public (GET /portal/:token + its
+// invoice PDF sub-route) - a client has no session/account at all, see
+// that file's own comment.
+router.use(clientPortalRouter);
 router.use(requireAuth);
 router.use(blockSoloOperatorFromManagement);
 
@@ -109,6 +117,9 @@ router.use(taskEquipmentRouter);
 router.use(travelLogisticsRouter);
 router.use(contractsRouter);
 router.use(vendorPerformanceRouter);
+router.use(rateBenchmarkingRouter);
+router.use(dataExportRouter);
+router.use(taskLocationPingsRouter);
 router.use(availabilityRequestsRouter);
 
 export default router;

@@ -62,7 +62,7 @@ export type RouteCreationMethod = "endpoint_marker" | "street_builder" | "freeha
 
 export interface User {
   id: number; companyId: number | null; name: string; email: string; role: UserRole; avatarInitials: string | null; active: boolean;
-  dayRate: number | null; nightRate: number | null; officeId: number | null; mustChangePassword: boolean; createdAt: string;
+  dayRate: number | null; nightRate: number | null; officeId: number | null; phone: string | null; mustChangePassword: boolean; createdAt: string;
 }
 
 // The logged-in session's own view of itself - a trimmed subset of
@@ -78,6 +78,23 @@ export interface SessionUser {
   // null for a plain Owner session (no company). "solo_operator" drives
   // require-auth.tsx's redirect keeping the session inside /cpo.
   planType: PlanType | null;
+}
+
+// Rate benchmarking - Following Roadmap Tier 3, item 28. An internal
+// benchmark (no external market-rate data source exists) - see
+// routes/rate-benchmarking.ts's own comment for the full reasoning.
+export interface RateBenchmark {
+  userId: number;
+  name: string;
+  dayRate: number | null;
+  nightRate: number | null;
+  region: string | null;
+  riskLevel: 1 | 2 | 3 | 4 | null;
+  riskLevelLabel: string | null;
+  comparisonBasis: "region" | "company";
+  avgDayRate: number | null;
+  avgNightRate: number | null;
+  regionSampleSize: number;
 }
 
 export interface Venue {
@@ -193,6 +210,16 @@ export interface Task {
 // lib/checkin-monitor.ts). Surfaced on Command Desk's Safety Alerts
 // panel (pages/alerts/list.tsx).
 export type CheckinType = "ok" | "panic" | "missed";
+
+// GPS breadcrumb trail - Following Roadmap Tier 3, item 33.
+export interface TaskLocationPing {
+  id: number;
+  taskId: number;
+  cpoId: number;
+  latitude: number;
+  longitude: number;
+  capturedAt: string;
+}
 
 // CPO self-service availability/time-off requests - Following Roadmap
 // Tier 3, item 34.
@@ -574,8 +601,42 @@ export interface Client {
   dayRate: number | null;
   nightRate: number | null;
   officeId: number | null;
+  portalToken: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// Client Portal - Following Roadmap Tier 3, item 25. What the public
+// GET /portal/:token endpoint returns - no session/auth, so this is
+// deliberately a narrower shape than the Command Desk's own Task/
+// Invoice types (no cost build-up, no internal assignee identity).
+export interface ClientPortalTask {
+  id: number;
+  title: string;
+  status: TaskStatus;
+  dueDate: string | null;
+  endDate: string | null;
+}
+
+export interface ClientPortalInvoice {
+  id: number;
+  invoiceNumber: string;
+  status: InvoiceStatus;
+  dueDate: string | null;
+  currency: string;
+  sentAt: string | null;
+  paidAt: string | null;
+  subtotal: number;
+  taxAmount: number;
+  totalAmount: number;
+}
+
+export interface ClientPortalData {
+  clientName: string;
+  companyName: string;
+  tasks: ClientPortalTask[];
+  quotes: ClientPortalQuote[];
+  invoices: ClientPortalInvoice[];
 }
 
 // A dated activity/communication log entry against a Client - see
@@ -703,10 +764,32 @@ export interface Quote {
   assignedByName: string | null;
   sentAt: string | null;
   decidedAt: string | null;
+  signedByName: string | null;
+  signedAt: string | null;
   createdAt: string;
   updatedAt: string;
   internalCost: number;
   markupAmount: number;
+  clientPrice: number;
+  taxAmount: number;
+  totalQuoteValue: number;
+}
+
+// Client Portal's own narrower quote shape - Following Roadmap Tier 3,
+// item 26. Never carries internalCost/markupAmount/costLineItems (the
+// internal cost build-up stays this company's business, not the
+// client's to see) - see routes/client-portal.ts's formatPortalQuote.
+export interface ClientPortalQuote {
+  id: number;
+  quoteNumber: string;
+  title: string;
+  status: QuoteStatus;
+  validUntil: string | null;
+  currency: string;
+  sentAt: string | null;
+  decidedAt: string | null;
+  signedByName: string | null;
+  signedAt: string | null;
   clientPrice: number;
   taxAmount: number;
   totalQuoteValue: number;
@@ -1000,9 +1083,11 @@ export interface OnboardingOverviewRecord extends OnboardingRecord {
 export type DocumentType =
   | "id_document"
   | "passport"
+  | "visa"
   | "psira_registration"
   | "sia_license"
   | "firearm_competency"
+  | "firearm_permit"
   | "medical_certificate"
   | "drivers_license"
   | "professional_indemnity_insurance"
@@ -1202,10 +1287,11 @@ export const api = {
     // initialPassword is only ever present on this one response - shown
     // once in the Add User dialog, never stored/refetchable.
     create: (data: Partial<User>) => apiFetch<User & { initialPassword: string }>("/users", { method: "POST", body: JSON.stringify(data) }),
-    update: (id: number, data: Partial<Pick<User, "name" | "email" | "avatarInitials" | "officeId">>) =>
+    update: (id: number, data: Partial<Pick<User, "name" | "email" | "avatarInitials" | "officeId" | "phone">>) =>
       apiFetch<User>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     updateRates: (id: number, data: { dayRate: number | null; nightRate: number | null }) =>
       apiFetch<User>(`/users/${id}/rates`, { method: "PATCH", body: JSON.stringify(data) }),
+    rateBenchmarks: () => apiFetch<RateBenchmark[]>("/rate-benchmarking"),
     // Command Desk's own self-service seat view - distinct from the
     // Master Console's aggregate-only /companies surface (Owner-only).
     // Any Management-side role can call these for its own company,
@@ -1290,6 +1376,11 @@ export const api = {
     create: (data: { taskId?: number; type: "ok" | "panic"; latitude?: number; longitude?: number; locationLabel?: string }) =>
       apiFetch<Checkin>("/checkins", { method: "POST", body: JSON.stringify(data) }),
     acknowledge: (id: number) => apiFetch<Checkin>(`/checkins/${id}`, { method: "PATCH", body: JSON.stringify({}) }),
+  },
+  taskLocationPings: {
+    listForTask: (taskId: number) => apiFetch<TaskLocationPing[]>(`/task-location-pings?taskId=${taskId}`),
+    create: (data: { taskId: number; latitude: number; longitude: number }) =>
+      apiFetch<TaskLocationPing>("/task-location-pings", { method: "POST", body: JSON.stringify(data) }),
   },
   availabilityRequests: {
     // Company-wide for Management, auto-scoped to "my own" server-side
@@ -1513,6 +1604,19 @@ export const api = {
       dayRate: number | null; nightRate: number | null; officeId: number | null;
     }>) => apiFetch<Client>(`/clients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     delete: (id: number) => apiFetch<void>(`/clients/${id}`, { method: "DELETE" }),
+    generatePortalLink: (id: number) => apiFetch<Client>(`/clients/${id}/portal-link`, { method: "POST" }),
+    revokePortalLink: (id: number) => apiFetch<Client>(`/clients/${id}/portal-link`, { method: "DELETE" }),
+  },
+  // The public, unauthenticated side of the same feature - called from
+  // pages/client-portal.tsx (the client-facing link itself), never
+  // from inside Command Desk. Same shape as publicFeedback below.
+  publicClientPortal: {
+    get: (token: string) => apiFetch<ClientPortalData>(`/portal/${token}`),
+    invoicePdfUrl: (token: string, invoiceId: number) => `${BASE}/portal/${token}/invoices/${invoiceId}/pdf`,
+    signQuote: (token: string, quoteId: number, signedByName: string) =>
+      apiFetch<ClientPortalQuote>(`/portal/${token}/quotes/${quoteId}/sign`, { method: "POST", body: JSON.stringify({ signedByName }) }),
+    declineQuote: (token: string, quoteId: number) =>
+      apiFetch<ClientPortalQuote>(`/portal/${token}/quotes/${quoteId}/decline`, { method: "POST" }),
   },
   clientActivities: {
     list: (clientId: number) => apiFetch<ClientActivity[]>(`/clients/${clientId}/activities`),

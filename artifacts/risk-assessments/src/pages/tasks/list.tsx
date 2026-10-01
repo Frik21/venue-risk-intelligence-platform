@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Task, type TaskStatus, type TaskPriority, type Venue, type User, type Client, type Vendor, type TimesheetEntry, type AfterActionReport, type TaskEquipment, type FeedbackRequest, type TaskVendor, type VendorPerformanceReview } from "@/lib/api";
+import { api, type Task, type TaskStatus, type TaskPriority, type Venue, type User, type Client, type Vendor, type TimesheetEntry, type AfterActionReport, type TaskEquipment, type FeedbackRequest, type TaskVendor, type VendorPerformanceReview, type TaskLocationPing } from "@/lib/api";
+import "leaflet/dist/leaflet.css";
+import { MapContainer, TileLayer, Polyline, CircleMarker } from "react-leaflet";
 import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,8 +15,8 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
-import { ListChecks, Plus, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, Search, Shield, Receipt, FileText, Package, Trash2, Wrench, Star, Store } from "lucide-react";
-import { formatDate } from "@/lib/display-utils";
+import { ListChecks, Plus, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, Search, Shield, Receipt, FileText, Package, Trash2, Wrench, Star, Store, MapPin } from "lucide-react";
+import { formatDate, formatDateTime } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { NewTaskDialog, LocationCombobox, QuotationStatusPicker, ClientCombobox } from "@/components/new-task-dialog";
@@ -510,6 +512,48 @@ function TaskEquipmentPanel({ taskId }: { taskId: number }) {
   );
 }
 
+// GPS breadcrumb trail - Following Roadmap Tier 3, item 33. Read-only,
+// fetched only while expanded (same lazy pattern as the panels above).
+// Uses react-leaflet (already a dependency, see pages/maps/index.tsx)
+// rather than a plain list of coordinates - a route is much more
+// legible traced on a real map than read off a table of lat/lng pairs.
+// CircleMarker for each point (not the default Marker icon) - no icon-
+// asset workaround needed for a simple trail of dots.
+function RouteTrailPanel({ taskId }: { taskId: number }) {
+  const { data: pings = [], isLoading } = useQuery<TaskLocationPing[]>({
+    queryKey: ["task-location-pings", taskId],
+    queryFn: () => api.taskLocationPings.listForTask(taskId),
+  });
+
+  if (isLoading) return <Skeleton className="h-16 mt-2" />;
+  if (pings.length === 0) {
+    return <p className="text-xs text-slate-400 mt-2">No location pings recorded yet - these are captured automatically every few minutes while the assigned CPO has this task open and in progress.</p>;
+  }
+
+  const positions: [number, number][] = pings.map((p) => [p.latitude, p.longitude]);
+  const last = positions[positions.length - 1];
+
+  return (
+    <div className="mt-2 border-t border-slate-100 pt-2 space-y-1.5">
+      <p className="text-xs text-slate-500">{pings.length} point{pings.length === 1 ? "" : "s"} · last seen {formatDateTime(pings[pings.length - 1].capturedAt)}</p>
+      <div className="h-56 rounded-md overflow-hidden border border-slate-200">
+        <MapContainer center={last} zoom={13} style={{ height: "100%", width: "100%" }} scrollWheelZoom={false}>
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
+          {positions.length > 1 && <Polyline positions={positions} pathOptions={{ color: "#2563eb", weight: 3 }} />}
+          {positions.map((pos, i) => (
+            <CircleMarker
+              key={i}
+              center={pos}
+              radius={i === positions.length - 1 ? 7 : 4}
+              pathOptions={{ color: i === positions.length - 1 ? "#dc2626" : "#2563eb", fillOpacity: 0.9 }}
+            />
+          ))}
+        </MapContainer>
+      </div>
+    </div>
+  );
+}
+
 // Static (read-only) star display for a submitted rating - distinct
 // from pages/feedback.tsx's own clickable StarPicker, which this
 // mirrors visually but never needs interaction here.
@@ -736,6 +780,7 @@ export default function TasksList() {
   const [expandedHoursTaskId, setExpandedHoursTaskId] = useState<number | null>(null);
   const [expandedAarTaskId, setExpandedAarTaskId] = useState<number | null>(null);
   const [expandedEquipmentTaskId, setExpandedEquipmentTaskId] = useState<number | null>(null);
+  const [expandedRouteTrailTaskId, setExpandedRouteTrailTaskId] = useState<number | null>(null);
   const [expandedFeedbackTaskId, setExpandedFeedbackTaskId] = useState<number | null>(null);
   const [expandedVendorsTaskId, setExpandedVendorsTaskId] = useState<number | null>(null);
   // "archived" sits alongside the real TaskBucket values as a 7th,
@@ -1108,6 +1153,20 @@ export default function TasksList() {
                         {expandedEquipmentTaskId === task.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                       </button>
                       {expandedEquipmentTaskId === task.id && <TaskEquipmentPanel taskId={task.id} />}
+
+                      {(task.status === "in_progress" || task.status === "completed") && (
+                        <>
+                          <button
+                            onClick={() => setExpandedRouteTrailTaskId((id) => (id === task.id ? null : task.id))}
+                            className="flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1.5"
+                          >
+                            <MapPin className="w-3 h-3" />
+                            Route trail
+                            {expandedRouteTrailTaskId === task.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          </button>
+                          {expandedRouteTrailTaskId === task.id && <RouteTrailPanel taskId={task.id} />}
+                        </>
+                      )}
 
                       {task.status === "completed" && (
                         <>

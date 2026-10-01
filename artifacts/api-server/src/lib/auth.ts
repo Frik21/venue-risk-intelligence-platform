@@ -147,6 +147,32 @@ export function requireRole(...roles: string[]) {
   };
 }
 
+// Granular per-role permissions - Following Roadmap Tier 3, item 30
+// ("today Finance/Operations/HR all have the same looseness on Command
+// Desk; this locks that down as the company grows"). Deliberately
+// narrow in two ways, both intentional given the roadmap item's own
+// framing as a later, as-the-company-grows concern rather than a
+// launch blocker: (1) only gates writes (POST/PATCH/DELETE) - every
+// GET stays open to every Management role, same looseness as before,
+// so nothing that only reads data (dashboards, cross-referencing a
+// task while reviewing an invoice) regresses; (2) applied only to a
+// curated set of the most clearly domain-specific write routes
+// (per-router, see routes/index.ts), not a full per-endpoint
+// permission matrix for all ~33 routers - that would be a much larger,
+// riskier change than this pass's scope. Manager and Admin (Owner,
+// including Preview mode) always pass regardless of allowedRoles -
+// Manager stays the "runs the company" unrestricted role it already
+// is everywhere else in this app, and Admin is VenueGuard's own
+// platform role.
+export function restrictWritesToRoles(...allowedRoles: string[]) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (req.method === "GET") { next(); return; }
+    const role = req.user?.role;
+    if (role === "admin" || role === "manager" || (role != null && allowedRoles.includes(role))) { next(); return; }
+    res.status(403).json({ error: "Your role doesn't have permission to make changes here." });
+  };
+}
+
 // A "solo_operator" plan company (see companies.ts's schema comment) is
 // a single freelance CPO's own subscription - Operators Note only, per
 // direct product direction, no Management side at all. This is the
@@ -174,6 +200,7 @@ const CPO_SURFACE_PATH_PREFIXES = [
   "/after-action-reports",
   "/task-equipment",
   "/travel-logistics",
+  "/task-location-pings",
   "/availability-requests",
 ];
 

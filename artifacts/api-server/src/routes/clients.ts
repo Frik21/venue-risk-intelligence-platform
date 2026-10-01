@@ -1,5 +1,6 @@
+import crypto from "crypto";
 import { Router, type IRouter } from "express";
-import { eq, asc, desc, inArray } from "drizzle-orm";
+import { eq, and, asc, desc, inArray } from "drizzle-orm";
 import { db, clientsTable, clientActivitiesTable, principalsTable, usersTable } from "@workspace/db";
 import { z } from "zod";
 import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
@@ -23,6 +24,7 @@ function formatClient(row: typeof clientsTable.$inferSelect) {
     dayRate: row.dayRate,
     nightRate: row.nightRate,
     officeId: row.officeId,
+    portalToken: row.portalToken,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -124,6 +126,51 @@ router.delete("/clients/:id", async (req, res): Promise<void> => {
   const [deleted] = await db.delete(clientsTable).where(eq(clientsTable.id, id)).returning();
   if (!deleted) { res.status(404).json({ error: "Client not found" }); return; }
   res.sendStatus(204);
+});
+
+// Client Portal link - Following Roadmap Tier 3, item 25. Generates a
+// fresh token every call (create-or-rotate in one action, no separate
+// "regenerate" endpoint needed) - scoped to the caller's own companyId
+// as a small defense-in-depth improvement over this file's existing
+// PATCH/DELETE (which only match by id), same "new route follows the
+// file's shape but closes this one gap" pattern item 17's contracts
+// route already used.
+router.post("/clients/:id/portal-link", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const portalToken = crypto.randomBytes(24).toString("base64url");
+  const [client] = await db
+    .update(clientsTable)
+    .set({ portalToken })
+    .where(and(eq(clientsTable.id, id), eq(clientsTable.companyId, companyId)))
+    .returning();
+  if (!client) { res.status(404).json({ error: "Client not found" }); return; }
+
+  res.json(formatClient(client));
+});
+
+// Revokes an existing link (e.g. it leaked) without immediately
+// generating a replacement - a Manager re-generates separately via the
+// route above when ready to issue a new one.
+router.delete("/clients/:id/portal-link", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [client] = await db
+    .update(clientsTable)
+    .set({ portalToken: null })
+    .where(and(eq(clientsTable.id, id), eq(clientsTable.companyId, companyId)))
+    .returning();
+  if (!client) { res.status(404).json({ error: "Client not found" }); return; }
+
+  res.json(formatClient(client));
 });
 
 router.get("/clients/:id/activities", async (req, res): Promise<void> => {
