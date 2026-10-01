@@ -31,6 +31,7 @@ import {
   ShieldCheck,
   Plane,
   FileSignature,
+  Download,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -84,6 +85,7 @@ const navGroups = [
       { href: "/admin/task-archive", label: "Task Archived", icon: Archive },
       { href: "/admin/offices", label: "Offices", icon: Building2 },
       { href: "/admin/users", label: "Users", icon: Users },
+      { href: "/admin/data-export", label: "Data Export", icon: Download },
     ],
   },
 ];
