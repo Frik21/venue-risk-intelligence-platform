@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
-import { ArrowLeft, Pencil, Trash2, Mail, Phone, MapPin, Briefcase, ListChecks, FileText, MessageSquare, ShieldCheck, Plus, X } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Mail, Phone, MapPin, Briefcase, ListChecks, FileText, MessageSquare, ShieldCheck, Plus, X, Link as LinkIcon } from "lucide-react";
 import { formatDate, formatDateTime } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -308,6 +308,74 @@ function PrincipalsPanel({ clientId }: { clientId: number }) {
   );
 }
 
+// Client Portal - Following Roadmap Tier 3, item 25. Mirrors Tasks'
+// own FeedbackPanel copy-link UX, but the link here is a persistent,
+// standing portal (not single-use) - "Generate Link" doubles as
+// "Regenerate" (rotates the token, invalidating any previously-sent
+// link) since repeat-clicking is also how a Manager would revoke a
+// leaked one and issue a fresh one in a single action.
+function ClientPortalCard({ client }: { client: Client }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const generateMutation = useMutation({
+    mutationFn: () => api.clients.generatePortalLink(client.id),
+    onSuccess: (updated) => {
+      qc.setQueryData<Client[]>(["clients"], (old) => old?.map((c) => (c.id === updated.id ? updated : c)));
+      const url = `${window.location.origin}/portal/${updated.portalToken}`;
+      navigator.clipboard.writeText(url).then(
+        () => toast({ title: "Portal link copied", description: "Send it to the client - it stays valid until regenerated." }),
+        () => toast({ title: "Link generated", description: url }),
+      );
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: () => api.clients.revokePortalLink(client.id),
+    onSuccess: (updated) => {
+      qc.setQueryData<Client[]>(["clients"], (old) => old?.map((c) => (c.id === updated.id ? updated : c)));
+      toast({ title: "Portal link revoked" });
+    },
+  });
+
+  const copyExisting = () => {
+    const url = `${window.location.origin}/portal/${client.portalToken}`;
+    navigator.clipboard.writeText(url).then(
+      () => toast({ title: "Portal link copied" }),
+      () => toast({ title: "Couldn't copy link", description: url, variant: "destructive" }),
+    );
+  };
+
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <h2 className="font-semibold text-slate-900 flex items-center gap-2 mb-1">
+          <LinkIcon className="w-4 h-4 text-slate-400" /> Client Portal
+        </h2>
+        <p className="text-xs text-slate-400 mb-3">A read-only link where this client can see their own job status and invoices.</p>
+        <div className="flex gap-2 flex-wrap">
+          {client.portalToken ? (
+            <>
+              <Button size="sm" variant="outline" onClick={copyExisting}>Copy Link</Button>
+              <Button size="sm" variant="outline" onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending}>
+                Regenerate Link
+              </Button>
+              <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700" onClick={() => revokeMutation.mutate()} disabled={revokeMutation.isPending}>
+                Revoke
+              </Button>
+            </>
+          ) : (
+            <Button size="sm" onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending}>
+              {generateMutation.isPending ? "Generating..." : "Generate Portal Link"}
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ClientDetailPage() {
   const params = useParams<{ id: string }>();
   const id = Number(params.id);
@@ -465,6 +533,8 @@ export default function ClientDetailPage() {
           </Card>
 
           <PrincipalsPanel clientId={client.id} />
+
+          <ClientPortalCard client={client} />
 
           <ActivityLog clientId={client.id} currentUserId={currentUserId} />
         </div>

@@ -3,6 +3,7 @@ import { requireAuth, blockSoloOperatorFromManagement } from "../lib/auth";
 import healthRouter from "./health";
 import authRouter from "./auth";
 import feedbackRouter from "./feedback";
+import clientPortalRouter from "./client-portal";
 import assessmentsRouter from "./assessments";
 import risksRouter from "./risks";
 import venuesRouter from "./venues";
@@ -62,6 +63,10 @@ router.use(authRouter);
 // one file, same pattern authRouter itself uses - see that file's own
 // comment.
 router.use(feedbackRouter);
+// clientPortalRouter is entirely public (GET /portal/:token + its
+// invoice PDF sub-route) - a client has no session/account at all, see
+// that file's own comment.
+router.use(clientPortalRouter);
 router.use(requireAuth);
 router.use(blockSoloOperatorFromManagement);
 
