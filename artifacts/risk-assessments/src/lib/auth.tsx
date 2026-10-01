@@ -1,5 +1,11 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, SESSION_EXPIRED_EVENT, MANAGEMENT_HOME_ROUTE, type SessionUser, type PlanType, type ManagementRole } from "./api";
+import { api, SESSION_EXPIRED_EVENT, MANAGEMENT_HOME_ROUTE, type SessionUser, type PlanType, type ManagementRole, type UserRole } from "./api";
+import { registerPushUser } from "./push";
+
+// Push notifications (lib/push.ts) are Management-only for now, same
+// scope as lib/notifications.ts's notifyManagement() on the backend -
+// a CPO or Owner (admin) session never registers for push.
+const MANAGEMENT_ROLES: UserRole[] = ["manager", "finance", "human_resources", "operations"];
 
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
@@ -38,6 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then(({ user }) => {
         setUser(user);
         setStatus("authenticated");
+        if (MANAGEMENT_ROLES.includes(user.role)) void registerPushUser(user.id);
       })
       .catch(() => setStatus("unauthenticated"));
   }, []);

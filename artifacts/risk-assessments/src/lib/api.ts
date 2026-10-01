@@ -1904,6 +1904,13 @@ export const api = {
     intelligence: (iso2: string, name: string) =>
       apiFetch<CountryIntelligence>(`/countries/${iso2}/intelligence?name=${encodeURIComponent(name)}`),
   },
+  push: {
+    // Authenticated - whether a real OneSignal account is connected
+    // yet (lib/push.ts on the backend) and, if so, the App ID to
+    // initialize the browser SDK with (public/safe, same posture as
+    // Stripe's publishable key) - see lib/push.ts (frontend).
+    config: () => apiFetch<{ enabled: boolean; appId: string | null }>("/push/config"),
+  },
 };
 
 // Country Intelligence Engine (Operational Canvas) - a Risk Rating from
