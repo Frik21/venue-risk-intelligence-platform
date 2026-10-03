@@ -1,7 +1,7 @@
 import { db, pool, companiesTable, usersTable, sessionsTable } from "@workspace/db";
 import { hashPassword } from "../lib/auth";
 
-export type TestUserRole = "admin" | "manager" | "cpo" | "finance" | "human_resources" | "operations";
+export type TestUserRole = "admin" | "manager" | "cpo" | "finance" | "human_resources" | "operations" | "gsoc";
 
 // Shared fixtures for the real-Postgres test suite (Platform Maturity
 // Roadmap, Tier 3, item 7) - scoped to this app's shared infrastructure

@@ -22,6 +22,7 @@ export const pricingConfigTable = pgTable("pricing_config", {
   pricePerOperationsSeat: integer("price_per_operations_seat").notNull().default(40),
   pricePerFinanceSeat: integer("price_per_finance_seat").notNull().default(40),
   pricePerHumanResourcesSeat: integer("price_per_human_resources_seat").notNull().default(40),
+  pricePerGsocSeat: integer("price_per_gsoc_seat").notNull().default(40),
   pricePerCpoSeat: integer("price_per_cpo_seat").notNull().default(40),
   soloOperatorMonthlyPrice: integer("solo_operator_monthly_price").notNull().default(250),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

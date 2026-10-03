@@ -22,7 +22,7 @@ const UserInputSchema = z.object({
   companyId: z.number().int().nullable().optional(),
   name: z.string().min(1),
   email: z.string().email(),
-  role: z.enum(["admin", "manager", "cpo", "finance", "human_resources", "operations"]),
+  role: z.enum(["admin", "manager", "cpo", "finance", "human_resources", "operations", "gsoc"]),
   avatarInitials: z.string().optional(),
   officeId: z.number().int().nullable().optional(),
 });
@@ -173,7 +173,9 @@ async function buildSeats(companyId: number) {
             ? company.additionalOperationsSeats
             : role === "finance"
               ? company.additionalFinanceSeats
-              : company.additionalHumanResourcesSeats;
+              : role === "human_resources"
+                ? company.additionalHumanResourcesSeats
+                : company.additionalGsocSeats;
       acc[role] = {
         used: usedByRole[role] ?? 0,
         base: BASE_SEATS_BY_ROLE[role],
@@ -241,6 +243,7 @@ const SeatsUpdateSchema = z.object({
   additionalOperationsSeats: z.number().int().min(0).optional(),
   additionalFinanceSeats: z.number().int().min(0).optional(),
   additionalHumanResourcesSeats: z.number().int().min(0).optional(),
+  additionalGsocSeats: z.number().int().min(0).optional(),
   additionalCpoSeats: z.number().int().min(0).optional(),
 });
 

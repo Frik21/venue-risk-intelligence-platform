@@ -40,6 +40,14 @@ export const companiesTable = pgTable("companies", {
   additionalOperationsSeats: integer("additional_operations_seats").notNull().default(0),
   additionalFinanceSeats: integer("additional_finance_seats").notNull().default(0),
   additionalHumanResourcesSeats: integer("additional_human_resources_seats").notNull().default(0),
+  // GSOC (Global Security Operations Center) - a 5th Management-side
+  // role, same base+additional shape as the other four, added per
+  // direct product direction for live monitoring/communication with
+  // CPOs (not Finance/HR/Ops's own domains - see routes/companies.ts's
+  // BASE_SEATS_BY_ROLE for its base count and restrictWritesToRoles
+  // call sites across routes/ for what it's deliberately excluded
+  // from: Quotes/Invoices/Payroll/Onboarding/Task writes).
+  additionalGsocSeats: integer("additional_gsoc_seats").notNull().default(0),
   additionalCpoSeats: integer("additional_cpo_seats").notNull().default(0),
   // The Owner's own sandbox for testing/QA-ing the Management and CPO
   // pages (see lib/auth.ts's preview session mechanism) - never a real

@@ -19,7 +19,10 @@ import { type TaskBucket, BUCKET_CONFIG, taskBucket } from "@/lib/task-bucket";
 // it sits first on this page, above the OSINT-driven alerts below -
 // nothing here should wait behind a review queue. "ok" check-ins never
 // show up here; this panel is only ever what needs a response.
-function SafetyAlertsPanel() {
+// Exported so the GSOC Dashboard (pages/admin/gsoc.tsx) can embed the
+// exact same panel rather than a second, drifting copy - GSOC's whole
+// job is monitoring/acknowledging this signal, same as this page.
+export function SafetyAlertsPanel() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -103,7 +106,8 @@ const FIELD_INCIDENT_SEVERITY_STYLES: Record<string, string> = {
 // here once the CPO's connection comes back. Same "only show what needs
 // a response" shape as SafetyAlertsPanel above - reviewed reports drop
 // off this list once actioned.
-function FieldIncidentReportsPanel() {
+// Exported for the same reason SafetyAlertsPanel is above.
+export function FieldIncidentReportsPanel() {
   const qc = useQueryClient();
   const { toast } = useToast();
 

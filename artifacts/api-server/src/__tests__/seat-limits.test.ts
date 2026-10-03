@@ -64,4 +64,38 @@ describe("seat-limit enforcement", () => {
       .send({ name: "Still Room", email: "still-room@test.local", role: "manager" });
     expect(res.status).toBe(201);
   });
+
+  // GSOC - the 5th Management-side role added alongside Manager/
+  // Operations/Finance/HR, base 5 seats - proves it shares the exact
+  // same enforcement path rather than silently falling through
+  // unenforced (the real risk of bolting a role onto an existing
+  // ternary chain by hand).
+  it("enforces GSOC's own base seat count (5), separately from the other roles", async () => {
+    const company = await createCompany();
+    const { user: hr } = await createUser(company.id, "human_resources");
+    const cookie = await sessionCookie(hr.id);
+
+    for (let i = 0; i < 5; i++) {
+      await createUser(company.id, "gsoc", { email: `existing-gsoc-${i}@test.local` });
+    }
+
+    const res = await request(app)
+      .post("/api/users")
+      .set("Cookie", cookie)
+      .send({ name: "One More GSOC", email: "one-more-gsoc@test.local", role: "gsoc" });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/Seat limit reached/);
+
+    const withExtraSeat = await createCompany({ additionalGsocSeats: 1 });
+    const { user: hr2 } = await createUser(withExtraSeat.id, "human_resources");
+    const cookie2 = await sessionCookie(hr2.id);
+    for (let i = 0; i < 5; i++) {
+      await createUser(withExtraSeat.id, "gsoc", { email: `existing-gsoc2-${i}@test.local` });
+    }
+    const res2 = await request(app)
+      .post("/api/users")
+      .set("Cookie", cookie2)
+      .send({ name: "The Extra GSOC Seat", email: "extra-gsoc-seat@test.local", role: "gsoc" });
+    expect(res2.status).toBe(201);
+  });
 });

@@ -178,6 +178,7 @@ const USER_ROLE_LABELS: Record<UserRole, string> = {
   finance: "Finance",
   human_resources: "Human Resources",
   operations: "Operations",
+  gsoc: "GSOC",
 };
 
 // Mirrors artifacts/api-server/src/lib/plan-checklist.ts (PLAN_CHECKLIST_ITEMS)

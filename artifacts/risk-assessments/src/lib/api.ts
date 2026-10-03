@@ -39,20 +39,22 @@ export type IncidentSeverity = "low" | "medium" | "high" | "critical";
 export type AlertPriority = "low" | "medium" | "high" | "critical";
 export type AlertStatus = "pending" | "reviewed" | "dismissed" | "escalated";
 export type OsintStatus = "pending" | "accepted" | "rejected";
-export type UserRole = "admin" | "manager" | "cpo" | "finance" | "human_resources" | "operations";
+export type UserRole = "admin" | "manager" | "cpo" | "finance" | "human_resources" | "operations" | "gsoc";
 
 // Where a logged-in Management-side session lands after login/
 // registration instead of the general Management Dashboard - only
 // roles with their own scoped dashboard are listed (Finance/HR/
 // Operations, see /admin/finance, /admin/hr, /admin/operations in
-// CLAUDE.md); "manager" and any role not listed here falls through to
-// the caller's own "/admin" default. cpo and admin (Owner) are handled
-// separately by callers, since their destinations depend on more than
-// just role (Solo Operator plan, Owner Console, etc.).
+// CLAUDE.md; GSOC's own live monitoring console, /admin/gsoc); "manager"
+// and any role not listed here falls through to the caller's own
+// "/admin" default. cpo and admin (Owner) are handled separately by
+// callers, since their destinations depend on more than just role
+// (Solo Operator plan, Owner Console, etc.).
 export const MANAGEMENT_HOME_ROUTE: Partial<Record<UserRole, string>> = {
   finance: "/admin/finance",
   human_resources: "/admin/hr",
   operations: "/admin/operations",
+  gsoc: "/admin/gsoc",
 };
 
 export type RouteType =
@@ -216,6 +218,21 @@ export interface TaskLocationPing {
   id: number;
   taskId: number;
   cpoId: number;
+  latitude: number;
+  longitude: number;
+  capturedAt: string;
+}
+
+// The GSOC Dashboard's Live Operator Map - each active CPO's most
+// recent ping within the last 30 minutes, company-wide (see
+// routes/task-location-pings.ts's own LIVE_MAP_WINDOW_MINUTES comment
+// for why stale positions are deliberately excluded rather than shown
+// as "live").
+export interface LiveOperatorPosition {
+  cpoId: number;
+  cpoName: string;
+  taskId: number;
+  taskTitle: string;
   latitude: number;
   longitude: number;
   capturedAt: string;
@@ -402,7 +419,7 @@ export interface TravelLogisticsEntry {
 }
 
 export type CompanyStatus = "trial" | "active" | "suspended" | "cancelled";
-export type ManagementRole = "manager" | "operations" | "finance" | "human_resources";
+export type ManagementRole = "manager" | "operations" | "finance" | "human_resources" | "gsoc";
 // "team" (the default, Management + CPO) or "solo_operator" (a single
 // freelance CPO's own subscription - Operators Note only, no
 // Management seats). Enforced server-side, not just a display label -
@@ -418,6 +435,7 @@ export const BASE_SEATS_BY_ROLE: Record<ManagementRole, number> = {
   operations: 5,
   finance: 5,
   human_resources: 5,
+  gsoc: 5,
 };
 
 // CPO seats (Operators note) - tracked separately from the four
@@ -556,6 +574,7 @@ export interface PricingConfig {
   pricePerOperationsSeat: number;
   pricePerFinanceSeat: number;
   pricePerHumanResourcesSeat: number;
+  pricePerGsocSeat: number;
   pricePerCpoSeat: number;
   soloOperatorMonthlyPrice: number;
   updatedAt: string;
@@ -567,6 +586,7 @@ export type PricingField =
   | "pricePerOperationsSeat"
   | "pricePerFinanceSeat"
   | "pricePerHumanResourcesSeat"
+  | "pricePerGsocSeat"
   | "pricePerCpoSeat"
   | "soloOperatorMonthlyPrice";
 
@@ -1331,6 +1351,7 @@ export const api = {
       additionalOperationsSeats: number;
       additionalFinanceSeats: number;
       additionalHumanResourcesSeats: number;
+      additionalGsocSeats: number;
       additionalCpoSeats: number;
     }>) =>
       apiFetch<{ seatsByRole: Record<ManagementRole, CompanySeatUsage>; cpoSeatUsage: CompanySeatUsage }>(
@@ -1404,6 +1425,8 @@ export const api = {
     listForTask: (taskId: number) => apiFetch<TaskLocationPing[]>(`/task-location-pings?taskId=${taskId}`),
     create: (data: { taskId: number; latitude: number; longitude: number }) =>
       apiFetch<TaskLocationPing>("/task-location-pings", { method: "POST", body: JSON.stringify(data) }),
+    // GSOC Dashboard's Live Operator Map - company-wide, not task-scoped.
+    liveMap: () => apiFetch<LiveOperatorPosition[]>("/task-location-pings/live-map"),
   },
   availabilityRequests: {
     // Company-wide for Management, auto-scoped to "my own" server-side
@@ -1570,6 +1593,7 @@ export const api = {
         additionalOperationsSeats?: number;
         additionalFinanceSeats?: number;
         additionalHumanResourcesSeats?: number;
+        additionalGsocSeats?: number;
         additionalCpoSeats?: number;
       },
     ) => apiFetch<Company>("/companies", { method: "POST", body: JSON.stringify(data) }),
@@ -1583,6 +1607,7 @@ export const api = {
         additionalOperationsSeats: number;
         additionalFinanceSeats: number;
         additionalHumanResourcesSeats: number;
+        additionalGsocSeats: number;
         additionalCpoSeats: number;
       }>,
     ) => apiFetch<Company>(`/companies/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
