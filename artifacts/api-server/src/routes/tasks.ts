@@ -185,6 +185,11 @@ async function setRoster(taskId: number, companyId: number, assignees: { operato
   const unique = assignees.filter((a) => (seen.has(a.operatorId) ? false : (seen.add(a.operatorId), true)));
   if (unique.length) {
     await db.insert(taskAssignmentsTable).values(unique.map((a) => ({ companyId, taskId, operatorId: a.operatorId, role: a.role ?? null })));
+    // Re-arms the unstaffed-task-approaching alert (lib/unstaffed-task-
+    // monitor.ts) for next time - a task that's staffed right now isn't
+    // unstaffed, so a later removal should be able to notify again
+    // rather than staying silenced by an old stamp.
+    await db.update(tasksTable).set({ unstaffedNotifiedAt: null }).where(eq(tasksTable.id, taskId));
   }
 }
 

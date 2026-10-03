@@ -70,6 +70,15 @@ export const tasksTable = pgTable("tasks", {
   // the Completed bucket once this is set); toggled via PATCH
   // /tasks/:id from the Tasks list, mirroring Mark Completed.
   invoiced: boolean("invoiced").notNull().default(false),
+  // Automation pass - unstaffed-task-approaching alert
+  // (lib/unstaffed-task-monitor.ts). Stamped once a task with an
+  // approved quote, no CPO on its roster, and a dueDate inside the
+  // warning window has been notified about - cleared back to null
+  // whenever a CPO is actually assigned (routes/tasks.ts's setRoster())
+  // so the alert re-arms if that CPO is later removed and the job
+  // becomes unstaffed again, rather than going quiet after the first
+  // notification forever.
+  unstaffedNotifiedAt: timestamp("unstaffed_notified_at", { withTimezone: true }),
   // No longer drives Tasks list bucketing (see venueId comment above and
   // lib/task-bucket.ts - that's now based on field completeness). Kept
   // as manually-settable state via PATCH /tasks/:id, clientConfirmed,
