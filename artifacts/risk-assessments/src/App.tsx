@@ -56,6 +56,7 @@ import CostsPage from "@/pages/admin/costs";
 import FinanceDashboard from "@/pages/admin/finance";
 import HrDashboard from "@/pages/admin/hr";
 import OperationsDashboard from "@/pages/admin/operations";
+import GsocDashboard from "@/pages/admin/gsoc";
 import ComplianceRollup from "@/pages/admin/compliance";
 import OfficesPage from "@/pages/admin/offices";
 import ClientsPage from "@/pages/admin/clients";
@@ -140,6 +141,7 @@ function Router() {
         <Route path="/admin/finance" component={FinanceDashboard} />
         <Route path="/admin/hr" component={HrDashboard} />
         <Route path="/admin/operations" component={OperationsDashboard} />
+        <Route path="/admin/gsoc" component={GsocDashboard} />
         <Route path="/admin/compliance" component={ComplianceRollup} />
         <Route path="/admin/offices" component={OfficesPage} />
         <Route path="/admin/communications" component={CommunicationsPage} />

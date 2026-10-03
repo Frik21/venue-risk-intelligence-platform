@@ -105,6 +105,86 @@ router.post("/clients", async (req, res): Promise<void> => {
   res.status(201).json(formatClient(client));
 });
 
+// Bulk CSV import - automation pass, per direct product direction
+// ("they should be able to import bulk from CSV excel"). The frontend
+// parses the CSV itself (papaparse) and posts plain row objects here -
+// this endpoint never touches a raw file, just already-structured
+// data, same validation (ClientInputSchema) as a single-client
+// POST above. Row-by-row rather than all-or-nothing: one malformed row
+// shouldn't block every other valid one in the same file, so this
+// returns which rows succeeded and which failed (with why), rather
+// than a single pass/fail for the whole import - the one design choice
+// that actually matters for "don't want a customer to come back and
+// say it's broken," since a bulk import silently dropping rows with no
+// explanation would be exactly that.
+const ClientImportRowSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  industry: z.string().max(200).optional(),
+  primaryContactName: z.string().max(200).optional(),
+  primaryContactRole: z.string().max(200).optional(),
+  email: z.string().max(200).optional(),
+  phone: z.string().max(200).optional(),
+  address: z.string().max(500).optional(),
+  dayRate: z.number().min(0).nullable().optional(),
+  nightRate: z.number().min(0).nullable().optional(),
+});
+
+const ClientImportSchema = z.object({
+  // Capped well above any realistic single-file import - a guardrail
+  // against an accidental multi-megabyte paste, not a real limit.
+  rows: z.array(z.record(z.string(), z.unknown())).min(1).max(1000),
+});
+
+// A day/night rate that doesn't parse as a number (blank, "N/A", a
+// stray note - real spreadsheets have all three) is treated as "no
+// rate set" rather than rejecting the whole row - dayRate/nightRate
+// are nullable on a Client already, so a row missing just that one
+// field is still a perfectly good client to import. Returning
+// `undefined` here instead would have let zod's own .optional() treat
+// an unparseable value as "not provided" and silently pass it through
+// uncoerced - caught by this feature's own test before it shipped.
+function coerceImportRow(raw: Record<string, unknown>) {
+  const num = (v: unknown): number | null => {
+    if (v == null || v === "") return null;
+    const n = Number(v);
+    return Number.isNaN(n) ? null : n;
+  };
+  return { ...raw, dayRate: num(raw["dayRate"]), nightRate: num(raw["nightRate"]) };
+}
+
+router.post("/clients/import", async (req, res): Promise<void> => {
+  const parsedBody = ClientImportSchema.safeParse(req.body);
+  if (!parsedBody.success) { res.status(400).json({ error: parsedBody.error.message }); return; }
+
+  const companyId = await resolveCompanyId(req.user!.companyId);
+  const errors: { row: number; error: string }[] = [];
+  let imported = 0;
+
+  for (let i = 0; i < parsedBody.data.rows.length; i++) {
+    const parsedRow = ClientImportRowSchema.safeParse(coerceImportRow(parsedBody.data.rows[i]));
+    if (!parsedRow.success) {
+      errors.push({ row: i + 1, error: parsedRow.error.issues[0]?.message ?? "Invalid row" });
+      continue;
+    }
+
+    await db.insert(clientsTable).values({
+      companyId,
+      name: parsedRow.data.name,
+      industry: parsedRow.data.industry ?? "",
+      primaryContactName: parsedRow.data.primaryContactName ?? "",
+      primaryContactRole: parsedRow.data.primaryContactRole ?? "",
+      email: parsedRow.data.email ?? "",
+      phone: parsedRow.data.phone ?? "",
+      address: parsedRow.data.address ?? "",
+      dayRate: parsedRow.data.dayRate ?? null,
+      nightRate: parsedRow.data.nightRate ?? null,
+    });
+    imported++;
+  }
+
+  res.json({ imported, errors });
+});
+
 const ClientUpdateSchema = ClientInputSchema.partial();
 
 router.patch("/clients/:id", async (req, res): Promise<void> => {

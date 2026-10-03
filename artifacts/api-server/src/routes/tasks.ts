@@ -1,10 +1,13 @@
+import crypto from "crypto";
 import { Router, type IRouter } from "express";
 import { eq, and, desc, inArray } from "drizzle-orm";
-import { db, tasksTable, venuesTable, usersTable, plansTable, taskAssignmentsTable, principalsTable } from "@workspace/db";
+import { db, tasksTable, venuesTable, usersTable, plansTable, taskAssignmentsTable, principalsTable, clientsTable, feedbackRequestsTable } from "@workspace/db";
 import { z } from "zod";
 import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
 import { restrictWritesToRoles } from "../lib/auth";
 import { logPrincipalAccess } from "../lib/principal-audit";
+import { sendEmail } from "../lib/email";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -185,6 +188,11 @@ async function setRoster(taskId: number, companyId: number, assignees: { operato
   const unique = assignees.filter((a) => (seen.has(a.operatorId) ? false : (seen.add(a.operatorId), true)));
   if (unique.length) {
     await db.insert(taskAssignmentsTable).values(unique.map((a) => ({ companyId, taskId, operatorId: a.operatorId, role: a.role ?? null })));
+    // Re-arms the unstaffed-task-approaching alert (lib/unstaffed-task-
+    // monitor.ts) for next time - a task that's staffed right now isn't
+    // unstaffed, so a later removal should be able to notify again
+    // rather than staying silenced by an old stamp.
+    await db.update(tasksTable).set({ unstaffedNotifiedAt: null }).where(eq(tasksTable.id, taskId));
   }
 }
 
@@ -298,6 +306,40 @@ const TaskUpdateSchema = z.object({
   checkInIntervalMinutes: z.number().int().min(1).nullable().optional(),
 });
 
+// Automation pass - closes the quality circle without a Manager
+// having to remember to click "Request Feedback" on every completed
+// task. requestedBy is the task's own assignedBy (the Manager who
+// owns the task) since there's no live acting user in this code path
+// the way the manual "Request Feedback" button has one. The
+// feedback_requests row itself is awaited (cheap, local, and the one
+// part of this that must reliably exist - losing it to an unawaited
+// race would defeat the whole point); only the actual email send is
+// fire-and-forget, same posture as checkins.ts's own panic-alert
+// dispatch, since that's the slow, external, best-effort part. Only
+// actually emails the client when the task has a real linked Client
+// record with a real email on file - clientContact is freeform text
+// (a phone number, a name, anything), never trusted as an email
+// address; a task with no such link or no email still gets a real
+// feedback_requests row generated (reachable from the Task's own
+// Client Feedback panel to copy/send by hand), matching the honest
+// "generate it, don't pretend to send it" rule the rest of this
+// feature already follows when email isn't connected.
+async function autoRequestFeedback(task: typeof tasksTable.$inferSelect, req: { protocol: string; get: (name: string) => string | undefined }) {
+  const id = crypto.randomBytes(24).toString("base64url");
+  await db.insert(feedbackRequestsTable).values({ id, companyId: task.companyId, taskId: task.id, requestedBy: task.assignedBy });
+
+  if (task.clientId == null) return;
+  const [client] = await db.select({ email: clientsTable.email }).from(clientsTable).where(eq(clientsTable.id, task.clientId));
+  if (!client?.email) return;
+
+  const feedbackUrl = `${req.protocol}://${req.get("host")}/feedback/${id}`;
+  sendEmail(
+    client.email,
+    "How did we do?",
+    `Thank you for choosing VenueGuard's services. We'd appreciate your feedback on the recently completed job: ${feedbackUrl}`,
+  ).catch((err) => logger.error({ err, taskId: task.id }, "Auto feedback request: email send failed"));
+}
+
 router.patch("/tasks/:id", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -340,6 +382,10 @@ router.patch("/tasks/:id", async (req, res): Promise<void> => {
 
   if (!task) { res.status(404).json({ error: "Task not found" }); return; }
   if (nextRoster !== undefined) await setRoster(task.id, task.companyId, nextRoster);
+
+  if (rest.status === "completed" && existing.status !== "completed") {
+    await autoRequestFeedback(task, req).catch((err) => logger.error({ err, taskId: task.id }, "Auto feedback request: failed to generate request"));
+  }
 
   const ctx = await loadTaskContext(task);
   const [plan] = await db.select({ submittedAt: plansTable.submittedAt }).from(plansTable).where(eq(plansTable.taskId, task.id));

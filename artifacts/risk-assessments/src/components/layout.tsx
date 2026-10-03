@@ -33,6 +33,7 @@ import {
   FileSignature,
   Download,
   HelpCircle,
+  Radar,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -49,6 +50,7 @@ const USER_ROLE_LABELS: Record<string, string> = {
   finance: "Finance",
   human_resources: "Human Resources",
   operations: "Operations",
+  gsoc: "GSOC",
   cpo: "CPO",
 };
 
@@ -75,6 +77,7 @@ const navGroups = [
       { href: "/admin/finance", label: "Finance", icon: Landmark },
       { href: "/admin/hr", label: "Human Resources", icon: IdCard },
       { href: "/admin/operations", label: "Operations", icon: Workflow },
+      { href: "/admin/gsoc", label: "GSOC", icon: Radar },
       { href: "/admin/costs", label: "Quotations", icon: DollarSign },
       { href: "/admin/invoices", label: "Invoices", icon: Receipt },
       { href: "/admin/cpo-deployment", label: "Operator Deployment", icon: UserCog },

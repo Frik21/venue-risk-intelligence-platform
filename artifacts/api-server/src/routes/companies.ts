@@ -49,6 +49,7 @@ export const BASE_SEATS_BY_ROLE = {
   operations: 5,
   finance: 5,
   human_resources: 5,
+  gsoc: 5,
 } as const;
 export type ManagementRole = keyof typeof BASE_SEATS_BY_ROLE;
 export const MANAGEMENT_ROLES = Object.keys(BASE_SEATS_BY_ROLE) as ManagementRole[];
@@ -93,7 +94,9 @@ export async function checkSeatAvailable(
             ? company.additionalOperationsSeats
             : role === "finance"
               ? company.additionalFinanceSeats
-              : company.additionalHumanResourcesSeats);
+              : role === "human_resources"
+                ? company.additionalHumanResourcesSeats
+                : company.additionalGsocSeats);
 
   return used >= limit ? { ok: false, used, limit } : { ok: true };
 }
@@ -111,6 +114,7 @@ export const PRICING_FIELDS = [
   "pricePerOperationsSeat",
   "pricePerFinanceSeat",
   "pricePerHumanResourcesSeat",
+  "pricePerGsocSeat",
   "pricePerCpoSeat",
   "soloOperatorMonthlyPrice",
 ] as const;
@@ -125,6 +129,7 @@ export const PRICE_FIELD_BY_ROLE: Record<ManagementRole, PricingField> = {
   operations: "pricePerOperationsSeat",
   finance: "pricePerFinanceSeat",
   human_resources: "pricePerHumanResourcesSeat",
+  gsoc: "pricePerGsocSeat",
 };
 export const CPO_PRICE_FIELD: PricingField = "pricePerCpoSeat";
 
@@ -152,6 +157,7 @@ function estimatedMonthlyCharge(
     additionalOperationsSeats: number;
     additionalFinanceSeats: number;
     additionalHumanResourcesSeats: number;
+    additionalGsocSeats: number;
     additionalCpoSeats: number;
   },
   pricing: typeof pricingConfigTable.$inferSelect,
@@ -163,6 +169,7 @@ function estimatedMonthlyCharge(
     company.additionalOperationsSeats * pricing.pricePerOperationsSeat +
     company.additionalFinanceSeats * pricing.pricePerFinanceSeat +
     company.additionalHumanResourcesSeats * pricing.pricePerHumanResourcesSeat +
+    company.additionalGsocSeats * pricing.pricePerGsocSeat +
     company.additionalCpoSeats * pricing.pricePerCpoSeat
   );
 }
@@ -226,7 +233,9 @@ async function buildCompanyRows() {
               ? c.additionalOperationsSeats
               : role === "finance"
                 ? c.additionalFinanceSeats
-                : c.additionalHumanResourcesSeats;
+                : role === "human_resources"
+                  ? c.additionalHumanResourcesSeats
+                  : c.additionalGsocSeats;
         acc[role] = {
           used: roleUsage[role] ?? 0,
           base: BASE_SEATS_BY_ROLE[role],
@@ -285,6 +294,7 @@ router.get("/companies/summary", requireRole("admin"), async (_req, res): Promis
       additionalOperationsSeats: companiesTable.additionalOperationsSeats,
       additionalFinanceSeats: companiesTable.additionalFinanceSeats,
       additionalHumanResourcesSeats: companiesTable.additionalHumanResourcesSeats,
+      additionalGsocSeats: companiesTable.additionalGsocSeats,
       additionalCpoSeats: companiesTable.additionalCpoSeats,
     })
     .from(companiesTable);

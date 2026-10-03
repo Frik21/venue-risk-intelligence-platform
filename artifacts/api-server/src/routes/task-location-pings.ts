@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, and, asc } from "drizzle-orm";
-import { db, taskLocationPingsTable, tasksTable, taskAssignmentsTable } from "@workspace/db";
+import { eq, and, asc, desc, gte } from "drizzle-orm";
+import { db, taskLocationPingsTable, tasksTable, taskAssignmentsTable, usersTable } from "@workspace/db";
 import { z } from "zod";
 import { requireCompanyId } from "../lib/resolve-company";
 
@@ -36,6 +36,65 @@ router.get("/task-location-pings", async (req, res): Promise<void> => {
     .orderBy(asc(taskLocationPingsTable.capturedAt));
 
   res.json(rows.map(formatPing));
+});
+
+// Company-wide live map - the GSOC console's own real-time view (new
+// GSOC role, see routes/companies.ts's BASE_SEATS_BY_ROLE), unlike the
+// task-scoped GET above which only ever answers "what's this one job's
+// route." Open to any Management-side session, same looseness every
+// other role dashboard's underlying data already has - no permission
+// boundary, just a different default landing page.
+//
+// Only a ping from the last 30 minutes counts as "live" - a breadcrumb
+// is passive telemetry from Operators Note's own 5-minute timer (see
+// dashboard.tsx), so a CPO whose last ping is older than that has
+// either gone off the clock or lost connectivity; showing their old
+// position as if it were current would be actively misleading on a
+// console whose whole job is situational awareness right now, not a
+// historical record (the per-task Route Trail panel is that).
+const LIVE_MAP_WINDOW_MINUTES = 30;
+
+router.get("/task-location-pings/live-map", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+
+  const cutoff = new Date(Date.now() - LIVE_MAP_WINDOW_MINUTES * 60 * 1000);
+
+  const rows = await db
+    .select({
+      cpoId: taskLocationPingsTable.cpoId,
+      cpoName: usersTable.name,
+      taskId: taskLocationPingsTable.taskId,
+      taskTitle: tasksTable.title,
+      latitude: taskLocationPingsTable.latitude,
+      longitude: taskLocationPingsTable.longitude,
+      capturedAt: taskLocationPingsTable.capturedAt,
+    })
+    .from(taskLocationPingsTable)
+    .innerJoin(usersTable, eq(usersTable.id, taskLocationPingsTable.cpoId))
+    .innerJoin(tasksTable, eq(tasksTable.id, taskLocationPingsTable.taskId))
+    .where(and(eq(taskLocationPingsTable.companyId, companyId), gte(taskLocationPingsTable.capturedAt, cutoff)))
+    .orderBy(desc(taskLocationPingsTable.capturedAt));
+
+  // Latest ping per CPO, grouped in JS rather than a window function -
+  // same convention routes/companies.ts's buildCompanyRows already uses
+  // for "one row per entity out of many candidate rows."
+  const latestByCpo = new Map<number, (typeof rows)[number]>();
+  for (const row of rows) {
+    if (!latestByCpo.has(row.cpoId)) latestByCpo.set(row.cpoId, row);
+  }
+
+  res.json(
+    [...latestByCpo.values()].map((r) => ({
+      cpoId: r.cpoId,
+      cpoName: r.cpoName,
+      taskId: r.taskId,
+      taskTitle: r.taskTitle,
+      latitude: r.latitude,
+      longitude: r.longitude,
+      capturedAt: r.capturedAt.toISOString(),
+    })),
+  );
 });
 
 const CreatePingSchema = z.object({

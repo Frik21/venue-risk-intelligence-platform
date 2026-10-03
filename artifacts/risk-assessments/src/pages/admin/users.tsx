@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useEffect } from "react";
-import { Users, Plus, ShieldCheck, Shield, Wallet, Users2, Workflow } from "lucide-react";
+import { Users, Plus, ShieldCheck, Shield, Wallet, Users2, Workflow, Radar } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -29,6 +29,7 @@ const ROLE_COLORS: Partial<Record<UserRole, string>> = {
   finance:         "text-emerald-700 bg-emerald-50 border-emerald-200",
   human_resources: "text-rose-700 bg-rose-50 border-rose-200",
   operations:      "text-amber-700 bg-amber-50 border-amber-200",
+  gsoc:            "text-cyan-700 bg-cyan-50 border-cyan-200",
 };
 
 const ROLE_ICONS: Partial<Record<UserRole, typeof Shield>> = {
@@ -36,6 +37,7 @@ const ROLE_ICONS: Partial<Record<UserRole, typeof Shield>> = {
   finance:         Wallet,
   human_resources: Users2,
   operations:      Workflow,
+  gsoc:            Radar,
 };
 
 const ROLE_LABELS: Partial<Record<UserRole, string>> = {
@@ -43,9 +45,10 @@ const ROLE_LABELS: Partial<Record<UserRole, string>> = {
   finance:         "Finance",
   human_resources: "Human Resources",
   operations:      "Operations",
+  gsoc:            "GSOC",
 };
 
-const MANAGEMENT_ROLES: ManagementRole[] = ["manager", "operations", "finance", "human_resources"];
+const MANAGEMENT_ROLES: ManagementRole[] = ["manager", "operations", "finance", "human_resources", "gsoc"];
 
 // The Command Desk side of seat management, distinct from the Owner
 // Console's version of the same idea (pages/owner/dashboard.tsx) - a
@@ -68,6 +71,7 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
     operations: 0,
     finance: 0,
     human_resources: 0,
+    gsoc: 0,
   });
   const [additionalCpo, setAdditionalCpo] = useState(0);
   const qc = useQueryClient();
@@ -96,6 +100,7 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
       operations: data.seatsByRole.operations.additional,
       finance: data.seatsByRole.finance.additional,
       human_resources: data.seatsByRole.human_resources.additional,
+      gsoc: data.seatsByRole.gsoc.additional,
     });
     setAdditionalCpo(data.cpoSeatUsage.additional);
   }, [data]);
@@ -107,6 +112,7 @@ function AdditionalSeatsDialog({ onClose }: { onClose: () => void }) {
         additionalOperationsSeats: additional.operations,
         additionalFinanceSeats: additional.finance,
         additionalHumanResourcesSeats: additional.human_resources,
+        additionalGsocSeats: additional.gsoc,
         additionalCpoSeats: additionalCpo,
       }),
     onSuccess: () => {
@@ -260,6 +266,7 @@ function NewUserDialog({ onClose }: { onClose: () => void }) {
               <SelectItem value="finance">Finance</SelectItem>
               <SelectItem value="human_resources">Human Resources</SelectItem>
               <SelectItem value="operations">Operations</SelectItem>
+              <SelectItem value="gsoc">GSOC</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -336,8 +343,8 @@ export default function UsersPage() {
           above for where the limit itself gets adjusted); falls back to
           a plain office-scoped count on first load so the tiles aren't
           empty while that query is still in flight. */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {(["manager", "finance", "human_resources", "operations"] as const).map((role) => {
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        {(["manager", "finance", "human_resources", "operations", "gsoc"] as const).map((role) => {
           const Icon = ROLE_ICONS[role] ?? Shield;
           const inRole = users.filter(u => u.role === role);
           const seat = seatsData?.seatsByRole[role];
