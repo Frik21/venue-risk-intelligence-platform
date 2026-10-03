@@ -424,6 +424,20 @@ const hideShell = (location === "/cpo" || location === "/admin/gsoc" || location
             <span className="font-bold text-sm text-slate-900">VenueGuard</span>
           </div>
           <div className="flex-1" />
+          {/* Owner-only, same reasoning as the sidebar's own Quick Access
+              link (see components/layout.tsx's quick-jump section below) -
+              surfaced in the top header too so it's reachable from every
+              Command Desk page without scrolling the sidebar all the way
+              down. Reported directly ("I also need that button here"). */}
+          {user?.role === "admin" && (
+            <Link
+              href="/quick-access"
+              className="hidden sm:flex items-center gap-2 text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-md transition-colors"
+            >
+              <Compass className="w-4 h-4" />
+              <span>Quick Access</span>
+            </Link>
+          )}
           <div className="hidden sm:flex items-center gap-2 text-sm text-slate-500 bg-slate-100 px-3 py-1.5 rounded-md">
             <Search className="w-4 h-4" />
             <span>Search...</span>
