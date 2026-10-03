@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
-import { api, type Client, type ClientActivity, type Principal, type Task, type Quote, type User } from "@/lib/api";
+import { api, type Client, type ClientActivity, type Principal, type PrincipalAccessLogEntry, type Task, type Quote, type User } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
-import { ArrowLeft, Pencil, Trash2, Mail, Phone, MapPin, Briefcase, ListChecks, FileText, MessageSquare, ShieldCheck, Plus, X } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Mail, Phone, MapPin, Briefcase, ListChecks, FileText, MessageSquare, ShieldCheck, Plus, X, Link as LinkIcon, History } from "lucide-react";
 import { formatDate, formatDateTime } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -175,6 +175,54 @@ function PrincipalForm({ form, onChange }: { form: PrincipalFormState; onChange:
 // their own medical/threats/routine/family sections. Surfaced
 // automatically to the assigned CPO on their own task (api.tasks.
 // principals) - this is the Command Desk side that maintains it.
+// Platform Maturity Roadmap, Tier 2, item 4 - who's looked at this
+// principal's record, and when. Fetch-on-tap, same lazy pattern as
+// Nearby Help/Handover Notes elsewhere in this app, rather than
+// fetching every principal's history on page load.
+const ACCESS_LOG_ACTION_LABELS: Record<PrincipalAccessLogEntry["action"], string> = {
+  viewed: "Viewed",
+  created: "Created",
+  updated: "Updated",
+  deleted: "Deleted",
+};
+
+function PrincipalAccessLog({ clientId, principalId }: { clientId: number; principalId: number }) {
+  const [open, setOpen] = useState(false);
+  const { data: entries = [], isLoading } = useQuery<PrincipalAccessLogEntry[]>({
+    queryKey: ["principal-access-log", clientId, principalId],
+    queryFn: () => api.principals.accessLog(clientId, principalId),
+    enabled: open,
+  });
+
+  return (
+    <div className="pt-1">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1"
+      >
+        <History className="w-3 h-3" /> {open ? "Hide" : "View"} access history{!open && entries.length > 0 ? ` (${entries.length})` : ""}
+      </button>
+      {open && (
+        isLoading ? (
+          <Skeleton className="h-10 mt-1" />
+        ) : entries.length === 0 ? (
+          <p className="text-xs text-slate-400 mt-1">No access recorded yet.</p>
+        ) : (
+          <div className="mt-1 space-y-1 max-h-40 overflow-y-auto">
+            {entries.map((e) => (
+              <p key={e.id} className="text-xs text-slate-500">
+                <span className="font-medium">{ACCESS_LOG_ACTION_LABELS[e.action]}</span> by {e.userName ?? "a deactivated user"}
+                {e.taskTitle ? ` (via task "${e.taskTitle}")` : ""} - {formatDateTime(e.createdAt)}
+              </p>
+            ))}
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
 function PrincipalsPanel({ clientId }: { clientId: number }) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -298,11 +346,80 @@ function PrincipalsPanel({ clientId }: { clientId: number }) {
                       <p key={key} className="text-sm text-slate-600"><span className="font-medium text-slate-500">{label}: </span>{p[key]}</p>
                     ) : null,
                   )}
+                  <PrincipalAccessLog clientId={clientId} principalId={p.id} />
                 </div>
               ),
             )}
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Client Portal - Following Roadmap Tier 3, item 25. Mirrors Tasks'
+// own FeedbackPanel copy-link UX, but the link here is a persistent,
+// standing portal (not single-use) - "Generate Link" doubles as
+// "Regenerate" (rotates the token, invalidating any previously-sent
+// link) since repeat-clicking is also how a Manager would revoke a
+// leaked one and issue a fresh one in a single action.
+function ClientPortalCard({ client }: { client: Client }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const generateMutation = useMutation({
+    mutationFn: () => api.clients.generatePortalLink(client.id),
+    onSuccess: (updated) => {
+      qc.setQueryData<Client[]>(["clients"], (old) => old?.map((c) => (c.id === updated.id ? updated : c)));
+      const url = `${window.location.origin}/portal/${updated.portalToken}`;
+      navigator.clipboard.writeText(url).then(
+        () => toast({ title: "Portal link copied", description: "Send it to the client - it stays valid until regenerated." }),
+        () => toast({ title: "Link generated", description: url }),
+      );
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: () => api.clients.revokePortalLink(client.id),
+    onSuccess: (updated) => {
+      qc.setQueryData<Client[]>(["clients"], (old) => old?.map((c) => (c.id === updated.id ? updated : c)));
+      toast({ title: "Portal link revoked" });
+    },
+  });
+
+  const copyExisting = () => {
+    const url = `${window.location.origin}/portal/${client.portalToken}`;
+    navigator.clipboard.writeText(url).then(
+      () => toast({ title: "Portal link copied" }),
+      () => toast({ title: "Couldn't copy link", description: url, variant: "destructive" }),
+    );
+  };
+
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <h2 className="font-semibold text-slate-900 flex items-center gap-2 mb-1">
+          <LinkIcon className="w-4 h-4 text-slate-400" /> Client Portal
+        </h2>
+        <p className="text-xs text-slate-400 mb-3">A read-only link where this client can see their own job status and invoices.</p>
+        <div className="flex gap-2 flex-wrap">
+          {client.portalToken ? (
+            <>
+              <Button size="sm" variant="outline" onClick={copyExisting}>Copy Link</Button>
+              <Button size="sm" variant="outline" onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending}>
+                Regenerate Link
+              </Button>
+              <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700" onClick={() => revokeMutation.mutate()} disabled={revokeMutation.isPending}>
+                Revoke
+              </Button>
+            </>
+          ) : (
+            <Button size="sm" onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending}>
+              {generateMutation.isPending ? "Generating..." : "Generate Portal Link"}
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -465,6 +582,8 @@ export default function ClientDetailPage() {
           </Card>
 
           <PrincipalsPanel clientId={client.id} />
+
+          <ClientPortalCard client={client} />
 
           <ActivityLog clientId={client.id} currentUserId={currentUserId} />
         </div>

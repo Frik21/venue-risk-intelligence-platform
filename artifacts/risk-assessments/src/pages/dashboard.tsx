@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, ChangeEvent } from "react";
-import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet, LifeBuoy, FileText, Package, Users, Plane } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet, LifeBuoy, FileText, Package, Users, Plane, Globe, CalendarOff } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -23,6 +23,7 @@ import {
 } from "@/lib/map-aesthetics";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useLanguage, LANGUAGE_LABELS } from "@/lib/i18n";
 import type {
   CountryIntelligence,
   CountryRiskLevel,
@@ -50,6 +51,7 @@ import type {
   TaskEquipment,
   TravelLogisticsEntry,
   TravelLogisticsEntryType,
+  AvailabilityRequest,
 } from "@/lib/api";
 import { enqueueOfflineSubmission, useOfflineQueue, useOfflineQueueSynced, retryOfflineItem, discardOfflineItem } from "@/lib/offline-queue";
 import { LocationSearch, resolveCurrentLocation } from "@/components/location-search";
@@ -161,11 +163,12 @@ const TRAVEL_LOGISTICS_TYPE_LABELS: Record<TravelLogisticsEntryType, string> = {
 
 // Profile's sub-navigation titles (excludes "root", which uses its own
 // "Your account." header instead of a nav item name).
-const PROFILE_VIEW_TITLES: Record<"overview" | "account" | "expenses" | "timesheet", string> = {
+const PROFILE_VIEW_TITLES: Record<"overview" | "account" | "expenses" | "timesheet" | "availability", string> = {
   overview: "Overview",
   account: "Account Details",
   expenses: "Expenses",
   timesheet: "Timesheet",
+  availability: "Availability",
 };
 
 const USER_ROLE_LABELS: Record<UserRole, string> = {
@@ -175,6 +178,7 @@ const USER_ROLE_LABELS: Record<UserRole, string> = {
   finance: "Finance",
   human_resources: "Human Resources",
   operations: "Operations",
+  gsoc: "GSOC",
 };
 
 // Mirrors artifacts/api-server/src/lib/plan-checklist.ts (PLAN_CHECKLIST_ITEMS)
@@ -1298,6 +1302,7 @@ function ExpenseEntryCard({
 
 function TopBanner({ onSignOut }: { onSignOut: () => void }) {
   const { user } = useAuth();
+  const { language, setLanguage, t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState("");
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
   const [operatorMenuOpen, setOperatorMenuOpen] = useState(false);
@@ -1333,16 +1338,16 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
     } catch (err) {
       console.error("Could not resolve location for panic alert:", err);
     }
-    try {
-      await api.checkins.create({ type: "panic", ...location });
-      setPanicSent(true);
-      setTimeout(() => setPanicSent(false), 5000);
-    } catch (err) {
-      console.error("Failed to send panic alert:", err);
-      window.alert("Couldn't send the panic alert - try again.");
-    } finally {
-      setPanicSending(false);
-    }
+    // Queued, not sent directly - Platform Maturity Roadmap, Tier 1,
+    // item 2. A panic alert is exactly the signal that must survive a
+    // dead zone: it's written to localStorage immediately and retried
+    // automatically once connectivity is back (see lib/offline-queue.ts
+    // and TopBanner's own sync-status indicator), rather than failing
+    // outright the moment this fetch can't reach the server.
+    enqueueOfflineSubmission("checkin", { type: "panic", ...location });
+    setPanicSent(true);
+    setTimeout(() => setPanicSent(false), 5000);
+    setPanicSending(false);
   }
 
   useEffect(() => {
@@ -1482,7 +1487,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
               }}
             >
               <ShieldAlert className="w-4 h-4" />
-              Risk Assessments
+              {t("riskAssessments")}
             </button>
             <button
               type="button"
@@ -1493,7 +1498,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
               }}
             >
               <Route className="w-4 h-4" />
-              Route Planning
+              {t("routePlanning")}
             </button>
             <button
               type="button"
@@ -1504,7 +1509,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
               }}
             >
               <Download className="w-4 h-4" />
-              Download Task
+              {t("downloadTask")}
             </button>
             <button
               type="button"
@@ -1515,7 +1520,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
               }}
             >
               <Layers className="w-4 h-4" />
-              Layers
+              {t("layers")}
             </button>
           </div>
         )}
@@ -1527,7 +1532,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
             value={searchQuery}
             onChange={setSearchQuery}
             onSelect={handleSearchSelect}
-            placeholder="Search for a place or address…"
+            placeholder={t("searchPlaceholder")}
             className="top-banner-search-input"
           />
         </div>
@@ -1549,7 +1554,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
         ) : (
           <ShieldAlert className="w-4 h-4" />
         )}
-        {panicSent ? "Sent" : "Panic"}
+        {panicSent ? t("panicSent") : t("panic")}
       </button>
       <button
         type="button"
@@ -1560,7 +1565,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
         }}
       >
         <Bell className="w-4 h-4" />
-        Alerts
+        {t("alerts")}
         {alertsCount > 0 && <span className="top-banner-alerts-trigger-badge">{alertsCount}</span>}
       </button>
       <div
@@ -1596,7 +1601,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
               }}
             >
               <UserIcon className="w-4 h-4" />
-              Profile
+              {t("profile")}
             </button>
             <button
               type="button"
@@ -1607,7 +1612,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
               }}
             >
               <AlertTriangle className="w-4 h-4" />
-              Report Incident
+              {t("reportIncident")}
             </button>
             <button
               type="button"
@@ -1618,7 +1623,19 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
               }}
             >
               <LifeBuoy className="w-4 h-4" />
-              Report an Issue
+              {t("reportIssue")}
+            </button>
+            {/* Multi-language UI - Following Roadmap Tier 3, item 32.
+                A plain toggle between the two currently-translated
+                languages rather than a dropdown - only two options
+                exist today, see lib/i18n.tsx for how to add a third. */}
+            <button
+              type="button"
+              className="top-banner-operator-menu-item"
+              onClick={() => setLanguage(language === "en" ? "af" : "en")}
+            >
+              <Globe className="w-4 h-4" />
+              {t("language")}: {LANGUAGE_LABELS[language]}
             </button>
             {/* Owner-only, only shown while actively previewing a Test
                 Company (see require-auth.tsx) - lets the Owner jump back
@@ -1669,7 +1686,7 @@ function SyncStatusIndicator() {
   if (items.length === 0) return null;
   const failedCount = items.filter((i) => i.status === "failed").length;
 
-  const KIND_LABELS: Record<string, string> = { timesheet: "Timesheet entry", incident: "Incident report" };
+  const KIND_LABELS: Record<string, string> = { timesheet: "Timesheet entry", incident: "Incident report", checkin: "Check-in / Panic signal" };
 
   return (
     <div
@@ -2151,6 +2168,106 @@ function buildFocusClipPath(svgPath: string, scale: number): string {
 // it does not, and cannot, persist to disk by itself.
 type CountryAdjustment = { status: "review-required"; notes: string };
 
+const AVAILABILITY_STATUS_LABELS: Record<AvailabilityRequest["status"], string> = {
+  pending: "Pending",
+  approved: "Approved",
+  denied: "Denied",
+};
+
+// CPO self-service availability/time-off requests - Following Roadmap
+// Tier 3, item 34, Profile > Availability. This file has no react-query/
+// toast usage anywhere in it (a different pattern than the rest of the
+// app - see submitPlan/saveAccountDetails), so this matches that same
+// plain-promise-plus-useState convention rather than introducing one.
+function AvailabilityPanel({ cpoId }: { cpoId: number | null }) {
+  const [requests, setRequests] = useState<AvailabilityRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadRequests = () => {
+    setLoading(true);
+    api.availabilityRequests
+      .list()
+      .then(setRequests)
+      .catch((err) => console.error("Failed to load availability requests:", err))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    if (cpoId != null) loadRequests();
+  }, [cpoId]);
+
+  function submit() {
+    if (!startDate || !endDate) { setError("Start and end dates are required."); return; }
+    if (endDate < startDate) { setError("End date can't be before start date."); return; }
+    setSubmitting(true);
+    setError(null);
+    api.availabilityRequests
+      .create({ startDate, endDate, reason: reason.trim() || undefined })
+      .then(() => {
+        setStartDate("");
+        setEndDate("");
+        setReason("");
+        loadRequests();
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Couldn't submit request."))
+      .finally(() => setSubmitting(false));
+  }
+
+  return (
+    <div className="tasks-panel-list">
+      <div className="venue-assessment-form">
+        <label className="venue-assessment-field">
+          <span>Start Date</span>
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="venue-assessment-field-input" />
+        </label>
+        <label className="venue-assessment-field">
+          <span>End Date</span>
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="venue-assessment-field-input" />
+        </label>
+        <label className="venue-assessment-field">
+          <span>Reason (optional)</span>
+          <input
+            type="text"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Annual leave, medical, personal..."
+            className="venue-assessment-field-input"
+          />
+        </label>
+        {error && <p className="venue-assessment-action-error">{error}</p>}
+        <button type="button" className="venue-assessment-add-btn" onClick={submit} disabled={submitting}>
+          <Plus className="w-3.5 h-3.5" />
+          {submitting ? "Submitting…" : "Request Time Off"}
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="tasks-panel-empty">Loading…</p>
+      ) : requests.length === 0 ? (
+        <p className="tasks-panel-empty">No requests yet.</p>
+      ) : (
+        requests.map((r) => (
+          <div key={r.id} className="risk-assessments-venue-detail">
+            <p className="risk-assessments-venue-detail-label">
+              <CalendarOff className="w-3.5 h-3.5" /> {r.startDate} &ndash; {r.endDate}
+            </p>
+            {r.reason && <p className="task-row-title">{r.reason}</p>}
+            <p className="tasks-panel-empty" style={{ margin: 0 }}>
+              {AVAILABILITY_STATUS_LABELS[r.status]}
+              {r.status !== "pending" && r.reviewedByName ? ` by ${r.reviewedByName}` : ""}
+            </p>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
 function OperationalCanvas({
   briefArea,
   briefCondition,
@@ -2212,7 +2329,7 @@ function OperationalCanvas({
   // Expenses), same "view switch inside one panel" pattern as Risk
   // Assessments below rather than separate sliding panels. Resets to
   // "root" whenever the panel is (re)opened (see openProfile).
-  const [profileView, setProfileView] = useState<"root" | "overview" | "account" | "expenses" | "timesheet">("root");
+  const [profileView, setProfileView] = useState<"root" | "overview" | "account" | "expenses" | "timesheet" | "availability">("root");
 
   // Risk Assessments has its own sub-navigation ("Venues," step 1 of a
   // bigger project, per direct product direction) - a view switch inside
@@ -2339,6 +2456,44 @@ function OperationalCanvas({
       .finally(() => setCpoTasksLoading(false));
   }, [effectiveCpoId]);
 
+  // GPS breadcrumb trail - Following Roadmap Tier 3, item 33 ("pairs
+  // with item 1" - checkins' own check-in/panic signal). A passive
+  // timer, not a button - fires a location ping every 5 minutes (same
+  // cadence lib/checkin-monitor.ts's own scan interval uses) for every
+  // in_progress task on this CPO's own roster, for as long as this
+  // page stays open. Honest limitation, not silently glossed over:
+  // this is a web app with no background service-worker tracking, so
+  // the trail only grows while Operators Note is actually open in a
+  // browser tab - closing the tab/app pauses it, same real constraint
+  // the offline-sync work already documented for this codebase. Only
+  // armed for a real CPO's own session (effectiveCpoId === sessionUser.id)
+  // - a Manager/Owner previewing as a CPO should never emit pings that
+  // would misrepresent where the operator actually is.
+  useEffect(() => {
+    if (effectiveCpoId == null || sessionUser?.id !== effectiveCpoId) return;
+    const PING_INTERVAL_MS = 5 * 60 * 1000;
+
+    async function pingInProgressTasks() {
+      const inProgress = cpoTasks.filter((t) => t.status === "in_progress");
+      if (inProgress.length === 0) return;
+      let resolved: { lat: number | null; lng: number | null };
+      try {
+        resolved = await resolveCurrentLocation();
+      } catch {
+        return; // best-effort - a denied/unavailable geolocation permission just skips this cycle
+      }
+      if (resolved.lat == null || resolved.lng == null) return;
+      for (const task of inProgress) {
+        api.taskLocationPings.create({ taskId: task.id, latitude: resolved.lat, longitude: resolved.lng }).catch((err) => {
+          console.error(`Breadcrumb ping failed for task ${task.id}:`, err);
+        });
+      }
+    }
+
+    const interval = setInterval(pingInProgressTasks, PING_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [effectiveCpoId, sessionUser?.id, cpoTasks]);
+
   // Profile > Account Details - self-service edit of the same
   // profileUser record Timesheet is scoped to. Local input state
   // mirrors profileUser (re-synced whenever it changes, e.g. once the
@@ -2348,6 +2503,12 @@ function OperationalCanvas({
   const [accountNameInput, setAccountNameInput] = useState("");
   const [accountEmailInput, setAccountEmailInput] = useState("");
   const [accountInitialsInput, setAccountInitialsInput] = useState("");
+  // Real notifications - Following Roadmap Tier 3, item 29. The one
+  // self-service surface that exists for a CPO's own account - this is
+  // where a CPO sets the number panic/missed-checkin SMS alerts would
+  // reach them on, though those currently only go to Management, not
+  // back to the CPO themselves (see notifyManagement's own scoping).
+  const [accountPhoneInput, setAccountPhoneInput] = useState("");
   const [savingAccountDetails, setSavingAccountDetails] = useState(false);
   const [accountDetailsError, setAccountDetailsError] = useState<string | null>(null);
 
@@ -2356,6 +2517,7 @@ function OperationalCanvas({
     setAccountNameInput(profileUser.name);
     setAccountEmailInput(profileUser.email);
     setAccountInitialsInput(profileUser.avatarInitials ?? "");
+    setAccountPhoneInput(profileUser.phone ?? "");
   }, [profileUser]);
 
   function saveAccountDetails() {
@@ -2371,6 +2533,7 @@ function OperationalCanvas({
         name: accountNameInput.trim(),
         email: accountEmailInput.trim(),
         avatarInitials: accountInitialsInput.trim() || undefined,
+        phone: accountPhoneInput.trim() || null,
       })
       .then((updated) => setProfileUser(updated))
       .catch((err) => {
@@ -2614,13 +2777,11 @@ function OperationalCanvas({
     } catch (err) {
       console.error("Could not resolve location for check-in:", err);
     }
-    try {
-      await api.checkins.create({ taskId, type, ...location });
-      setCheckinState((prev) => ({ ...prev, [taskId]: { submitting: false, lastResult: type } }));
-    } catch (err) {
-      console.error(`Failed to send ${type} check-in for task ${taskId}:`, err);
-      setCheckinState((prev) => ({ ...prev, [taskId]: { submitting: false, lastResult: "error" } }));
-    }
+    // Queued, not sent directly - same dead-zone protection as the
+    // global panic button above (Platform Maturity Roadmap, Tier 1,
+    // item 2).
+    enqueueOfflineSubmission("checkin", { taskId, type, ...location });
+    setCheckinState((prev) => ({ ...prev, [taskId]: { submitting: false, lastResult: type } }));
   }
 
   // One-tap emergency info (Following Roadmap Tier 1, item 5) - nearest
@@ -5253,6 +5414,11 @@ function OperationalCanvas({
               Timesheet
               <ChevronRight className="w-4 h-4 risk-assessments-nav-item-chevron" />
             </button>
+            <button type="button" className="risk-assessments-nav-item" onClick={() => setProfileView("availability")}>
+              <CalendarOff className="w-4 h-4" />
+              Availability
+              <ChevronRight className="w-4 h-4 risk-assessments-nav-item-chevron" />
+            </button>
           </div>
         ) : (
           <>
@@ -5360,6 +5526,16 @@ function OperationalCanvas({
                       value={accountInitialsInput}
                       onChange={(event) => setAccountInitialsInput(event.target.value.toUpperCase())}
                       maxLength={4}
+                      className="venue-assessment-field-input"
+                    />
+                  </label>
+                  <label className="venue-assessment-field">
+                    <span>Phone</span>
+                    <input
+                      type="tel"
+                      value={accountPhoneInput}
+                      onChange={(event) => setAccountPhoneInput(event.target.value)}
+                      placeholder="For SMS alerts"
                       className="venue-assessment-field-input"
                     />
                   </label>
@@ -5477,6 +5653,8 @@ function OperationalCanvas({
                   })}
                 </div>
               )
+            ) : profileView === "availability" ? (
+              <AvailabilityPanel cpoId={profileUserId} />
             ) : (
               <p className="tasks-panel-empty">Coming soon.</p>
             )}

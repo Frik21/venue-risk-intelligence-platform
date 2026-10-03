@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DollarSign, Wallet, CheckCircle2, Clock, XCircle, Users as UsersIcon, Settings, Pencil, Car, FileText, Plus, X, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { DollarSign, Wallet, CheckCircle2, Clock, XCircle, Users as UsersIcon, Settings, Pencil, Car, FileText, Plus, X, ChevronDown, ChevronUp, Trash2, TrendingUp, AlertTriangle } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -554,6 +554,52 @@ export default function CostsPage() {
     allQuoted[t.estimatedCostCurrency] = (allQuoted[t.estimatedCostCurrency] ?? 0) + t.estimatedCost;
   }
 
+  // Pipeline Forecast - Following Roadmap Tier 3, item 18. Open (draft/
+  // sent, not yet decided) real Quotes, bucketed by their own
+  // operational startDate - the month the work (and the revenue it
+  // represents) would actually begin, which is what matters for
+  // staffing/cash planning, not validUntil (a decision deadline) or
+  // createdAt. A quote with no startDate set falls into its own
+  // "Unscheduled" bucket rather than being silently dropped. Weighted
+  // by the company's overall historical win rate (approved / decided,
+  // decided = approved + rejected) - same shape as the Dashboard's own
+  // "Quote Win Rate" trend (item 12), collapsed to one current-state
+  // number rather than a day-by-day series, since a single scalar is
+  // all a per-month forecast needs.
+  const openPipelineQuotes = quotes.filter((q) => q.status === "draft" || q.status === "sent");
+  const decidedQuotes = quotes.filter((q) => q.status === "approved" || q.status === "rejected");
+  const winRate = decidedQuotes.length > 0
+    ? decidedQuotes.filter((q) => q.status === "approved").length / decidedQuotes.length
+    : null;
+
+  const UNSCHEDULED_BUCKET = "unscheduled";
+  function pipelineMonthKey(q: Quote): string {
+    if (!q.startDate) return UNSCHEDULED_BUCKET;
+    const d = new Date(q.startDate);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  }
+  function pipelineMonthLabel(key: string): string {
+    if (key === UNSCHEDULED_BUCKET) return "Unscheduled";
+    const [y, m] = key.split("-").map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "short", year: "numeric" });
+  }
+  const pipelineByMonth = new Map<string, Record<string, number>>();
+  for (const q of openPipelineQuotes) {
+    const key = pipelineMonthKey(q);
+    const byCurrency = pipelineByMonth.get(key) ?? {};
+    byCurrency[q.currency] = (byCurrency[q.currency] ?? 0) + q.totalQuoteValue;
+    pipelineByMonth.set(key, byCurrency);
+  }
+  const pipelineMonthOrder = [...pipelineByMonth.keys()].filter((k) => k !== UNSCHEDULED_BUCKET).sort();
+  if (pipelineByMonth.has(UNSCHEDULED_BUCKET)) pipelineMonthOrder.push(UNSCHEDULED_BUCKET);
+  const pipelineTotalRaw: Record<string, number> = {};
+  for (const byCurrency of pipelineByMonth.values()) {
+    for (const [cur, amt] of Object.entries(byCurrency)) pipelineTotalRaw[cur] = (pipelineTotalRaw[cur] ?? 0) + amt;
+  }
+  const pipelineTotalWeighted: Record<string, number> = winRate != null
+    ? Object.fromEntries(Object.entries(pipelineTotalRaw).map(([cur, amt]) => [cur, amt * winRate]))
+    : {};
+
   const totalsByCurrency = expenses.reduce<Record<string, number>>((acc, e) => {
     acc[e.currency] = (acc[e.currency] ?? 0) + e.amount;
     return acc;
@@ -671,6 +717,32 @@ export default function CostsPage() {
     })
     .slice(0, 8);
 
+  // Scope-creep alerts - Following Roadmap Tier 3, item 27 ("flag when
+  // actual task cost is diverging from the quote while the job is
+  // still running, not after"). Deliberately compares against the
+  // quote's own internalCost (the planned/budgeted internal cost
+  // before markup and tax), not totalQuoteValue (the client-facing
+  // sale price) - this is a "are we overspending against our own
+  // budget" signal, not a revenue one. Only in_progress tasks (a
+  // completed job overrunning its budget is a Job Profitability
+  // problem, already covered above; this is specifically about
+  // catching it while there's still time to act) with an approved
+  // quote that actually has a positive budget to measure against.
+  const SCOPE_CREEP_WARNING_RATIO = 0.8;
+  const costByTaskId = new Map(totalCostByTask.filter((t) => t.taskId != null).map((t) => [t.taskId as number, t.total]));
+  const scopeCreepAlerts = tasks
+    .filter((t) => t.status === "in_progress")
+    .map((t) => {
+      const approvedQuote = quotes.find((q) => q.taskId === t.id && q.status === "approved");
+      if (!approvedQuote || approvedQuote.internalCost <= 0) return null;
+      const actualCost = costByTaskId.get(t.id) ?? 0;
+      const ratio = actualCost / approvedQuote.internalCost;
+      if (ratio < SCOPE_CREEP_WARNING_RATIO) return null;
+      return { taskId: t.id, title: t.title, actualCost, budget: approvedQuote.internalCost, ratio };
+    })
+    .filter((x): x is NonNullable<typeof x> => x != null)
+    .sort((a, b) => b.ratio - a.ratio);
+
   return (
     <div className="space-y-5">
       {showQuoteDialog && <QuoteDialog quote={null} venues={venues} users={users} clients={clients} onClose={() => setShowQuoteDialog(false)} />}
@@ -759,6 +831,9 @@ export default function CostsPage() {
                       <span className={cn("text-xs font-medium border rounded-full px-2 py-0.5", QUOTE_STATUS_CONFIG[q.status].color)}>
                         {QUOTE_STATUS_CONFIG[q.status].label}
                       </span>
+                      {q.signedByName && (
+                        <div className="text-[10px] text-slate-400 mt-1">Signed by {q.signedByName}</div>
+                      )}
                     </td>
                     <td className="py-2 text-right font-mono tabular-nums text-slate-900">{formatMoney(q.totalQuoteValue, q.currency)}</td>
                     <td className="py-2 text-right">
@@ -775,6 +850,62 @@ export default function CostsPage() {
                 ))}
               </tbody>
             </table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-slate-400" /> Pipeline Forecast
+            </h2>
+            {winRate != null && (
+              <span className="text-xs text-slate-400">Company win rate: {(winRate * 100).toFixed(0)}%</span>
+            )}
+          </div>
+          <p className="text-xs text-slate-400 mb-4">
+            Open (draft/sent) quotes, by the month their work would start - for staffing and cash planning. Raw pipeline value next to a win-rate-weighted estimate.
+          </p>
+          {quotesLoading ? (
+            <Skeleton className="h-32" />
+          ) : openPipelineQuotes.length === 0 ? (
+            <p className="text-sm text-slate-400">No open quotes right now.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-xs font-medium uppercase tracking-wide text-slate-500">
+                  <th className="text-left py-1.5">Month</th>
+                  <th className="text-right py-1.5">Raw Pipeline</th>
+                  <th className="text-right py-1.5">Weighted Estimate</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {pipelineMonthOrder.map((key) => (
+                  <tr key={key}>
+                    <td className="py-2 text-slate-700">{pipelineMonthLabel(key)}</td>
+                    <td className="py-2 text-right"><CurrencyStack byCurrency={pipelineByMonth.get(key)!} /></td>
+                    <td className="py-2 text-right">
+                      {winRate != null ? (
+                        <CurrencyStack byCurrency={Object.fromEntries(Object.entries(pipelineByMonth.get(key)!).map(([cur, amt]) => [cur, amt * winRate]))} className="text-slate-500" />
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="border-t-2 border-slate-200 font-semibold">
+                  <td className="py-2 text-slate-900">Total</td>
+                  <td className="py-2 text-right"><CurrencyStack byCurrency={pipelineTotalRaw} /></td>
+                  <td className="py-2 text-right">
+                    {winRate != null ? <CurrencyStack byCurrency={pipelineTotalWeighted} className="text-slate-500" /> : <span className="text-slate-300">—</span>}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          )}
+          {winRate == null && !quotesLoading && openPipelineQuotes.length > 0 && (
+            <p className="text-xs text-slate-400 mt-3">Not enough decided quotes yet to estimate a win rate - once at least one is approved or rejected, a weighted estimate will show here too.</p>
           )}
         </CardContent>
       </Card>
@@ -973,6 +1104,37 @@ export default function CostsPage() {
           )}
         </CardContent>
       </Card>
+
+      {scopeCreepAlerts.length > 0 && (
+        <Card className="border-red-200">
+          <CardContent className="p-5">
+            <h2 className="font-semibold text-slate-900 mb-1 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-500" /> Scope-Creep Alerts
+            </h2>
+            <p className="text-xs text-slate-400 mb-3">
+              In-progress jobs where actual personnel + expense cost is approaching or over the quoted internal budget - while there's still time to act.
+            </p>
+            <div className="space-y-2">
+              {scopeCreepAlerts.map((a) => (
+                <div key={a.taskId} className="flex items-center justify-between text-sm border-b border-slate-100 last:border-0 pb-2 last:pb-0">
+                  <span className="text-slate-700 truncate">{a.title}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-slate-400 font-mono tabular-nums">
+                      {a.actualCost.toLocaleString(undefined, { maximumFractionDigits: 0 })} / {a.budget.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </span>
+                    <span className={cn(
+                      "text-xs font-medium border rounded-full px-2 py-0.5",
+                      a.ratio >= 1 ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200",
+                    )}>
+                      {Math.round(a.ratio * 100)}%
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {jobProfitability.length > 0 && (
         <Card>

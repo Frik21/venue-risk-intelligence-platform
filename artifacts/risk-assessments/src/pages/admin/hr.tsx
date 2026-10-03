@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { api, type OnboardingOverviewRecord, type OnboardingDocument, type User } from "@/lib/api";
+import { api, type OnboardingOverviewRecord, type OnboardingDocument, type User, type AvailabilityRequest } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserPlus, Users as UsersIcon, type LucideIcon } from "lucide-react";
@@ -75,6 +75,13 @@ export default function HrDashboard() {
     queryKey: ["onboarding-documents-all"],
     queryFn: api.onboarding.listAllDocuments,
   });
+  // CPO self-service availability/time-off requests - Following
+  // Roadmap Tier 3, item 34.
+  const { data: availabilityRequests = [] } = useQuery<AvailabilityRequest[]>({
+    queryKey: ["availability-requests"],
+    queryFn: api.availabilityRequests.list,
+  });
+  const pendingTimeOff = availabilityRequests.filter((r) => r.status === "pending").length;
 
   const inProgress = onboarding.filter((o) => o.status === "in_progress").length;
   const onboarded = onboarding.filter((o) => o.status === "onboarded").length;
@@ -115,6 +122,7 @@ export default function HrDashboard() {
               <StatTile label="Denied" value={String(denied)} />
               <StatTile label="Certs expiring" value={String(expiringCerts)} tone={expiringCerts > 0 ? "negative" : undefined} />
               <StatTile label="Certs expired" value={String(expiredCerts)} tone={expiredCerts > 0 ? "negative" : undefined} />
+              <StatTile label="Time off pending" value={String(pendingTimeOff)} tone={pendingTimeOff > 0 ? "negative" : undefined} />
             </div>
           </SectionCard>
 

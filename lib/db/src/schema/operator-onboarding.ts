@@ -34,6 +34,18 @@ export const operatorOnboardingTable = pgTable("operator_onboarding", {
   // /onboarding/:id/operational-access and PATCH
   // /onboarding/:id/status in routes/onboarding.ts.
   operationalAccessGrantedAt: timestamp("operational_access_granted_at", { withTimezone: true }),
+  // Re-vetting/background-check renewal cadence - Following Roadmap
+  // Tier 3, item 22 ("vetting isn't one-and-done"). Deliberately a
+  // real timestamp a Manager stamps explicitly (PATCH
+  // /onboarding/:id/mark-vetted) rather than reusing the checklist's
+  // one-time "background_check" checkbox - re-vetting happens more
+  // than once over an operator's tenure, and a checklist item checked
+  // during initial onboarding has no way to be "re-checked" to mark a
+  // later re-vet. "Due for re-vetting" = lastVettedAt + a fixed
+  // VETTING_INTERVAL_MONTHS constant (12 months, see
+  // lib/onboarding-checklist.ts), computed the same way cert expiry
+  // already is - never stored as its own status.
+  lastVettedAt: timestamp("last_vetted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [index("idx_operator_onboarding_company_id").on(table.companyId)]);
@@ -60,6 +72,13 @@ export const operatorDocumentsTable = pgTable("operator_documents", {
   fileDataUrl: text("file_data_url"),
   expiryDate: text("expiry_date"),
   verified: boolean("verified").notNull().default(false),
+  // Real notifications - Following Roadmap Tier 3, item 29. Same
+  // stamped-once, never-cleared shape as invoices.overdueNotifiedAt -
+  // lib/cert-expiry-monitor.ts sets this the first time a document
+  // enters the existing EXPIRY_WARNING_DAYS window, so a re-uploaded/
+  // renewed document (a fresh row) naturally gets its own notification
+  // cycle even though this one never resets.
+  expiryNotifiedAt: timestamp("expiry_notified_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [index("idx_operator_documents_company_id").on(table.companyId)]);

@@ -3,7 +3,7 @@ import { db, usersTable, companiesTable, officesTable } from "@workspace/db";
 import { z } from "zod";
 import { eq, desc, and, count, asc } from "drizzle-orm";
 import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
-import { generateInitialPassword, hashPassword } from "../lib/auth";
+import { generateInitialPassword, hashPassword, restrictWritesToRoles } from "../lib/auth";
 import { resolveCurrency } from "../lib/currency";
 import {
   BASE_SEATS_BY_ROLE,
@@ -22,7 +22,7 @@ const UserInputSchema = z.object({
   companyId: z.number().int().nullable().optional(),
   name: z.string().min(1),
   email: z.string().email(),
-  role: z.enum(["admin", "manager", "cpo", "finance", "human_resources", "operations"]),
+  role: z.enum(["admin", "manager", "cpo", "finance", "human_resources", "operations", "gsoc"]),
   avatarInitials: z.string().optional(),
   officeId: z.number().int().nullable().optional(),
 });
@@ -39,6 +39,7 @@ function formatUser(row: typeof usersTable.$inferSelect) {
     dayRate: row.dayRate ?? null,
     nightRate: row.nightRate ?? null,
     officeId: row.officeId,
+    phone: row.phone ?? null,
     mustChangePassword: row.mustChangePassword,
     createdAt: row.createdAt.toISOString(),
   };
@@ -55,7 +56,14 @@ router.get("/users", async (req, res): Promise<void> => {
   res.json(users.map(formatUser));
 });
 
-router.post("/users", async (req, res): Promise<void> => {
+// Granular per-role permissions - Following Roadmap Tier 3, item 30.
+// Creating a user and setting a CPO's pay rate are HR's own domain
+// (see pages/admin/hr.tsx) - deliberately NOT applied to this whole
+// router (GET /users, PATCH /users/:id self-service, GET/PATCH
+// /users/seats all stay open to every Management role and, for GET,
+// to CPOs too - this only gates the two specific HR-management writes
+// below).
+router.post("/users", restrictWritesToRoles("human_resources"), async (req, res): Promise<void> => {
   const parsed = UserInputSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
@@ -165,7 +173,9 @@ async function buildSeats(companyId: number) {
             ? company.additionalOperationsSeats
             : role === "finance"
               ? company.additionalFinanceSeats
-              : company.additionalHumanResourcesSeats;
+              : role === "human_resources"
+                ? company.additionalHumanResourcesSeats
+                : company.additionalGsocSeats;
       acc[role] = {
         used: usedByRole[role] ?? 0,
         base: BASE_SEATS_BY_ROLE[role],
@@ -233,6 +243,7 @@ const SeatsUpdateSchema = z.object({
   additionalOperationsSeats: z.number().int().min(0).optional(),
   additionalFinanceSeats: z.number().int().min(0).optional(),
   additionalHumanResourcesSeats: z.number().int().min(0).optional(),
+  additionalGsocSeats: z.number().int().min(0).optional(),
   additionalCpoSeats: z.number().int().min(0).optional(),
 });
 
@@ -257,6 +268,10 @@ const UserUpdateSchema = z.object({
   // Unlike role/active below, home office isn't a permission field -
   // no separate admin-only endpoint needed for it.
   officeId: z.number().int().nullable().optional(),
+  // Real notifications - Following Roadmap Tier 3, item 29 - the SMS
+  // recipient number. Self-service like name/email above, not a
+  // permission field.
+  phone: z.string().max(40).nullable().optional(),
 });
 
 // Self-service profile edit (Profile > Account Details) - deliberately
@@ -282,7 +297,7 @@ const RatesUpdateSchema = z.object({
 // Manager-set pay rate, deliberately separate from the self-service
 // PATCH above - a CPO editing their own Account Details should never
 // be able to set their own pay rate.
-router.patch("/users/:id/rates", async (req, res): Promise<void> => {
+router.patch("/users/:id/rates", restrictWritesToRoles("human_resources"), async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 

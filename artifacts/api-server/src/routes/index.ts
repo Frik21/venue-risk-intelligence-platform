@@ -2,6 +2,9 @@ import { Router, type IRouter } from "express";
 import { requireAuth, blockSoloOperatorFromManagement } from "../lib/auth";
 import healthRouter from "./health";
 import authRouter from "./auth";
+import feedbackRouter from "./feedback";
+import clientPortalRouter from "./client-portal";
+import publicStatusRouter from "./public-status";
 import assessmentsRouter from "./assessments";
 import risksRouter from "./risks";
 import venuesRouter from "./venues";
@@ -44,6 +47,14 @@ import fieldIncidentReportsRouter from "./field-incident-reports";
 import afterActionReportsRouter from "./after-action-reports";
 import taskEquipmentRouter from "./task-equipment";
 import travelLogisticsRouter from "./travel-logistics";
+import contractsRouter from "./contracts";
+import vendorPerformanceRouter from "./vendor-performance";
+import rateBenchmarkingRouter from "./rate-benchmarking";
+import dataExportRouter from "./data-export";
+import taskLocationPingsRouter from "./task-location-pings";
+import availabilityRequestsRouter from "./availability-requests";
+import pushRouter from "./push";
+import sampleDataRouter from "./sample-data";
 
 const router: IRouter = Router();
 
@@ -53,6 +64,20 @@ const router: IRouter = Router();
 // line instead of each of the ~33 files needing its own guard.
 router.use(healthRouter);
 router.use(authRouter);
+// feedbackRouter mixes public (/feedback/:token) and authenticated
+// (/tasks/:id/feedback-requests, requireAuth applied inline) routes in
+// one file, same pattern authRouter itself uses - see that file's own
+// comment.
+router.use(feedbackRouter);
+// clientPortalRouter is entirely public (GET /portal/:token + its
+// invoice PDF sub-route) - a client has no session/account at all, see
+// that file's own comment.
+router.use(clientPortalRouter);
+// publicStatusRouter mixes a public GET /status (no session - the
+// whole point is checkable during an outage) with Owner-only incident
+// posting (requireAuth/requireRole applied inline), same mixed-file
+// pattern as feedbackRouter.
+router.use(publicStatusRouter);
 router.use(requireAuth);
 router.use(blockSoloOperatorFromManagement);
 
@@ -98,5 +123,13 @@ router.use(fieldIncidentReportsRouter);
 router.use(afterActionReportsRouter);
 router.use(taskEquipmentRouter);
 router.use(travelLogisticsRouter);
+router.use(contractsRouter);
+router.use(vendorPerformanceRouter);
+router.use(rateBenchmarkingRouter);
+router.use(dataExportRouter);
+router.use(taskLocationPingsRouter);
+router.use(availabilityRequestsRouter);
+router.use(pushRouter);
+router.use(sampleDataRouter);
 
 export default router;

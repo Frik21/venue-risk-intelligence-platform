@@ -1,8 +1,10 @@
+import crypto from "crypto";
 import { Router, type IRouter } from "express";
-import { eq, asc, desc, inArray } from "drizzle-orm";
-import { db, clientsTable, clientActivitiesTable, principalsTable, usersTable } from "@workspace/db";
+import { eq, and, asc, desc, inArray } from "drizzle-orm";
+import { db, clientsTable, clientActivitiesTable, principalsTable, usersTable, principalAccessLogTable, tasksTable } from "@workspace/db";
 import { z } from "zod";
 import { resolveCompanyId, requireCompanyId } from "../lib/resolve-company";
+import { logPrincipalAccess } from "../lib/principal-audit";
 
 const router: IRouter = Router();
 
@@ -23,6 +25,7 @@ function formatClient(row: typeof clientsTable.$inferSelect) {
     dayRate: row.dayRate,
     nightRate: row.nightRate,
     officeId: row.officeId,
+    portalToken: row.portalToken,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -102,6 +105,86 @@ router.post("/clients", async (req, res): Promise<void> => {
   res.status(201).json(formatClient(client));
 });
 
+// Bulk CSV import - automation pass, per direct product direction
+// ("they should be able to import bulk from CSV excel"). The frontend
+// parses the CSV itself (papaparse) and posts plain row objects here -
+// this endpoint never touches a raw file, just already-structured
+// data, same validation (ClientInputSchema) as a single-client
+// POST above. Row-by-row rather than all-or-nothing: one malformed row
+// shouldn't block every other valid one in the same file, so this
+// returns which rows succeeded and which failed (with why), rather
+// than a single pass/fail for the whole import - the one design choice
+// that actually matters for "don't want a customer to come back and
+// say it's broken," since a bulk import silently dropping rows with no
+// explanation would be exactly that.
+const ClientImportRowSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  industry: z.string().max(200).optional(),
+  primaryContactName: z.string().max(200).optional(),
+  primaryContactRole: z.string().max(200).optional(),
+  email: z.string().max(200).optional(),
+  phone: z.string().max(200).optional(),
+  address: z.string().max(500).optional(),
+  dayRate: z.number().min(0).nullable().optional(),
+  nightRate: z.number().min(0).nullable().optional(),
+});
+
+const ClientImportSchema = z.object({
+  // Capped well above any realistic single-file import - a guardrail
+  // against an accidental multi-megabyte paste, not a real limit.
+  rows: z.array(z.record(z.string(), z.unknown())).min(1).max(1000),
+});
+
+// A day/night rate that doesn't parse as a number (blank, "N/A", a
+// stray note - real spreadsheets have all three) is treated as "no
+// rate set" rather than rejecting the whole row - dayRate/nightRate
+// are nullable on a Client already, so a row missing just that one
+// field is still a perfectly good client to import. Returning
+// `undefined` here instead would have let zod's own .optional() treat
+// an unparseable value as "not provided" and silently pass it through
+// uncoerced - caught by this feature's own test before it shipped.
+function coerceImportRow(raw: Record<string, unknown>) {
+  const num = (v: unknown): number | null => {
+    if (v == null || v === "") return null;
+    const n = Number(v);
+    return Number.isNaN(n) ? null : n;
+  };
+  return { ...raw, dayRate: num(raw["dayRate"]), nightRate: num(raw["nightRate"]) };
+}
+
+router.post("/clients/import", async (req, res): Promise<void> => {
+  const parsedBody = ClientImportSchema.safeParse(req.body);
+  if (!parsedBody.success) { res.status(400).json({ error: parsedBody.error.message }); return; }
+
+  const companyId = await resolveCompanyId(req.user!.companyId);
+  const errors: { row: number; error: string }[] = [];
+  let imported = 0;
+
+  for (let i = 0; i < parsedBody.data.rows.length; i++) {
+    const parsedRow = ClientImportRowSchema.safeParse(coerceImportRow(parsedBody.data.rows[i]));
+    if (!parsedRow.success) {
+      errors.push({ row: i + 1, error: parsedRow.error.issues[0]?.message ?? "Invalid row" });
+      continue;
+    }
+
+    await db.insert(clientsTable).values({
+      companyId,
+      name: parsedRow.data.name,
+      industry: parsedRow.data.industry ?? "",
+      primaryContactName: parsedRow.data.primaryContactName ?? "",
+      primaryContactRole: parsedRow.data.primaryContactRole ?? "",
+      email: parsedRow.data.email ?? "",
+      phone: parsedRow.data.phone ?? "",
+      address: parsedRow.data.address ?? "",
+      dayRate: parsedRow.data.dayRate ?? null,
+      nightRate: parsedRow.data.nightRate ?? null,
+    });
+    imported++;
+  }
+
+  res.json({ imported, errors });
+});
+
 const ClientUpdateSchema = ClientInputSchema.partial();
 
 router.patch("/clients/:id", async (req, res): Promise<void> => {
@@ -124,6 +207,51 @@ router.delete("/clients/:id", async (req, res): Promise<void> => {
   const [deleted] = await db.delete(clientsTable).where(eq(clientsTable.id, id)).returning();
   if (!deleted) { res.status(404).json({ error: "Client not found" }); return; }
   res.sendStatus(204);
+});
+
+// Client Portal link - Following Roadmap Tier 3, item 25. Generates a
+// fresh token every call (create-or-rotate in one action, no separate
+// "regenerate" endpoint needed) - scoped to the caller's own companyId
+// as a small defense-in-depth improvement over this file's existing
+// PATCH/DELETE (which only match by id), same "new route follows the
+// file's shape but closes this one gap" pattern item 17's contracts
+// route already used.
+router.post("/clients/:id/portal-link", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const portalToken = crypto.randomBytes(24).toString("base64url");
+  const [client] = await db
+    .update(clientsTable)
+    .set({ portalToken })
+    .where(and(eq(clientsTable.id, id), eq(clientsTable.companyId, companyId)))
+    .returning();
+  if (!client) { res.status(404).json({ error: "Client not found" }); return; }
+
+  res.json(formatClient(client));
+});
+
+// Revokes an existing link (e.g. it leaked) without immediately
+// generating a replacement - a Manager re-generates separately via the
+// route above when ready to issue a new one.
+router.delete("/clients/:id/portal-link", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [client] = await db
+    .update(clientsTable)
+    .set({ portalToken: null })
+    .where(and(eq(clientsTable.id, id), eq(clientsTable.companyId, companyId)))
+    .returning();
+  if (!client) { res.status(404).json({ error: "Client not found" }); return; }
+
+  res.json(formatClient(client));
 });
 
 router.get("/clients/:id/activities", async (req, res): Promise<void> => {
@@ -194,14 +322,23 @@ router.delete("/clients/:id/activities/:activityId", async (req, res): Promise<v
 // from the Client detail page. Same nested-resource shape as
 // activities above.
 router.get("/clients/:id/principals", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+
   const clientId = Number(req.params.id);
   if (isNaN(clientId)) { res.status(400).json({ error: "Invalid id" }); return; }
 
+  // Scoped by companyId directly on principalsTable (not just clientId)
+  // - a pre-existing gap noticed while wiring up audit logging below:
+  // without this, the log itself would misattribute a cross-tenant
+  // read to the wrong company, on top of the read itself never having
+  // been tenant-scoped at all.
   const rows = await db
     .select()
     .from(principalsTable)
-    .where(eq(principalsTable.clientId, clientId))
+    .where(and(eq(principalsTable.clientId, clientId), eq(principalsTable.companyId, companyId)))
     .orderBy(asc(principalsTable.name));
+  void logPrincipalAccess(companyId, req.user!.id, "viewed", rows.map((r) => ({ id: r.id, name: r.name })));
   res.json(rows.map(formatPrincipal));
 });
 
@@ -215,10 +352,16 @@ const PrincipalInputSchema = z.object({
 });
 
 router.post("/clients/:id/principals", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+
   const clientId = Number(req.params.id);
   if (isNaN(clientId)) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const [client] = await db.select({ id: clientsTable.id, companyId: clientsTable.companyId }).from(clientsTable).where(eq(clientsTable.id, clientId));
+  const [client] = await db
+    .select({ id: clientsTable.id, companyId: clientsTable.companyId })
+    .from(clientsTable)
+    .where(and(eq(clientsTable.id, clientId), eq(clientsTable.companyId, companyId)));
   if (!client) { res.status(404).json({ error: "Client not found" }); return; }
 
   const parsed = PrincipalInputSchema.safeParse(req.body);
@@ -228,12 +371,16 @@ router.post("/clients/:id/principals", async (req, res): Promise<void> => {
     .insert(principalsTable)
     .values({ companyId: client.companyId, clientId, ...parsed.data })
     .returning();
+  void logPrincipalAccess(client.companyId, req.user!.id, "created", [{ id: principal.id, name: principal.name }]);
   res.status(201).json(formatPrincipal(principal));
 });
 
 const PrincipalUpdateSchema = PrincipalInputSchema.partial();
 
 router.patch("/clients/:id/principals/:principalId", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+
   const clientId = Number(req.params.id);
   const principalId = Number(req.params.principalId);
   if (isNaN(clientId) || isNaN(principalId)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -241,19 +388,63 @@ router.patch("/clients/:id/principals/:principalId", async (req, res): Promise<v
   const parsed = PrincipalUpdateSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const [principal] = await db.update(principalsTable).set(parsed.data).where(eq(principalsTable.id, principalId)).returning();
+  const [principal] = await db
+    .update(principalsTable)
+    .set(parsed.data)
+    .where(and(eq(principalsTable.id, principalId), eq(principalsTable.companyId, companyId)))
+    .returning();
   if (!principal || principal.clientId !== clientId) { res.status(404).json({ error: "Principal not found" }); return; }
+  void logPrincipalAccess(companyId, req.user!.id, "updated", [{ id: principal.id, name: principal.name }]);
   res.json(formatPrincipal(principal));
 });
 
 router.delete("/clients/:id/principals/:principalId", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+
   const clientId = Number(req.params.id);
   const principalId = Number(req.params.principalId);
   if (isNaN(clientId) || isNaN(principalId)) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const [deleted] = await db.delete(principalsTable).where(eq(principalsTable.id, principalId)).returning();
+  const [deleted] = await db
+    .delete(principalsTable)
+    .where(and(eq(principalsTable.id, principalId), eq(principalsTable.companyId, companyId)))
+    .returning();
   if (!deleted || deleted.clientId !== clientId) { res.status(404).json({ error: "Principal not found" }); return; }
+  // Logged after the delete, not before - principalId is `onDelete:
+  // set null` precisely so this "deleted" row (and the rest of this
+  // principal's history) survives the row it describes being gone.
+  void logPrincipalAccess(companyId, req.user!.id, "deleted", [{ id: deleted.id, name: deleted.name }]);
   res.sendStatus(204);
+});
+
+// Platform Maturity Roadmap, Tier 2, item 4 - the access trail itself,
+// surfaced on the Client detail page's Protection Profiles card.
+// Deliberately keyed by principalId, not clientId - "who looked at
+// THIS person's record," scoped by companyId since `principalId` is
+// nullable (survives the principal itself being deleted) so it can't
+// be used alone to re-derive tenant ownership.
+router.get("/clients/:id/principals/:principalId/access-log", async (req, res): Promise<void> => {
+  const companyId = requireCompanyId(req, res);
+  if (companyId == null) return;
+
+  const principalId = Number(req.params.principalId);
+  if (isNaN(principalId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const rows = await db
+    .select({
+      id: principalAccessLogTable.id,
+      action: principalAccessLogTable.action,
+      userName: usersTable.name,
+      taskTitle: tasksTable.title,
+      createdAt: principalAccessLogTable.createdAt,
+    })
+    .from(principalAccessLogTable)
+    .leftJoin(usersTable, eq(principalAccessLogTable.userId, usersTable.id))
+    .leftJoin(tasksTable, eq(principalAccessLogTable.accessedViaTaskId, tasksTable.id))
+    .where(and(eq(principalAccessLogTable.principalId, principalId), eq(principalAccessLogTable.companyId, companyId)))
+    .orderBy(desc(principalAccessLogTable.createdAt));
+  res.json(rows);
 });
 
 export default router;

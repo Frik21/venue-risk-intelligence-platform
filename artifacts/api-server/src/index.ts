@@ -2,6 +2,10 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startGdeltMonitor } from "./lib/gdelt-monitor";
 import { startCheckinMonitor } from "./lib/checkin-monitor";
+import { startOverdueInvoiceMonitor } from "./lib/overdue-invoice-monitor";
+import { startCertExpiryMonitor } from "./lib/cert-expiry-monitor";
+import { startContractRenewalMonitor } from "./lib/contract-renewal-monitor";
+import { startUnstaffedTaskMonitor } from "./lib/unstaffed-task-monitor";
 import { initErrorTracking, captureError } from "./lib/error-tracking";
 
 // Real error tracking, built now and connected later - see lib/error-
@@ -43,4 +47,8 @@ app.listen(port, (err) => {
   logger.info({ port }, "Server listening");
   startGdeltMonitor();
   startCheckinMonitor();
+  startOverdueInvoiceMonitor();
+  startCertExpiryMonitor();
+  startContractRenewalMonitor();
+  startUnstaffedTaskMonitor();
 });

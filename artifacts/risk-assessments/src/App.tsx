@@ -7,11 +7,15 @@ import NotFound from "@/pages/not-found";
 import Layout from "@/components/layout";
 import Dashboard from "@/pages/dashboard";
 import LoginPage from "@/pages/login";
+import FeedbackPage from "@/pages/feedback";
+import ClientPortalPage from "@/pages/client-portal";
+import StatusPage from "@/pages/status";
 import RegisterPage from "@/pages/register";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import ChangePasswordPage from "@/pages/change-password";
 import { AuthProvider } from "@/lib/auth";
+import { LanguageProvider } from "@/lib/i18n";
 import RequireAuth from "@/components/require-auth";
 
 import AssessmentsList from "@/pages/assessments/list";
@@ -38,6 +42,9 @@ import AuditLogPage from "@/pages/admin/audit-log";
 import TaskArchive from "@/pages/admin/task-archive";
 import VendorsPage from "@/pages/admin/vendors";
 import TravelLogisticsPage from "@/pages/admin/travel-logistics";
+import DataExportPage from "@/pages/admin/data-export";
+import HelpCenterPage from "@/pages/admin/help-center";
+import ContractsPage from "@/pages/admin/contracts";
 import VendorDetailPage from "@/pages/admin/vendor-detail";
 import PayrollPage from "@/pages/admin/payroll";
 import CommunicationsPage from "@/pages/admin/communications";
@@ -49,6 +56,7 @@ import CostsPage from "@/pages/admin/costs";
 import FinanceDashboard from "@/pages/admin/finance";
 import HrDashboard from "@/pages/admin/hr";
 import OperationsDashboard from "@/pages/admin/operations";
+import GsocDashboard from "@/pages/admin/gsoc";
 import ComplianceRollup from "@/pages/admin/compliance";
 import OfficesPage from "@/pages/admin/offices";
 import ClientsPage from "@/pages/admin/clients";
@@ -74,6 +82,9 @@ function Router() {
       <Layout>
       <Switch>
         <Route path="/login" component={LoginPage} />
+        <Route path="/feedback/:token" component={FeedbackPage} />
+        <Route path="/portal/:token" component={ClientPortalPage} />
+        <Route path="/status" component={StatusPage} />
         <Route path="/register" component={RegisterPage} />
         <Route path="/forgot-password" component={ForgotPasswordPage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
@@ -117,6 +128,9 @@ function Router() {
         <Route path="/admin/vendors" component={VendorsPage} />
         <Route path="/admin/vendors/:id" component={VendorDetailPage} />
         <Route path="/admin/travel-logistics" component={TravelLogisticsPage} />
+        <Route path="/admin/data-export" component={DataExportPage} />
+        <Route path="/admin/help-center" component={HelpCenterPage} />
+        <Route path="/admin/contracts" component={ContractsPage} />
         <Route path="/admin/payroll" component={PayrollPage} />
         <Route path="/admin/task-archive" component={TaskArchive} />
         <Route path="/admin/invoices" component={InvoicesPage} />
@@ -127,6 +141,7 @@ function Router() {
         <Route path="/admin/finance" component={FinanceDashboard} />
         <Route path="/admin/hr" component={HrDashboard} />
         <Route path="/admin/operations" component={OperationsDashboard} />
+        <Route path="/admin/gsoc" component={GsocDashboard} />
         <Route path="/admin/compliance" component={ComplianceRollup} />
         <Route path="/admin/offices" component={OfficesPage} />
         <Route path="/admin/communications" component={CommunicationsPage} />
@@ -147,7 +162,9 @@ function App() {
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <AuthProvider>
-            <Router />
+            <LanguageProvider>
+              <Router />
+            </LanguageProvider>
           </AuthProvider>
         </WouterRouter>
         <Toaster />

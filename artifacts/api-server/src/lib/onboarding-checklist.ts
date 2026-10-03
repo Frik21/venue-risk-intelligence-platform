@@ -40,10 +40,33 @@ export const ONBOARDING_CHECKLIST_ITEMS: OnboardingChecklistItem[] = [
 export const DOCUMENT_TYPES = [
   { value: "id_document", label: "ID Document" },
   { value: "passport", label: "Passport" },
+  // Passport/visa expiry tracking for internationally-deployed CPOs -
+  // Following Roadmap Tier 3, item 23. "Passport" already existed
+  // (item 4) and was already picked up by the expiry-tracking
+  // machinery below; this is the one missing piece - same
+  // zero-new-code pattern as item 21's insurance types, since expiry
+  // tracking here is keyed on documentType value, not a fixed list.
+  { value: "visa", label: "Visa" },
   { value: "psira_registration", label: "PSIRA Registration" },
   { value: "sia_license", label: "SIA License" },
   { value: "firearm_competency", label: "Firearm Competency Certificate" },
+  // Weapons/firearms permit tracking - Following Roadmap Tier 3, item
+  // 24 ("same treatment as certs"). Distinct from firearm_competency
+  // above - a competency certificate proves training, a permit/license
+  // is the separate legal authorization to actually carry/possess,
+  // same real-world distinction PSIRA registration vs. SIA license
+  // already models for two different jurisdictions' licensing bodies.
+  { value: "firearm_permit", label: "Firearm Permit / License" },
   { value: "medical_certificate", label: "Medical / First Aid Certificate" },
   { value: "drivers_license", label: "Driver's License" },
+  // Insurance/liability policy tracking - Following Roadmap Tier 3,
+  // item 21. Scoped via AskUserQuestion to per-operator only (not a
+  // separate company-level policy entity) - these are just two more
+  // document types, so the expiry-tracking machinery already built for
+  // PSIRA/SIA/etc. (item 4's Expiring Certifications card, the HR
+  // dashboard's cert tiles, and the Compliance Rollup) picks them up
+  // automatically with no new code.
+  { value: "professional_indemnity_insurance", label: "Professional Indemnity Insurance" },
+  { value: "public_liability_insurance", label: "Public Liability Insurance" },
   { value: "other_certification", label: "Other Certification / License" },
 ] as const;

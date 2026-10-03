@@ -39,20 +39,22 @@ export type IncidentSeverity = "low" | "medium" | "high" | "critical";
 export type AlertPriority = "low" | "medium" | "high" | "critical";
 export type AlertStatus = "pending" | "reviewed" | "dismissed" | "escalated";
 export type OsintStatus = "pending" | "accepted" | "rejected";
-export type UserRole = "admin" | "manager" | "cpo" | "finance" | "human_resources" | "operations";
+export type UserRole = "admin" | "manager" | "cpo" | "finance" | "human_resources" | "operations" | "gsoc";
 
 // Where a logged-in Management-side session lands after login/
 // registration instead of the general Management Dashboard - only
 // roles with their own scoped dashboard are listed (Finance/HR/
 // Operations, see /admin/finance, /admin/hr, /admin/operations in
-// CLAUDE.md); "manager" and any role not listed here falls through to
-// the caller's own "/admin" default. cpo and admin (Owner) are handled
-// separately by callers, since their destinations depend on more than
-// just role (Solo Operator plan, Owner Console, etc.).
+// CLAUDE.md; GSOC's own live monitoring console, /admin/gsoc); "manager"
+// and any role not listed here falls through to the caller's own
+// "/admin" default. cpo and admin (Owner) are handled separately by
+// callers, since their destinations depend on more than just role
+// (Solo Operator plan, Owner Console, etc.).
 export const MANAGEMENT_HOME_ROUTE: Partial<Record<UserRole, string>> = {
   finance: "/admin/finance",
   human_resources: "/admin/hr",
   operations: "/admin/operations",
+  gsoc: "/admin/gsoc",
 };
 
 export type RouteType =
@@ -62,7 +64,7 @@ export type RouteCreationMethod = "endpoint_marker" | "street_builder" | "freeha
 
 export interface User {
   id: number; companyId: number | null; name: string; email: string; role: UserRole; avatarInitials: string | null; active: boolean;
-  dayRate: number | null; nightRate: number | null; officeId: number | null; mustChangePassword: boolean; createdAt: string;
+  dayRate: number | null; nightRate: number | null; officeId: number | null; phone: string | null; mustChangePassword: boolean; createdAt: string;
 }
 
 // The logged-in session's own view of itself - a trimmed subset of
@@ -78,6 +80,23 @@ export interface SessionUser {
   // null for a plain Owner session (no company). "solo_operator" drives
   // require-auth.tsx's redirect keeping the session inside /cpo.
   planType: PlanType | null;
+}
+
+// Rate benchmarking - Following Roadmap Tier 3, item 28. An internal
+// benchmark (no external market-rate data source exists) - see
+// routes/rate-benchmarking.ts's own comment for the full reasoning.
+export interface RateBenchmark {
+  userId: number;
+  name: string;
+  dayRate: number | null;
+  nightRate: number | null;
+  region: string | null;
+  riskLevel: 1 | 2 | 3 | 4 | null;
+  riskLevelLabel: string | null;
+  comparisonBasis: "region" | "company";
+  avgDayRate: number | null;
+  avgNightRate: number | null;
+  regionSampleSize: number;
 }
 
 export interface Venue {
@@ -193,6 +212,48 @@ export interface Task {
 // lib/checkin-monitor.ts). Surfaced on Command Desk's Safety Alerts
 // panel (pages/alerts/list.tsx).
 export type CheckinType = "ok" | "panic" | "missed";
+
+// GPS breadcrumb trail - Following Roadmap Tier 3, item 33.
+export interface TaskLocationPing {
+  id: number;
+  taskId: number;
+  cpoId: number;
+  latitude: number;
+  longitude: number;
+  capturedAt: string;
+}
+
+// The GSOC Dashboard's Live Operator Map - each active CPO's most
+// recent ping within the last 30 minutes, company-wide (see
+// routes/task-location-pings.ts's own LIVE_MAP_WINDOW_MINUTES comment
+// for why stale positions are deliberately excluded rather than shown
+// as "live").
+export interface LiveOperatorPosition {
+  cpoId: number;
+  cpoName: string;
+  taskId: number;
+  taskTitle: string;
+  latitude: number;
+  longitude: number;
+  capturedAt: string;
+}
+
+// CPO self-service availability/time-off requests - Following Roadmap
+// Tier 3, item 34.
+export interface AvailabilityRequest {
+  id: number;
+  cpoId: number;
+  cpoName: string | null;
+  startDate: string;
+  endDate: string;
+  reason: string;
+  status: "pending" | "approved" | "denied";
+  reviewedBy: number | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  requestedAt: string;
+}
+
 export interface Checkin {
   id: number;
   // Null for the always-visible TopBanner panic button, which works
@@ -268,6 +329,62 @@ export interface AfterActionReport {
 // Equipment/asset tracking, issued/returned per task - Following
 // Roadmap Tier 2, item 14. Ad-hoc per task, not a shared company-wide
 // catalog - see the schema's own comment for why.
+// Post-task client satisfaction - Following Roadmap Tier 3, item 19.
+// A Manager generates one of these against a task (POST, below) and
+// sends the resulting link (built from `id`, the opaque token -
+// /feedback/:id) to the client manually, since no email infra exists
+// and there's no client portal for the client to log into. See
+// schema/feedback-requests.ts.
+export interface FeedbackRequest {
+  id: string;
+  taskId: number;
+  requestedBy: number;
+  requestedByName: string | null;
+  requestedAt: string;
+  overallRating: number | null;
+  professionalismRating: number | null;
+  punctualityRating: number | null;
+  communicationRating: number | null;
+  comment: string;
+  submittedAt: string | null;
+}
+
+// What the public, unauthenticated /feedback/:token page gets back -
+// deliberately just enough to render the form, never anything else
+// about the task/company.
+export interface PublicFeedbackInfo {
+  taskTitle: string;
+  companyName: string;
+  submitted: boolean;
+}
+
+// The real Task<->Vendor link - Following Roadmap Tier 3, item 20.
+// See schema/task-vendors.ts.
+export interface TaskVendor {
+  id: number;
+  taskId: number;
+  vendorId: number;
+  vendorName: string | null;
+  addedBy: number;
+  addedByName: string | null;
+  createdAt: string;
+}
+
+// A performance review against one real Task<->Vendor engagement -
+// see schema/vendor-performance-reviews.ts.
+export interface VendorPerformanceReview {
+  id: number;
+  vendorId: number;
+  vendorName: string | null;
+  taskId: number;
+  taskTitle: string | null;
+  rating: number;
+  notes: string;
+  reviewedBy: number;
+  reviewedByName: string | null;
+  reviewedAt: string;
+}
+
 export interface TaskEquipment {
   id: number;
   taskId: number;
@@ -302,7 +419,7 @@ export interface TravelLogisticsEntry {
 }
 
 export type CompanyStatus = "trial" | "active" | "suspended" | "cancelled";
-export type ManagementRole = "manager" | "operations" | "finance" | "human_resources";
+export type ManagementRole = "manager" | "operations" | "finance" | "human_resources" | "gsoc";
 // "team" (the default, Management + CPO) or "solo_operator" (a single
 // freelance CPO's own subscription - Operators Note only, no
 // Management seats). Enforced server-side, not just a display label -
@@ -318,6 +435,7 @@ export const BASE_SEATS_BY_ROLE: Record<ManagementRole, number> = {
   operations: 5,
   finance: 5,
   human_resources: 5,
+  gsoc: 5,
 };
 
 // CPO seats (Operators note) - tracked separately from the four
@@ -402,6 +520,17 @@ export interface SystemStatus {
   serverTime: string;
 }
 
+// Public status page - Platform Maturity Roadmap, Tier 5, item 11. A
+// flat, append-only post log - the most recent post's own `status` is
+// what the public page's "known issues" banner reflects.
+export interface StatusIncident {
+  id: number;
+  title: string;
+  message: string;
+  status: "investigating" | "identified" | "monitoring" | "resolved";
+  createdAt: string;
+}
+
 export interface CompanySummary {
   totalCompanies: number;
   byStatus: Record<CompanyStatus, number>;
@@ -445,6 +574,7 @@ export interface PricingConfig {
   pricePerOperationsSeat: number;
   pricePerFinanceSeat: number;
   pricePerHumanResourcesSeat: number;
+  pricePerGsocSeat: number;
   pricePerCpoSeat: number;
   soloOperatorMonthlyPrice: number;
   updatedAt: string;
@@ -456,6 +586,7 @@ export type PricingField =
   | "pricePerOperationsSeat"
   | "pricePerFinanceSeat"
   | "pricePerHumanResourcesSeat"
+  | "pricePerGsocSeat"
   | "pricePerCpoSeat"
   | "soloOperatorMonthlyPrice";
 
@@ -501,8 +632,42 @@ export interface Client {
   dayRate: number | null;
   nightRate: number | null;
   officeId: number | null;
+  portalToken: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// Client Portal - Following Roadmap Tier 3, item 25. What the public
+// GET /portal/:token endpoint returns - no session/auth, so this is
+// deliberately a narrower shape than the Command Desk's own Task/
+// Invoice types (no cost build-up, no internal assignee identity).
+export interface ClientPortalTask {
+  id: number;
+  title: string;
+  status: TaskStatus;
+  dueDate: string | null;
+  endDate: string | null;
+}
+
+export interface ClientPortalInvoice {
+  id: number;
+  invoiceNumber: string;
+  status: InvoiceStatus;
+  dueDate: string | null;
+  currency: string;
+  sentAt: string | null;
+  paidAt: string | null;
+  subtotal: number;
+  taxAmount: number;
+  totalAmount: number;
+}
+
+export interface ClientPortalData {
+  clientName: string;
+  companyName: string;
+  tasks: ClientPortalTask[];
+  quotes: ClientPortalQuote[];
+  invoices: ClientPortalInvoice[];
 }
 
 // A dated activity/communication log entry against a Client - see
@@ -534,6 +699,18 @@ export interface Principal {
   updatedAt?: string;
 }
 
+// Platform Maturity Roadmap, Tier 2, item 4 - one row per access to a
+// Principal Protection Profile. userName/taskTitle are null-safe left
+// joins - a deactivated user or a deleted task still leaves the log
+// entry itself intact.
+export interface PrincipalAccessLogEntry {
+  id: number;
+  action: "viewed" | "created" | "updated" | "deleted";
+  userName: string | null;
+  taskTitle: string | null;
+  createdAt: string;
+}
+
 export type VendorStatus = "lead" | "active" | "inactive" | "preferred";
 
 export interface Vendor {
@@ -560,6 +737,31 @@ export interface VendorActivity {
   createdBy: number | null;
   createdByName: string | null;
   createdAt: string;
+}
+
+export type ContractStatus = "active" | "expired" | "cancelled";
+export type ContractBillingFrequency = "monthly" | "quarterly" | "annually";
+
+// A client's standing retainer/contract - Following Roadmap Tier 3,
+// item 17. See contractsTable in schema/contracts.ts for why this is a
+// standalone entity (own lifecycle + renewal date) rather than fields
+// on Client. "expiring soon" is never stored - computed from
+// renewalDate client-side, same convention as cert expiry elsewhere.
+export interface Contract {
+  id: number;
+  clientId: number;
+  clientName: string | null;
+  title: string;
+  status: ContractStatus;
+  recurringAmount: number;
+  billingFrequency: ContractBillingFrequency;
+  currency: string;
+  startDate: string;
+  renewalDate: string;
+  renewalNotifiedAt: string | null;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type QuoteStatus = "draft" | "sent" | "approved" | "rejected";
@@ -606,10 +808,32 @@ export interface Quote {
   assignedByName: string | null;
   sentAt: string | null;
   decidedAt: string | null;
+  signedByName: string | null;
+  signedAt: string | null;
   createdAt: string;
   updatedAt: string;
   internalCost: number;
   markupAmount: number;
+  clientPrice: number;
+  taxAmount: number;
+  totalQuoteValue: number;
+}
+
+// Client Portal's own narrower quote shape - Following Roadmap Tier 3,
+// item 26. Never carries internalCost/markupAmount/costLineItems (the
+// internal cost build-up stays this company's business, not the
+// client's to see) - see routes/client-portal.ts's formatPortalQuote.
+export interface ClientPortalQuote {
+  id: number;
+  quoteNumber: string;
+  title: string;
+  status: QuoteStatus;
+  validUntil: string | null;
+  currency: string;
+  sentAt: string | null;
+  decidedAt: string | null;
+  signedByName: string | null;
+  signedAt: string | null;
   clientPrice: number;
   taxAmount: number;
   totalQuoteValue: number;
@@ -887,6 +1111,11 @@ export interface OnboardingRecord {
   // access was actually handed over, separate from the Approved/
   // Pending/Denied decision and from account creation.
   operationalAccessGrantedAt: string | null;
+  // Re-vetting/background-check renewal cadence - Following Roadmap
+  // Tier 3, item 22. See lastVettedAt's own comment in
+  // schema/operator-onboarding.ts - stamped by api.onboarding.markVetted,
+  // not derived from the checklist's one-time background_check item.
+  lastVettedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -898,11 +1127,15 @@ export interface OnboardingOverviewRecord extends OnboardingRecord {
 export type DocumentType =
   | "id_document"
   | "passport"
+  | "visa"
   | "psira_registration"
   | "sia_license"
   | "firearm_competency"
+  | "firearm_permit"
   | "medical_certificate"
   | "drivers_license"
+  | "professional_indemnity_insurance"
+  | "public_liability_insurance"
   | "other_certification";
 
 // fileDataUrl is a base64 data: URL (this app has no cloud file
@@ -1098,10 +1331,11 @@ export const api = {
     // initialPassword is only ever present on this one response - shown
     // once in the Add User dialog, never stored/refetchable.
     create: (data: Partial<User>) => apiFetch<User & { initialPassword: string }>("/users", { method: "POST", body: JSON.stringify(data) }),
-    update: (id: number, data: Partial<Pick<User, "name" | "email" | "avatarInitials" | "officeId">>) =>
+    update: (id: number, data: Partial<Pick<User, "name" | "email" | "avatarInitials" | "officeId" | "phone">>) =>
       apiFetch<User>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     updateRates: (id: number, data: { dayRate: number | null; nightRate: number | null }) =>
       apiFetch<User>(`/users/${id}/rates`, { method: "PATCH", body: JSON.stringify(data) }),
+    rateBenchmarks: () => apiFetch<RateBenchmark[]>("/rate-benchmarking"),
     // Command Desk's own self-service seat view - distinct from the
     // Master Console's aggregate-only /companies surface (Owner-only).
     // Any Management-side role can call these for its own company,
@@ -1118,6 +1352,7 @@ export const api = {
       additionalOperationsSeats: number;
       additionalFinanceSeats: number;
       additionalHumanResourcesSeats: number;
+      additionalGsocSeats: number;
       additionalCpoSeats: number;
     }>) =>
       apiFetch<{ seatsByRole: Record<ManagementRole, CompanySeatUsage>; cpoSeatUsage: CompanySeatUsage }>(
@@ -1187,6 +1422,22 @@ export const api = {
       apiFetch<Checkin>("/checkins", { method: "POST", body: JSON.stringify(data) }),
     acknowledge: (id: number) => apiFetch<Checkin>(`/checkins/${id}`, { method: "PATCH", body: JSON.stringify({}) }),
   },
+  taskLocationPings: {
+    listForTask: (taskId: number) => apiFetch<TaskLocationPing[]>(`/task-location-pings?taskId=${taskId}`),
+    create: (data: { taskId: number; latitude: number; longitude: number }) =>
+      apiFetch<TaskLocationPing>("/task-location-pings", { method: "POST", body: JSON.stringify(data) }),
+    // GSOC Dashboard's Live Operator Map - company-wide, not task-scoped.
+    liveMap: () => apiFetch<LiveOperatorPosition[]>("/task-location-pings/live-map"),
+  },
+  availabilityRequests: {
+    // Company-wide for Management, auto-scoped to "my own" server-side
+    // for a CPO session - see routes/availability-requests.ts's own GET.
+    list: () => apiFetch<AvailabilityRequest[]>("/availability-requests"),
+    create: (data: { startDate: string; endDate: string; reason?: string }) =>
+      apiFetch<AvailabilityRequest>("/availability-requests", { method: "POST", body: JSON.stringify(data) }),
+    review: (id: number, status: "approved" | "denied") =>
+      apiFetch<AvailabilityRequest>(`/availability-requests/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  },
   fieldIncidentReports: {
     // Company-wide, newest first - Command Desk's Field Incident Reports
     // panel filters this to unreviewed rows, same pattern as checkins.
@@ -1213,6 +1464,30 @@ export const api = {
     returnItem: (id: number, data: { needsMaintenance?: boolean; notes?: string }) =>
       apiFetch<TaskEquipment>(`/task-equipment/${id}/return`, { method: "PATCH", body: JSON.stringify(data) }),
     remove: (id: number) => apiFetch<void>(`/task-equipment/${id}`, { method: "DELETE" }),
+  },
+  taskVendors: {
+    listForTask: (taskId: number) => apiFetch<TaskVendor[]>(`/task-vendors?taskId=${taskId}`),
+    create: (data: { taskId: number; vendorId: number }) => apiFetch<TaskVendor>("/task-vendors", { method: "POST", body: JSON.stringify(data) }),
+    remove: (id: number) => apiFetch<void>(`/task-vendors/${id}`, { method: "DELETE" }),
+  },
+  vendorPerformanceReviews: {
+    list: () => apiFetch<VendorPerformanceReview[]>("/vendor-performance-reviews"),
+    listForVendor: (vendorId: number) => apiFetch<VendorPerformanceReview[]>(`/vendor-performance-reviews?vendorId=${vendorId}`),
+    listForTask: (taskId: number) => apiFetch<VendorPerformanceReview[]>(`/vendor-performance-reviews?taskId=${taskId}`),
+    create: (data: { taskId: number; vendorId: number; rating: number; notes?: string }) =>
+      apiFetch<VendorPerformanceReview>("/vendor-performance-reviews", { method: "POST", body: JSON.stringify(data) }),
+  },
+  feedbackRequests: {
+    listForTask: (taskId: number) => apiFetch<FeedbackRequest[]>(`/tasks/${taskId}/feedback-requests`),
+    create: (taskId: number) => apiFetch<FeedbackRequest>(`/tasks/${taskId}/feedback-requests`, { method: "POST", body: JSON.stringify({}) }),
+  },
+  // The public, unauthenticated side of the same feature - called from
+  // pages/feedback.tsx (the client-facing link itself), never from
+  // inside Command Desk.
+  publicFeedback: {
+    get: (token: string) => apiFetch<PublicFeedbackInfo>(`/feedback/${token}`),
+    submit: (token: string, data: { overallRating: number; professionalismRating: number; punctualityRating: number; communicationRating: number; comment?: string }) =>
+      apiFetch<void>(`/feedback/${token}`, { method: "POST", body: JSON.stringify(data) }),
   },
   travelLogistics: {
     // Unfiltered - Command Desk's own reference-data page manages
@@ -1319,6 +1594,7 @@ export const api = {
         additionalOperationsSeats?: number;
         additionalFinanceSeats?: number;
         additionalHumanResourcesSeats?: number;
+        additionalGsocSeats?: number;
         additionalCpoSeats?: number;
       },
     ) => apiFetch<Company>("/companies", { method: "POST", body: JSON.stringify(data) }),
@@ -1332,6 +1608,7 @@ export const api = {
         additionalOperationsSeats: number;
         additionalFinanceSeats: number;
         additionalHumanResourcesSeats: number;
+        additionalGsocSeats: number;
         additionalCpoSeats: number;
       }>,
     ) => apiFetch<Company>(`/companies/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
@@ -1342,6 +1619,18 @@ export const api = {
   // actually checkable today.
   system: {
     status: () => apiFetch<SystemStatus>("/system/status"),
+  },
+  // Public status page - Platform Maturity Roadmap, Tier 5, item 11.
+  // `get` is entirely unauthenticated (no session needed to check
+  // whether the platform is up); create/update/delete are Owner-only,
+  // used from /owner/it's own "Public Status Page" section.
+  status: {
+    get: () => apiFetch<{ operational: boolean; checkedAt: string; incidents: StatusIncident[] }>("/status"),
+    create: (data: { title: string; message: string; status?: StatusIncident["status"] }) =>
+      apiFetch<StatusIncident>("/status/incidents", { method: "POST", body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<{ title: string; message: string; status: StatusIncident["status"] }>) =>
+      apiFetch<StatusIncident>(`/status/incidents/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    delete: (id: number) => apiFetch<void>(`/status/incidents/${id}`, { method: "DELETE" }),
   },
   // create is open to any company-scoped user (Command Desk or
   // Operators Note, "Report an Issue"); list/update are Owner-only (the
@@ -1376,6 +1665,28 @@ export const api = {
       dayRate: number | null; nightRate: number | null; officeId: number | null;
     }>) => apiFetch<Client>(`/clients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     delete: (id: number) => apiFetch<void>(`/clients/${id}`, { method: "DELETE" }),
+    // Bulk CSV import - rows are already-parsed objects (the frontend
+    // parses the file itself, this never touches a raw file). Returns
+    // which rows actually landed vs failed, and why - never a bare
+    // pass/fail for the whole batch.
+    import: (rows: Record<string, unknown>[]) =>
+      apiFetch<{ imported: number; errors: { row: number; error: string }[] }>("/clients/import", {
+        method: "POST",
+        body: JSON.stringify({ rows }),
+      }),
+    generatePortalLink: (id: number) => apiFetch<Client>(`/clients/${id}/portal-link`, { method: "POST" }),
+    revokePortalLink: (id: number) => apiFetch<Client>(`/clients/${id}/portal-link`, { method: "DELETE" }),
+  },
+  // The public, unauthenticated side of the same feature - called from
+  // pages/client-portal.tsx (the client-facing link itself), never
+  // from inside Command Desk. Same shape as publicFeedback below.
+  publicClientPortal: {
+    get: (token: string) => apiFetch<ClientPortalData>(`/portal/${token}`),
+    invoicePdfUrl: (token: string, invoiceId: number) => `${BASE}/portal/${token}/invoices/${invoiceId}/pdf`,
+    signQuote: (token: string, quoteId: number, signedByName: string) =>
+      apiFetch<ClientPortalQuote>(`/portal/${token}/quotes/${quoteId}/sign`, { method: "POST", body: JSON.stringify({ signedByName }) }),
+    declineQuote: (token: string, quoteId: number) =>
+      apiFetch<ClientPortalQuote>(`/portal/${token}/quotes/${quoteId}/decline`, { method: "POST" }),
   },
   clientActivities: {
     list: (clientId: number) => apiFetch<ClientActivity[]>(`/clients/${clientId}/activities`),
@@ -1390,6 +1701,10 @@ export const api = {
     update: (clientId: number, id: number, data: Partial<{ name: string; relationship: string; medicalInfo: string | null; knownThreats: string | null; routineNotes: string | null; familyNotes: string | null }>) =>
       apiFetch<Principal>(`/clients/${clientId}/principals/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     delete: (clientId: number, id: number) => apiFetch<void>(`/clients/${clientId}/principals/${id}`, { method: "DELETE" }),
+    // Platform Maturity Roadmap, Tier 2, item 4 - who's viewed/edited
+    // this principal's record, and when.
+    accessLog: (clientId: number, id: number) =>
+      apiFetch<PrincipalAccessLogEntry[]>(`/clients/${clientId}/principals/${id}/access-log`),
   },
   vendors: {
     list: () => apiFetch<Vendor[]>("/vendors"),
@@ -1410,6 +1725,20 @@ export const api = {
     create: (vendorId: number, data: { note: string; createdBy?: number | null }) =>
       apiFetch<VendorActivity>(`/vendors/${vendorId}/activities`, { method: "POST", body: JSON.stringify(data) }),
     delete: (vendorId: number, id: number) => apiFetch<void>(`/vendors/${vendorId}/activities/${id}`, { method: "DELETE" }),
+  },
+  contracts: {
+    list: () => apiFetch<Contract[]>("/contracts"),
+    create: (data: {
+      clientId: number; title: string; status?: ContractStatus;
+      recurringAmount: number; billingFrequency?: ContractBillingFrequency;
+      currency?: string; startDate: string; renewalDate: string; notes?: string;
+    }) => apiFetch<Contract>("/contracts", { method: "POST", body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<{
+      clientId: number; title: string; status: ContractStatus;
+      recurringAmount: number; billingFrequency: ContractBillingFrequency;
+      currency: string; startDate: string; renewalDate: string; notes: string;
+    }>) => apiFetch<Contract>(`/contracts/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    delete: (id: number) => apiFetch<void>(`/contracts/${id}`, { method: "DELETE" }),
   },
   quotes: {
     list: () => apiFetch<Quote[]>("/quotes"),
@@ -1549,6 +1878,8 @@ export const api = {
       apiFetch<OnboardingRecord>(`/onboarding/${onboardingId}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
     setOperationalAccess: (onboardingId: number, granted: boolean) =>
       apiFetch<OnboardingRecord>(`/onboarding/${onboardingId}/operational-access`, { method: "PATCH", body: JSON.stringify({ granted }) }),
+    markVetted: (onboardingId: number) =>
+      apiFetch<OnboardingRecord>(`/onboarding/${onboardingId}/mark-vetted`, { method: "PATCH", body: JSON.stringify({}) }),
     listDocuments: (onboardingId: number) => apiFetch<OnboardingDocument[]>(`/onboarding/${onboardingId}/documents`),
     // Every document across every operator, company-wide - powers the
     // Expiring Certifications view (Following Roadmap Tier 1, item 4).
@@ -1646,6 +1977,19 @@ export const api = {
   countries: {
     intelligence: (iso2: string, name: string) =>
       apiFetch<CountryIntelligence>(`/countries/${iso2}/intelligence?name=${encodeURIComponent(name)}`),
+  },
+  push: {
+    // Authenticated - whether a real OneSignal account is connected
+    // yet (lib/push.ts on the backend) and, if so, the App ID to
+    // initialize the browser SDK with (public/safe, same posture as
+    // Stripe's publishable key) - see lib/push.ts (frontend).
+    config: () => apiFetch<{ enabled: boolean; appId: string | null }>("/push/config"),
+  },
+  sampleData: {
+    // Platform Maturity Roadmap, Tier 4, item 10.
+    status: () => apiFetch<{ exists: boolean }>("/sample-data"),
+    load: () => apiFetch<{ loaded: boolean }>("/sample-data/load", { method: "POST" }),
+    remove: () => apiFetch<void>("/sample-data", { method: "DELETE" }),
   },
 };
 

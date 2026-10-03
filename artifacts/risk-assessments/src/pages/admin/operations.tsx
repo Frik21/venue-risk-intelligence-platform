@@ -3,8 +3,10 @@ import { Link } from "wouter";
 import { api, type Task } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ListChecks, UserCog, CalendarDays, type LucideIcon } from "lucide-react";
+import { ListChecks, UserCog, CalendarDays, AlertTriangle, type LucideIcon } from "lucide-react";
+import { formatDateTime } from "@/lib/display-utils";
 import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
+import { cn } from "@/lib/utils";
 
 function SectionCard({
   title,
@@ -51,6 +53,17 @@ function inNextDays(dateStr: string | null, days: number): boolean {
   return due >= now && due <= now + days * 24 * 60 * 60 * 1000;
 }
 
+// Same definition as the backend's own unstaffed-task-approaching
+// monitor (lib/unstaffed-task-monitor.ts) - an approved quote with no
+// CPO on the roster yet, due inside a 48-hour window - so this card
+// can never disagree with what that background notification is
+// actually alerting on. Most-urgent-first, same convention as Aging
+// Receivables/Expiring Certs elsewhere in this app.
+const UNSTAFFED_WARNING_HOURS = 48;
+function hoursUntil(dateStr: string): number {
+  return (new Date(dateStr).getTime() - Date.now()) / (60 * 60 * 1000);
+}
+
 // Operations' own scoped view - Tasks, Operator Deployment, and
 // Schedule rolled into one dashboard, per direct product direction,
 // confirmed via AskUserQuestion following the same pattern as
@@ -72,12 +85,43 @@ export default function OperationsDashboard() {
 
   const dueThisWeek = tasks.filter((t) => t.status !== "completed" && inNextDays(t.dueDate, 7)).length;
 
+  const unstaffedApproaching = tasks
+    .filter((t) => t.quotationStatus === "approved" && t.assignedToIds.length === 0 && t.status !== "completed" && t.dueDate != null && hoursUntil(t.dueDate) <= UNSTAFFED_WARNING_HOURS)
+    .sort((a, b) => hoursUntil(a.dueDate!) - hoursUntil(b.dueDate!));
+
   return (
     <div className="p-4 md:p-6 space-y-5">
       <div>
         <h1 className="text-xl font-bold text-slate-900">Operations</h1>
         <p className="text-sm text-slate-500 mt-0.5">Tasks, Operator Deployment, and Schedule at a glance</p>
       </div>
+
+      {!isLoading && unstaffedApproaching.length > 0 && (
+        <Card className="border-red-200 bg-red-50/40">
+          <CardContent className="p-5">
+            <h2 className="font-semibold text-red-800 flex items-center gap-2 mb-3">
+              <AlertTriangle className="w-4 h-4" /> Unstaffed Tasks Approaching
+            </h2>
+            <div className="space-y-2">
+              {unstaffedApproaching.map((t) => {
+                const hours = hoursUntil(t.dueDate!);
+                return (
+                  <Link
+                    key={t.id}
+                    href="/admin/cpo-deployment"
+                    className="flex items-center justify-between gap-3 text-sm bg-white border border-red-100 rounded-md px-3 py-2 hover:bg-red-50/60"
+                  >
+                    <span className="font-medium text-slate-900 truncate">{t.title}</span>
+                    <span className={cn("text-xs font-medium shrink-0", hours < 0 ? "text-red-700" : "text-amber-700")}>
+                      {hours < 0 ? `Overdue ${Math.abs(Math.round(hours))}h` : `Starts in ${Math.round(hours)}h`} · {formatDateTime(t.dueDate!)}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {isLoading ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

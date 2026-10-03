@@ -18,6 +18,26 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   const { user, status } = useAuth();
   const [location] = useLocation();
 
+  // /feedback/:token (pages/feedback.tsx) - the public client-
+  // satisfaction link, see schema/feedback-requests.ts - is reachable
+  // by someone with no account and no session at all, regardless of
+  // whatever session (if any) happens to be active in this browser.
+  // Checked before every other branch below, the same way none of the
+  // other public pages need to be.
+  if (location.startsWith("/feedback/")) return <>{children}</>;
+
+  // /portal/:token (pages/client-portal.tsx) - the public Client
+  // Portal link (Following Roadmap Tier 3, item 25), same "no
+  // account/session at all, regardless of whatever's active in this
+  // browser" treatment as /feedback/:token above.
+  if (location.startsWith("/portal/")) return <>{children}</>;
+
+  // /status (pages/status.tsx) - the public status page (Platform
+  // Maturity Roadmap, Tier 5, item 11). Same "no account/session at
+  // all" treatment - the whole point is being checkable during a real
+  // outage, which includes one that's taken out auth itself.
+  if (location === "/status") return <>{children}</>;
+
   if (status === "loading") {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">

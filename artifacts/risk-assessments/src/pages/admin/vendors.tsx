@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { api, type Vendor, type VendorStatus, type Office } from "@/lib/api";
+import { api, type Vendor, type VendorStatus, type Office, type VendorPerformanceReview } from "@/lib/api";
 import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
-import { Store, Plus, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { Store, Plus, MoreVertical, Pencil, Trash2, Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -154,6 +154,22 @@ export function VendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
 // pattern as Clients (profile + dated activity log, detail page) but
 // with vendor-specific fields - no rates or billing rollups, since a
 // vendor is who VenueGuard pays/contracts with, not who it bills.
+// Company-wide average rating for one vendor - Following Roadmap
+// Tier 3, item 20. Computed client-side from every vendor_performance_
+// review against that vendor, same "fetch once, roll up per row"
+// pattern as e.g. the Revenue Concentration card on Clients.
+function RatingBadge({ reviews }: { reviews: VendorPerformanceReview[] }) {
+  if (reviews.length === 0) return <span className="text-slate-300">No reviews yet</span>;
+  const avg = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
+  return (
+    <span className="inline-flex items-center gap-1">
+      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+      <span className="font-medium text-slate-700">{avg.toFixed(1)}</span>
+      <span className="text-slate-400">({reviews.length})</span>
+    </span>
+  );
+}
+
 export default function VendorsPage() {
   const [showDialog, setShowDialog] = useState(false);
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
@@ -161,6 +177,7 @@ export default function VendorsPage() {
   const { toast } = useToast();
 
   const { data: allVendors = [], isLoading } = useQuery<Vendor[]>({ queryKey: ["vendors"], queryFn: api.vendors.list });
+  const { data: allReviews = [] } = useQuery<VendorPerformanceReview[]>({ queryKey: ["vendor-performance-reviews"], queryFn: api.vendorPerformanceReviews.list });
   const [selectedOfficeId] = useSelectedOfficeId();
   const vendors = filterByOffice(allVendors, selectedOfficeId);
 
@@ -207,6 +224,7 @@ export default function VendorsPage() {
                   <th className="text-left px-4 py-2.5">Vendor</th>
                   <th className="text-left px-4 py-2.5">Status</th>
                   <th className="text-left px-4 py-2.5">Category</th>
+                  <th className="text-left px-4 py-2.5">Rating</th>
                   <th className="text-left px-4 py-2.5">Primary Contact</th>
                   <th className="text-left px-4 py-2.5">Email</th>
                   <th className="text-left px-4 py-2.5">Phone</th>
@@ -225,6 +243,9 @@ export default function VendorsPage() {
                         <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase", sc.color)}>{sc.label}</span>
                       </td>
                       <td className="px-4 py-2.5 text-slate-500">{vendor.category || "—"}</td>
+                      <td className="px-4 py-2.5 text-xs">
+                        <RatingBadge reviews={allReviews.filter((r) => r.vendorId === vendor.id)} />
+                      </td>
                       <td className="px-4 py-2.5 text-slate-500">
                         {vendor.primaryContactName || "—"}
                       </td>

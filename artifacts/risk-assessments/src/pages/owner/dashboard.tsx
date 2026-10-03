@@ -26,12 +26,13 @@ const STATUS_CONFIG: Record<CompanyStatus, { label: string; color: string }> = {
 // (Operators note) follow the same shape but are tracked completely
 // separately, via CPO_BASE_SEATS/CpoSeatInput below - not a fifth
 // Management role.
-const MANAGEMENT_ROLES: ManagementRole[] = ["manager", "operations", "finance", "human_resources"];
+const MANAGEMENT_ROLES: ManagementRole[] = ["manager", "operations", "finance", "human_resources", "gsoc"];
 const ROLE_LABELS: Record<ManagementRole, string> = {
   manager: "Manager",
   operations: "Operations",
   finance: "Finance",
   human_resources: "HR",
+  gsoc: "GSOC",
 };
 
 type AdditionalSeats = Record<ManagementRole, number>;
@@ -98,7 +99,7 @@ function CpoSeatInput({ value, onChange }: { value: number; onChange: (additiona
 function NewCompanyDialog({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
   const [planType, setPlanType] = useState<PlanType>("team");
-  const [seats, setSeats] = useState<AdditionalSeats>({ manager: 0, operations: 0, finance: 0, human_resources: 0 });
+  const [seats, setSeats] = useState<AdditionalSeats>({ manager: 0, operations: 0, finance: 0, human_resources: 0, gsoc: 0 });
   const [additionalCpoSeats, setAdditionalCpoSeats] = useState(0);
   const [cpoName, setCpoName] = useState("");
   const [cpoEmail, setCpoEmail] = useState("");
@@ -129,6 +130,7 @@ function NewCompanyDialog({ onClose }: { onClose: () => void }) {
               additionalOperationsSeats: seats.operations,
               additionalFinanceSeats: seats.finance,
               additionalHumanResourcesSeats: seats.human_resources,
+              additionalGsocSeats: seats.gsoc,
               additionalCpoSeats,
             }
           : {}),
@@ -241,6 +243,7 @@ function EditSeatsDialog({ company, onClose }: { company: Company; onClose: () =
     operations: company.seatsByRole.operations.additional,
     finance: company.seatsByRole.finance.additional,
     human_resources: company.seatsByRole.human_resources.additional,
+    gsoc: company.seatsByRole.gsoc.additional,
   });
   const [additionalCpoSeats, setAdditionalCpoSeats] = useState(company.cpoSeatUsage.additional);
   const qc = useQueryClient();
@@ -253,6 +256,7 @@ function EditSeatsDialog({ company, onClose }: { company: Company; onClose: () =
         additionalOperationsSeats: seats.operations,
         additionalFinanceSeats: seats.finance,
         additionalHumanResourcesSeats: seats.human_resources,
+        additionalGsocSeats: seats.gsoc,
         additionalCpoSeats,
       }),
     onSuccess: () => {

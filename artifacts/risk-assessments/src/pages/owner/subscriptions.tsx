@@ -43,6 +43,7 @@ const FIELD_LABELS: Record<PricingField, string> = {
   pricePerOperationsSeat: "Team - Price per additional Operations seat",
   pricePerFinanceSeat: "Team - Price per additional Finance seat",
   pricePerHumanResourcesSeat: "Team - Price per additional Human Resources seat",
+  pricePerGsocSeat: "Team - Price per additional GSOC seat",
   pricePerCpoSeat: "Team - Price per additional CPO seat (Operators note)",
   soloOperatorMonthlyPrice: "Solo Operator - Price/month",
 };
@@ -327,6 +328,13 @@ export default function SubscriptionsPage() {
                   label="Human Resources seat"
                   field="pricePerHumanResourcesSeat"
                   value={pricing.pricePerHumanResourcesSeat}
+                  currency={currency}
+                  onChanged={refetchAll}
+                />
+                <PriceFieldRow
+                  label="GSOC seat"
+                  field="pricePerGsocSeat"
+                  value={pricing.pricePerGsocSeat}
                   currency={currency}
                   onChanged={refetchAll}
                 />

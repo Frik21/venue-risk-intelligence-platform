@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type OnboardingOverviewRecord, type OnboardingRecord, type OnboardingDocument, type DocumentType, type OnboardingStatus, type User } from "@/lib/api";
+import { api, type OnboardingOverviewRecord, type OnboardingRecord, type OnboardingDocument, type DocumentType, type OnboardingStatus, type User, type RateBenchmark, type AvailabilityRequest } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,11 +41,15 @@ const STATUS_CONFIG: Record<OnboardingStatus, { label: string; color: string }> 
 const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
   { value: "id_document", label: "ID Document" },
   { value: "passport", label: "Passport" },
+  { value: "visa", label: "Visa" },
   { value: "psira_registration", label: "PSIRA Registration" },
   { value: "sia_license", label: "SIA License" },
   { value: "firearm_competency", label: "Firearm Competency Certificate" },
+  { value: "firearm_permit", label: "Firearm Permit / License" },
   { value: "medical_certificate", label: "Medical / First Aid Certificate" },
   { value: "drivers_license", label: "Driver's License" },
+  { value: "professional_indemnity_insurance", label: "Professional Indemnity Insurance" },
+  { value: "public_liability_insurance", label: "Public Liability Insurance" },
   { value: "other_certification", label: "Other Certification / License" },
 ];
 
@@ -61,6 +65,21 @@ const MAX_DOCUMENT_BYTES = 6 * 1024 * 1024;
 const EXPIRY_WARNING_DAYS = 30;
 function daysUntilExpiry(expiryDate: string): number {
   return Math.ceil((new Date(expiryDate + "T00:00:00").getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+}
+
+// Re-vetting/background-check renewal cadence - Following Roadmap
+// Tier 3, item 22. A fixed 12-month interval, same "fixed constant,
+// not a company setting" convention as EXPIRY_WARNING_DAYS above -
+// "due" = lastVettedAt + this interval, computed here rather than
+// stored, so it can never drift out of sync with lastVettedAt itself.
+// Never vetted at all (lastVettedAt null) counts as due, not excluded
+// - the most urgent case, not a reason to hide it.
+const VETTING_INTERVAL_MONTHS = 12;
+function daysUntilVettingDue(lastVettedAt: string | null): number {
+  if (lastVettedAt == null) return -Infinity;
+  const due = new Date(lastVettedAt);
+  due.setMonth(due.getMonth() + VETTING_INTERVAL_MONTHS);
+  return Math.ceil((due.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
 }
 
 // Always-shown either/or indicator for the two mutually-exclusive
@@ -287,6 +306,25 @@ function AddOperatorDialog({ onClose, onCreated }: { onClose: () => void; onCrea
 // CPOs at all - see "Product Vision & Business Model" in CLAUDE.md)
 // since a CPO's rate is exactly the kind of Management-side-only
 // setting that shouldn't exist inside Operators note itself.
+// Rate benchmarking - Following Roadmap Tier 3, item 28 ("is a given
+// day/night rate competitive for the region and risk level"). Fetched
+// once (shared ["rate-benchmarks"] cache, same pattern as ["users"])
+// and looked up per-operator here rather than per-row, since this
+// editor already renders inside each operator's own detail panel.
+function RateBenchmarkHint({ userId }: { userId: number }) {
+  const { data: benchmarks = [] } = useQuery<RateBenchmark[]>({ queryKey: ["rate-benchmarks"], queryFn: api.users.rateBenchmarks });
+  const b = benchmarks.find((r) => r.userId === userId);
+  if (!b || (b.avgDayRate == null && b.avgNightRate == null)) return null;
+
+  const basisLabel = b.comparisonBasis === "region" && b.region ? `other CPOs in ${b.region}` : "the company average";
+  return (
+    <p className="text-[11px] text-slate-400 mt-1">
+      Benchmark ({basisLabel}): Day {b.avgDayRate != null ? Math.round(b.avgDayRate) : "—"} / Night {b.avgNightRate != null ? Math.round(b.avgNightRate) : "—"}
+      {b.riskLevelLabel && b.region ? ` · ${b.region} is currently "${b.riskLevelLabel}"` : ""}
+    </p>
+  );
+}
+
 function OperatorRateEditor({ user }: { user: User }) {
   const [editing, setEditing] = useState(false);
   const [dayRate, setDayRate] = useState(user.dayRate != null ? String(user.dayRate) : "");
@@ -310,15 +348,18 @@ function OperatorRateEditor({ user }: { user: User }) {
 
   if (!editing) {
     return (
-      <button
-        onClick={() => setEditing(true)}
-        className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700"
-      >
-        <Pencil className="w-3 h-3" />
-        {user.dayRate != null || user.nightRate != null
-          ? `Day ${user.dayRate ?? "—"} / Night ${user.nightRate ?? "—"}`
-          : "Set rates"}
-      </button>
+      <div>
+        <button
+          onClick={() => setEditing(true)}
+          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700"
+        >
+          <Pencil className="w-3 h-3" />
+          {user.dayRate != null || user.nightRate != null
+            ? `Day ${user.dayRate ?? "—"} / Night ${user.nightRate ?? "—"}`
+            : "Set rates"}
+        </button>
+        <RateBenchmarkHint userId={user.id} />
+      </div>
     );
   }
 
@@ -397,6 +438,16 @@ function CpoOnboardingDetail({ onboardingId, onRemoved }: { onboardingId: number
     },
   });
 
+  const markVettedMutation = useMutation({
+    mutationFn: () => api.onboarding.markVetted(record!.id),
+    onSuccess: (updated) => {
+      qc.setQueryData(["onboarding", onboardingId], updated);
+      qc.invalidateQueries({ queryKey: ["onboarding-overview"] });
+      toast({ title: "Re-vetting recorded" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   const removeOperatorMutation = useMutation({
     mutationFn: () => api.onboarding.remove(onboardingId),
     onSuccess: () => {
@@ -448,6 +499,27 @@ function CpoOnboardingDetail({ onboardingId, onRemoved }: { onboardingId: number
           )}
         </div>
       )}
+
+      <div>
+        <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Re-vetting</p>
+        {recordLoading ? (
+          <Skeleton className="h-6 w-40" />
+        ) : (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-slate-600">
+              {record?.lastVettedAt ? `Last vetted ${formatDate(record.lastVettedAt)}` : "Never vetted"}
+            </span>
+            {record && daysUntilVettingDue(record.lastVettedAt) <= 0 && (
+              <Badge className="bg-red-50 text-red-700 border-red-200 text-[10px]">
+                {record.lastVettedAt ? "Re-vetting overdue" : "Due for vetting"}
+              </Badge>
+            )}
+            <Button size="sm" className="h-7 px-2 text-xs" onClick={() => markVettedMutation.mutate()} disabled={markVettedMutation.isPending}>
+              Mark Re-vetted
+            </Button>
+          </div>
+        )}
+      </div>
 
       <div>
         <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Checklist</p>
@@ -568,12 +640,44 @@ export default function OnboardingPage() {
     queryKey: ["onboarding-documents-all"],
     queryFn: api.onboarding.listAllDocuments,
   });
+
+  // CPO self-service availability/time-off requests - Following
+  // Roadmap Tier 3, item 34. api.availabilityRequests.list() is
+  // already company-wide for a Management session (see that route's
+  // own GET), so no further filtering is needed here.
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { data: availabilityRequests = [] } = useQuery<AvailabilityRequest[]>({
+    queryKey: ["availability-requests"],
+    queryFn: api.availabilityRequests.list,
+  });
+  const pendingAvailabilityRequests = availabilityRequests.filter((r) => r.status === "pending");
+  const reviewAvailabilityMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: "approved" | "denied" }) => api.availabilityRequests.review(id, status),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["availability-requests"] });
+      toast({ title: "Request reviewed" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   // Most urgent first - already-expired certs (negative days) sort
   // ahead of ones still inside the warning window.
   const expiringDocuments = allDocuments
     .filter((d) => d.expiryDate != null)
     .map((d) => ({ ...d, days: daysUntilExpiry(d.expiryDate!) }))
     .filter((d) => d.days <= EXPIRY_WARNING_DAYS)
+    .sort((a, b) => a.days - b.days);
+
+  // Due for Re-vetting - Following Roadmap Tier 3, item 22. Scoped to
+  // active (onboarded) operators only - a still-pending or denied
+  // candidate has a different, already-tracked gap (Pending
+  // Onboarding), not a re-vetting cadence problem. Most overdue first,
+  // same convention as expiringDocuments above.
+  const recordsDueForVetting = records
+    .filter((r) => r.status === "onboarded")
+    .map((r) => ({ ...r, days: daysUntilVettingDue(r.lastVettedAt) }))
+    .filter((r) => r.days <= 0)
     .sort((a, b) => a.days - b.days);
 
   // Scroll a manually-expanded card into view (e.g. after "Manage" on
@@ -754,6 +858,72 @@ export default function OnboardingPage() {
                   </div>
                 );
               })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {recordsDueForVetting.length > 0 && (
+        <Card className="border-red-200">
+          <CardContent className="p-5">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2 mb-3">
+              <AlertTriangle className="w-4 h-4 text-red-500" /> Due for Re-vetting
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-red-700 bg-red-50 border-red-200">
+                {recordsDueForVetting.length}
+              </span>
+            </h2>
+            <div className="space-y-2">
+              {recordsDueForVetting.map((r) => (
+                <div key={r.id} className="flex items-center justify-between gap-3 text-sm border border-red-100 rounded-md px-3 py-2">
+                  <span className="text-slate-900">{r.userName}</span>
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-red-700 bg-red-50 border-red-200 shrink-0 whitespace-nowrap">
+                    {r.lastVettedAt ? `Overdue ${Math.abs(r.days)}d` : "Never vetted"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {pendingAvailabilityRequests.length > 0 && (
+        <Card className="border-red-200">
+          <CardContent className="p-5">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2 mb-3">
+              <AlertTriangle className="w-4 h-4 text-red-500" /> Pending Time-Off Requests
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-red-700 bg-red-50 border-red-200">
+                {pendingAvailabilityRequests.length}
+              </span>
+            </h2>
+            <div className="space-y-2">
+              {pendingAvailabilityRequests.map((r) => (
+                <div key={r.id} className="flex items-center justify-between gap-3 text-sm border border-red-100 rounded-md px-3 py-2">
+                  <div className="min-w-0">
+                    <span className="text-slate-900">{r.cpoName ?? "Unknown"}</span>
+                    <span className="text-slate-400"> · {r.startDate} – {r.endDate}</span>
+                    {r.reason && <span className="text-slate-400"> · {r.reason}</span>}
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Button
+                      size="sm"
+                      className="h-6 px-2 text-[11px]"
+                      onClick={() => reviewAvailabilityMutation.mutate({ id: r.id, status: "approved" })}
+                      disabled={reviewAvailabilityMutation.isPending}
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 px-2 text-[11px] text-red-600 hover:text-red-700"
+                      onClick={() => reviewAvailabilityMutation.mutate({ id: r.id, status: "denied" })}
+                      disabled={reviewAvailabilityMutation.isPending}
+                    >
+                      Deny
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
