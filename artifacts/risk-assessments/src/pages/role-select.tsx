@@ -1,8 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useAuth } from "@/lib/auth";
-import { api } from "@/lib/api";
 import {
   ShieldCheck,
   Gauge,
@@ -59,15 +56,32 @@ import {
 //
 // Per direct product direction, the Owner should never have to click a
 // separate "Preview" button on the Master Console first just to reach
-// this page's own tiles - RoleSelect itself now auto-starts Preview on
-// the designated Test Company the moment it loads (see the effect
-// below), so the locked state above is now only ever a brief flash (or
-// a genuine fallback if no company is flagged isInternal yet). This
-// does NOT relax the underlying rule that the Owner never sees a real
-// subscriber's live data without Preview - it's still exactly the same
-// server-enforced /auth/preview/:companyId call (routes/auth.ts, which
-// 403s anything but the one isInternal-flagged company), just fired
-// automatically instead of waiting for a manual click.
+// this page's own tiles - rather than this page attempting its own
+// auto-preview, the Owner's Test Company Preview now starts as part of
+// login itself (lib/auth.tsx's attemptAutoPreviewOnLogin, awaited
+// inside login() before the redirect to /owner), so by the time a
+// fresh login ever reaches this page isPreviewing is already true and
+// the lock below is never shown. This does NOT relax the underlying
+// rule that the Owner never sees a real subscriber's live data without
+// Preview - it's still exactly the same server-enforced
+// /auth/preview/:companyId call (routes/auth.ts, which 403s anything
+// but the one isInternal-flagged company), just fired automatically
+// instead of waiting for a manual click.
+//
+// Deliberately NOT a reactive effect on this page watching isPreviewing
+// (an earlier version of this fix tried that, scoped to /quick-access
+// only) - that version had two real problems: (1) it could get visibly
+// stuck on "Setting up..." indefinitely if the company-list fetch
+// errored or enterPreview() hung rather than cleanly resolving/
+// rejecting, with no way out but a manual refresh - reported directly
+// ("it doesn't go away"); (2) more fundamentally, re-attempting Preview
+// on every non-previewing page load would silently re-enter Preview the
+// instant the Owner deliberately clicked "Exit Preview," making that
+// button pointless. Tying it to the login moment only avoids both - if
+// it ever fails (timeout, no Test Company set, a stale session that
+// predates a fresh login), this page just shows the lock below exactly
+// as it always has, pointing back to the Master Console's own manual
+// Preview button.
 const TILES = [
   {
     href: "/cpo",
@@ -154,28 +168,6 @@ const TILES = [
 export default function RoleSelect() {
   const { user } = useAuth();
   const isPreviewing = user?.isPreviewing ?? false;
-  const attemptedAutoPreview = useRef(false);
-  const [autoPreviewFailed, setAutoPreviewFailed] = useState(false);
-
-  // Companies list is Owner-only (requireRole("admin")) but needs no
-  // active Preview itself to call - see routes/companies.ts.
-  const { data: companies } = useQuery({
-    queryKey: ["companies"],
-    queryFn: api.companies.list,
-    enabled: !isPreviewing,
-  });
-  const testCompany = companies?.find((c) => c.isInternal);
-
-  useEffect(() => {
-    if (isPreviewing || !testCompany || attemptedAutoPreview.current) return;
-    attemptedAutoPreview.current = true;
-    api.auth
-      .enterPreview(testCompany.id)
-      .then(() => { window.location.reload(); })
-      .catch(() => setAutoPreviewFailed(true));
-  }, [isPreviewing, testCompany]);
-
-  const noTestCompany = companies !== undefined && !testCompany;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white p-8 flex items-center justify-center relative">
@@ -198,18 +190,10 @@ export default function RoleSelect() {
         <div>
           <p className="text-sky-300 text-sm">Quick Access</p>
           <h1 className="text-3xl font-bold mt-1">Where do you want to go?</h1>
-          {!isPreviewing && noTestCompany && (
+          {!isPreviewing && (
             <p className="text-xs text-slate-500 mt-2 max-w-md mx-auto">
-              No company is flagged as the Test Company yet - set one on the Master Console to unlock the CPO/Management tiles below.
+              Start a Preview on your Test Company from the Master Console to unlock the CPO/Management tiles below.
             </p>
-          )}
-          {!isPreviewing && !noTestCompany && autoPreviewFailed && (
-            <p className="text-xs text-amber-400 mt-2 max-w-md mx-auto">
-              Couldn't start Preview automatically - try the Preview button on the Master Console instead.
-            </p>
-          )}
-          {!isPreviewing && !noTestCompany && !autoPreviewFailed && (
-            <p className="text-xs text-slate-500 mt-2 max-w-md mx-auto">Setting up your Test Company preview&hellip;</p>
           )}
         </div>
 
