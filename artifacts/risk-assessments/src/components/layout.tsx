@@ -33,6 +33,7 @@ import {
   Download,
   HelpCircle,
   Radar,
+  Compass,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -272,6 +273,26 @@ const hideShell = (location === "/cpo" || location === "/admin/gsoc" || location
           >
             <Radar className="w-4 h-4 shrink-0" />
             GSOC
+          </Link>
+        )}
+        {/* The one way back to /quick-access (and from there, the
+            Master Console) once an Owner session is already viewing
+            the Test Company's Command Desk pages - the old route back
+            was the Preview banner's own "Master Console" link, removed
+            along with the rest of that mechanism (see CLAUDE.md's
+            Preview-removal note) since there's no longer a Preview to
+            show a banner about. Owner-only, same gating logic as the
+            other two quick-jump links above, just inverted - a real
+            subscriber's own session has no Master Console to jump back
+            to at all. */}
+        {user?.role === "admin" && (
+          <Link
+            href="/quick-access"
+            onClick={() => setMobileOpen(false)}
+            className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors border border-slate-800"
+          >
+            <Compass className="w-4 h-4 shrink-0" />
+            Quick Access
           </Link>
         )}
         {/* The real "support channel for subscribers" - lands in the
