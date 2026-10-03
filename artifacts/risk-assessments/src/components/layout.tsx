@@ -74,9 +74,11 @@ const navGroups = [
       { href: "/admin/communications", label: "Communications", icon: MessageSquare },
       { href: "/admin/clients", label: "Clients", icon: Briefcase },
       { href: "/admin/contracts", label: "Contracts", icon: FileSignature },
-      { href: "/admin/finance", label: "Finance", icon: Landmark },
-      { href: "/admin/hr", label: "Human Resources", icon: IdCard },
-      { href: "/admin/operations", label: "Operations", icon: Workflow },
+      // Finance/Human Resources/Operations aren't regular nav items
+      // anymore - each is now its own standalone page/UI (see
+      // components/standalone-page-header.tsx, the hideShell list
+      // below, and the sidebar's own quick-jump links further down),
+      // same treatment GSOC got first, per direct product direction.
       { href: "/admin/costs", label: "Quotations", icon: DollarSign },
       { href: "/admin/invoices", label: "Invoices", icon: Receipt },
       { href: "/admin/cpo-deployment", label: "Operator Deployment", icon: UserCog },
@@ -143,11 +145,13 @@ useEffect(() => {
     window.removeEventListener("venueguard-show-shell", handler);
   };
 }, []);
-// "/cpo" is the CPO's own full-screen Operational Canvas, "/admin/gsoc"
-// is GSOC's own standalone console (per direct product direction - its
-// own page and own UI, separated from the rest of Command Desk, same
-// "own product surface" treatment as Operators Note rather than living
-// inside this Management shell; see pages/admin/gsoc.tsx's own header),
+// "/cpo" is the CPO's own full-screen Operational Canvas, "/admin/gsoc",
+// "/admin/operations", "/admin/finance", and "/admin/hr" are each their
+// own standalone console (per direct product direction - their own page
+// and own UI, separated from the rest of Command Desk, same "own
+// product surface" treatment as Operators Note rather than living
+// inside this Management shell; see components/standalone-page-header.tsx,
+// shared by all four so the treatment can't drift between them),
 // "/owner" is the platform Owner's own Master Console, and
 // "/quick-access" is the Owner's manual chooser back to /cpo or /admin
 // (a different concept entirely from this company-scoped Management
@@ -155,7 +159,7 @@ useEffect(() => {
 // sidebar/header chrome, nor do the full-bleed auth pages. "/" itself
 // renders the public landing page directly from require-auth.tsx, never
 // reaching this component at all, so it's not listed here either.
-const hideShell = (location === "/cpo" || location === "/admin/gsoc" || location === "/owner" || location === "/owner/subscriptions" || location === "/owner/it" || location === "/quick-access" || location === "/login" || location === "/register" || location === "/forgot-password" || location === "/reset-password" || location === "/change-password" || location.startsWith("/feedback/") || location.startsWith("/portal/") || location === "/status") && !showShell;
+const hideShell = (location === "/cpo" || location === "/admin/gsoc" || location === "/admin/operations" || location === "/admin/finance" || location === "/admin/hr" || location === "/owner" || location === "/owner/subscriptions" || location === "/owner/it" || location === "/quick-access" || location === "/login" || location === "/register" || location === "/forgot-password" || location === "/reset-password" || location === "/change-password" || location.startsWith("/feedback/") || location.startsWith("/portal/") || location === "/status") && !showShell;
   // "/admin" needs the same exact-match treatment as "/" - otherwise
   // it'd also read as active on "/admin/users" (a real, distinct nav
   // item), since that path also starts with "/admin".
@@ -273,6 +277,42 @@ const hideShell = (location === "/cpo" || location === "/admin/gsoc" || location
           >
             <Radar className="w-4 h-4 shrink-0" />
             GSOC
+          </Link>
+        )}
+        {/* Operations/Finance/Human Resources each got the same
+            standalone-page treatment as GSOC above, per direct product
+            direction - no longer regular nav items (they're not part of
+            this shell anymore), so they need the same quick-jump
+            treatment as Operators note/GSOC to still be reachable from
+            here. */}
+        {user?.role !== "admin" && (
+          <Link
+            href="/admin/operations"
+            onClick={() => setMobileOpen(false)}
+            className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors border border-slate-800"
+          >
+            <Workflow className="w-4 h-4 shrink-0" />
+            Operations
+          </Link>
+        )}
+        {user?.role !== "admin" && (
+          <Link
+            href="/admin/finance"
+            onClick={() => setMobileOpen(false)}
+            className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors border border-slate-800"
+          >
+            <Landmark className="w-4 h-4 shrink-0" />
+            Finance
+          </Link>
+        )}
+        {user?.role !== "admin" && (
+          <Link
+            href="/admin/hr"
+            onClick={() => setMobileOpen(false)}
+            className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors border border-slate-800"
+          >
+            <IdCard className="w-4 h-4 shrink-0" />
+            Human Resources
           </Link>
         )}
         {/* The one way back to /quick-access (and from there, the

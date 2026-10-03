@@ -3,10 +3,11 @@ import { Link } from "wouter";
 import { api, type Task } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ListChecks, UserCog, CalendarDays, AlertTriangle, type LucideIcon } from "lucide-react";
+import { ListChecks, UserCog, CalendarDays, AlertTriangle, Workflow, type LucideIcon } from "lucide-react";
 import { formatDateTime } from "@/lib/display-utils";
 import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { cn } from "@/lib/utils";
+import { StandalonePageHeader } from "@/components/standalone-page-header";
 
 function SectionCard({
   title,
@@ -69,7 +70,12 @@ function hoursUntil(dateStr: string): number {
 // confirmed via AskUserQuestion following the same pattern as
 // /admin/finance and /admin/hr. Office-scoped like every other
 // Command Desk list page. role: "operations" lands here after login/
-// registration instead of the general Management Dashboard.
+// registration instead of the general Management Dashboard. Its own
+// standalone page/UI (StandalonePageHeader, no Command Desk sidebar) -
+// same treatment GSOC got first, per direct product direction; still
+// links out to real full-shell pages (/tasks, /admin/cpo-deployment,
+// /admin/schedule) for the actual workflows, same as GSOC/Master
+// Console already coexist with full-shell pages.
 export default function OperationsDashboard() {
   const [selectedOfficeId] = useSelectedOfficeId();
   const { data: allTasks = [], isLoading } = useQuery<Task[]>({ queryKey: ["tasks"], queryFn: () => api.tasks.list() });
@@ -90,7 +96,10 @@ export default function OperationsDashboard() {
     .sort((a, b) => hoursUntil(a.dueDate!) - hoursUntil(b.dueDate!));
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
+    <div className="min-h-screen bg-slate-100">
+      <StandalonePageHeader icon={Workflow} label="Operations" iconClassName="text-emerald-400" avatarClassName="bg-emerald-600/30 text-emerald-300" />
+
+      <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-5">
       <div>
         <h1 className="text-xl font-bold text-slate-900">Operations</h1>
         <p className="text-sm text-slate-500 mt-0.5">Tasks, Operator Deployment, and Schedule at a glance</p>
@@ -152,6 +161,7 @@ export default function OperationsDashboard() {
           </SectionCard>
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { DollarSign, Receipt, Wallet, type LucideIcon } from "lucide-react";
 import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { cn } from "@/lib/utils";
+import { StandalonePageHeader } from "@/components/standalone-page-header";
 
 function SectionCard({
   title,
@@ -58,7 +59,9 @@ function StatTile({ label, value, tone }: { label: string; value: string; tone?:
 // a Finance user cares about first. role: "finance" now lands here
 // after login instead of the general Management Dashboard (see
 // lib/auth.tsx) - a genuine role-scoped destination, not just an Owner
-// Quick Access preview.
+// Quick Access preview. Its own standalone page/UI (StandalonePageHeader,
+// no Command Desk sidebar), same GSOC-first treatment applied to
+// Operations/Finance/HR per direct product direction.
 export default function FinanceDashboard() {
   const [selectedOfficeId] = useSelectedOfficeId();
   const { data: quotes = [], isLoading: quotesLoading } = useQuery<Quote[]>({ queryKey: ["quotes"], queryFn: api.quotes.list });
@@ -93,7 +96,10 @@ export default function FinanceDashboard() {
   const loading = quotesLoading || invoicesLoading || pendingLoading || runsLoading;
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
+    <div className="min-h-screen bg-slate-100">
+      <StandalonePageHeader icon={DollarSign} label="Finance" iconClassName="text-amber-400" avatarClassName="bg-amber-600/30 text-amber-300" />
+
+      <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-5">
       <div>
         <h1 className="text-xl font-bold text-slate-900">Finance</h1>
         <p className="text-sm text-slate-500 mt-0.5">Quotations, Invoices, and Payroll at a glance</p>
@@ -155,6 +161,7 @@ export default function FinanceDashboard() {
           </SectionCard>
         </div>
       )}
+      </div>
     </div>
   );
 }
