@@ -21,10 +21,10 @@ import {
 // before real auth existed; now it's a manual shortcut reachable via a
 // button on the Master Console header (pages/owner/dashboard.tsx), for
 // jumping straight into whatever's currently the Test Company's
-// Management/CPO pages during Preview, without digging through either
-// app's own nav. Not a role/auth gate itself - the tiles with an href
-// land wherever clicking into them normally would. Finance, Operations,
-// and Human Resources are each separately scoped now - /admin/finance
+// Management/CPO pages without digging through either app's own nav.
+// Not a role/auth gate itself - the tiles with an href land wherever
+// clicking into them normally would. Finance, Operations, and Human
+// Resources are each separately scoped now - /admin/finance
 // (Quotations/Invoices/Payroll), /admin/operations (Tasks/Operator
 // Deployment/Schedule), /admin/hr (Operator Database/Users), /admin/gsoc
 // (Safety Alerts/Live Operator Map/Field Incident Reports/Communications)
@@ -36,56 +36,35 @@ import {
 // system status plus the support-ticket inbox (routes/support-tickets.ts),
 // per direct product direction ("this needs to monitor the website/App
 // health, were logged tickets get send to all off IT"). Single Operator
-// links to /cpo (requiresPreview: true) - a Solo Operator company
+// links to /cpo (requiresTestCompany: true) - a Solo Operator company
 // redirects there automatically (require-auth.tsx), so this tile is
-// really just "preview it, and remember to set your Test Company to
-// that plan first." "Enterprise" (the old tier system's leftover, per
-// the seat-model note) has been removed outright rather than left as a
+// really just "see it, and remember to set your Test Company to that
+// plan first." "Enterprise" (the old tier system's leftover, per the
+// seat-model note) has been removed outright rather than left as a
 // placeholder - per direct product direction, no longer needed.
 //
-// requiresPreview: true tiles (CPO/Management/Operations/Finance/HR/
-// Single Operator) land on a company-scoped page with no company
-// context unless the Owner is actively previewing a Test Company -
-// require-auth.tsx's catch-all bounces a plain (non-previewing) Owner
-// straight back to /owner, since there's nothing real to show.
-// Previously that just silently kicked you back with no explanation,
-// reported directly as "clicking Quick Access takes me to the Master
-// Console." Fixed by disabling those specific tiles up front (matching
-// the "Coming soon" treatment, but explaining why) until a Preview is
-// actually running.
-//
-// Per direct product direction, the Owner should never have to click a
-// separate "Preview" button on the Master Console first just to reach
-// this page's own tiles - rather than this page attempting its own
-// auto-preview, the Owner's Test Company Preview now starts as part of
-// login itself (lib/auth.tsx's attemptAutoPreviewOnLogin, awaited
-// inside login() before the redirect to /owner), so by the time a
-// fresh login ever reaches this page isPreviewing is already true and
-// the lock below is never shown. This does NOT relax the underlying
-// rule that the Owner never sees a real subscriber's live data without
-// Preview - it's still exactly the same server-enforced
-// /auth/preview/:companyId call (routes/auth.ts, which 403s anything
-// but the one isInternal-flagged company), just fired automatically
-// instead of waiting for a manual click.
-//
-// Deliberately NOT a reactive effect on this page watching isPreviewing
-// (an earlier version of this fix tried that, scoped to /quick-access
-// only) - that version had two real problems: (1) it could get visibly
-// stuck on "Setting up..." indefinitely if the company-list fetch
-// errored or enterPreview() hung rather than cleanly resolving/
-// rejecting, with no way out but a manual refresh - reported directly
-// ("it doesn't go away"); (2) more fundamentally, re-attempting Preview
-// on every non-previewing page load would silently re-enter Preview the
-// instant the Owner deliberately clicked "Exit Preview," making that
-// button pointless. Tying it to the login moment only avoids both - if
-// it ever fails (timeout, no Test Company set, a stale session that
-// predates a fresh login), this page just shows the lock below exactly
-// as it always has, pointing back to the Master Console's own manual
-// Preview button.
+// Per direct product direction ("remove this completely... always show
+// my Test Company's data, no Preview concept at all") - there is no
+// Preview to start or exit anymore. An Owner (role: "admin") session
+// always resolves to whichever company is flagged as the Test Company,
+// automatically, on every single request (lib/auth.ts's
+// resolveAdminCompany) - no login-time action, no per-page effect, no
+// toggle, nothing that can get stuck or silently undo a manual exit the
+// way the two earlier attempts at this both did (one got visibly stuck
+// on "Setting up..." indefinitely when its own fetch/call failed to
+// resolve cleanly, reported directly as "it doesn't go away"; the other,
+// a login-time version, worked but was a needless extra network
+// round-trip for something the backend can just always be true about).
+// requiresTestCompany: true tiles (CPO/Management/Operations/Finance/HR/
+// Single Operator) land on a company-scoped page with no company context
+// unless a Test Company has been flagged at all - require-auth.tsx's
+// catch-all bounces that one real remaining edge case (no Test Company
+// designated yet) back to /owner rather than showing a broken empty
+// page, with the dashed-tile "locked" treatment below explaining why.
 const TILES = [
   {
     href: "/cpo",
-    requiresPreview: true,
+    requiresTestCompany: true,
     icon: ShieldCheck,
     iconColor: "text-sky-300",
     label: "CPO",
@@ -93,7 +72,7 @@ const TILES = [
   },
   {
     href: "/admin",
-    requiresPreview: true,
+    requiresTestCompany: true,
     icon: Gauge,
     iconColor: "text-amber-300",
     label: "Management",
@@ -101,7 +80,7 @@ const TILES = [
   },
   {
     href: "/admin/operations",
-    requiresPreview: true,
+    requiresTestCompany: true,
     icon: Workflow,
     iconColor: "text-emerald-300",
     label: "Operations",
@@ -109,7 +88,7 @@ const TILES = [
   },
   {
     href: "/admin/finance",
-    requiresPreview: true,
+    requiresTestCompany: true,
     icon: Wallet,
     iconColor: "text-violet-300",
     label: "Finance",
@@ -117,7 +96,7 @@ const TILES = [
   },
   {
     href: "/admin/hr",
-    requiresPreview: true,
+    requiresTestCompany: true,
     icon: Users2,
     iconColor: "text-rose-300",
     label: "Human Resources",
@@ -125,7 +104,7 @@ const TILES = [
   },
   {
     href: "/admin/gsoc",
-    requiresPreview: true,
+    requiresTestCompany: true,
     icon: Radar,
     iconColor: "text-cyan-300",
     label: "GSOC",
@@ -133,7 +112,7 @@ const TILES = [
   },
   {
     href: "/owner/it",
-    requiresPreview: false,
+    requiresTestCompany: false,
     icon: Cpu,
     iconColor: "text-sky-300",
     label: "IT",
@@ -141,7 +120,7 @@ const TILES = [
   },
   {
     href: "/",
-    requiresPreview: false,
+    requiresTestCompany: false,
     icon: Globe,
     iconColor: "text-cyan-300",
     label: "Landing Page",
@@ -149,7 +128,7 @@ const TILES = [
   },
   {
     href: "/owner",
-    requiresPreview: false,
+    requiresTestCompany: false,
     icon: CreditCard,
     iconColor: "text-emerald-300",
     label: "Subscriptions",
@@ -157,13 +136,13 @@ const TILES = [
   },
   {
     href: "/cpo",
-    requiresPreview: true,
+    requiresTestCompany: true,
     icon: UserCog,
     iconColor: "text-violet-300",
     label: "Single Operator",
     description: "Preview Operators Note for a Solo Operator company - set your Test Company to that plan first.",
   },
-] as const satisfies readonly { href: string | null; requiresPreview: boolean; icon: typeof Cpu; iconColor: string; label: string; description: string }[];
+] as const satisfies readonly { href: string | null; requiresTestCompany: boolean; icon: typeof Cpu; iconColor: string; label: string; description: string }[];
 
 export default function RoleSelect() {
   const { user } = useAuth();
@@ -192,14 +171,14 @@ export default function RoleSelect() {
           <h1 className="text-3xl font-bold mt-1">Where do you want to go?</h1>
           {!isPreviewing && (
             <p className="text-xs text-slate-500 mt-2 max-w-md mx-auto">
-              Start a Preview on your Test Company from the Master Console to unlock the CPO/Management tiles below.
+              Mark a company as your Test Company on the Master Console to unlock the CPO/Management tiles below.
             </p>
           )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-left">
           {TILES.map((tile) => {
-            const locked = tile.requiresPreview && !isPreviewing;
+            const locked = tile.requiresTestCompany && !isPreviewing;
             return tile.href && !locked ? (
               <Link
                 key={tile.label}
@@ -222,11 +201,11 @@ export default function RoleSelect() {
                 <div className="flex items-center justify-between">
                   <h2 className="text-xl font-bold text-slate-500">{tile.label}</h2>
                   <span className="text-[10px] uppercase tracking-widest text-slate-600 border border-slate-700 rounded px-1.5 py-0.5">
-                    {locked ? "Start Preview first" : "Coming soon"}
+                    {locked ? "No Test Company set" : "Coming soon"}
                   </span>
                 </div>
                 <p className="text-sm text-slate-500 mt-1">
-                  {locked ? "Requires an active Preview on your Test Company." : tile.description}
+                  {locked ? "Mark a company as your Test Company on the Master Console first." : tile.description}
                 </p>
               </div>
             );

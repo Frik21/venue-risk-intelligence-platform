@@ -115,17 +115,19 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
     return <Redirect to={homeRoute} />;
   }
 
-  // A plain Owner session (role: "admin", companyId: null, not
-  // previewing) has nothing to do on the Management/CPO pages - every
-  // API call there 400s (see requireCompanyId's comment in
-  // lib/resolve-company.ts). Send them to /owner instead of a broken
-  // empty-looking UI. Once they've entered Preview (pages/owner/
-  // dashboard.tsx's "Preview" button), companyId is set and these
-  // routes work normally, so this only applies pre-preview. /quick-
-  // access, /register, /owner/subscriptions, and /owner/it are exempt
-  // the same way /owner is - none makes any tenant-scoped API call of
-  // its own (Subscriptions is platform-wide pricing, IT is the
-  // Owner's own status/ticket inbox - neither is per-company data).
+  // An Owner session (role: "admin") with no company flagged as the
+  // Test Company yet (companyId: null, isPreviewing: false - resolved
+  // server-side, see lib/auth.ts's resolveAdminCompany) has nothing to
+  // do on the Management/CPO pages - every API call there 400s (see
+  // requireCompanyId's comment in lib/resolve-company.ts). Send them to
+  // /owner instead of a broken empty-looking UI. Once a company is
+  // marked as Test Company on /owner, companyId resolves automatically
+  // on every request and these routes work normally - no separate
+  // "enter" step. /quick-access, /register, /owner/subscriptions, and
+  // /owner/it are exempt the same way /owner is - none makes any
+  // tenant-scoped API call of its own (Subscriptions is platform-wide
+  // pricing, IT is the Owner's own status/ticket inbox - neither is
+  // per-company data).
   if (
     user?.role === "admin" &&
     !user.isPreviewing &&

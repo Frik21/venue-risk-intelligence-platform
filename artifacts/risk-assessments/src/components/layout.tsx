@@ -23,7 +23,6 @@ import {
   Receipt,
   Wallet,
   LogOut,
-  FlaskConical,
   LifeBuoy,
   Landmark,
   IdCard,
@@ -345,31 +344,6 @@ const hideShell = (location === "/cpo" || location === "/admin/gsoc" || location
             <ShieldAlert className="w-5 h-5 text-blue-600 mr-1.5" />
             <span className="font-bold text-sm text-slate-900">VenueGuard</span>
           </div>
-          {user?.isPreviewing && (
-            <div className="flex items-center gap-2 bg-violet-50 border border-violet-200 text-violet-700 text-xs font-medium px-3 py-1.5 rounded-md">
-              <FlaskConical className="w-3.5 h-3.5" />
-              <span>Previewing {user.companyName ?? "the test company"} - not a real subscriber</span>
-              {/* Back to /owner without ending Preview - distinct from
-                  "Exit Preview" below, which does end the session. */}
-              <Link href="/owner" className="underline decoration-dotted hover:text-violet-900">
-                Master Console
-              </Link>
-              <span className="text-violet-300">·</span>
-              <button
-                className="underline decoration-dotted hover:text-violet-900"
-                onClick={async () => {
-                  // Full reload (not client-side nav) - no react-query
-                  // cache in this app is keyed by company, so an
-                  // in-memory cache built while previewing shouldn't
-                  // bleed into the plain Owner view after exiting.
-                  await api.auth.exitPreview();
-                  window.location.href = "/owner";
-                }}
-              >
-                Exit Preview
-              </button>
-            </div>
-          )}
           <div className="flex-1" />
           <div className="hidden sm:flex items-center gap-2 text-sm text-slate-500 bg-slate-100 px-3 py-1.5 rounded-md">
             <Search className="w-4 h-4" />

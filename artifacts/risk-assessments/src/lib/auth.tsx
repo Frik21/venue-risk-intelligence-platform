@@ -7,35 +7,6 @@ import { registerPushUser } from "./push";
 // a CPO or Owner (admin) session never registers for push.
 const MANAGEMENT_ROLES: UserRole[] = ["manager", "finance", "human_resources", "operations"];
 
-// How long the post-login auto-preview attempt below may take before
-// giving up - a hung request here must never block the Owner from
-// reaching the Master Console at all.
-const AUTO_PREVIEW_TIMEOUT_MS = 8000;
-
-// Per direct product direction ("I need it gone as soon as I am in the
-// master console") - an Owner's very first landing on /owner should
-// already be previewing the designated Test Company, not require a
-// separate manual click or a visit to /quick-access first. Scoped to
-// the login moment only (awaited, best-effort, failures swallowed) -
-// NOT a reactive effect watching isPreviewing elsewhere in the app,
-// which would otherwise silently re-enter Preview the moment the Owner
-// deliberately clicks "Exit Preview" on their next page load, making
-// that button pointless. A failed/timed-out attempt here just leaves
-// the Owner on a plain, non-previewing /owner, exactly like before this
-// feature existed - the Master Console's own manual Preview button
-// remains the fallback either way.
-async function attemptAutoPreviewOnLogin(): Promise<void> {
-  const companies = await api.companies.list();
-  const testCompany = companies.find((c) => c.isInternal);
-  if (!testCompany) return;
-  await Promise.race([
-    api.auth.enterPreview(testCompany.id),
-    new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error("auto-preview timed out")), AUTO_PREVIEW_TIMEOUT_MS);
-    }),
-  ]);
-}
-
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
 interface AuthContextValue {
@@ -89,9 +60,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const { user } = await api.auth.login(email, password);
-    if (user.role === "admin" && !user.isPreviewing) {
-      await attemptAutoPreviewOnLogin().catch(() => {});
-    }
+    // An Owner (role: "admin") session's isPreviewing is already
+    // correctly set here - resolved server-side, automatically, from
+    // whichever company is flagged as the Test Company (see
+    // SessionUser.isPreviewing) - no separate client-side action needed.
     // Full reload rather than just setting state - no react-query cache
     // in this app is keyed by user/company today, so a same-session
     // login-as-someone-else could otherwise serve stale, wrong-tenant

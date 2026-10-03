@@ -50,11 +50,13 @@ export const companiesTable = pgTable("companies", {
   additionalGsocSeats: integer("additional_gsoc_seats").notNull().default(0),
   additionalCpoSeats: integer("additional_cpo_seats").notNull().default(0),
   // The Owner's own sandbox for testing/QA-ing the Management and CPO
-  // pages (see lib/auth.ts's preview session mechanism) - never a real
-  // subscriber. Only a company flagged true here can ever be entered
-  // via POST /auth/preview/:companyId; enforced server-side there, not
-  // just a UI convention, so the Owner's aggregate-only boundary on
-  // every other company can never be bypassed by URL/API manipulation.
+  // pages - never a real subscriber. At most one company should carry
+  // this flag; whichever one does is what every Owner (role: "admin")
+  // session automatically resolves its effective companyId to, on
+  // every request (lib/auth.ts's resolveAdminCompany) - enforced
+  // server-side there, not just a UI convention, so the Owner's
+  // aggregate-only boundary on every other company can never be
+  // bypassed by URL/API manipulation.
   isInternal: boolean("is_internal").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   // Set once, at creation, whenever a company starts on status: "trial"
