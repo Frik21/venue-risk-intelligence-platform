@@ -77,7 +77,6 @@ const navGroups = [
       { href: "/admin/finance", label: "Finance", icon: Landmark },
       { href: "/admin/hr", label: "Human Resources", icon: IdCard },
       { href: "/admin/operations", label: "Operations", icon: Workflow },
-      { href: "/admin/gsoc", label: "GSOC", icon: Radar },
       { href: "/admin/costs", label: "Quotations", icon: DollarSign },
       { href: "/admin/invoices", label: "Invoices", icon: Receipt },
       { href: "/admin/cpo-deployment", label: "Operator Deployment", icon: UserCog },
@@ -144,15 +143,19 @@ useEffect(() => {
     window.removeEventListener("venueguard-show-shell", handler);
   };
 }, []);
-// "/cpo" is the CPO's own full-screen Operational Canvas, "/owner" is
-// the platform Owner's own Master Console, and "/quick-access" is the Owner's
-// manual chooser back to /cpo or /admin (a different concept entirely
-// from this company-scoped Management shell, which carries the Office
-// switcher) - none want this sidebar/header chrome, nor do the
-// full-bleed auth pages. "/" itself renders the public landing page
-// directly from require-auth.tsx, never reaching this component at
-// all, so it's not listed here either.
-const hideShell = (location === "/cpo" || location === "/owner" || location === "/owner/subscriptions" || location === "/owner/it" || location === "/quick-access" || location === "/login" || location === "/register" || location === "/forgot-password" || location === "/reset-password" || location === "/change-password" || location.startsWith("/feedback/") || location.startsWith("/portal/") || location === "/status") && !showShell;
+// "/cpo" is the CPO's own full-screen Operational Canvas, "/admin/gsoc"
+// is GSOC's own standalone console (per direct product direction - its
+// own page and own UI, separated from the rest of Command Desk, same
+// "own product surface" treatment as Operators Note rather than living
+// inside this Management shell; see pages/admin/gsoc.tsx's own header),
+// "/owner" is the platform Owner's own Master Console, and
+// "/quick-access" is the Owner's manual chooser back to /cpo or /admin
+// (a different concept entirely from this company-scoped Management
+// shell, which carries the Office switcher) - none want this
+// sidebar/header chrome, nor do the full-bleed auth pages. "/" itself
+// renders the public landing page directly from require-auth.tsx, never
+// reaching this component at all, so it's not listed here either.
+const hideShell = (location === "/cpo" || location === "/admin/gsoc" || location === "/owner" || location === "/owner/subscriptions" || location === "/owner/it" || location === "/quick-access" || location === "/login" || location === "/register" || location === "/forgot-password" || location === "/reset-password" || location === "/change-password" || location.startsWith("/feedback/") || location.startsWith("/portal/") || location === "/status") && !showShell;
   // "/admin" needs the same exact-match treatment as "/" - otherwise
   // it'd also read as active on "/admin/users" (a real, distinct nav
   // item), since that path also starts with "/admin".
@@ -253,6 +256,23 @@ const hideShell = (location === "/cpo" || location === "/owner" || location === 
           >
             <ArrowLeftRight className="w-4 h-4 shrink-0" />
             Operators note
+          </Link>
+        )}
+        {/* GSOC's own standalone console (pages/admin/gsoc.tsx) - its own
+            page/UI, separated from this shell, per direct product
+            direction. Same quick-jump treatment as the Operators note
+            link above (not a regular nav item, since the destination
+            itself has no sidebar to stay "active" in) - a GSOC-role
+            session lands there directly on login anyway, so this is
+            mainly for other Management roles checking in on it. */}
+        {user?.role !== "admin" && (
+          <Link
+            href="/admin/gsoc"
+            onClick={() => setMobileOpen(false)}
+            className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors border border-slate-800"
+          >
+            <Radar className="w-4 h-4 shrink-0" />
+            GSOC
           </Link>
         )}
         {/* The real "support channel for subscribers" - lands in the
