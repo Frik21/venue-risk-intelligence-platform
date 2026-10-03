@@ -13,6 +13,7 @@ import {
   Globe,
   CreditCard,
   UserCog,
+  Radar,
 } from "lucide-react";
 
 // Owner-only fast-path (see require-auth.tsx - non-admin sessions
@@ -25,8 +26,9 @@ import {
 // land wherever clicking into them normally would. Finance, Operations,
 // and Human Resources are each separately scoped now - /admin/finance
 // (Quotations/Invoices/Payroll), /admin/operations (Tasks/Operator
-// Deployment/Schedule), /admin/hr (Operator Database/Users) - see
-// CLAUDE.md's own notes on them. Only "Management" still lands on the
+// Deployment/Schedule), /admin/hr (Operator Database/Users), /admin/gsoc
+// (Safety Alerts/Live Operator Map/Field Incident Reports/Communications)
+// - see CLAUDE.md's own notes on them. Only "Management" still lands on the
 // general /admin Management Dashboard. Landing Page links to "/"
 // itself (pages/landing.tsx); Subscriptions links to /owner, where
 // plan/status/seats actually live now (see the single-plan seat model
@@ -91,6 +93,14 @@ const TILES = [
     iconColor: "text-rose-300",
     label: "Human Resources",
     description: "HR Dashboard - Operator Database and Users.",
+  },
+  {
+    href: "/admin/gsoc",
+    requiresPreview: true,
+    icon: Radar,
+    iconColor: "text-cyan-300",
+    label: "GSOC",
+    description: "Live monitoring, communication, and check-in oversight for every CPO in the field.",
   },
   {
     href: "/owner/it",
