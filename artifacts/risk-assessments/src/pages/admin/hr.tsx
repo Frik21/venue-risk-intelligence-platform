@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { UserPlus, Users as UsersIcon, type LucideIcon } from "lucide-react";
 import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { cn } from "@/lib/utils";
+import { StandalonePageHeader } from "@/components/standalone-page-header";
 
 // Same 30-day heads-up window and expiry math as the Expiring
 // Certifications card on /admin/onboarding (Following Roadmap Tier 1,
@@ -63,7 +64,10 @@ function StatTile({ label, value, tone }: { label: string; value: string; tone?:
 // onboarding half - operator_onboarding isn't an office-scoped entity
 // anywhere else in this app either (see the Dashboard Trends note in
 // CLAUDE.md). role: "human_resources" lands here after login/
-// registration instead of the general Management Dashboard.
+// registration instead of the general Management Dashboard. Its own
+// standalone page/UI (StandalonePageHeader, no Command Desk sidebar),
+// same GSOC-first treatment applied to Operations/Finance/HR per
+// direct product direction.
 export default function HrDashboard() {
   const [selectedOfficeId] = useSelectedOfficeId();
   const { data: onboarding = [], isLoading: onboardingLoading } = useQuery<OnboardingOverviewRecord[]>({
@@ -103,7 +107,10 @@ export default function HrDashboard() {
   const loading = onboardingLoading || usersLoading;
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
+    <div className="min-h-screen bg-slate-100">
+      <StandalonePageHeader icon={UsersIcon} label="Human Resources" iconClassName="text-violet-400" avatarClassName="bg-violet-600/30 text-violet-300" />
+
+      <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-5">
       <div>
         <h1 className="text-xl font-bold text-slate-900">Human Resources</h1>
         <p className="text-sm text-slate-500 mt-0.5">Operator Database and Users at a glance</p>
@@ -136,6 +143,7 @@ export default function HrDashboard() {
           </SectionCard>
         </div>
       )}
+      </div>
     </div>
   );
 }
