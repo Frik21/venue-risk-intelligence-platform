@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, ChangeEvent } from "react";
-import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet, LifeBuoy, FileText, Package, Users, Plane, Globe, CalendarOff } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet, LifeBuoy, FileText, Package, Users, Plane, Globe, CalendarOff, Compass } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -1641,18 +1641,33 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
                 Company (see require-auth.tsx) - lets the Owner jump back
                 to /owner without ending Preview, same idea as the
                 equivalent link in Layout's own header for the
-                Management side. */}
+                Management side. Reported directly ("IT, Landing page,
+                subscriptions, single operator and CPO needs that same
+                button") - Quick Access sits alongside it, since both the
+                "CPO" and "Single Operator" Quick Access tiles land here. */}
             {user?.isPreviewing && (
-              <button
-                type="button"
-                className="top-banner-operator-menu-item"
-                onClick={() => {
-                  window.location.href = "/owner";
-                }}
-              >
-                <Building2 className="w-4 h-4" />
-                Back to Master Console
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="top-banner-operator-menu-item"
+                  onClick={() => {
+                    window.location.href = "/quick-access";
+                  }}
+                >
+                  <Compass className="w-4 h-4" />
+                  Quick Access
+                </button>
+                <button
+                  type="button"
+                  className="top-banner-operator-menu-item"
+                  onClick={() => {
+                    window.location.href = "/owner";
+                  }}
+                >
+                  <Building2 className="w-4 h-4" />
+                  Back to Master Console
+                </button>
+              </>
             )}
             <button
               type="button"
