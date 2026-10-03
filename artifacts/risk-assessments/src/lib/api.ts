@@ -1665,6 +1665,15 @@ export const api = {
       dayRate: number | null; nightRate: number | null; officeId: number | null;
     }>) => apiFetch<Client>(`/clients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     delete: (id: number) => apiFetch<void>(`/clients/${id}`, { method: "DELETE" }),
+    // Bulk CSV import - rows are already-parsed objects (the frontend
+    // parses the file itself, this never touches a raw file). Returns
+    // which rows actually landed vs failed, and why - never a bare
+    // pass/fail for the whole batch.
+    import: (rows: Record<string, unknown>[]) =>
+      apiFetch<{ imported: number; errors: { row: number; error: string }[] }>("/clients/import", {
+        method: "POST",
+        body: JSON.stringify({ rows }),
+      }),
     generatePortalLink: (id: number) => apiFetch<Client>(`/clients/${id}/portal-link`, { method: "POST" }),
     revokePortalLink: (id: number) => apiFetch<Client>(`/clients/${id}/portal-link`, { method: "DELETE" }),
   },

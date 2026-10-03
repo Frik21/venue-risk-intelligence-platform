@@ -11,10 +11,139 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { useState } from "react";
-import { Briefcase, Plus, MoreVertical, Pencil, Trash2, PieChart } from "lucide-react";
+import { useState, useRef } from "react";
+import Papa from "papaparse";
+import { Briefcase, Plus, MoreVertical, Pencil, Trash2, PieChart, Upload, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+
+// Bulk CSV import - automation pass, per direct product direction. A
+// new or existing company's client list almost always starts life in
+// a spreadsheet somewhere; this is the one explicit "replace Excel"
+// entry point that lets them bring it in rather than re-typing every
+// row by hand. Header names are matched case-insensitively against
+// this exact set (plus the aliases below) - the Download Template
+// link exists specifically so a real import doesn't depend on
+// guessing the right column names, since a mismatched header silently
+// producing nothing is exactly the kind of "this is broken" result to
+// avoid.
+const IMPORT_FIELDS = ["name", "email", "phone", "industry", "primaryContactName", "primaryContactRole", "address", "dayRate", "nightRate"] as const;
+const HEADER_ALIASES: Record<string, string> = {
+  "client name": "name", "company": "name", "company name": "name",
+  "phone number": "phone", "contact name": "primaryContactName", "contact role": "primaryContactRole",
+  "day rate": "dayRate", "night rate": "nightRate",
+};
+
+function normalizeHeader(header: string): string {
+  const trimmed = header.trim().toLowerCase();
+  if (HEADER_ALIASES[trimmed]) return HEADER_ALIASES[trimmed];
+  const match = IMPORT_FIELDS.find((f) => f.toLowerCase() === trimmed);
+  return match ?? header.trim();
+}
+
+function downloadClientTemplate() {
+  const csv = Papa.unparse({
+    fields: ["name", "email", "phone", "industry", "primaryContactName", "primaryContactRole", "address", "dayRate", "nightRate"],
+    data: [["Acme Corp", "contact@acme.com", "+27 11 555 0100", "Retail", "Jane Doe", "Operations Manager", "123 Main St, Johannesburg", "2500", "3500"]],
+  });
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "venueguard-clients-template.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function ImportClientsDialog({ onClose }: { onClose: () => void }) {
+  const [rows, setRows] = useState<Record<string, unknown>[] | null>(null);
+  const [fileName, setFileName] = useState("");
+  const [result, setResult] = useState<{ imported: number; errors: { row: number; error: string }[] } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const mutation = useMutation({
+    mutationFn: () => api.clients.import(rows!),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["clients"] });
+      setResult(res);
+      if (res.errors.length === 0) toast({ title: `${res.imported} client${res.imported === 1 ? "" : "s"} imported` });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  function handleFile(file: File) {
+    setFileName(file.name);
+    setResult(null);
+    Papa.parse<Record<string, string>>(file, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: normalizeHeader,
+      complete: (res) => setRows(res.data as Record<string, unknown>[]),
+      error: () => toast({ title: "Couldn't read that file", description: "Make sure it's a valid CSV export.", variant: "destructive" }),
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg my-8 p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-bold">Import Clients from CSV</h2>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Bring in your existing client list from a spreadsheet instead of typing each one in by hand.
+          </p>
+        </div>
+
+        <button type="button" onClick={downloadClientTemplate} className="flex items-center gap-1.5 text-sm text-blue-600 hover:underline">
+          <Download className="w-3.5 h-3.5" /> Download CSV template
+        </button>
+
+        <div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+          />
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+            <Upload className="w-4 h-4 mr-1.5" /> Choose CSV File
+          </Button>
+          {fileName && <span className="ml-2 text-sm text-slate-500">{fileName}</span>}
+        </div>
+
+        {rows && !result && (
+          <p className="text-sm text-slate-600">{rows.length} row{rows.length === 1 ? "" : "s"} found - ready to import.</p>
+        )}
+
+        {result && (
+          <div className="space-y-2 border-t border-slate-100 pt-3">
+            <p className="text-sm font-medium text-slate-900">
+              {result.imported} imported{result.errors.length > 0 ? `, ${result.errors.length} failed` : ""}
+            </p>
+            {result.errors.length > 0 && (
+              <div className="max-h-40 overflow-y-auto space-y-1">
+                {result.errors.map((e) => (
+                  <p key={e.row} className="text-xs text-red-600">Row {e.row}: {e.error}</p>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex gap-3 pt-2">
+          {!result && (
+            <Button onClick={() => mutation.mutate()} disabled={!rows || rows.length === 0 || mutation.isPending}>
+              {mutation.isPending ? "Importing..." : `Import${rows ? ` ${rows.length} Client${rows.length === 1 ? "" : "s"}` : ""}`}
+            </Button>
+          )}
+          <Button variant="outline" onClick={onClose}>{result ? "Done" : "Cancel"}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function formatMoney(amount: number, currency: string) {
   return `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
@@ -254,6 +383,7 @@ function CurrencyStack({ byCurrency }: { byCurrency: Record<string, number> }) {
 // Quotes, activity log).
 export default function ClientsPage() {
   const [showDialog, setShowDialog] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -316,15 +446,21 @@ export default function ClientsPage() {
     <div className="space-y-5">
       {showDialog && <ClientDialog client={null} onClose={() => setShowDialog(false)} />}
       {editingClient && <ClientDialog client={editingClient} onClose={() => setEditingClient(null)} />}
+      {showImport && <ImportClientsDialog onClose={() => setShowImport(false)} />}
 
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Clients</h1>
           <p className="text-slate-500 text-sm mt-0.5">Client organizations, contacts, and day/night rates - link a task to one from the request form</p>
         </div>
-        <Button onClick={() => setShowDialog(true)}>
-          <Plus className="w-4 h-4 mr-1.5" /> Add Client
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setShowImport(true)}>
+            <Upload className="w-4 h-4 mr-1.5" /> Import CSV
+          </Button>
+          <Button onClick={() => setShowDialog(true)}>
+            <Plus className="w-4 h-4 mr-1.5" /> Add Client
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
