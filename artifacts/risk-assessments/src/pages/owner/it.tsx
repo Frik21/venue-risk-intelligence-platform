@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ShieldAlert, ArrowLeft, Database, Clock, Server, Globe, Trash2 } from "lucide-react";
+import { ShieldAlert, ArrowLeft, Compass, Database, Clock, Server, Globe, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateTime } from "@/lib/display-utils";
 import { cn } from "@/lib/utils";
@@ -207,6 +207,10 @@ export default function ItPage() {
           <div className="text-[10px] text-slate-500 uppercase tracking-widest -mt-0.5">Master Console</div>
         </div>
         <div className="flex-1" />
+        <Link href="/quick-access" className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors mr-4">
+          <Compass className="w-3.5 h-3.5" />
+          Quick Access
+        </Link>
         <Link href="/owner" className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors">
           <ArrowLeft className="w-3.5 h-3.5" />
           Master Console

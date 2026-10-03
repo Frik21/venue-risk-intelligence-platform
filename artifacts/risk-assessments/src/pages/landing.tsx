@@ -10,8 +10,10 @@ import {
   Radio,
   Users2,
   ArrowRight,
+  Compass,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth";
 
 // Public marketing page, shown at "/" for anyone who isn't logged in,
 // and for authenticated sessions too (see require-auth.tsx - being
@@ -115,6 +117,7 @@ function LogoIntro() {
 }
 
 export default function LandingPage() {
+  const { user } = useAuth();
   const [showIntro, setShowIntro] = useState(true);
 
   useEffect(() => {
@@ -134,6 +137,19 @@ export default function LandingPage() {
           </div>
         </div>
         <div className="flex items-center gap-2.5">
+          {/* Owner-only - this page is reachable from Quick Access's own
+              "Landing Page" tile, and the marketing content/CTAs below
+              stay the same for every visitor regardless of auth state
+              (see this file's own top comment) - this is purely a way
+              back for the one session that got here via Quick Access. */}
+          {user?.role === "admin" && (
+            <Link href="/quick-access">
+              <Button variant="outline" size="sm" className="border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white">
+                <Compass className="w-3.5 h-3.5 mr-1.5" />
+                Quick Access
+              </Button>
+            </Link>
+          )}
           <Link href="/login">
             <Button variant="outline" size="sm" className="border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white">
               Log In
