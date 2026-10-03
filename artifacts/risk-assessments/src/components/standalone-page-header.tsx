@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { ArrowLeftRight, LogOut, type LucideIcon } from "lucide-react";
+import { ArrowLeftRight, Compass, LogOut, type LucideIcon } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -29,6 +29,12 @@ export function StandalonePageHeader({
   avatarClassName?: string;
 }) {
   const { user, logout } = useAuth();
+  // An Owner session has no real "Command Desk home" of its own - it's
+  // just auto-scoped to the Test Company for QA (see CLAUDE.md's Preview-
+  // removal note), so the way back for an Owner is Quick Access, not
+  // Command Desk. A real Management-role session's home genuinely is
+  // Command Desk, so that link stays correct for them.
+  const isOwner = user?.role === "admin";
 
   return (
     <header className="h-14 flex items-center px-6 bg-slate-950 text-white gap-2.5 shrink-0">
@@ -38,9 +44,15 @@ export function StandalonePageHeader({
         <div className="text-[10px] text-slate-500 uppercase tracking-widest -mt-0.5">{label}</div>
       </div>
       <div className="flex-1" />
-      <Link href="/admin" className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors mr-4">
-        <ArrowLeftRight className="w-3.5 h-3.5" /> Command Desk
-      </Link>
+      {isOwner ? (
+        <Link href="/quick-access" className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors mr-4">
+          <Compass className="w-3.5 h-3.5" /> Quick Access
+        </Link>
+      ) : (
+        <Link href="/admin" className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors mr-4">
+          <ArrowLeftRight className="w-3.5 h-3.5" /> Command Desk
+        </Link>
+      )}
       <div className="flex items-center gap-2">
         <div className={`w-7 h-7 rounded flex items-center justify-center text-xs font-bold shrink-0 ${avatarClassName}`}>
           {user?.avatarInitials ?? user?.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() ?? "?"}
