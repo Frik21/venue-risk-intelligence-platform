@@ -4,6 +4,7 @@ import { startGdeltMonitor } from "./lib/gdelt-monitor";
 import { startCheckinMonitor } from "./lib/checkin-monitor";
 import { startOverdueInvoiceMonitor } from "./lib/overdue-invoice-monitor";
 import { startCertExpiryMonitor } from "./lib/cert-expiry-monitor";
+import { startContractRenewalMonitor } from "./lib/contract-renewal-monitor";
 import { initErrorTracking, captureError } from "./lib/error-tracking";
 
 // Real error tracking, built now and connected later - see lib/error-
@@ -47,4 +48,5 @@ app.listen(port, (err) => {
   startCheckinMonitor();
   startOverdueInvoiceMonitor();
   startCertExpiryMonitor();
+  startContractRenewalMonitor();
 });

@@ -40,6 +40,16 @@ export const contractsTable = pgTable("contracts", {
   currency: text("currency").notNull().default("ZAR"),
   startDate: date("start_date").notNull(),
   renewalDate: date("renewal_date").notNull(),
+  // Stamped once a renewal-approaching notification has been sent for
+  // the CURRENT renewalDate (lib/contract-renewal-monitor.ts), same
+  // "notify once" shape as invoices.overdueNotifiedAt/operator_
+  // documents.expiryNotifiedAt - except, unlike those two, this one is
+  // deliberately reset to null whenever renewalDate itself changes
+  // (routes/contracts.ts's PATCH handler) so extending a contract
+  // (pages/admin/contracts.tsx's "Extend" action) re-arms the reminder
+  // for the new date instead of silently going quiet for every future
+  // renewal after the first.
+  renewalNotifiedAt: timestamp("renewal_notified_at", { withTimezone: true }),
   notes: text("notes").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

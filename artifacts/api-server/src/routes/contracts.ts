@@ -22,6 +22,7 @@ function formatContract(row: typeof contractsTable.$inferSelect, clientName: str
     currency: row.currency,
     startDate: row.startDate,
     renewalDate: row.renewalDate,
+    renewalNotifiedAt: row.renewalNotifiedAt?.toISOString() ?? null,
     notes: row.notes,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -109,7 +110,11 @@ router.patch("/contracts/:id", async (req, res): Promise<void> => {
 
   const [contract] = await db
     .update(contractsTable)
-    .set(parsed.data)
+    // Re-arm the renewal-reminder monitor for the new date whenever
+    // renewalDate itself changes (e.g. the "Extend" action) - otherwise
+    // a contract notified once would never be notified again for any
+    // later renewal cycle.
+    .set(parsed.data.renewalDate != null ? { ...parsed.data, renewalNotifiedAt: null } : parsed.data)
     .where(and(eq(contractsTable.id, id), eq(contractsTable.companyId, companyId)))
     .returning();
   if (!contract) { res.status(404).json({ error: "Contract not found" }); return; }

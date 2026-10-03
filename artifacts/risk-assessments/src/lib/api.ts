@@ -758,6 +758,7 @@ export interface Contract {
   currency: string;
   startDate: string;
   renewalDate: string;
+  renewalNotifiedAt: string | null;
   notes: string;
   createdAt: string;
   updatedAt: string;

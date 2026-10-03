@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { FileSignature, Plus, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { FileSignature, Plus, MoreVertical, Pencil, Trash2, CalendarPlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/display-utils";
@@ -38,6 +38,63 @@ function daysUntilRenewal(renewalDate: string): number {
 
 function formatMoney(amount: number, currency: string) {
   return `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+}
+
+function addMonths(dateStr: string, months: number): string {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
+// A retainer being renewed, not a new agreement being drawn up - no
+// new backend route needed, PATCH /contracts/:id already accepts a
+// partial update of renewalDate/status (same reuse-what-exists
+// posture this session's own automation pass is built around, to keep
+// the risk of shipping something broken as low as possible). Preset
+// +6/+12 month buttons cover the normal case; the date itself stays
+// editable for an irregular renewal. Extending always sets status back
+// to "active" - a lapsed ("expired") contract being renewed is active
+// again by definition - deliberately not offered on a "cancelled"
+// contract (that's a deliberate termination, not something to extend).
+function ExtendContractDialog({ contract, onClose }: { contract: Contract; onClose: () => void }) {
+  const [renewalDate, setRenewalDate] = useState(addMonths(contract.renewalDate, 12));
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const mutation = useMutation({
+    mutationFn: () => api.contracts.update(contract.id, { renewalDate, status: "active" as ContractStatus }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["contracts"] });
+      toast({ title: "Contract extended" });
+      onClose();
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm my-8 p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-bold">Extend Contract</h2>
+          <p className="text-sm text-slate-500 mt-0.5">{contract.title} - current renewal {formatDate(contract.renewalDate)}</p>
+        </div>
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => setRenewalDate(addMonths(contract.renewalDate, 6))}>+6 months</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => setRenewalDate(addMonths(contract.renewalDate, 12))}>+12 months</Button>
+        </div>
+        <div>
+          <Label>New Renewal Date</Label>
+          <Input type="date" value={renewalDate} onChange={(e) => setRenewalDate(e.target.value)} />
+        </div>
+        <div className="flex gap-3 pt-2">
+          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !renewalDate}>
+            {mutation.isPending ? "Extending..." : "Extend"}
+          </Button>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // Add/edit form - a Contract is always client-scoped (contractsTable.
@@ -170,6 +227,7 @@ function ContractDialog({ contract, onClose }: { contract: Contract | null; onCl
 export default function ContractsPage() {
   const [showDialog, setShowDialog] = useState(false);
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
+  const [extendingContract, setExtendingContract] = useState<Contract | null>(null);
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -187,6 +245,7 @@ export default function ContractsPage() {
     <div className="space-y-5">
       {showDialog && <ContractDialog contract={null} onClose={() => setShowDialog(false)} />}
       {editingContract && <ContractDialog contract={editingContract} onClose={() => setEditingContract(null)} />}
+      {extendingContract && <ExtendContractDialog contract={extendingContract} onClose={() => setExtendingContract(null)} />}
 
       <div className="flex items-center justify-between gap-4">
         <div>
@@ -259,6 +318,11 @@ export default function ContractsPage() {
                             <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="w-4 h-4" /></Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            {contract.status !== "cancelled" && (
+                              <DropdownMenuItem onClick={() => setExtendingContract(contract)}>
+                                <CalendarPlus className="w-3.5 h-3.5 mr-2" /> Extend
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem onClick={() => setEditingContract(contract)}>
                               <Pencil className="w-3.5 h-3.5 mr-2" /> Edit
                             </DropdownMenuItem>
