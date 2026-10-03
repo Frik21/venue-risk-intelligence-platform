@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, ShieldAlert, Building2, Users, UserCog, Wallet, TrendingUp, FlaskConical, Eye, Compass, Settings2, ShieldCheck } from "lucide-react";
+import { Plus, ShieldAlert, Building2, Users, UserCog, Wallet, TrendingUp, FlaskConical, Compass, Settings2, ShieldCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatDate } from "@/lib/display-utils";
 import { cn } from "@/lib/utils";
@@ -326,18 +326,6 @@ export default function OwnerDashboard() {
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  // Drops the Owner into the Management/CPO pages, scoped to the
-  // internal test company, for testing/QA - see SessionUser.isPreviewing.
-  // Full page load (not client-side nav) for the same cache-safety
-  // reason login uses one: react-query caches here aren't keyed by
-  // company, so a stale in-memory cache from browsing /owner itself
-  // shouldn't bleed into the preview session.
-  const previewMutation = useMutation({
-    mutationFn: (companyId: number) => api.auth.enterPreview(companyId),
-    onSuccess: () => { window.location.href = "/admin"; },
-    onError: (e: Error) => toast({ title: "Couldn't start preview", description: e.message, variant: "destructive" }),
-  });
-
   return (
     <div className="min-h-screen bg-slate-100">
       {showNewCompany && <NewCompanyDialog onClose={() => setShowNewCompany(false)} />}
@@ -369,7 +357,7 @@ export default function OwnerDashboard() {
             <h1 className="text-2xl font-bold text-slate-900">Companies</h1>
             <p className="text-slate-500 text-sm mt-0.5">Every subscriber on the platform - account status and usage only</p>
             <p className="text-slate-400 text-xs mt-1 max-w-2xl">
-              Mark one company as your Test Company to browse the Management/CPO pages yourself for QA - Preview is only ever available on that one company, never a real subscriber.
+              Mark one company as your Test Company to automatically see its Management/CPO pages yourself for QA via Quick Access - never a real subscriber.
             </p>
           </div>
           <Button onClick={() => setShowNewCompany(true)}>
@@ -420,7 +408,6 @@ export default function OwnerDashboard() {
                     <th className="text-left px-4 py-2.5">Last Activity</th>
                     <th className="text-left px-4 py-2.5">Signed Up</th>
                     <th className="text-left px-4 py-2.5">Test Company</th>
-                    <th className="text-right px-4 py-2.5">Preview</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -502,18 +489,6 @@ export default function OwnerDashboard() {
                           >
                             {c.isInternal ? "Unmark" : "Mark as Test Company"}
                           </Button>
-                        </td>
-                        <td className="px-4 py-2.5 text-right">
-                          {c.isInternal && (
-                            <Button
-                              size="sm"
-                              className="h-7 text-xs"
-                              disabled={previewMutation.isPending}
-                              onClick={() => previewMutation.mutate(c.id)}
-                            >
-                              <Eye className="w-3.5 h-3.5 mr-1" /> Preview
-                            </Button>
-                          )}
                         </td>
                       </tr>
                     );

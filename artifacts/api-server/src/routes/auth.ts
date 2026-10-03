@@ -7,11 +7,9 @@ import {
   SESSION_COOKIE,
   createSession,
   destroySession,
-  enterPreview,
-  exitPreview,
   hashPassword,
   requireAuth,
-  requireRole,
+  resolveAdminCompany,
   verifyPassword,
 } from "../lib/auth";
 import { getOrCreatePricingConfig, trialEndsAtFor } from "./companies";
@@ -89,6 +87,17 @@ router.post("/auth/login", loginLimiter, async (req, res): Promise<void> => {
 
   const sessionId = await createSession(user.id);
   res.cookie(SESSION_COOKIE, sessionId, cookieOptions);
+  // An Owner (role: "admin") session's effective company is resolved
+  // right here too, not left for the next /auth/me call - per direct
+  // product direction, the very first login response should already
+  // reflect the designated Test Company, with no separate client-side
+  // action needed to "enter" it (see resolveAdminCompany's own comment
+  // in lib/auth.ts for why there's no toggle to begin with).
+  if (user.role === "admin") {
+    const { companyId } = await resolveAdminCompany();
+    res.json({ user: await formatSessionUser(user, { companyId, isPreviewing: companyId != null }) });
+    return;
+  }
   res.json({ user: await formatSessionUser(user) });
 });
 
@@ -376,44 +385,6 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
   res.json({ user: await formatSessionUser(user, { companyId: req.user!.companyId, isPreviewing: req.user!.isPreviewing }) });
 });
 
-// Lets the Owner browse the Management/CPO pages for testing/QA,
-// scoped to the internal test company only - never a real subscriber.
-// The isInternal check here is the actual enforcement of that boundary
-// (not just the Master Console UI only showing a Preview button on that
-// one row) - a request for any other company's id is rejected outright.
-// Registered before the /auth/preview/:companyId route below - Express
-// matches routes in registration order, and ":companyId" matches
-// literally any path segment including the string "exit", so having
-// that dynamic route first would swallow every exit request as an
-// invalid company id (confirmed live: this silently broke the Owner's
-// "Exit Preview" button - the request always 400'd before ever reaching
-// this handler). Static/literal routes must come before a param route
-// that could otherwise shadow them.
-router.post("/auth/preview/exit", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
-  const sessionId = req.signedCookies?.[SESSION_COOKIE];
-  await exitPreview(sessionId);
-
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id));
-  res.json({ user: await formatSessionUser(user!, { companyId: user!.companyId, isPreviewing: false }) });
-});
-
-router.post("/auth/preview/:companyId", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
-  const companyId = Number(req.params.companyId);
-  if (isNaN(companyId)) { res.status(400).json({ error: "Invalid company id" }); return; }
-
-  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId));
-  if (!company || !company.isInternal) {
-    res.status(403).json({ error: "Preview is only available for the designated internal test company" });
-    return;
-  }
-
-  const sessionId = req.signedCookies?.[SESSION_COOKIE];
-  await enterPreview(sessionId, companyId);
-
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id));
-  res.json({ user: await formatSessionUser(user!, { companyId, isPreviewing: true }) });
-});
-
 const ChangePasswordSchema = z.object({
   currentPassword: z.string().min(1),
   newPassword: z.string().min(8),
@@ -436,7 +407,7 @@ router.post("/auth/change-password", requireAuth, async (req, res): Promise<void
     .where(eq(usersTable.id, user.id))
     .returning();
 
-  res.json({ user: await formatSessionUser(updated) });
+  res.json({ user: await formatSessionUser(updated, { companyId: req.user!.companyId, isPreviewing: req.user!.isPreviewing }) });
 });
 
 export default router;

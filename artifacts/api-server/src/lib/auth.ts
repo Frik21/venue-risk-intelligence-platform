@@ -47,17 +47,24 @@ export async function destroySession(sessionId: string): Promise<void> {
   await db.delete(sessionsTable).where(eq(sessionsTable.id, sessionId));
 }
 
-// Puts an Owner (role: "admin") session into Preview mode, scoped to
-// the internal test company - see companies.isInternal's comment and
-// POST /auth/preview/:companyId in routes/auth.ts, which is the only
-// caller and is the one place that validates the target is actually
-// flagged isInternal before this is ever called.
-export async function enterPreview(sessionId: string, companyId: number): Promise<void> {
-  await db.update(sessionsTable).set({ previewCompanyId: companyId }).where(eq(sessionsTable.id, sessionId));
-}
-
-export async function exitPreview(sessionId: string): Promise<void> {
-  await db.update(sessionsTable).set({ previewCompanyId: null }).where(eq(sessionsTable.id, sessionId));
+// Resolves what an Owner (role: "admin") session's effective company
+// should be - always and only the one company flagged
+// companies.isInternal (the designated Test Company, set via the
+// toggle on /owner), computed live on every call rather than stored on
+// the session. Per direct product direction ("remove this completely
+// ... always show my Test Company's data, no Preview concept at all")
+// - this replaces the earlier enterPreview/exitPreview session-toggle
+// mechanism entirely: there's nothing to start or stop anymore, an
+// Owner session just always resolves this way. requireAuth calls this
+// for every admin-role request; routes/auth.ts's login does the same
+// so the very first login response already reflects it, with no
+// separate client-side action needed.
+export async function resolveAdminCompany(): Promise<{ companyId: number | null; planType: "team" | "solo_operator" | null }> {
+  const [testCompany] = await db
+    .select({ id: companiesTable.id, planType: companiesTable.planType })
+    .from(companiesTable)
+    .where(eq(companiesTable.isInternal, true));
+  return { companyId: testCompany?.id ?? null, planType: (testCompany?.planType as "team" | "solo_operator" | undefined) ?? null };
 }
 
 // Attaches req.user from the signed session cookie, or 401s. Mounted
@@ -76,7 +83,6 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     .select({
       sessionId: sessionsTable.id,
       lastSeenAt: sessionsTable.lastSeenAt,
-      previewCompanyId: sessionsTable.previewCompanyId,
       userId: usersTable.id,
       name: usersTable.name,
       email: usersTable.email,
@@ -95,29 +101,25 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return;
   }
 
-  // previewCompanyId only ever gets set on an admin-role session (see
-  // enterPreview) and only ever to a company with isInternal: true (see
-  // POST /auth/preview/:companyId) - overriding companyId here is what
-  // makes every existing tenant-scoped route work for a previewing
-  // Owner with zero per-route changes.
-  const isPreviewing = row.previewCompanyId != null;
-  // planType needs a second lookup while previewing - the joined
-  // ownPlanType above belongs to the Owner's own company (null), not
-  // the company being previewed.
+  // An Owner (role: "admin") session always resolves to the designated
+  // Test Company automatically (resolveAdminCompany) - no per-session
+  // toggle, nothing to enter or exit. Every other role uses its own
+  // real companyId straight off the users row.
+  let companyId = row.companyId;
+  let isPreviewing = false;
   let planType = (row.ownPlanType as "team" | "solo_operator" | null) ?? null;
-  if (isPreviewing) {
-    const [previewCompany] = await db
-      .select({ planType: companiesTable.planType })
-      .from(companiesTable)
-      .where(eq(companiesTable.id, row.previewCompanyId!));
-    planType = (previewCompany?.planType as "team" | "solo_operator" | undefined) ?? null;
+  if (row.role === "admin") {
+    const admin = await resolveAdminCompany();
+    companyId = admin.companyId;
+    planType = admin.planType;
+    isPreviewing = admin.companyId != null;
   }
   req.user = {
     id: row.userId,
     name: row.name,
     email: row.email,
     role: row.role,
-    companyId: isPreviewing ? row.previewCompanyId : row.companyId,
+    companyId,
     isPreviewing,
     planType,
   };
