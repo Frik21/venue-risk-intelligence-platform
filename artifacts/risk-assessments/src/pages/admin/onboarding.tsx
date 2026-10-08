@@ -23,6 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useRef, useState } from "react";
 import { UserPlus, ChevronDown, ChevronUp, FileText, CheckCircle2, Trash2, Plus, Search, Pencil, AlertTriangle } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
+import { OperatorAvatar } from "@/components/operator-avatar";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -748,6 +749,7 @@ export default function OnboardingPage() {
           <div className="flex items-center justify-between gap-3">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                <OperatorAvatar name={r.userName ?? "?"} size="xs" />
                 <span className="font-semibold text-slate-900 text-sm">{r.userName}</span>
                 <Badge variant="secondary" className={cn("text-[10px] uppercase", STATUS_CONFIG[r.status].color)}>
                   {STATUS_CONFIG[r.status].label}
