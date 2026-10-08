@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NewTaskDialog } from "@/components/new-task-dialog";
 import { TrendChart } from "@/components/trend-chart";
+import { OperatorAvatar, OperatorOverflowBadge } from "@/components/operator-avatar";
 import {
   ClipboardPlus,
   UserCog,
@@ -138,28 +139,6 @@ const PRIORITY_COLORS: Record<string, string> = {
   high: "text-orange-700 bg-orange-50 border-orange-200",
   urgent: "text-red-700 bg-red-50 border-red-200",
 };
-
-// Small initials avatar - same gradient-circle convention already used
-// for CPOs on /admin/cpo-deployment, just offered in two sizes so it
-// also fits inline in a dense task row.
-function initialsFor(name: string, avatarInitials?: string | null): string {
-  return avatarInitials || name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
-}
-
-function OperatorAvatar({ name, avatarInitials, size = "sm" }: { name: string; avatarInitials?: string | null; size?: "sm" | "xs" }) {
-  const dims = size === "xs" ? "w-6 h-6 text-[9px]" : "w-7 h-7 text-[10px]";
-  return (
-    <div
-      title={name}
-      className={cn(
-        "rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shrink-0 ring-2 ring-white",
-        dims,
-      )}
-    >
-      {initialsFor(name, avatarInitials)}
-    </div>
-  );
-}
 
 function SectionCard({
   title,
@@ -491,11 +470,7 @@ export default function AdminDashboard() {
                           {roster.slice(0, 4).map((r) => (
                             <OperatorAvatar key={r.id} name={r.name} avatarInitials={usersById.get(r.id)?.avatarInitials} size="xs" />
                           ))}
-                          {roster.length > 4 && (
-                            <div className="w-6 h-6 rounded-full bg-slate-200 text-slate-600 text-[9px] font-bold flex items-center justify-center ring-2 ring-white shrink-0">
-                              +{roster.length - 4}
-                            </div>
-                          )}
+                          {roster.length > 4 && <OperatorOverflowBadge count={roster.length - 4} />}
                         </div>
                       ) : (
                         <span className="text-xs text-slate-400 italic">Unassigned</span>
