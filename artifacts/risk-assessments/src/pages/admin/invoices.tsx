@@ -140,14 +140,19 @@ export default function InvoicesPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        {(["draft", "sent", "paid"] as const).map((s) => (
-          <Card key={s}>
-            <CardContent className="p-4">
-              <div className="text-xs text-slate-500 mb-1">{STATUS_CONFIG[s].label}</div>
-              <CurrencyStack byCurrency={totalsByStatus[s]} />
-            </CardContent>
-          </Card>
-        ))}
+        {(["draft", "sent", "paid"] as const).map((s) => {
+          const toneClass = { draft: "text-slate-900", sent: "text-amber-700", paid: "text-green-700" }[s];
+          return (
+            <Card key={s}>
+              <CardContent className="p-4">
+                <div className="text-xs text-slate-500 mb-1">{STATUS_CONFIG[s].label}</div>
+                <div className={cn("text-base font-semibold", toneClass)}>
+                  <CurrencyStack byCurrency={totalsByStatus[s]} />
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       <Card>
@@ -242,8 +247,8 @@ export default function InvoicesPage() {
                   const sc = STATUS_CONFIG[invoice.status];
                   const overdueDays = daysOverdue(invoice);
                   return (
-                    <tr key={invoice.id} className="hover:bg-slate-50/60">
-                      <td className="px-4 py-2.5">
+                    <tr key={invoice.id} className={cn("hover:bg-slate-50/60", overdueDays != null && "bg-red-50/30")}>
+                      <td className={cn("px-4 py-2.5", overdueDays != null && "border-l-2 border-l-red-400")}>
                         <button onClick={() => setEditingInvoice(invoice)} className="text-left hover:underline hover:text-blue-600">
                           <span className="text-[10px] font-mono text-slate-400 border border-slate-200 px-1.5 py-0.5 rounded mr-2">{invoice.invoiceNumber}</span>
                           <span className="font-medium text-slate-900">{invoice.title || "Untitled invoice"}</span>
