@@ -13,6 +13,7 @@ import { Users, Plus, ShieldCheck, Shield, Wallet, Users2, Workflow, Radar } fro
 import { formatDate } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { OperatorAvatar } from "@/components/operator-avatar";
 
 // Manager, Finance, Human Resources, Operations: a subscribed
 // company's own Management-side seats - what this page manages. CPOs
@@ -30,6 +31,16 @@ const ROLE_COLORS: Partial<Record<UserRole, string>> = {
   human_resources: "text-rose-700 bg-rose-50 border-rose-200",
   operations:      "text-amber-700 bg-amber-50 border-amber-200",
   gsoc:            "text-cyan-700 bg-cyan-50 border-cyan-200",
+};
+
+// Same colors as ROLE_COLORS above, text-only - for tinting the big
+// seat-usage number on each role tile, where a bg/border isn't wanted.
+const ROLE_NUMBER_TONE: Partial<Record<UserRole, string>> = {
+  manager:         "text-purple-700",
+  finance:         "text-emerald-700",
+  human_resources: "text-rose-700",
+  operations:      "text-amber-700",
+  gsoc:            "text-cyan-700",
 };
 
 const ROLE_ICONS: Partial<Record<UserRole, typeof Shield>> = {
@@ -354,7 +365,7 @@ export default function UsersPage() {
                 <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center mb-2", ROLE_COLORS[role])}>
                   <Icon className="w-4 h-4" />
                 </div>
-                <div className="text-xl font-bold">{seat ? `${seat.used}/${seat.limit}` : inRole.length}</div>
+                <div className={cn("text-xl font-bold", ROLE_NUMBER_TONE[role])}>{seat ? `${seat.used}/${seat.limit}` : inRole.length}</div>
                 <div className="text-xs text-slate-500">{ROLE_LABELS[role]}</div>
               </CardContent>
             </Card>
@@ -378,10 +389,8 @@ export default function UsersPage() {
             {users.map((user) => {
               const Icon = ROLE_ICONS[user.role] ?? Shield;
               return (
-                <div key={user.id} className="px-5 py-4 flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
-                    {user.avatarInitials ?? user.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
-                  </div>
+                <div key={user.id} className={cn("px-5 py-4 flex items-center gap-4", !user.active && "opacity-60")}>
+                  <OperatorAvatar name={user.name} avatarInitials={user.avatarInitials} size="md" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-slate-900">{user.name}</span>
