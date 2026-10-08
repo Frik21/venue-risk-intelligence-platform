@@ -13,10 +13,10 @@ import {
   UserCog,
   Building,
   Plus,
-  Users as UsersIcon,
   CheckCircle2,
   Activity,
   UserX,
+  AlertTriangle,
   type LucideIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -139,6 +139,28 @@ const PRIORITY_COLORS: Record<string, string> = {
   urgent: "text-red-700 bg-red-50 border-red-200",
 };
 
+// Small initials avatar - same gradient-circle convention already used
+// for CPOs on /admin/cpo-deployment, just offered in two sizes so it
+// also fits inline in a dense task row.
+function initialsFor(name: string, avatarInitials?: string | null): string {
+  return avatarInitials || name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+}
+
+function OperatorAvatar({ name, avatarInitials, size = "sm" }: { name: string; avatarInitials?: string | null; size?: "sm" | "xs" }) {
+  const dims = size === "xs" ? "w-6 h-6 text-[9px]" : "w-7 h-7 text-[10px]";
+  return (
+    <div
+      title={name}
+      className={cn(
+        "rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shrink-0 ring-2 ring-white",
+        dims,
+      )}
+    >
+      {initialsFor(name, avatarInitials)}
+    </div>
+  );
+}
+
 function SectionCard({
   title,
   icon: Icon,
@@ -238,6 +260,8 @@ export default function AdminDashboard() {
 
   const cpos = users.filter((u) => u.role === "cpo");
   const managers = users.filter((u) => u.role === "manager" || u.role === "admin");
+  const usersById = useMemo(() => new Map(allUsers.map((u) => [u.id, u])), [allUsers]);
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   const openTasks = tasks
     .filter((t) => !t.archived && t.status !== "completed")
@@ -388,26 +412,36 @@ export default function AdminDashboard() {
           <StatTile icon={UserCog} label="Operators on Tasks" value={deployedCpos.length} />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <TrendChart title="Tasks Completed" data={tasksCompletedData} lines={[{ key: "completed", label: "Completed", color: "#008300" }]} />
-          <TrendChart
-            title="Quotes: Sent vs Pending"
-            data={quotesSentPendingData}
-            lines={[
-              { key: "sent", label: "Sent", color: "#2a78d6" },
-              { key: "pending", label: "Pending", color: "#eb6834" },
-            ]}
-          />
-          <TrendChart
-            title="Quote Win Rate"
-            data={quoteWinRateData}
-            lines={[{ key: "winRate", label: "Win Rate", color: "#9333ea" }]}
-            unit="%"
-          />
-          <TrendChart title="Invoices Pending" data={invoicesPendingData} lines={[{ key: "pending", label: "Pending", color: "#eda100" }]} />
-          <TrendChart title="New Clients Onboarded" data={newClientsData} lines={[{ key: "onboarded", label: "New Clients", color: "#1baf7a" }]} />
-          <TrendChart title="Operators Onboarded" data={operatorsOnboardedData} lines={[{ key: "onboarded", label: "Operators Onboarded", color: "#4a3aa7" }]} />
-          <TrendChart title="Operator Utilization" data={operatorUtilizationData} lines={[{ key: "deployed", label: "% CPOs Deployed", color: "#0891b2" }]} />
+        <div className="space-y-5">
+          <div>
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Operations</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <TrendChart title="Tasks Completed" data={tasksCompletedData} lines={[{ key: "completed", label: "Completed", color: "#008300" }]} />
+              <TrendChart title="Operator Utilization" data={operatorUtilizationData} lines={[{ key: "deployed", label: "% CPOs Deployed", color: "#0891b2" }]} />
+              <TrendChart title="Operators Onboarded" data={operatorsOnboardedData} lines={[{ key: "onboarded", label: "Operators Onboarded", color: "#4a3aa7" }]} />
+            </div>
+          </div>
+          <div>
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Revenue</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <TrendChart
+                title="Quotes: Sent vs Pending"
+                data={quotesSentPendingData}
+                lines={[
+                  { key: "sent", label: "Sent", color: "#2a78d6" },
+                  { key: "pending", label: "Pending", color: "#eb6834" },
+                ]}
+              />
+              <TrendChart
+                title="Quote Win Rate"
+                data={quoteWinRateData}
+                lines={[{ key: "winRate", label: "Win Rate", color: "#9333ea" }]}
+                unit="%"
+              />
+              <TrendChart title="Invoices Pending" data={invoicesPendingData} lines={[{ key: "pending", label: "Pending", color: "#eda100" }]} />
+              <TrendChart title="New Clients Onboarded" data={newClientsData} lines={[{ key: "onboarded", label: "New Clients", color: "#1baf7a" }]} />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -421,11 +455,19 @@ export default function AdminDashboard() {
             No open tasks - everything is assigned and complete.
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-1">
             {openTasks.slice(0, 8).map((task) => {
               const understaffed = task.assignedToIds.length < task.operatorsRequired;
+              const isOverdue = !!task.dueDate && task.dueDate < todayStr;
+              const roster = task.assignedToIds.map((id, i) => ({ id, name: task.assignedToNames[i] ?? "?" }));
               return (
-                <div key={task.id} className="flex items-start justify-between gap-3 text-sm border-b border-slate-100 last:border-0 pb-3 last:pb-0">
+                <div
+                  key={task.id}
+                  className={cn(
+                    "flex items-start justify-between gap-3 text-sm border-l-4 pl-3 pr-1 py-2.5 rounded-r",
+                    isOverdue ? "border-red-400 bg-red-50/50" : understaffed ? "border-orange-400 bg-orange-50/40" : "border-transparent",
+                  )}
+                >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[9px] font-mono text-slate-400 border border-slate-200 px-1 py-0.5 rounded">{task.taskNumber}</span>
@@ -433,16 +475,33 @@ export default function AdminDashboard() {
                       <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase shrink-0 ${PRIORITY_COLORS[task.priority] ?? ""}`}>
                         {task.priority}
                       </span>
+                      {isOverdue && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase shrink-0 text-red-700 bg-red-50 border-red-200 flex items-center gap-1">
+                          <AlertTriangle className="w-2.5 h-2.5" /> Overdue
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5">
                       {task.venueName ?? "No venue"}{task.clientName && ` · ${task.clientName}`}
                       {task.dueDate && ` · ${formatDate(task.dueDate)}`}
                     </p>
                     <div className="flex items-center gap-2 mt-1.5">
-                      <UsersIcon className="w-3 h-3 text-slate-400 shrink-0" />
+                      {roster.length > 0 ? (
+                        <div className="flex items-center -space-x-1.5">
+                          {roster.slice(0, 4).map((r) => (
+                            <OperatorAvatar key={r.id} name={r.name} avatarInitials={usersById.get(r.id)?.avatarInitials} size="xs" />
+                          ))}
+                          {roster.length > 4 && (
+                            <div className="w-6 h-6 rounded-full bg-slate-200 text-slate-600 text-[9px] font-bold flex items-center justify-center ring-2 ring-white shrink-0">
+                              +{roster.length - 4}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400 italic">Unassigned</span>
+                      )}
                       <span className={understaffed ? "text-orange-600 font-medium text-xs" : "text-slate-500 text-xs"}>
-                        {task.assignedToNames.length > 0 ? task.assignedToNames.join(", ") : "Unassigned"}
-                        {` (${task.assignedToIds.length}/${task.operatorsRequired})`}
+                        {task.assignedToIds.length}/{task.operatorsRequired}
                       </span>
                     </div>
                   </div>
@@ -461,16 +520,26 @@ export default function AdminDashboard() {
           <p className="text-sm text-slate-400">No CPOs yet - add one from Users.</p>
         ) : (
           <div className="space-y-4">
-            <p className="text-sm text-slate-600">
-              {deployedCpos.length} deployed · {availableCpos.length} available · {offDutyCpos.length} off duty
-            </p>
+            <div>
+              <div className="flex h-2.5 rounded-full overflow-hidden bg-slate-100">
+                {deployedCpos.length > 0 && <div className="bg-green-500" style={{ width: `${(deployedCpos.length / cpos.length) * 100}%` }} />}
+                {availableCpos.length > 0 && <div className="bg-blue-400" style={{ width: `${(availableCpos.length / cpos.length) * 100}%` }} />}
+                {offDutyCpos.length > 0 && <div className="bg-slate-300" style={{ width: `${(offDutyCpos.length / cpos.length) * 100}%` }} />}
+              </div>
+              <div className="flex items-center gap-4 mt-2 text-xs text-slate-500 flex-wrap">
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 shrink-0" /> {deployedCpos.length} deployed</span>
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-400 shrink-0" /> {availableCpos.length} available</span>
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-slate-300 shrink-0" /> {offDutyCpos.length} off duty</span>
+              </div>
+            </div>
             {deployedCpos.length > 0 && (
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {deployedCpos.map((c) => {
                   const t = tasks.find((t) => t.assignedToIds.includes(c.id) && t.status === "in_progress");
                   return (
-                    <div key={c.id} className="flex items-center justify-between text-sm">
-                      <span className="text-slate-700">{c.name}</span>
+                    <div key={c.id} className="flex items-center gap-2.5 text-sm">
+                      <OperatorAvatar name={c.name} avatarInitials={c.avatarInitials} size="xs" />
+                      <span className="text-slate-700 font-medium shrink-0">{c.name}</span>
                       <span className="text-xs text-slate-400 truncate">{t?.title} · {t?.venueName}</span>
                     </div>
                   );
@@ -488,16 +557,23 @@ export default function AdminDashboard() {
         ) : operatorUtilizationRows.length === 0 ? (
           <p className="text-sm text-slate-400">No active CPOs yet.</p>
         ) : (
-          <div className="space-y-1">
-            <p className="text-xs text-slate-400 mb-2">Days deployed since {formatDate(sinceDate)} - most idle first.</p>
-            {operatorUtilizationRows.map((r) => (
-              <div key={r.id} className="flex items-center justify-between text-sm py-1">
-                <span className="text-slate-700">{r.name}</span>
-                <span className="text-xs text-slate-500 tabular-nums">
-                  {r.daysDeployed}/{daysInPeriod} days · {r.hours.toFixed(1)}h
-                </span>
-              </div>
-            ))}
+          <div className="space-y-2.5">
+            <p className="text-xs text-slate-400 mb-1">Days deployed since {formatDate(sinceDate)} - most idle first.</p>
+            {operatorUtilizationRows.map((r) => {
+              const ratio = daysInPeriod > 0 ? r.daysDeployed / daysInPeriod : 0;
+              const barColor = ratio < 0.15 ? "bg-red-400" : ratio < 0.4 ? "bg-amber-400" : "bg-emerald-500";
+              return (
+                <div key={r.id} className="flex items-center gap-3 text-sm">
+                  <span className="text-slate-700 w-28 truncate shrink-0">{r.name}</span>
+                  <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+                    <div className={cn("h-full rounded-full", barColor)} style={{ width: `${ratio * 100}%` }} />
+                  </div>
+                  <span className={cn("text-xs tabular-nums shrink-0 w-28 text-right", ratio < 0.15 ? "text-red-600 font-medium" : "text-slate-500")}>
+                    {r.daysDeployed}/{daysInPeriod}d · {r.hours.toFixed(1)}h
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
       </SectionCard>
