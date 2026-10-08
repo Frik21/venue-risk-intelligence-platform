@@ -14,13 +14,14 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { useState } from "react";
-import { ListChecks, Plus, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, Search, Shield, Receipt, FileText, Package, Trash2, Wrench, Star, Store, MapPin } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ListChecks, Plus, MoreVertical, Pencil, Copy, Archive, ArchiveRestore, Users, Car, DollarSign, Clock, ChevronDown, ChevronUp, Check, Search, Shield, Receipt, FileText, Package, Trash2, Wrench, Star, Store, MapPin, AlertTriangle, type LucideIcon } from "lucide-react";
 import { formatDate, formatDateTime } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { NewTaskDialog, LocationCombobox, QuotationStatusPicker, ClientCombobox } from "@/components/new-task-dialog";
 import { type TaskBucket, BUCKET_CONFIG, taskBucket } from "@/lib/task-bucket";
+import { OperatorAvatar, OperatorOverflowBadge } from "@/components/operator-avatar";
 
 const STATUS_CONFIG: Record<TaskStatus, { label: string; color: string }> = {
   not_completed: { label: "Not Completed", color: "text-red-700 bg-red-50 border-red-200" },
@@ -811,6 +812,8 @@ export default function TasksList() {
   // manager/admin found" convention used elsewhere (e.g. Profile
   // resolution on the CPO side).
   const currentManagerId = users.find((u) => u.role === "manager" || u.role === "admin")?.id;
+  const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   const duplicateMutation = useMutation({
     mutationFn: (id: number) => api.tasks.duplicate(id),
@@ -984,8 +987,27 @@ export default function TasksList() {
             const pc = PRIORITY_CONFIG[task.priority];
             const bc = BUCKET_CONFIG[taskBucket(task)];
             const understaffed = task.assignedToIds.length < task.operatorsRequired;
+            // Only an active (not completed/archived) job's understaffing is
+            // something to still act on - a completed job that happened to
+            // run short-staffed is history, not an open concern, so it
+            // doesn't compete for attention with a genuinely urgent card.
+            const activeUnderstaffed = understaffed && task.status !== "completed" && !task.archived;
+            const isOverdue = !!task.dueDate && task.dueDate < todayStr && task.status !== "completed" && !task.archived;
+            const roster = task.assignedToIds.map((id, i) => ({ id, name: task.assignedToNames[i] ?? "?", role: task.assignedToRoles[i] ?? null }));
             return (
-              <Card key={task.id} className={cn(task.archived && "opacity-60")}>
+              <Card
+                key={task.id}
+                className={cn(
+                  "border-l-4",
+                  task.archived
+                    ? "opacity-60 border-l-transparent"
+                    : isOverdue
+                      ? "border-l-red-400 bg-red-50/40"
+                      : activeUnderstaffed
+                        ? "border-l-orange-400 bg-orange-50/30"
+                        : "border-l-transparent",
+                )}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
@@ -1000,9 +1022,18 @@ export default function TasksList() {
                         <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase", bc.color)}>
                           {bc.label}
                         </span>
+                        {isOverdue && (
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-red-700 bg-red-50 border-red-200 flex items-center gap-1">
+                            <AlertTriangle className="w-2.5 h-2.5" /> Overdue
+                          </span>
+                        )}
                         {task.archived && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase text-slate-500 bg-slate-100 border-slate-200">Archived</span>}
                         {task.venueName && <span className="text-xs text-slate-500">{task.venueName}</span>}
-                        {task.dueDate && <span className="text-xs text-slate-400 ml-auto">Due {formatDate(task.dueDate)}</span>}
+                        {task.dueDate && (
+                          <span className={cn("text-xs ml-auto", isOverdue ? "text-red-600 font-medium" : "text-slate-400")}>
+                            Due {formatDate(task.dueDate)}
+                          </span>
+                        )}
                       </div>
                       <div className="font-semibold text-slate-900 text-sm mb-0.5">{task.title}</div>
                       {task.clientName && (
@@ -1072,8 +1103,17 @@ export default function TasksList() {
                       )}
 
                       <div className="flex items-center gap-3 flex-wrap mt-1.5">
-                        <div className="flex items-center gap-1 text-xs">
-                          <Users className="w-3 h-3 text-slate-400" />
+                        <div className="flex items-center gap-1.5 text-xs">
+                          {roster.length > 0 ? (
+                            <div className="flex items-center -space-x-1.5 shrink-0">
+                              {roster.slice(0, 4).map((r) => (
+                                <OperatorAvatar key={r.id} name={r.name} avatarInitials={usersById.get(r.id)?.avatarInitials} size="xs" />
+                              ))}
+                              {roster.length > 4 && <OperatorOverflowBadge count={roster.length - 4} />}
+                            </div>
+                          ) : (
+                            <Users className="w-3 h-3 text-slate-400" />
+                          )}
                           <span className={understaffed ? "text-orange-600 font-medium" : "text-slate-500"}>
                             {task.assignedToNames.length > 0
                               ? task.assignedToNames.map((name, i) => (task.assignedToRoles[i] ? `${name} (${task.assignedToRoles[i]})` : name)).join(", ")
@@ -1098,99 +1138,66 @@ export default function TasksList() {
                         )}
                       </div>
 
-                      {task.status === "completed" && (
-                        <>
-                          <div className="flex items-center gap-3 mt-1.5">
-                            <button
-                              onClick={() => setExpandedHoursTaskId((id) => (id === task.id ? null : task.id))}
-                              className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
-                            >
-                              <Clock className="w-3 h-3" />
-                              Hours logged
-                              {expandedHoursTaskId === task.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                            </button>
-                            {task.invoiced ? (
-                              <span className="flex items-center gap-1 text-xs font-medium text-teal-700">
-                                <Check className="w-3 h-3" /> Invoiced
-                              </span>
-                            ) : (
-                              <button
-                                onClick={() => invoiceMutation.mutate(task.id)}
-                                disabled={invoiceMutation.isPending}
-                                className="flex items-center gap-1 text-xs text-teal-700 hover:underline disabled:opacity-50"
-                              >
-                                <Receipt className="w-3 h-3" />
-                                Mark Invoiced
-                              </button>
+                      {(() => {
+                        const panels: { key: string; icon: LucideIcon; label: string; expanded: boolean; onToggle: () => void }[] = [];
+                        if (task.status === "completed") {
+                          panels.push({ key: "hours", icon: Clock, label: "Hours logged", expanded: expandedHoursTaskId === task.id, onToggle: () => setExpandedHoursTaskId((id) => (id === task.id ? null : task.id)) });
+                        }
+                        if (task.status === "in_progress" || task.status === "completed") {
+                          panels.push({ key: "aar", icon: FileText, label: "After-action reports", expanded: expandedAarTaskId === task.id, onToggle: () => setExpandedAarTaskId((id) => (id === task.id ? null : task.id)) });
+                        }
+                        panels.push({ key: "equipment", icon: Package, label: "Equipment", expanded: expandedEquipmentTaskId === task.id, onToggle: () => setExpandedEquipmentTaskId((id) => (id === task.id ? null : task.id)) });
+                        if (task.status === "in_progress" || task.status === "completed") {
+                          panels.push({ key: "route", icon: MapPin, label: "Route trail", expanded: expandedRouteTrailTaskId === task.id, onToggle: () => setExpandedRouteTrailTaskId((id) => (id === task.id ? null : task.id)) });
+                        }
+                        if (task.status === "completed") {
+                          panels.push({ key: "feedback", icon: Star, label: "Client Feedback", expanded: expandedFeedbackTaskId === task.id, onToggle: () => setExpandedFeedbackTaskId((id) => (id === task.id ? null : task.id)) });
+                        }
+                        panels.push({ key: "vendors", icon: Store, label: "Vendors Used", expanded: expandedVendorsTaskId === task.id, onToggle: () => setExpandedVendorsTaskId((id) => (id === task.id ? null : task.id)) });
+
+                        return (
+                          <>
+                            <div className="flex items-center gap-1.5 flex-wrap mt-2 pt-2 border-t border-slate-100">
+                              {task.status === "completed" && (
+                                task.invoiced ? (
+                                  <span className="flex items-center gap-1 text-[11px] font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded-full px-2 py-1">
+                                    <Check className="w-3 h-3" /> Invoiced
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => invoiceMutation.mutate(task.id)}
+                                    disabled={invoiceMutation.isPending}
+                                    className="flex items-center gap-1 text-[11px] text-teal-700 bg-teal-50 border border-teal-200 rounded-full px-2 py-1 hover:bg-teal-100 disabled:opacity-50"
+                                  >
+                                    <Receipt className="w-3 h-3" /> Mark Invoiced
+                                  </button>
+                                )
+                              )}
+                              {panels.map((p) => (
+                                <button
+                                  key={p.key}
+                                  onClick={p.onToggle}
+                                  className={cn(
+                                    "flex items-center gap-1 text-[11px] rounded-full px-2 py-1 border transition-colors",
+                                    p.expanded ? "text-blue-700 bg-blue-50 border-blue-200" : "text-slate-500 bg-slate-50 border-slate-200 hover:border-blue-200 hover:text-blue-600",
+                                  )}
+                                >
+                                  <p.icon className="w-3 h-3" /> {p.label}
+                                  {p.expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                </button>
+                              ))}
+                            </div>
+                            {expandedHoursTaskId === task.id && (
+                              <TaskHoursPanel taskId={task.id} currentManagerId={currentManagerId} />
                             )}
-                          </div>
-                          {expandedHoursTaskId === task.id && (
-                            <TaskHoursPanel taskId={task.id} currentManagerId={currentManagerId} />
-                          )}
-                        </>
-                      )}
-
-                      {(task.status === "in_progress" || task.status === "completed") && (
-                        <>
-                          <button
-                            onClick={() => setExpandedAarTaskId((id) => (id === task.id ? null : task.id))}
-                            className="flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1.5"
-                          >
-                            <FileText className="w-3 h-3" />
-                            After-action reports
-                            {expandedAarTaskId === task.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                          </button>
-                          {expandedAarTaskId === task.id && <AfterActionReportsPanel taskId={task.id} />}
-                        </>
-                      )}
-
-                      <button
-                        onClick={() => setExpandedEquipmentTaskId((id) => (id === task.id ? null : task.id))}
-                        className="flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1.5"
-                      >
-                        <Package className="w-3 h-3" />
-                        Equipment
-                        {expandedEquipmentTaskId === task.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                      </button>
-                      {expandedEquipmentTaskId === task.id && <TaskEquipmentPanel taskId={task.id} />}
-
-                      {(task.status === "in_progress" || task.status === "completed") && (
-                        <>
-                          <button
-                            onClick={() => setExpandedRouteTrailTaskId((id) => (id === task.id ? null : task.id))}
-                            className="flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1.5"
-                          >
-                            <MapPin className="w-3 h-3" />
-                            Route trail
-                            {expandedRouteTrailTaskId === task.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                          </button>
-                          {expandedRouteTrailTaskId === task.id && <RouteTrailPanel taskId={task.id} />}
-                        </>
-                      )}
-
-                      {task.status === "completed" && (
-                        <>
-                          <button
-                            onClick={() => setExpandedFeedbackTaskId((id) => (id === task.id ? null : task.id))}
-                            className="flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1.5"
-                          >
-                            <Star className="w-3 h-3" />
-                            Client Feedback
-                            {expandedFeedbackTaskId === task.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                          </button>
-                          {expandedFeedbackTaskId === task.id && <FeedbackPanel taskId={task.id} />}
-                        </>
-                      )}
-
-                      <button
-                        onClick={() => setExpandedVendorsTaskId((id) => (id === task.id ? null : task.id))}
-                        className="flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1.5"
-                      >
-                        <Store className="w-3 h-3" />
-                        Vendors Used
-                        {expandedVendorsTaskId === task.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                      </button>
-                      {expandedVendorsTaskId === task.id && <VendorsUsedPanel taskId={task.id} />}
+                            {expandedAarTaskId === task.id && <AfterActionReportsPanel taskId={task.id} />}
+                            {expandedEquipmentTaskId === task.id && <TaskEquipmentPanel taskId={task.id} />}
+                            {expandedRouteTrailTaskId === task.id && <RouteTrailPanel taskId={task.id} />}
+                            {expandedFeedbackTaskId === task.id && <FeedbackPanel taskId={task.id} />}
+                            {expandedVendorsTaskId === task.id && <VendorsUsedPanel taskId={task.id} />}
+                          </>
+                        );
+                      })()}
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
