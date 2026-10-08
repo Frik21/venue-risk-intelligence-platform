@@ -154,6 +154,32 @@ export function VendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
 // pattern as Clients (profile + dated activity log, detail page) but
 // with vendor-specific fields - no rates or billing rollups, since a
 // vendor is who VenueGuard pays/contracts with, not who it bills.
+// A small colored-initials identity badge for a vendor row, same
+// scannability idea - and same square-not-circular, hashed-from-name
+// shape - as Clients' own ClientBadge. Page-local rather than shared,
+// matching that page's own reasoning: this is about an organization,
+// not a person, so it's a different component family from the
+// operator avatars, and nothing else needs a vendor-specific badge yet.
+const VENDOR_BADGE_COLORS = [
+  "bg-blue-100 text-blue-700",
+  "bg-violet-100 text-violet-700",
+  "bg-emerald-100 text-emerald-700",
+  "bg-amber-100 text-amber-700",
+  "bg-rose-100 text-rose-700",
+  "bg-cyan-100 text-cyan-700",
+];
+
+function VendorBadge({ name }: { name: string }) {
+  const hash = [...name].reduce((h, c) => h + c.charCodeAt(0), 0);
+  const color = VENDOR_BADGE_COLORS[hash % VENDOR_BADGE_COLORS.length];
+  const initials = name.trim().split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+  return (
+    <div className={cn("w-7 h-7 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0", color)}>
+      {initials || "?"}
+    </div>
+  );
+}
+
 // Company-wide average rating for one vendor - Following Roadmap
 // Tier 3, item 20. Computed client-side from every vendor_performance_
 // review against that vendor, same "fetch once, roll up per row"
@@ -234,10 +260,14 @@ export default function VendorsPage() {
               <tbody className="divide-y divide-slate-100">
                 {vendors.map((vendor) => {
                   const sc = VENDOR_STATUS_CONFIG[vendor.status];
+                  const inactive = vendor.status === "inactive";
                   return (
-                    <tr key={vendor.id} className="hover:bg-slate-50/60">
+                    <tr key={vendor.id} className={cn("hover:bg-slate-50/60", inactive && "opacity-60")}>
                       <td className="px-4 py-2.5 font-medium text-slate-900">
-                        <Link href={`/admin/vendors/${vendor.id}`} className="hover:underline hover:text-blue-600">{vendor.name}</Link>
+                        <div className="flex items-center gap-2.5">
+                          <VendorBadge name={vendor.name} />
+                          <Link href={`/admin/vendors/${vendor.id}`} className="hover:underline hover:text-blue-600">{vendor.name}</Link>
+                        </div>
                       </td>
                       <td className="px-4 py-2.5">
                         <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase", sc.color)}>{sc.label}</span>
