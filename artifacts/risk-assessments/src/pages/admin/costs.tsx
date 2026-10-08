@@ -1114,20 +1114,28 @@ export default function CostsPage() {
             <p className="text-xs text-slate-400 mb-3">
               In-progress jobs where actual personnel + expense cost is approaching or over the quoted internal budget - while there's still time to act.
             </p>
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {scopeCreepAlerts.map((a) => (
-                <div key={a.taskId} className="flex items-center justify-between text-sm border-b border-slate-100 last:border-0 pb-2 last:pb-0">
-                  <span className="text-slate-700 truncate">{a.title}</span>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs text-slate-400 font-mono tabular-nums">
-                      {a.actualCost.toLocaleString(undefined, { maximumFractionDigits: 0 })} / {a.budget.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                    </span>
-                    <span className={cn(
-                      "text-xs font-medium border rounded-full px-2 py-0.5",
-                      a.ratio >= 1 ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200",
-                    )}>
-                      {Math.round(a.ratio * 100)}%
-                    </span>
+                <div key={a.taskId} className="text-sm border-b border-slate-100 last:border-0 pb-2.5 last:pb-0">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-700 truncate">{a.title}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs text-slate-400 font-mono tabular-nums">
+                        {a.actualCost.toLocaleString(undefined, { maximumFractionDigits: 0 })} / {a.budget.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      </span>
+                      <span className={cn(
+                        "text-xs font-medium border rounded-full px-2 py-0.5",
+                        a.ratio >= 1 ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200",
+                      )}>
+                        {Math.round(a.ratio * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden mt-1.5">
+                    <div
+                      className={cn("h-full rounded-full", a.ratio >= 1 ? "bg-red-500" : "bg-amber-500")}
+                      style={{ width: `${Math.min(a.ratio * 100, 100)}%` }}
+                    />
                   </div>
                 </div>
               ))}
@@ -1156,9 +1164,11 @@ export default function CostsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {jobProfitability.map((t, i) => (
-                  <tr key={i}>
-                    <td className="py-2 text-slate-700 truncate max-w-0">{t.title}</td>
+                {jobProfitability.map((t, i) => {
+                  const losing = t.margin != null && t.margin < 0;
+                  return (
+                  <tr key={i} className={cn(losing && "bg-red-50/30")}>
+                    <td className={cn("py-2 text-slate-700 truncate max-w-0", losing ? "border-l-2 border-l-red-400 pl-2" : "pl-0")}>{t.title}</td>
                     <td className="py-2 text-right font-mono tabular-nums text-slate-500">
                       {t.revenue != null ? t.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—"}
                       {t.revenueCurrency && <span className="text-slate-400 ml-1">{t.revenueCurrency}</span>}
@@ -1173,7 +1183,8 @@ export default function CostsPage() {
                       {t.margin != null ? t.margin.toLocaleString(undefined, { maximumFractionDigits: 0, signDisplay: "always" }) : "—"}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </CardContent>
