@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useState, useRef } from "react";
 import Papa from "papaparse";
-import { Briefcase, Plus, MoreVertical, Pencil, Trash2, PieChart, Upload, Download } from "lucide-react";
+import { Briefcase, Plus, MoreVertical, Pencil, Trash2, PieChart, Upload, Download, Mail, Phone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -352,6 +352,34 @@ export function ClientDialog({ client, onClose }: { client: Client | null; onClo
   );
 }
 
+// A small colored-initials identity badge for a client row, same
+// scannability idea as the operator-avatar convention used elsewhere
+// in this refinement pass, but square (not circular) and hashed from
+// the client's own name rather than a person's initials - visually
+// distinct from a CPO/operator, since a client is an organization, not
+// a person. Page-local rather than pulled into the shared
+// components/operator-avatar.tsx - that component's own naming/shape
+// is specifically about operators, and nothing else needs this yet.
+const ORG_BADGE_COLORS = [
+  "bg-blue-100 text-blue-700",
+  "bg-violet-100 text-violet-700",
+  "bg-emerald-100 text-emerald-700",
+  "bg-amber-100 text-amber-700",
+  "bg-rose-100 text-rose-700",
+  "bg-cyan-100 text-cyan-700",
+];
+
+function ClientBadge({ name }: { name: string }) {
+  const hash = [...name].reduce((h, c) => h + c.charCodeAt(0), 0);
+  const color = ORG_BADGE_COLORS[hash % ORG_BADGE_COLORS.length];
+  const initials = name.trim().split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+  return (
+    <div className={cn("w-7 h-7 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0", color)}>
+      {initials || "?"}
+    </div>
+  );
+}
+
 // One currency-bucketed amount per line, stacked when a client's tasks
 // span more than one currency (same currency-naive convention as the
 // Quotations page - see its own comment on totalCostByTask).
@@ -503,16 +531,28 @@ export default function ClientsPage() {
                 {clients.map((client) => {
                   const { quoted, approved, count } = rollup(tasksByClient.get(client.id) ?? []);
                   const sc = CLIENT_STATUS_CONFIG[client.status];
+                  const inactive = client.status === "inactive";
                   return (
-                    <tr key={client.id} className="hover:bg-slate-50/60">
+                    <tr key={client.id} className={cn("hover:bg-slate-50/60", inactive && "opacity-60")}>
                       <td className="px-4 py-2.5 font-medium text-slate-900">
-                        <Link href={`/admin/clients/${client.id}`} className="hover:underline hover:text-blue-600">{client.name}</Link>
+                        <div className="flex items-center gap-2.5">
+                          <ClientBadge name={client.name} />
+                          <Link href={`/admin/clients/${client.id}`} className="hover:underline hover:text-blue-600">{client.name}</Link>
+                        </div>
                       </td>
                       <td className="px-4 py-2.5">
                         <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border uppercase", sc.color)}>{sc.label}</span>
                       </td>
                       <td className="px-4 py-2.5 text-slate-500">
-                        {client.primaryContactName || client.email || client.phone || "—"}
+                        {client.primaryContactName ? (
+                          client.primaryContactName
+                        ) : client.email ? (
+                          <span className="flex items-center gap-1.5"><Mail className="w-3 h-3 text-slate-400 shrink-0" /> {client.email}</span>
+                        ) : client.phone ? (
+                          <span className="flex items-center gap-1.5"><Phone className="w-3 h-3 text-slate-400 shrink-0" /> {client.phone}</span>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td className="px-4 py-2.5 text-right font-mono tabular-nums text-slate-600">
                         {client.dayRate != null ? client.dayRate.toLocaleString(undefined, { minimumFractionDigits: 2 }) : "—"}
