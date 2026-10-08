@@ -11,6 +11,7 @@ import { formatDateTime } from "@/lib/display-utils";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { OperatorAvatar } from "@/components/operator-avatar";
 
 const STATUS_CONFIG: Record<PayRunStatus, { label: string; color: string }> = {
   pending: { label: "Pending", color: "text-amber-700 bg-amber-50 border-amber-200" },
@@ -123,9 +124,12 @@ export default function PayrollPage() {
             <div className="space-y-2">
               {pending.map((p) => (
                 <div key={p.userId} className="flex items-center justify-between gap-3 text-sm border border-slate-100 rounded-md px-3 py-2">
-                  <div>
-                    <span className="text-slate-900 font-medium">{p.userName ?? "Unknown"}</span>
-                    <span className="text-slate-400 text-xs"> · {p.totalHours.toFixed(1)}h</span>
+                  <div className="flex items-center gap-2.5">
+                    <OperatorAvatar name={p.userName ?? "Unknown"} size="xs" />
+                    <div>
+                      <span className="text-slate-900 font-medium">{p.userName ?? "Unknown"}</span>
+                      <span className="text-slate-400 text-xs"> · {p.totalHours.toFixed(1)}h</span>
+                    </div>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <span className="font-mono tabular-nums text-slate-700">{formatAmount(p.totalAmount)}</span>
