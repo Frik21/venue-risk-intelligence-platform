@@ -9,6 +9,7 @@ import { Users, Mail, ClipboardList } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { taskBucket } from "@/lib/task-bucket";
+import { OperatorAvatar } from "@/components/operator-avatar";
 
 type DeployStatus = "deployed" | "available" | "off_duty";
 
@@ -79,21 +80,24 @@ export default function CpoDeployment() {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        {(["deployed", "available", "off_duty"] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter((current) => (current === s ? null : s))}
-            className="text-left"
-            disabled={isLoading}
-          >
-            <Card className={cn("transition-colors", statusFilter === s && "ring-2 ring-blue-500 border-blue-500")}>
-              <CardContent className="p-4">
-                <div className="text-2xl font-bold text-slate-900">{isLoading ? "—" : counts[s]}</div>
-                <div className="text-xs text-slate-500">{STATUS_CONFIG[s].label}</div>
-              </CardContent>
-            </Card>
-          </button>
-        ))}
+        {(["deployed", "available", "off_duty"] as const).map((s) => {
+          const toneClass = { deployed: "text-blue-700", available: "text-green-700", off_duty: "text-slate-500" }[s];
+          return (
+            <button
+              key={s}
+              onClick={() => setStatusFilter((current) => (current === s ? null : s))}
+              className="text-left"
+              disabled={isLoading}
+            >
+              <Card className={cn("transition-colors", statusFilter === s && "ring-2 ring-blue-500 border-blue-500")}>
+                <CardContent className="p-4">
+                  <div className={cn("text-2xl font-bold", isLoading ? "text-slate-900" : toneClass)}>{isLoading ? "—" : counts[s]}</div>
+                  <div className="text-xs text-slate-500">{STATUS_CONFIG[s].label}</div>
+                </CardContent>
+              </Card>
+            </button>
+          );
+        })}
       </div>
 
       {statusFilter != null && (
@@ -126,9 +130,7 @@ export default function CpoDeployment() {
             <Card key={cpo.id}>
               <CardContent className="p-4">
                 <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
-                    {cpo.avatarInitials ?? cpo.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
-                  </div>
+                  <OperatorAvatar name={cpo.name} avatarInitials={cpo.avatarInitials} size="md" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <span className="font-semibold text-slate-900 text-sm">{cpo.name}</span>

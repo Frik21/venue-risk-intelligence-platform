@@ -17,9 +17,9 @@ export function OperatorAvatar({
 }: {
   name: string;
   avatarInitials?: string | null;
-  size?: "sm" | "xs";
+  size?: "md" | "sm" | "xs";
 }) {
-  const dims = size === "xs" ? "w-6 h-6 text-[9px]" : "w-7 h-7 text-[10px]";
+  const dims = size === "xs" ? "w-6 h-6 text-[9px]" : size === "md" ? "w-10 h-10 text-sm" : "w-7 h-7 text-[10px]";
   return (
     <div
       title={name}
