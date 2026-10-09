@@ -8,6 +8,7 @@ import { DollarSign, Receipt, Wallet, type LucideIcon } from "lucide-react";
 import { useSelectedOfficeId, filterByOffice } from "@/lib/office-scope";
 import { cn } from "@/lib/utils";
 import { StandalonePageHeader } from "@/components/standalone-page-header";
+import { OperatorAvatar } from "@/components/operator-avatar";
 
 function SectionCard({
   title,
@@ -141,7 +142,10 @@ export default function FinanceDashboard() {
                 <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">Recent pay runs</div>
                 {recentRuns.map((run) => (
                   <div key={run.id} className="flex items-center justify-between text-sm py-1">
-                    <span className="text-slate-700 truncate">{run.userName ?? "Unknown"}</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <OperatorAvatar name={run.userName ?? "Unknown"} size="xs" />
+                      <span className="text-slate-700 truncate">{run.userName ?? "Unknown"}</span>
+                    </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="font-mono tabular-nums text-slate-500">${run.totalAmount.toLocaleString()}</span>
                       <Badge
