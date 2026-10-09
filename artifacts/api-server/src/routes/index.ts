@@ -56,6 +56,7 @@ import availabilityRequestsRouter from "./availability-requests";
 import pushRouter from "./push";
 import sampleDataRouter from "./sample-data";
 import integrationsRouter from "./integrations";
+import nearbyPlacesRouter from "./nearby-places";
 
 const router: IRouter = Router();
 
@@ -133,5 +134,6 @@ router.use(availabilityRequestsRouter);
 router.use(pushRouter);
 router.use(sampleDataRouter);
 router.use(integrationsRouter);
+router.use(nearbyPlacesRouter);
 
 export default router;

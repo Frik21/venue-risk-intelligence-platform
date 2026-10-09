@@ -204,6 +204,14 @@ const CPO_SURFACE_PATH_PREFIXES = [
   "/travel-logistics",
   "/task-location-pings",
   "/availability-requests",
+  "/nearby-places",
+  // Pre-existing gap closed while wiring up the "Ask" chatbot's
+  // alternative-route lookup (GET /task-routes/:id/alternatives) -
+  // /tasks/:taskId/routes already matched the /tasks prefix above, but
+  // /task-routes/:id/calculate and the new .../alternatives route
+  // didn't match any prefix, so a Solo Operator CPO couldn't actually
+  // calculate a route at all.
+  "/task-routes",
 ];
 
 export function blockSoloOperatorFromManagement(req: Request, res: Response, next: NextFunction): void {

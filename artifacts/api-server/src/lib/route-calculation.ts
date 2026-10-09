@@ -12,14 +12,15 @@ export interface OsrmRoute {
   durationSeconds: number;
 }
 
-export async function fetchOsrmRoute(
+async function fetchOsrmRoutes(
   startLat: number,
   startLng: number,
   endLat: number,
   endLng: number,
-): Promise<OsrmRoute> {
+  alternatives: boolean,
+): Promise<OsrmRoute[]> {
   const coordStr = `${startLng},${startLat};${endLng},${endLat}`;
-  const url = `${OSRM_BASE}/${coordStr}?overview=full&geometries=geojson&steps=false`;
+  const url = `${OSRM_BASE}/${coordStr}?overview=full&geometries=geojson&steps=false${alternatives ? "&alternatives=true" : ""}`;
 
   const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
   if (!resp.ok) {
@@ -30,10 +31,35 @@ export async function fetchOsrmRoute(
     throw new Error(`OSRM routing failed: ${data.message ?? data.code}`);
   }
 
-  const route = data.routes[0];
-  return {
+  return data.routes.map((route: any) => ({
     geometry: route.geometry,
     distanceMeters: Math.round(route.distance),
     durationSeconds: Math.round(route.duration),
-  };
+  }));
+}
+
+export async function fetchOsrmRoute(
+  startLat: number,
+  startLng: number,
+  endLat: number,
+  endLng: number,
+): Promise<OsrmRoute> {
+  const [route] = await fetchOsrmRoutes(startLat, startLng, endLat, endLng, false);
+  return route;
+}
+
+// Backs Operators Note's "Ask" chatbot's "alternative route" intent -
+// OSRM's own alternate-route option (per direct product direction),
+// not a second routing engine. OSRM's own ordering puts its default/
+// fastest route first (index 0, the same one already stored as a
+// task's primary route), so everything after that is a real
+// alternative to it.
+export async function fetchOsrmRouteAlternatives(
+  startLat: number,
+  startLng: number,
+  endLat: number,
+  endLng: number,
+): Promise<OsrmRoute[]> {
+  const routes = await fetchOsrmRoutes(startLat, startLng, endLat, endLng, true);
+  return routes.slice(1);
 }

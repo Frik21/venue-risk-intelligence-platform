@@ -191,3 +191,54 @@ export async function fetchNearbyEmergencyInfo(lat: number, lng: number): Promis
     embassies: embassies.slice(0, MAX_EMERGENCY_RESULTS_PER_CATEGORY),
   };
 }
+
+// Operators Note's "Ask" chatbot (per direct product direction - a
+// keyword-matched chat, deliberately not a full AI/LLM requiring API
+// keys) - one category per question, same free Overpass source as the
+// rest of this file. Hospital/Police reuse the same tags already used
+// above; Coffee Shop/Fuel Station are new OSM amenity categories this
+// app didn't search before. Hospital/Police keep the wider emergency
+// radius (consistent with what Nearby Help already finds for the same
+// two categories) - Coffee/Fuel use a tighter radius since they're far
+// more common and a CPO asking "closest coffee shop" wants nearby, not
+// a 20km detour.
+export type NearbyPlaceCategory = "hospital" | "police" | "cafe" | "fuel";
+
+const PLACE_CATEGORY_TAGS: Record<NearbyPlaceCategory, { osmKey: string; osmValue: string; fallbackName: string; radiusMeters: number }> = {
+  hospital: { osmKey: "amenity", osmValue: "hospital", fallbackName: "Unnamed hospital", radiusMeters: EMERGENCY_SEARCH_RADIUS_METERS },
+  police: { osmKey: "amenity", osmValue: "police", fallbackName: "Unnamed police station", radiusMeters: EMERGENCY_SEARCH_RADIUS_METERS },
+  cafe: { osmKey: "amenity", osmValue: "cafe", fallbackName: "Unnamed coffee shop", radiusMeters: 10000 },
+  fuel: { osmKey: "amenity", osmValue: "fuel", fallbackName: "Unnamed fuel station", radiusMeters: 10000 },
+};
+const MAX_PLACE_RESULTS = 3;
+
+export async function fetchNearbyPlace(lat: number, lng: number, category: NearbyPlaceCategory): Promise<NearbyService[]> {
+  const { osmKey, osmValue, fallbackName, radiusMeters } = PLACE_CATEGORY_TAGS[category];
+  const padDeg = (radiusMeters / 111000) * 1.2;
+  const bbox = `${lat - padDeg},${lng - padDeg},${lat + padDeg},${lng + padDeg}`;
+  const query = `[out:json][timeout:20];(node["${osmKey}"="${osmValue}"](${bbox});way["${osmKey}"="${osmValue}"](${bbox}););out center;`;
+
+  const resp = await fetch(OVERPASS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `data=${encodeURIComponent(query)}`,
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!resp.ok) throw new Error(`Overpass API returned HTTP ${resp.status}`);
+  const data: any = await resp.json();
+
+  const results: NearbyService[] = [];
+  for (const el of data.elements ?? []) {
+    const elLat = el.lat ?? el.center?.lat;
+    const elLng = el.lon ?? el.center?.lon;
+    if (typeof elLat !== "number" || typeof elLng !== "number") continue;
+
+    const distanceMeters = Math.round(haversineMeters(lat, lng, elLat, elLng));
+    if (distanceMeters > radiusMeters) continue;
+
+    results.push({ name: el.tags?.name?.trim() || fallbackName, lat: elLat, lng: elLng, distanceMeters });
+  }
+
+  results.sort((a, b) => a.distanceMeters - b.distanceMeters);
+  return results.slice(0, MAX_PLACE_RESULTS);
+}
