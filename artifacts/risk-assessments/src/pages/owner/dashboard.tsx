@@ -13,6 +13,15 @@ import { useToast } from "@/hooks/use-toast";
 import { formatDate } from "@/lib/display-utils";
 import { cn } from "@/lib/utils";
 
+// Same EXPIRY_WARNING_DAYS-style convention used elsewhere in this app
+// (Contracts/Compliance/Operator Database's own cert-expiry math) -
+// duplicated page-local rather than shared, matching this codebase's
+// existing small-helper convention.
+const TRIAL_WARNING_DAYS = 7;
+function daysUntil(dateStr: string): number {
+  return Math.ceil((new Date(dateStr).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+}
+
 const STATUS_CONFIG: Record<CompanyStatus, { label: string; color: string }> = {
   trial: { label: "Trial", color: "text-blue-700 bg-blue-50 border-blue-200" },
   active: { label: "Active", color: "text-green-700 bg-green-50 border-green-200" },
@@ -441,9 +450,15 @@ export default function OwnerDashboard() {
                               ))}
                             </SelectContent>
                           </Select>
-                          {c.status === "trial" && c.trialEndsAt && (
-                            <p className="text-[10px] text-slate-400 mt-1 whitespace-nowrap">Ends {formatDate(c.trialEndsAt)}</p>
-                          )}
+                          {c.status === "trial" && c.trialEndsAt && (() => {
+                            const days = daysUntil(c.trialEndsAt);
+                            const urgent = days <= TRIAL_WARNING_DAYS;
+                            return (
+                              <p className={cn("text-[10px] mt-1 whitespace-nowrap font-medium", urgent ? (days < 0 ? "text-red-700" : "text-amber-700") : "text-slate-400 font-normal")}>
+                                {days < 0 ? `Ended ${Math.abs(days)}d ago` : urgent ? `Ends in ${days}d` : `Ends ${formatDate(c.trialEndsAt)}`}
+                              </p>
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-2.5 text-slate-600">
                           {c.planType === "solo_operator" ? (
@@ -455,16 +470,19 @@ export default function OwnerDashboard() {
                             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                               {MANAGEMENT_ROLES.map((role) => {
                                 const seat = c.seatsByRole[role];
+                                const atLimit = seat.used >= seat.limit;
                                 return (
                                   <span key={role} className="whitespace-nowrap">
                                     <span className="text-slate-400">{ROLE_LABELS[role]}</span>{" "}
-                                    <span className="font-mono tabular-nums">{seat.used}/{seat.limit}</span>
+                                    <span className={cn("font-mono tabular-nums", atLimit && "text-red-700 font-semibold")}>{seat.used}/{seat.limit}</span>
                                   </span>
                                 );
                               })}
                               <span className="whitespace-nowrap">
                                 <span className="text-slate-400">CPO</span>{" "}
-                                <span className="font-mono tabular-nums">{c.cpoSeatUsage.used}/{c.cpoSeatUsage.limit}</span>
+                                <span className={cn("font-mono tabular-nums", c.cpoSeatUsage.used >= c.cpoSeatUsage.limit && "text-red-700 font-semibold")}>
+                                  {c.cpoSeatUsage.used}/{c.cpoSeatUsage.limit}
+                                </span>
                               </span>
                               <button
                                 type="button"
