@@ -10,6 +10,23 @@ import { getPriorityColor, timeAgo } from "@/lib/display-utils";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { type TaskBucket, BUCKET_CONFIG, taskBucket } from "@/lib/task-bucket";
+import { OperatorAvatar } from "@/components/operator-avatar";
+
+const PRIORITY_BORDER: Record<string, string> = {
+  critical: "border-l-red-400",
+  high: "border-l-orange-400",
+  medium: "border-l-amber-400",
+  low: "border-l-green-400",
+};
+
+const BUCKET_BORDER: Record<TaskBucket, string> = {
+  pending_details: "border-l-amber-400",
+  quotation: "border-l-orange-400",
+  pending_allocation: "border-l-purple-400",
+  running: "border-l-blue-400",
+  completed: "border-l-green-400",
+  invoiced: "border-l-teal-400",
+};
 
 // The live duty-of-care signal - a CPO's own "panic" trigger, or the
 // system's own "missed" finding when a scheduled check-in goes overdue
@@ -57,7 +74,14 @@ export function SafetyAlertsPanel() {
       </CardHeader>
       <CardContent className="space-y-2">
         {needsAttention.map((c) => (
-          <div key={c.id} className="flex items-center gap-3 py-2 border-b border-slate-100 last:border-0">
+          <div
+            key={c.id}
+            className={cn(
+              "flex items-center gap-3 py-2 pl-2 border-b border-slate-100 last:border-0 border-l-2",
+              c.type === "panic" ? "border-l-red-400" : "border-l-amber-400",
+            )}
+          >
+            <OperatorAvatar name={c.cpoName ?? "Unknown"} size="sm" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-0.5">
                 <span
@@ -145,7 +169,14 @@ export function FieldIncidentReportsPanel() {
       </CardHeader>
       <CardContent className="space-y-2">
         {unreviewed.map((r) => (
-          <div key={r.id} className="flex items-start gap-3 py-2 border-b border-slate-100 last:border-0">
+          <div
+            key={r.id}
+            className={cn(
+              "flex items-start gap-3 py-2 pl-2 border-b border-slate-100 last:border-0 border-l-2",
+              r.severity === "high" ? "border-l-red-400" : r.severity === "low" ? "border-l-slate-300" : "border-l-amber-400",
+            )}
+          >
+            <OperatorAvatar name={r.cpoName ?? "Unknown"} size="sm" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-0.5">
                 <span
@@ -244,7 +275,10 @@ function TaskFlagsPanel() {
         {flagged.map(({ task, bucket }) => {
           const bc = BUCKET_CONFIG[bucket];
           return (
-            <div key={`${task.id}-${bucket}`} className="flex items-center gap-3 py-2 border-b border-slate-100 last:border-0">
+            <div
+              key={`${task.id}-${bucket}`}
+              className={cn("flex items-center gap-3 py-2 pl-2 border-b border-slate-100 last:border-0 border-l-2", BUCKET_BORDER[bucket])}
+            >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap mb-0.5">
                   <span className="text-[10px] font-mono text-slate-400 border border-slate-200 px-1.5 py-0.5 rounded">{task.taskNumber}</span>
@@ -345,7 +379,13 @@ export default function AlertsList() {
           {filtered.map((alert) => {
             const sc = STATUS_CONFIG[alert.status];
             return (
-              <Card key={alert.id} className={cn(alert.status === "pending" && "border-amber-200 shadow-sm")}>
+              <Card
+                key={alert.id}
+                className={cn(
+                  alert.status === "pending" && "shadow-sm border-l-4",
+                  alert.status === "pending" && (PRIORITY_BORDER[alert.priority] ?? "border-l-slate-300"),
+                )}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
