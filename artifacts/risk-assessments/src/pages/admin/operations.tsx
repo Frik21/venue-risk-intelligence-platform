@@ -38,10 +38,10 @@ function SectionCard({
   );
 }
 
-function StatTile({ label, value }: { label: string; value: string }) {
+function StatTile({ label, value, tone }: { label: string; value: string; tone?: "negative" }) {
   return (
-    <div className="border border-slate-100 rounded-lg p-3">
-      <div className="text-lg font-mono tabular-nums font-bold text-slate-900">{value}</div>
+    <div className={cn("border rounded-lg p-3", tone === "negative" ? "border-red-200 bg-red-50/50" : "border-slate-100")}>
+      <div className={cn("text-lg font-mono tabular-nums font-bold", tone === "negative" ? "text-red-700" : "text-slate-900")}>{value}</div>
       <div className="text-xs text-slate-500 mt-0.5">{label}</div>
     </div>
   );
@@ -143,7 +143,7 @@ export default function OperationsDashboard() {
               <StatTile label="Not Started" value={String(notCompleted)} />
               <StatTile label="In Progress" value={String(inProgress)} />
               <StatTile label="Completed" value={String(completed)} />
-              <StatTile label="Unassigned" value={String(unassigned)} />
+              <StatTile label="Unassigned" value={String(unassigned)} tone={unassigned > 0 ? "negative" : undefined} />
             </div>
           </SectionCard>
 
