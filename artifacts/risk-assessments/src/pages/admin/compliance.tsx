@@ -5,6 +5,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ShieldCheck, IdCard, Clock, MessageSquareWarning, FileSignature, UserCog, type LucideIcon } from "lucide-react";
 import { formatDate } from "@/lib/display-utils";
+import { OperatorAvatar } from "@/components/operator-avatar";
+import { cn } from "@/lib/utils";
 
 // Same 30-day heads-up window and expiry math as the Expiring
 // Certifications card on /admin/onboarding and the Certs tiles on
@@ -149,10 +151,19 @@ export default function ComplianceRollup() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <RollupCard title="Expiring/Expired Certifications" icon={IdCard} count={expiringDocs.length} action={{ href: "/admin/onboarding", label: "Operator Database →" }}>
             {expiringDocs.map((d) => (
-              <div key={d.id} className="flex items-center justify-between text-sm border-b border-slate-100 last:border-0 pb-2 last:pb-0">
-                <div className="min-w-0">
-                  <span className="text-slate-700">{d.operatorName}</span>
-                  <span className="text-slate-400"> · {d.label}</span>
+              <div
+                key={d.id}
+                className={cn(
+                  "flex items-center justify-between gap-2 text-sm border-b border-slate-100 last:border-0 pb-2 last:pb-0 pl-2 border-l-2",
+                  d.days < 0 ? "border-l-red-400" : "border-l-amber-400",
+                )}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <OperatorAvatar name={d.operatorName} size="xs" />
+                  <div className="min-w-0">
+                    <span className="text-slate-700">{d.operatorName}</span>
+                    <span className="text-slate-400"> · {d.label}</span>
+                  </div>
                 </div>
                 <span className={d.days < 0 ? "text-red-700 font-medium text-xs shrink-0" : "text-amber-700 font-medium text-xs shrink-0"}>
                   {d.days < 0 ? `Expired ${Math.abs(d.days)}d ago` : `${d.days}d left`}
@@ -163,8 +174,11 @@ export default function ComplianceRollup() {
 
           <RollupCard title="Pending Onboarding" icon={IdCard} count={pendingOnboarding.length} action={{ href: "/admin/onboarding", label: "Operator Database →" }}>
             {pendingOnboarding.map((o) => (
-              <div key={o.id} className="flex items-center justify-between text-sm border-b border-slate-100 last:border-0 pb-2 last:pb-0">
-                <span className="text-slate-700">{o.userName ?? "Unnamed candidate"}</span>
+              <div key={o.id} className="flex items-center justify-between gap-2 text-sm border-b border-slate-100 last:border-0 pb-2 last:pb-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <OperatorAvatar name={o.userName ?? "Unnamed candidate"} size="xs" />
+                  <span className="text-slate-700">{o.userName ?? "Unnamed candidate"}</span>
+                </div>
                 <span className="text-xs text-slate-400 shrink-0">{o.checkedCount}/{o.totalCount} checklist items</span>
               </div>
             ))}
@@ -172,10 +186,13 @@ export default function ComplianceRollup() {
 
           <RollupCard title="Unapproved Timesheets" icon={Clock} count={unapprovedTimesheets.length} action={{ href: "/tasks", label: "Tasks →" }}>
             {unapprovedTimesheets.map((e) => (
-              <div key={e.id} className="flex items-center justify-between text-sm border-b border-slate-100 last:border-0 pb-2 last:pb-0">
-                <div className="min-w-0">
-                  <span className="text-slate-700">{e.userName ?? "Unknown"}</span>
-                  <span className="text-slate-400"> · {formatDate(e.date)}{e.taskTitle ? ` · ${e.taskTitle}` : ""}</span>
+              <div key={e.id} className="flex items-center justify-between gap-2 text-sm border-b border-slate-100 last:border-0 pb-2 last:pb-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <OperatorAvatar name={e.userName ?? "Unknown"} size="xs" />
+                  <div className="min-w-0">
+                    <span className="text-slate-700">{e.userName ?? "Unknown"}</span>
+                    <span className="text-slate-400"> · {formatDate(e.date)}{e.taskTitle ? ` · ${e.taskTitle}` : ""}</span>
+                  </div>
                 </div>
                 <span className="text-xs text-slate-500 tabular-nums shrink-0">{e.hoursWorked}h</span>
               </div>
@@ -184,10 +201,13 @@ export default function ComplianceRollup() {
 
           <RollupCard title="Unreviewed Field Incident Reports" icon={MessageSquareWarning} count={unreviewedIncidents.length} action={{ href: "/alerts", label: "Alerts →" }}>
             {unreviewedIncidents.map((r) => (
-              <div key={r.id} className="flex items-center justify-between text-sm border-b border-slate-100 last:border-0 pb-2 last:pb-0">
-                <div className="min-w-0">
-                  <span className="text-slate-700">{r.cpoName ?? "Unknown"}</span>
-                  <span className="text-slate-400"> · {r.summary.slice(0, 60)}{r.summary.length > 60 ? "…" : ""}</span>
+              <div key={r.id} className="flex items-center justify-between gap-2 text-sm border-b border-slate-100 last:border-0 pb-2 last:pb-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <OperatorAvatar name={r.cpoName ?? "Unknown"} size="xs" />
+                  <div className="min-w-0">
+                    <span className="text-slate-700">{r.cpoName ?? "Unknown"}</span>
+                    <span className="text-slate-400"> · {r.summary.slice(0, 60)}{r.summary.length > 60 ? "…" : ""}</span>
+                  </div>
                 </div>
                 <span className="text-xs text-slate-500 shrink-0 uppercase">{r.severity}</span>
               </div>
@@ -196,7 +216,13 @@ export default function ComplianceRollup() {
 
           <RollupCard title="Contracts Renewing Soon" icon={FileSignature} count={renewingContracts.length} action={{ href: "/admin/contracts", label: "Contracts →" }}>
             {renewingContracts.map((c) => (
-              <div key={c.id} className="flex items-center justify-between text-sm border-b border-slate-100 last:border-0 pb-2 last:pb-0">
+              <div
+                key={c.id}
+                className={cn(
+                  "flex items-center justify-between gap-2 text-sm border-b border-slate-100 last:border-0 pb-2 last:pb-0 pl-2 border-l-2",
+                  c.days < 0 ? "border-l-red-400" : "border-l-amber-400",
+                )}
+              >
                 <div className="min-w-0">
                   <span className="text-slate-700">{c.clientName ?? "Unknown client"}</span>
                   <span className="text-slate-400"> · {c.title}</span>
@@ -210,8 +236,11 @@ export default function ComplianceRollup() {
 
           <RollupCard title="Operators Due for Re-vetting" icon={UserCog} count={dueForVetting.length} action={{ href: "/admin/onboarding", label: "Operator Database →" }}>
             {dueForVetting.map((o) => (
-              <div key={o.id} className="flex items-center justify-between text-sm border-b border-slate-100 last:border-0 pb-2 last:pb-0">
-                <span className="text-slate-700">{o.userName}</span>
+              <div key={o.id} className="flex items-center justify-between gap-2 text-sm border-b border-slate-100 last:border-0 pb-2 last:pb-0 pl-2 border-l-2 border-l-red-400">
+                <div className="flex items-center gap-2 min-w-0">
+                  <OperatorAvatar name={o.userName ?? "Unknown"} size="xs" />
+                  <span className="text-slate-700">{o.userName ?? "Unknown"}</span>
+                </div>
                 <span className="text-red-700 font-medium text-xs shrink-0">
                   {o.lastVettedAt ? `Overdue ${Math.abs(o.days)}d` : "Never vetted"}
                 </span>
