@@ -241,6 +241,10 @@ export default function ContractsPage() {
     },
   });
 
+  const activeCount = contracts.filter((c) => c.status === "active").length;
+  const expiredCount = contracts.filter((c) => c.status === "expired").length;
+  const cancelledCount = contracts.filter((c) => c.status === "cancelled").length;
+
   return (
     <div className="space-y-5">
       {showDialog && <ContractDialog contract={null} onClose={() => setShowDialog(false)} />}
@@ -256,6 +260,29 @@ export default function ContractsPage() {
           <Plus className="w-4 h-4 mr-1.5" /> Add Contract
         </Button>
       </div>
+
+      {contracts.length > 0 && (
+        <div className="grid grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-xs text-slate-500 mb-1">Active</div>
+              <div className="text-lg font-semibold text-blue-700">{activeCount}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-xs text-slate-500 mb-1">Expired</div>
+              <div className="text-lg font-semibold text-slate-600">{expiredCount}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-xs text-slate-500 mb-1">Cancelled</div>
+              <div className="text-lg font-semibold text-red-700">{cancelledCount}</div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {isLoading ? (
         <Skeleton className="h-64" />
@@ -287,9 +314,18 @@ export default function ContractsPage() {
                   const sc = CONTRACT_STATUS_CONFIG[contract.status];
                   const days = daysUntilRenewal(contract.renewalDate);
                   const renewingSoon = contract.status === "active" && days <= RENEWAL_WARNING_DAYS;
+                  const overdue = renewingSoon && days < 0;
                   return (
                     <tr key={contract.id} className="hover:bg-slate-50/60">
-                      <td className="px-4 py-2.5 font-medium text-slate-900">{contract.title}</td>
+                      <td
+                        className={cn(
+                          "px-4 py-2.5 font-medium text-slate-900",
+                          overdue && "border-l-2 border-red-400 bg-red-50/50",
+                          renewingSoon && !overdue && "border-l-2 border-amber-400 bg-amber-50/40",
+                        )}
+                      >
+                        {contract.title}
+                      </td>
                       <td className="px-4 py-2.5 text-slate-500">
                         {contract.clientId ? (
                           <Link href={`/admin/clients/${contract.clientId}`} className="hover:underline hover:text-blue-600">
