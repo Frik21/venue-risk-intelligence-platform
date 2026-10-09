@@ -55,6 +55,7 @@ import taskLocationPingsRouter from "./task-location-pings";
 import availabilityRequestsRouter from "./availability-requests";
 import pushRouter from "./push";
 import sampleDataRouter from "./sample-data";
+import integrationsRouter from "./integrations";
 
 const router: IRouter = Router();
 
@@ -131,5 +132,6 @@ router.use(taskLocationPingsRouter);
 router.use(availabilityRequestsRouter);
 router.use(pushRouter);
 router.use(sampleDataRouter);
+router.use(integrationsRouter);
 
 export default router;

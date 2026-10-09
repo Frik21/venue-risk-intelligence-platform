@@ -42,3 +42,4 @@ export * from "./task-location-pings";
 export * from "./availability-requests";
 export * from "./sample-data";
 export * from "./status-incidents";
+export * from "./company-integrations";

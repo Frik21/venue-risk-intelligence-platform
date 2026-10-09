@@ -766,6 +766,34 @@ export interface Contract {
   updatedAt: string;
 }
 
+// Third-party platform integrations - per direct product direction
+// ("subscribers can insert other platforms API keys to connect to the
+// management system... AlertMedia is just an example"). The provider
+// catalog itself is pluggable (lib/integration-providers.ts) - the
+// frontend never hardcodes AlertMedia specifically, it always renders
+// from GET /integrations/providers.
+export interface IntegrationProviderInfo {
+  id: string;
+  label: string;
+  description: string;
+  apiKeyLabel: string;
+}
+
+export interface CompanyIntegration {
+  id: number;
+  provider: string;
+  providerLabel: string;
+  apiKeyLastFour: string;
+  enabled: boolean;
+  connectedBy: number | null;
+  connectedByName: string | null;
+  lastUsedAt: string | null;
+  lastErrorAt: string | null;
+  lastErrorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type QuoteStatus = "draft" | "sent" | "approved" | "rejected";
 export type QuoteMarkupType = "percent" | "fixed";
 export const QUOTE_COST_CATEGORIES = [
@@ -1737,6 +1765,15 @@ export const api = {
       currency: string; startDate: string; renewalDate: string; notes: string;
     }>) => apiFetch<Contract>(`/contracts/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     delete: (id: number) => apiFetch<void>(`/contracts/${id}`, { method: "DELETE" }),
+  },
+  integrations: {
+    providers: () => apiFetch<IntegrationProviderInfo[]>("/integrations/providers"),
+    list: () => apiFetch<{ encryptionConfigured: boolean; integrations: CompanyIntegration[] }>("/integrations"),
+    connect: (data: { provider: string; apiKey: string }) =>
+      apiFetch<CompanyIntegration>("/integrations", { method: "POST", body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<{ enabled: boolean; apiKey: string }>) =>
+      apiFetch<CompanyIntegration>(`/integrations/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    disconnect: (id: number) => apiFetch<void>(`/integrations/${id}`, { method: "DELETE" }),
   },
   quotes: {
     list: () => apiFetch<Quote[]>("/quotes"),
