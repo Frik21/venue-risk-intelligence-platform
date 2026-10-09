@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, max } from "drizzle-orm";
 import { db, taskRoutesTable, tasksTable } from "@workspace/db";
 import { z } from "zod";
-import { fetchOsrmRoute } from "../lib/route-calculation";
+import { fetchOsrmRoute, fetchOsrmRouteAlternatives } from "../lib/route-calculation";
 import { fetchTrafficAwareRoute, TrafficNotConfiguredError } from "../lib/traffic";
 import { fetchNearbyServices, type NearbyService } from "../lib/nearby-services";
 
@@ -156,6 +156,31 @@ router.post("/task-routes/:id/calculate", async (req, res): Promise<void> => {
     .returning();
 
   res.json(formatRoute(updated));
+});
+
+// Read-only - backs the "Ask" chatbot's "alternative route" intent
+// (Operators Note). Doesn't persist anything or touch this route's own
+// stored geometry; it's a fresh OSRM lookup for the same start/end
+// points this route already has, returned for the chat to show inline.
+router.get("/task-routes/:id/alternatives", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [route] = await db.select().from(taskRoutesTable).where(eq(taskRoutesTable.id, id));
+  if (!route) { res.status(404).json({ error: "Route not found" }); return; }
+
+  if (route.startLat == null || route.startLng == null || route.endLat == null || route.endLng == null) {
+    res.status(422).json({ error: "This route has no start/end point set yet" });
+    return;
+  }
+
+  try {
+    const alternatives = await fetchOsrmRouteAlternatives(route.startLat, route.startLng, route.endLat, route.endLng);
+    res.json({ alternatives });
+  } catch (err) {
+    console.error(`OSRM alternative-route lookup failed for route ${id}:`, err);
+    res.status(502).json({ error: "Alternative route lookup failed" });
+  }
 });
 
 export default router;

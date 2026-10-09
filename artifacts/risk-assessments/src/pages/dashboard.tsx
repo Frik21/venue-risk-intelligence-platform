@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, ChangeEvent } from "react";
-import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet, LifeBuoy, FileText, Package, Users, Plane, Globe, CalendarOff, Compass } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, ShieldCheck, ShieldAlert, Clock, AlertCircle, AlertTriangle, Info, ClipboardList, ClipboardCheck, Bell, Layers, LogOut, Search, X, ChevronDown, ChevronRight, ChevronLeft, ListChecks, MessageSquare, Check, Building2, Plus, Crosshair, Loader2, Car, Route, Download, Eye, User as UserIcon, LayoutDashboard, Wallet, LifeBuoy, FileText, Package, Users, Plane, Globe, CalendarOff, Compass, Bot, Send } from "lucide-react";
 import { COUNTRY_REGISTRY } from "@/lib/country-registry";
 import type { CountryDefinition } from "@/lib/country-registry";
 import { CITY_REGISTRY } from "@/lib/city-registry";
@@ -45,6 +45,9 @@ import type {
   ExpenseCategory,
   Announcement,
   NearbyEmergencyInfo,
+  NearbyService,
+  NearbyPlaceCategory,
+  OsrmRouteOption,
   FieldIncidentReportSeverity,
   Principal,
   AfterActionReport,
@@ -463,6 +466,7 @@ const OPEN_RISK_ASSESSMENTS_PANEL_EVENT = "venueguard-open-risk-assessments-pane
 const OPEN_ROUTE_PLANNING_PANEL_EVENT = "venueguard-open-route-planning-panel";
 const OPEN_DOWNLOAD_TASK_PANEL_EVENT = "venueguard-open-download-task-panel";
 const OPEN_LAYERS_PANEL_EVENT = "venueguard-open-layers-panel";
+const OPEN_ASK_PANEL_EVENT = "venueguard-open-ask-panel";
 // Dispatched by the operator menu (TopBanner, top-right - separate
 // from the Operators note brand menu on the left) when "Profile" is
 // clicked. Kept in the same activePanel state as the six brand-menu
@@ -1504,6 +1508,17 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
               type="button"
               className="top-banner-brand-menu-item"
               onClick={() => {
+                window.dispatchEvent(new Event(OPEN_ASK_PANEL_EVENT));
+                setBrandMenuOpen(false);
+              }}
+            >
+              <Bot className="w-4 h-4" />
+              Ask
+            </button>
+            <button
+              type="button"
+              className="top-banner-brand-menu-item"
+              onClick={() => {
                 window.dispatchEvent(new Event(OPEN_DOWNLOAD_TASK_PANEL_EVENT));
                 setBrandMenuOpen(false);
               }}
@@ -2325,6 +2340,7 @@ function OperationalCanvas({
     | "task-planning"
     | "risk-assessments"
     | "route-planning"
+    | "ask"
     | "download-task"
     | "layers"
     | "profile"
@@ -2336,6 +2352,7 @@ function OperationalCanvas({
   const taskPlanningPanelOpen = activePanel === "task-planning";
   const riskAssessmentsPanelOpen = activePanel === "risk-assessments";
   const routePlanningPanelOpen = activePanel === "route-planning";
+  const askPanelOpen = activePanel === "ask";
   const downloadTaskPanelOpen = activePanel === "download-task";
   const layersPanelOpen = activePanel === "layers";
   const profilePanelOpen = activePanel === "profile";
@@ -2923,6 +2940,149 @@ function OperationalCanvas({
     () => displayedTasks.filter((t) => taskAcceptance[t.id] === "accepted"),
     [displayedTasks, taskAcceptance],
   );
+
+  // "Ask" chatbot - per direct product direction ("I dont want a full
+  // AI that will require API keys"), a keyword-matched chat, not an
+  // LLM. Covers the same four categories the brief literally asked for
+  // (hospital/police/coffee shop/fuel station, via the new single-
+  // category GET /nearby-places - same Overpass source as Nearby Help,
+  // which stays separate and untouched per direct product direction)
+  // plus "alternative route" (OSRM's own alternate-route option against
+  // whichever in-progress task already has a calculated primary route,
+  // via GET /task-routes/:id/alternatives). Each bot reply is either
+  // plain text or a small structured result list - never free-form
+  // generated prose, since there's no model generating it.
+  interface AskChatMessage {
+    role: "user" | "bot";
+    text: string;
+    places?: NearbyService[];
+    routeOptions?: OsrmRouteOption[];
+  }
+  const ASK_WELCOME: AskChatMessage = {
+    role: "bot",
+    text: 'Ask me things like "closest hospital", "nearest fuel station", "find me a coffee shop", or "alternative route" for a task you\'re currently running.',
+  };
+  const [askMessages, setAskMessages] = useState<AskChatMessage[]>([ASK_WELCOME]);
+  const [askInput, setAskInput] = useState("");
+  const [askSending, setAskSending] = useState(false);
+  // Set when more than one in-progress task has a calculated route, so
+  // "alternative route" needs the CPO to say which one - the next
+  // message is checked against this list before running the normal
+  // keyword matcher, same lightweight "menu, not NLP" approach as the
+  // rest of this chat.
+  const [askPendingRouteChoice, setAskPendingRouteChoice] = useState<{ taskTitle: string; routeId: number }[] | null>(null);
+
+  type AskIntent = "hospital" | "police" | "cafe" | "fuel" | "alt-route" | "unknown";
+  function matchAskIntent(text: string): AskIntent {
+    const q = text.toLowerCase();
+    if (/\balternat\w*\s+route\b|\broute\s+alternat\w*\b|\breroute\b|\banother\s+route\b|\bdifferent\s+route\b/.test(q)) return "alt-route";
+    if (/\bhospital|\bmedical|\bemergency\s*room\b/.test(q)) return "hospital";
+    if (/\bpolice|\bcops?\b/.test(q)) return "police";
+    if (/\bcoffee|\bcaf[eé]/.test(q)) return "cafe";
+    if (/\bfuel|\bpetrol|\bgas\b/.test(q)) return "fuel";
+    return "unknown";
+  }
+  const ASK_CATEGORY_LABEL: Record<NearbyPlaceCategory, string> = {
+    hospital: "hospital",
+    police: "police station",
+    cafe: "coffee shop",
+    fuel: "fuel station",
+  };
+
+  async function runAskPlaceLookup(category: NearbyPlaceCategory) {
+    try {
+      const resolved = await resolveCurrentLocation();
+      if (resolved.lat == null || resolved.lng == null) throw new Error("No location available");
+      const { results } = await api.nearbyPlaces.check(resolved.lat, resolved.lng, category);
+      if (results.length === 0) {
+        setAskMessages((prev) => [...prev, { role: "bot", text: `No ${ASK_CATEGORY_LABEL[category]} found nearby.` }]);
+      } else {
+        setAskMessages((prev) => [...prev, { role: "bot", text: `Closest ${ASK_CATEGORY_LABEL[category]}:`, places: results }]);
+      }
+    } catch (err) {
+      console.error(`Ask: nearby ${category} lookup failed:`, err);
+      setAskMessages((prev) => [...prev, { role: "bot", text: "Couldn't get your location or reach the lookup - try again." }]);
+    }
+  }
+
+  async function runAskAlternativeRoute(routeId: number) {
+    try {
+      const { alternatives } = await api.taskRoutes.alternatives(routeId);
+      if (alternatives.length === 0) {
+        setAskMessages((prev) => [...prev, { role: "bot", text: "No alternative route found for that one - the main route may be the only realistic option." }]);
+      } else {
+        setAskMessages((prev) => [...prev, { role: "bot", text: "Here's an alternative:", routeOptions: alternatives }]);
+      }
+    } catch (err) {
+      console.error("Ask: alternative route lookup failed:", err);
+      setAskMessages((prev) => [...prev, { role: "bot", text: "Couldn't calculate an alternative route - try again, or check Route Planning." }]);
+    }
+  }
+
+  async function runAskAltRouteIntent() {
+    const candidates: { taskTitle: string; routeId: number }[] = [];
+    for (const task of acceptedTasksList) {
+      if (task.id === MOCK_TASK_ID || task.status !== "in_progress") continue;
+      try {
+        const routes = await api.taskRoutes.list(task.id);
+        for (const route of routes) {
+          if (route.distanceMeters != null) candidates.push({ taskTitle: task.title, routeId: route.id });
+        }
+      } catch (err) {
+        console.error(`Ask: failed to load routes for task ${task.id}:`, err);
+      }
+    }
+
+    if (candidates.length === 0) {
+      setAskMessages((prev) => [
+        ...prev,
+        { role: "bot", text: "You don't have a calculated route on a running task yet - set one up in Route Planning first." },
+      ]);
+      return;
+    }
+    if (candidates.length === 1) {
+      await runAskAlternativeRoute(candidates[0].routeId);
+      return;
+    }
+    setAskPendingRouteChoice(candidates);
+    setAskMessages((prev) => [
+      ...prev,
+      {
+        role: "bot",
+        text: `Which task's route? Reply with a number:\n${candidates.map((c, i) => `${i + 1}. ${c.taskTitle}`).join("\n")}`,
+      },
+    ]);
+  }
+
+  async function handleAskSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    const text = askInput.trim();
+    if (!text || askSending) return;
+    setAskMessages((prev) => [...prev, { role: "user", text }]);
+    setAskInput("");
+    setAskSending(true);
+
+    try {
+      if (askPendingRouteChoice) {
+        const choiceIndex = Number(text) - 1;
+        const choice = askPendingRouteChoice[choiceIndex];
+        setAskPendingRouteChoice(null);
+        if (!choice) {
+          setAskMessages((prev) => [...prev, { role: "bot", text: "Not a valid number - try asking again." }]);
+          return;
+        }
+        await runAskAlternativeRoute(choice.routeId);
+        return;
+      }
+
+      const intent = matchAskIntent(text);
+      if (intent === "alt-route") await runAskAltRouteIntent();
+      else if (intent === "unknown") setAskMessages((prev) => [...prev, ASK_WELCOME]);
+      else await runAskPlaceLookup(intent);
+    } finally {
+      setAskSending(false);
+    }
+  }
 
   // Real Alerts (OSINT/GDELT findings promoted by a Manager, plus any
   // other alert source) - fetched once and scoped down to venues this
@@ -3781,6 +3941,7 @@ function OperationalCanvas({
       setAssessmentForm(null);
     };
     const openRoutePlanning = () => setActivePanel("route-planning");
+    const openAsk = () => setActivePanel("ask");
     const openDownloadTask = () => setActivePanel("download-task");
     const openLayers = () => setActivePanel("layers");
     // Profile docks on the same right edge as Alerts (unlike the other
@@ -3818,6 +3979,7 @@ function OperationalCanvas({
     window.addEventListener(OPEN_TASK_PLANNING_PANEL_EVENT, openTaskPlanning);
     window.addEventListener(OPEN_RISK_ASSESSMENTS_PANEL_EVENT, openRiskAssessments);
     window.addEventListener(OPEN_ROUTE_PLANNING_PANEL_EVENT, openRoutePlanning);
+    window.addEventListener(OPEN_ASK_PANEL_EVENT, openAsk);
     window.addEventListener(OPEN_DOWNLOAD_TASK_PANEL_EVENT, openDownloadTask);
     window.addEventListener(OPEN_LAYERS_PANEL_EVENT, openLayers);
     window.addEventListener(OPEN_PROFILE_PANEL_EVENT, openProfile);
@@ -3830,6 +3992,7 @@ function OperationalCanvas({
       window.removeEventListener(OPEN_TASK_PLANNING_PANEL_EVENT, openTaskPlanning);
       window.removeEventListener(OPEN_RISK_ASSESSMENTS_PANEL_EVENT, openRiskAssessments);
       window.removeEventListener(OPEN_ROUTE_PLANNING_PANEL_EVENT, openRoutePlanning);
+      window.removeEventListener(OPEN_ASK_PANEL_EVENT, openAsk);
       window.removeEventListener(OPEN_DOWNLOAD_TASK_PANEL_EVENT, openDownloadTask);
       window.removeEventListener(OPEN_LAYERS_PANEL_EVENT, openLayers);
       window.removeEventListener(OPEN_PROFILE_PANEL_EVENT, openProfile);
@@ -5152,6 +5315,88 @@ function OperationalCanvas({
             })}
           </div>
         )}
+      </div>
+
+      <div
+        className={`ask-panel ${askPanelOpen ? "ask-panel-open" : ""}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="tasks-panel-header">
+          <div>
+            <p className="tasks-panel-eyebrow">Ask</p>
+            <h2 className="tasks-panel-title">Ask</h2>
+          </div>
+          <button type="button" className="tasks-panel-close" onClick={() => setActivePanel(null)} aria-label="Close Ask">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <button type="button" className="venueguard-panel-back" onClick={backToMenu}>
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to Menu
+        </button>
+
+        <div className="ask-panel-messages">
+          {askMessages.map((msg, i) => (
+            <div key={i} className={`ask-panel-message ${msg.role === "user" ? "ask-panel-message-user" : "ask-panel-message-bot"}`}>
+              {msg.role === "bot" && <Bot className="w-3.5 h-3.5 ask-panel-message-icon" />}
+              <div className="ask-panel-message-bubble">
+                <p className="ask-panel-message-text">{msg.text}</p>
+                {msg.places && (
+                  <div className="nearby-help-results">
+                    {msg.places.map((place, j) => (
+                      <div key={j} className="nearby-help-row">
+                        <span className="nearby-help-name">{place.name} · {formatDistance(place.distanceMeters)}</span>
+                        <a
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="nearby-help-directions"
+                        >
+                          Directions
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {msg.routeOptions && (
+                  <div className="nearby-help-results">
+                    {msg.routeOptions.map((route, j) => (
+                      <div key={j} className="nearby-help-row">
+                        <span className="nearby-help-name">
+                          {(route.distanceMeters / 1000).toFixed(1)}km · {Math.round(route.durationSeconds / 60)} min
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          {askSending && (
+            <div className="ask-panel-message ask-panel-message-bot">
+              <Bot className="w-3.5 h-3.5 ask-panel-message-icon" />
+              <div className="ask-panel-message-bubble">
+                <p className="ask-panel-message-text ask-panel-message-thinking">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Looking…
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <form className="ask-panel-input-row" onSubmit={handleAskSubmit}>
+          <input
+            type="text"
+            className="ask-panel-input"
+            placeholder="Ask something…"
+            value={askInput}
+            onChange={(e) => setAskInput(e.target.value)}
+            disabled={askSending}
+          />
+          <button type="submit" className="ask-panel-send" disabled={askSending || !askInput.trim()} aria-label="Send">
+            <Send className="w-4 h-4" />
+          </button>
+        </form>
       </div>
 
       <div

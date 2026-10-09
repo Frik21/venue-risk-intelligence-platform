@@ -999,6 +999,9 @@ export interface NearbyService {
   distanceMeters: number;
 }
 
+// Backs Operators Note's "Ask" chatbot - one category per question.
+export type NearbyPlaceCategory = "hospital" | "police" | "cafe" | "fuel";
+
 // One-tap emergency info (Following Roadmap Tier 1, item 5) - mirrors
 // the backend's NearbyEmergencyInfo, same reasoning as NearbyService
 // above.
@@ -1028,6 +1031,14 @@ export interface TaskRoute {
   nearestPoliceStations: NearbyService[];
   createdAt: string;
   updatedAt: string;
+}
+
+// A single OSRM route option - backs the "Ask" chatbot's alternative-
+// route intent (GET /task-routes/:id/alternatives).
+export interface OsrmRouteOption {
+  geometry: RouteGeoJSON;
+  distanceMeters: number;
+  durationSeconds: number;
 }
 
 // One logged day - Profile > Timesheet. date is a plain "YYYY-MM-DD"
@@ -1865,6 +1876,7 @@ export const api = {
       data: Partial<Pick<TaskRoute, "startLabel" | "startLat" | "startLng" | "endLabel" | "endLat" | "endLng">>,
     ) => apiFetch<TaskRoute>(`/task-routes/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     calculate: (id: number) => apiFetch<TaskRoute>(`/task-routes/${id}/calculate`, { method: "POST" }),
+    alternatives: (id: number) => apiFetch<{ alternatives: OsrmRouteOption[] }>(`/task-routes/${id}/alternatives`),
   },
   timesheet: {
     // Company-wide, every entry regardless of approval status - powers
@@ -1952,6 +1964,11 @@ export const api = {
     // One-tap emergency info (Following Roadmap Tier 1, item 5) -
     // nearest hospital/police station/embassy to an arbitrary lat/lng.
     check: (lat: number, lng: number) => apiFetch<NearbyEmergencyInfo>(`/emergency-info?lat=${lat}&lng=${lng}`),
+  },
+  nearbyPlaces: {
+    // Backs the "Ask" chatbot - one category per question.
+    check: (lat: number, lng: number, category: NearbyPlaceCategory) =>
+      apiFetch<{ category: NearbyPlaceCategory; results: NearbyService[] }>(`/nearby-places?lat=${lat}&lng=${lng}&category=${category}`),
   },
   assessments: {
     list: () => apiFetch<AssessmentSummary[]>("/assessments"),
