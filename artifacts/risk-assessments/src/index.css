@@ -174,16 +174,77 @@
    permanent screen space (the canvas sits below it in a flex column,
    see Dashboard's step === "centre" render) rather than floating over
    the map like the panel triggers, per direct product direction. */
+/* Horizontal-overflow safety net - a phone-width viewport otherwise
+   lets any one oversized element (most commonly .top-banner below,
+   before its own mobile breakpoint existed) force the whole page into
+   horizontal scroll, which on Android Chrome also triggers its own
+   floating zoom/scroll affordance overlapping the page - reported
+   directly from a real phone screenshot. */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 .top-banner {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 16px;
-  height: 56px;
-  padding: 0 20px;
+  min-height: 56px;
+  padding: 10px 20px;
   background: rgba(8, 11, 15, 0.96);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Phone-width layout - the banner's controls (brand, search, Panic,
+   Alerts, operator menu) add up to well over 700px at full desktop
+   sizing, so no amount of shrinking the search bar alone makes them
+   fit under ~400px. Drop secondary text (context label, operator
+   name, button labels - icons stay, each gets an aria-label instead)
+   and push search onto its own row below the safety-critical controls
+   (Panic/Alerts/operator), rather than letting it squeeze them. */
+@media (max-width: 640px) {
+  .top-banner {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .top-banner-brand-context,
+  .top-banner-brand-divider {
+    display: none;
+  }
+
+  .top-banner-search-wrap {
+    order: 10;
+    flex: 1 1 100%;
+    padding: 0;
+  }
+
+  .top-banner-btn-text,
+  .top-banner-operator-name {
+    display: none;
+  }
+
+  .top-banner-panic-trigger,
+  .top-banner-alerts-trigger {
+    margin-right: 0;
+    padding: 8px 10px;
+  }
+
+  .top-banner-sync-status {
+    margin-right: 0;
+  }
+
+  .top-banner-sync-status-trigger {
+    padding: 8px 10px;
+  }
+
+  .top-banner-operator-trigger {
+    padding: 6px 8px;
+  }
 }
 
 .top-banner-brand {

@@ -1557,6 +1557,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
         type="button"
         className="top-banner-panic-trigger"
         disabled={panicSending}
+        aria-label={panicSent ? t("panicSent") : t("panic")}
         onClick={(event) => {
           event.stopPropagation();
           sendGlobalPanic();
@@ -1569,18 +1570,19 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
         ) : (
           <ShieldAlert className="w-4 h-4" />
         )}
-        {panicSent ? t("panicSent") : t("panic")}
+        <span className="top-banner-btn-text">{panicSent ? t("panicSent") : t("panic")}</span>
       </button>
       <button
         type="button"
         className="top-banner-alerts-trigger"
+        aria-label={t("alerts")}
         onClick={(event) => {
           event.stopPropagation();
           window.dispatchEvent(new Event(TOGGLE_ALERTS_PANEL_EVENT));
         }}
       >
         <Bell className="w-4 h-4" />
-        {t("alerts")}
+        <span className="top-banner-btn-text">{t("alerts")}</span>
         {alertsCount > 0 && <span className="top-banner-alerts-trigger-badge">{alertsCount}</span>}
       </button>
       <div
@@ -1595,6 +1597,7 @@ function TopBanner({ onSignOut }: { onSignOut: () => void }) {
           className="top-banner-operator-trigger"
           onClick={() => setOperatorMenuOpen((open) => !open)}
           aria-expanded={operatorMenuOpen}
+          aria-label={operatorDisplayName}
         >
           <span className="top-banner-operator-avatar" aria-hidden="true">
             {operatorDisplayInitials}
